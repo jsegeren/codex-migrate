@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "codex-migrate"
+version = "0.1.0"
+description = "Unofficial, resumable Mac-to-Mac migration for local Codex workspaces"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+authors = [{ name = "Joshua Segeren" }]
+keywords = ["codex", "migration", "macos", "developer-tools", "backup"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: MacOS X",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: MacOS",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Topic :: System :: Archiving :: Backup",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/jsegeren/codex-migrate"
+Issues = "https://github.com/jsegeren/codex-migrate/issues"
+
+[project.scripts]
+codex-migrate = "codex_migrate.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.unittest]
+start-directory = "tests"

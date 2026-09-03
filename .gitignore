@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+.venv/
+.DS_Store
+.codex-migrate/
+.playwright-cli/
+output/
+.mypy_cache/
+.ruff_cache/

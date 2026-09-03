@@ -1,0 +1,25 @@
+name: Feature request
+description: Propose a focused migration improvement
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Migration problem
+      description: Describe the user problem without private data.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Failure and recovery behavior
+      description: What should happen if this is interrupted or fails halfway?
+    validations:
+      required: true

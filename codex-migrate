@@ -1,0 +1,5 @@
+#!/bin/zsh
+set -eu
+repo_dir="${0:A:h}"
+export PYTHONPATH="$repo_dir/src${PYTHONPATH:+:$PYTHONPATH}"
+exec /usr/bin/env python3 -m codex_migrate "$@"

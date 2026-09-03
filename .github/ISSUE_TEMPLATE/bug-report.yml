@@ -1,0 +1,58 @@
+name: Bug report
+description: Report a reproducible Codex Migrate problem without private data
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not attach conversations, credentials, private repository names, complete logs, or personal paths. Replace them with synthetic examples.
+  - type: input
+    id: version
+    attributes:
+      label: Codex Migrate version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS versions
+      description: Source and destination versions, without device names.
+    validations:
+      required: true
+  - type: dropdown
+    id: phase
+    attributes:
+      label: Migration phase
+      options:
+        - Inventory
+        - Preflight
+        - Staging
+        - Pause or resume
+        - Finalization
+        - Verification
+        - Recovery
+        - Dashboard
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened?
+      description: Use synthetic paths and redact all identifiers and secrets.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I removed credentials, conversation content, private repository names, personal paths, IP addresses, and complete real migration logs.
+          required: true
