@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "teamId": "team_konL1mlt3spj6W2pjkIE58X7",
+  "projectId": "prj_jXmzcjmACVYfAgdNytpAwSuDSCHK",
+  "projectName": "codex-migrate",
+  "gitRepository": "jsegeren/codex-migrate",
+  "productionBranch": "main",
+  "productionDomains": [
+    "codex-migrate.vercel.app"
+  ],
+  "allowProjectCreation": false
+}

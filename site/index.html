@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Move your local Codex conversations, settings, skills, repositories, worktrees, and unfinished work to a new Mac—with a resumable, verifiable migration.">
+    <meta name="theme-color" content="#f7f4ed">
+    <meta property="og:title" content="Codex Migrate — Keep the work. Change the Mac.">
+    <meta property="og:description" content="An unofficial, privacy-first Mac-to-Mac migration tool for local Codex workspaces.">
+    <meta property="og:type" content="website">
+    <title>Codex Migrate — Keep the work. Change the Mac.</title>
+    <link rel="icon" href="/assets/mark.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="Codex Migrate home">
+        <span class="brand-mark" aria-hidden="true">CM</span>
+        <span>Codex Migrate</span>
+      </a>
+      <nav aria-label="Primary navigation">
+        <a href="#how-it-works">How it works</a>
+        <a href="#editions">Editions</a>
+        <a href="https://github.com/jsegeren/codex-migrate">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero shell">
+        <div class="hero-copy">
+          <p class="eyebrow"><span class="status-dot"></span> Open source now · Mac app in development</p>
+          <h1>Keep the work.<br><em>Change the Mac.</em></h1>
+          <p class="lede">Move local Codex conversations, settings, skills, repositories, branches, worktrees, and unfinished files—without handing your workspace to a cloud migration service.</p>
+          <div class="actions">
+            <a class="button button-primary" href="https://github.com/jsegeren/codex-migrate">Get the free CLI</a>
+            <a class="button button-secondary" href="#founding-edition">Pre-order the Mac app</a>
+          </div>
+          <p class="fine-print">Unofficial and independent. Not affiliated with or endorsed by OpenAI.</p>
+        </div>
+        <div class="terminal-card" aria-label="Codex Migrate terminal example">
+          <div class="terminal-bar"><span></span><span></span><span></span><strong>migration · ready</strong></div>
+          <div class="terminal-body">
+            <p><span class="prompt">$</span> ./codex-migrate inspect \\</p>
+            <p class="indent">--target new-mac.local \\</p>
+            <p class="indent">--workspace "$HOME/Git"</p>
+            <div class="rule"></div>
+            <p><span class="ok">✓</span> destination identity verified</p>
+            <p><span class="ok">✓</span> Codex authentication preserved</p>
+            <p><span class="ok">✓</span> 1,951 conversations found</p>
+            <p><span class="ok">✓</span> 12 Git workspaces selected</p>
+            <p><span class="ok">✓</span> transfer is resumable</p>
+            <div class="progress"><span></span></div>
+            <p class="terminal-note">PLAN READY · no source files changed</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="proof-strip" aria-label="Product principles">
+        <div><strong>No cloud copy</strong><span>Your data stays Mac-to-Mac</span></div>
+        <div><strong>No telemetry</strong><span>Nothing to opt out of</span></div>
+        <div><strong>No lock-in</strong><span>The engine is MIT licensed</span></div>
+        <div><strong>No blind overwrite</strong><span>Backup, install, verify</span></div>
+      </section>
+
+      <section class="story shell" id="how-it-works">
+        <div class="section-intro">
+          <p class="eyebrow">Built after the hard version</p>
+          <h2>Your Codex workspace is more than a login.</h2>
+          <p>Signing in on a new Mac does not recreate every piece of local working state. Codex Migrate inventories what exists, moves it over a connection you control, preserves the new Mac's identity, and proves the result before calling it done.</p>
+        </div>
+        <ol class="steps">
+          <li><span>01</span><div><h3>Inspect</h3><p>See exactly what will move, how large it is, and whether both Macs are ready. Planning mode changes nothing.</p></div></li>
+          <li><span>02</span><div><h3>Transfer</h3><p>Stage a resumable copy over SSH. Pause, disconnect, switch networks, and continue without starting over.</p></div></li>
+          <li><span>03</span><div><h3>Protect</h3><p>Keep destination authentication and installation identity. Create a timestamped rollback backup before replacement.</p></div></li>
+          <li><span>04</span><div><h3>Verify</h3><p>Compare conversation counts, check databases, and produce a readable receipt of what arrived.</p></div></li>
+        </ol>
+      </section>
+
+      <section class="inventory">
+        <div class="shell inventory-grid">
+          <div>
+            <p class="eyebrow">The whole working environment</p>
+            <h2>Not just the clean, committed parts.</h2>
+            <p>Selected workspace roots move byte-for-byte, including the work that has not reached a remote yet.</p>
+          </div>
+          <ul class="check-list">
+            <li>Active and archived conversations</li>
+            <li>Configuration, project organization, rules, and memories</li>
+            <li>Personal and repository-scoped skills</li>
+            <li>Automations and relevant local state</li>
+            <li>Repositories, branches, tags, remotes, and stashes</li>
+            <li>Worktrees, uncommitted changes, and untracked files</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="editions shell" id="editions">
+        <div class="section-intro centered">
+          <p class="eyebrow">One engine. Two ways to use it.</p>
+          <h2>Safety is not a paid feature.</h2>
+          <p>The full migration engine stays free and inspectable. The paid edition is for people who want a signed Mac experience and maintainer support.</p>
+        </div>
+        <div class="pricing-grid">
+          <article class="price-card">
+            <p class="plan-name">Open source CLI</p>
+            <p class="price">$0</p>
+            <p class="price-note">MIT licensed · available today</p>
+            <ul class="check-list compact">
+              <li>Complete migration engine</li>
+              <li>Selective skills export</li>
+              <li>Local progress dashboard</li>
+              <li>Pause, resume, backup, and verification</li>
+              <li>Community support on GitHub</li>
+            </ul>
+            <a class="button button-secondary full" href="https://github.com/jsegeren/codex-migrate">View on GitHub</a>
+          </article>
+
+          <article class="price-card featured" id="founding-edition">
+            <div class="badge">Founding pre-order</div>
+            <p class="plan-name">Mac app · v1 license</p>
+            <p class="price"><span>$</span>49</p>
+            <p class="price-note">One payment · no subscription</p>
+            <ul class="check-list compact">
+              <li>Signed and notarized Mac app when released</li>
+              <li>Guided setup and permission checks</li>
+              <li>Automatic discovery and route testing</li>
+              <li>One-click migration controls and reports</li>
+              <li>Founding beta access and maintainer support</li>
+            </ul>
+            <a class="button button-primary full disabled" href="#" aria-disabled="true" data-checkout>Checkout opening shortly</a>
+            <p class="disclosure"><strong>This is a pre-order.</strong> The signed Mac app is not available today. The free CLI is. Pre-orders are refundable any time before the first beta, and for 30 days after delivery.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="origin shell">
+        <blockquote>“I changed Macs, signed in, and discovered the working environment I depended on had not followed me. Migration Assistant stalled. So I built the missing migration path, used it on a 400+ GB workspace, and opened the engine.”</blockquote>
+        <p>— Joshua Segeren, creator of Codex Migrate</p>
+      </section>
+
+      <section class="faq shell">
+        <div class="section-intro"><p class="eyebrow">Straight answers</p><h2>Before you move anything.</h2></div>
+        <div class="faq-grid">
+          <details><summary>Is this made by OpenAI?</summary><p>No. Codex Migrate is an independent compatibility project. It is not affiliated with, supported by, or endorsed by OpenAI.</p></details>
+          <details><summary>Does it copy my Codex login?</summary><p>No. Authentication and installation identity are deliberately excluded. You sign in on the new Mac first; the migration preserves that new identity.</p></details>
+          <details><summary>Does the paid app exist today?</summary><p>Not yet. The $49 Founding Edition is a clearly labeled pre-order for the signed v1 Mac app. The complete open-source CLI is usable today.</p></details>
+          <details><summary>What if the transfer is interrupted?</summary><p>Rerun it. Staging uses resumable transfer semantics, so completed data is reused. The source Mac is never deleted or modified.</p></details>
+          <details><summary>Can I migrate only one thing?</summary><p>Yes. Personal and repository-scoped skills can already be exported independently; more selective components will use the same guarded workflow.</p></details>
+          <details><summary>What is the refund policy?</summary><p>Founding pre-orders can be refunded any time before the first beta is delivered, and for 30 days after delivery. See the full <a href="/refunds.html">refund policy</a>.</p></details>
+        </div>
+      </section>
+
+      <section class="closing">
+        <div class="shell closing-inner">
+          <div><p class="eyebrow">Your old Mac is not a backup plan.</p><h2>Make the move deliberate.</h2></div>
+          <div class="actions"><a class="button button-primary" href="https://github.com/jsegeren/codex-migrate">Start with the free CLI</a><a class="button button-secondary light" href="#founding-edition">Pre-order v1</a></div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="shell footer-grid">
+        <div><a class="brand" href="/"><span class="brand-mark" aria-hidden="true">CM</span><span>Codex Migrate</span></a><p>Independent software by Segeren Studio.</p></div>
+        <div><h2>Project</h2><a href="https://github.com/jsegeren/codex-migrate">GitHub</a><a href="https://github.com/jsegeren/codex-migrate/issues">Support</a><a href="https://github.com/jsegeren/codex-migrate/blob/main/SECURITY.md">Security</a></div>
+        <div><h2>Legal</h2><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a><a href="/refunds.html">Refunds</a></div>
+      </div>
+      <div class="shell footer-bottom"><p>© 2026 Segeren Studio.</p><p>OpenAI and Codex are trademarks of their respective owner.</p></div>
+    </footer>
+  </body>
+</html>

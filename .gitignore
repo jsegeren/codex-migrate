@@ -13,3 +13,5 @@ dist/
 output/
 .mypy_cache/
 .ruff_cache/
+.vercel
+.env*

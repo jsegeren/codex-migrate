@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 — unreleased
+## 0.1.0 — 2026-09-03
 
 - Added content-free local inventory.
 - Added strict SSH preflight and route reporting.
@@ -12,3 +12,5 @@
 - Added selective personal- and workspace-skill export with per-item rollback
   backups and username-independent user-skill discovery.
 - Corrected APFS detection to use macOS `diskutil` plist metadata.
+- Published the static project website, privacy policy, purchase terms, and
+  refund policy for the clearly disclosed Founding Edition pre-order.

@@ -21,6 +21,8 @@ Codex Migrate is an independent project by Joshua Segeren. It is not made by,
 affiliated with, supported by, or endorsed by OpenAI. OpenAI and Codex are
 trademarks of their respective owner.
 
+**Website:** [codex-migrate.vercel.app](https://codex-migrate.vercel.app)
+
 ![Codex Migrate showing a resumable workspace transfer](docs/images/dashboard.png)
 
 ## Why this exists
@@ -210,15 +212,19 @@ Read [the security model](docs/security-model.md) before using the alpha on an
 irreplaceable workspace. Please report vulnerabilities privately according to
 [SECURITY.md](SECURITY.md).
 
-## Free CLI and paid Mac app
+## Free CLI and Founding Edition
 
 The migration engine is MIT-licensed and will remain inspectable and usable from
-the command line. A signed, notarized Mac app is planned as a one-time purchase
-for people who want automatic discovery, guided permissions, route testing,
-one-click controls, updates, and support. See
+the command line. A signed, notarized Mac app is in development for people who
+want automatic discovery, guided permissions, route testing, one-click controls,
+updates, and support. A **$49 one-time Founding Edition pre-order** reserves an
+individual v1 license and beta access. It is not a subscription. See
 [the commercial-edition principles](docs/commercial-edition.md).
 
-There is no subscription and no paid download today.
+The signed Mac app is not available for download today. The complete free CLI
+is. Pre-orders are refundable at any time before the first beta and for 30 days
+after delivery. The checkout and full terms are available on the
+[project website](https://codex-migrate.vercel.app/#founding-edition).
 
 ## Contributing
 

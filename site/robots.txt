@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://codex-migrate.vercel.app/sitemap.xml

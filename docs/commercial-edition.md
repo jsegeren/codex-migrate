@@ -1,10 +1,10 @@
 # Commercial edition principles
 
-The open-source migration engine is the trust foundation. A future paid Mac app
-may charge a one-time price for convenience and support, not for access to a
+The open-source migration engine is the trust foundation. The paid Mac app
+charges a one-time price for convenience and support, not for access to a
 user's own data or recovery from an artificial lock.
 
-## Planned paid value
+## Paid value
 
 - Signed and notarized native macOS application
 - Automatic Mac and Codex discovery
@@ -17,13 +17,18 @@ user's own data or recovery from an artificial lock.
 - Human-readable verification report
 - Maintainer support
 
-## Pricing direction
+## Founding Edition
 
-The current direction is a **$49 one-time purchase** with updates for the major
-version purchased. There is no reason for a subscription unless the product
-later provides an ongoing hosted backup or synchronization service.
+The Founding Edition is a **$49 one-time pre-order** for one individual v1 Mac
+app license, founding beta access, and maintainer support. It is not a
+subscription.
 
-The exact offer is not live and may change after beta feedback.
+The signed Mac app is in development and is not available for download today.
+The full open-source CLI is available today. Pre-orders are refundable at any
+time before the first beta is delivered and for 30 days after delivery. If the
+paid app is cancelled before a first beta ships, remaining pre-orders will be
+refunded. The current offer, checkout, privacy policy, terms, and refund policy
+are published at <https://codex-migrate.vercel.app>.
 
 ## Non-negotiables
 
