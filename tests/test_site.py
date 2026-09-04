@@ -93,7 +93,7 @@ class SiteTests(unittest.TestCase):
         self.assertNotIn("Times New Roman", styles)
         self.assertIn("--ink: #000;", styles)
         self.assertIn("--muted: #000;", styles)
-        headline = styles.split("h1 {", 1)[1].split("}", 1)[0]
+        headline = styles.split("\nh1 {", 1)[1].split("}", 1)[0]
         self.assertIn("font-weight: 800", headline)
         self.assertIn(".legal p, .legal li { color: var(--ink); }", styles)
 
