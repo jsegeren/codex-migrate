@@ -104,6 +104,18 @@ sub flush_parent {
     $fh->sync or fail();
     close($fh) or fail();
 }
+sub exclusive_rename {
+    my ($from, $to) = @_;
+    $^O eq 'darwin' or fail();
+    my $source = filesystem_path($from);
+    my $destination = filesystem_path($to);
+    # Darwin SDK sys/syscall.h: SYS_renameatx_np=488; sys/fcntl.h:
+    # AT_FDCWD=-2; sys/stdio.h: RENAME_EXCL=4 (macOS 10.12+).
+    # Atomic failure if the destination appears, including files/symlinks.
+    # System Perl has syscall but ships no generated sys/syscall.ph. Never
+    # fall back to check-then-rename or a replacing rename on unsupported OSes.
+    syscall(488, -2, $source, -2, $destination, 4) == 0 or fail();
+}
 sub save_new {
     my ($path, $value, $id) = @_;
     $path = filesystem_path($path);
@@ -119,7 +131,7 @@ sub save_new {
         $offset += $n;
     }
     $fh->sync or fail();
-    rename($temp, $path) or fail();
+    exclusive_rename($temp, $path);
     flush_parent($path);
     defined fcntl($fh, 51, 0) or fail();
     close($fh) or fail();

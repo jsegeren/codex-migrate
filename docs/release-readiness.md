@@ -8,6 +8,29 @@ results, accessibility findings, and pre-signing work still open.
 
 ## Candidate checks completed on the development Mac
 
+- An internal post-crash restoration engine now restores frozen destination
+  backups while retaining displaced current entries in a separate, indexed
+  recovery directory. It is **not exposed by the CLI or browser yet**. Explicit
+  apply authority and the inspected transaction ID/backup/scope are required.
+  Immutable plan/ready/completion evidence and per-entry checks allow tested
+  interrupted restores to resume. Destination identity is preserved, including
+  a newer logout; unsupported missing prior Codex roots fail closed. No current
+  entry is deleted. Atomic Darwin exclusive renames reject newly appearing
+  destination entries; this also hardens shared recovery-record publication.
+  Independent `public_release_review` reproduced and verified fixes for stale
+  identity resurrection, process checks too far from mutation, evidence replay
+  without a renewed flush, and a check-then-rename overwrite race. Disposable
+  APFS fixtures exercise actual copies, moves, process interruption, preservation,
+  corruption, Unicode/skill links, insufficient space, and resume. See the
+  [internal engine contract](restore-engine.md). Final local checks: 325 Python
+  tests (324 passed, one existing filesystem skip), including 22 restoration
+  tests; 10 signup tests; Swift typecheck and diff checks passed. Independent
+  review accepted the final code and engineering documentation. These are
+  source-engine checks, not a packaged guided-restore proof. Guided confirmation, progress,
+  recovery-state reconciliation, lost-reply handling, real cross-Mac/drive
+  power-loss acceptance and Intel coverage remain gates. This is not a claim
+  that the downloadable app can perform guided restoration yet.
+
 - Read-only recovery inspection is now available through the collapsed browser
   recovery panel and `codex-migrate recovery`. It opens the existing destination
   lock read-only, reports a live writer as busy, validates bounded saved scope,

@@ -1,6 +1,7 @@
 """Read-only destination recovery inspection; never authorizes replacement."""
 
 import json
+import re
 import shlex
 
 from codex_migrate.errors import MigrationError
@@ -9,7 +10,7 @@ from codex_migrate.transaction import TRANSACTION_LIBRARY
 
 # Uses the same persistent inode as writers, but opens it read-only and never
 # creates it. No pending-record bypass is added to the normal write entrypoints.
-INSPECT_RUNNER = TRANSACTION_LIBRARY + r'''
+RECOVERY_CONTEXT = TRANSACTION_LIBRARY + r'''
 use Fcntl qw(:flock);
 use Errno qw(EAGAIN EWOULDBLOCK);
 use Unicode::Normalize ();
@@ -39,8 +40,10 @@ sub overlap {
     ($a, $b) = (fc(Unicode::Normalize::NFD($a)), fc(Unicode::Normalize::NFD($b)));
     return $a eq $b || inside($a, $b) || inside($b, $a);
 }
-@ARGV == 1 or fail();
-my $home = $ARGV[0];
+@ARGV >= 2 or fail();
+my $mode = $ARGV[0];
+$mode eq 'inspect' || $mode eq 'restore' or fail();
+my $home = $ARGV[1];
 $home = Encode::decode_utf8($home, Encode::FB_CROAK);
 clean_path($home);
 directory($home);
@@ -56,7 +59,7 @@ if (!$ls) {
 $ls && S_ISREG($ls->[2]) && $ls->[3] == 1 && $ls->[4] == $< &&
     ($ls->[2] & 07777) == 0600 && $ls->[7] == 0 or fail();
 my $lock = handle($lock_path);
-unless (flock($lock, LOCK_SH | LOCK_NB)) {
+unless (flock($lock, ($mode eq 'restore' ? LOCK_EX : LOCK_SH) | LOCK_NB)) {
     if ($! == EAGAIN || $! == EWOULDBLOCK) {
         emit({status => 'busy', inspected_items => 0});
     }
@@ -107,6 +110,10 @@ for my $item (@{$record->{scope}}) {
 # read_record/frozen-check failures are generic, not path/content dumps. A
 # failed check does not mean the backup is absent or safe to replace.
 for my $item (@{$record->{scope}}) { verify_frozen($item, $item->{backup}); }
+'''
+
+INSPECT_RUNNER = RECOVERY_CONTEXT + r'''
+@ARGV == 2 && $mode eq 'inspect' or fail();
 my @items;
 for my $item (@{$record->{scope}}) {
     my $current = present($item->{original});
@@ -125,7 +132,8 @@ if (present($terminal_path)) {
         JSON::PP->new->canonical->encode($record) or fail();
 }
 emit({status => 'backup_verified', inspected_items => scalar(@items),
-      backup => $backup, items => \@items, terminal_phase => $terminal_phase});
+      transaction_id => $record->{id}, backup => $backup, items => \@items,
+      terminal_phase => $terminal_phase});
 '''
 
 
@@ -139,7 +147,7 @@ MESSAGES = {
 
 def inspection_script(home):
     return ("/usr/bin/env -u PERL5OPT -u PERL5LIB -u PERLLIB -u PERLIO -u PERL_UNICODE "
-            "LC_ALL=C /usr/bin/perl -e " + shlex.quote(INSPECT_RUNNER) + " -- " + shlex.quote(home) + "\n")
+            "LC_ALL=C /usr/bin/perl -e " + shlex.quote(INSPECT_RUNNER) + " -- inspect " + shlex.quote(home) + "\n")
 
 
 def _validate_report(report, home):
@@ -149,8 +157,10 @@ def _validate_report(report, home):
         if set(report) != {"status", "inspected_items"} or type(report["inspected_items"]) is not int or report["inspected_items"] != 0:
             raise ValueError("Invalid recovery summary")
         return
-    if set(report) != {"status", "inspected_items", "backup", "items", "terminal_phase"}:
+    if set(report) != {"status", "inspected_items", "transaction_id", "backup", "items", "terminal_phase"}:
         raise ValueError("Invalid recovery fields")
+    if not isinstance(report["transaction_id"], str) or not re.fullmatch(r"[0-9a-f]{32}", report["transaction_id"]):
+        raise ValueError("Invalid recovery identity")
     if report["terminal_phase"] not in (None, "installed", "restored"):
         raise ValueError("Invalid recovery phase")
     items = report["items"]
