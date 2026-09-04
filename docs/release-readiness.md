@@ -8,6 +8,28 @@ results, accessibility findings, and pre-signing work still open.
 
 ## Candidate checks completed on the development Mac
 
+- Frozen backup integrity now uses version-2 destination recovery records. Each
+  existing backup and original must match before replacement; all backups are
+  rechecked before normal rollback can remove current destination data, and
+  restored files must match the frozen checksums. Existing absent items remain
+  explicitly absent. Legacy or malformed records do not authorize recovery.
+  The shared tree algorithm covers file bytes, names, permission bits, empty
+  directories, and link text without displaying digests. This caught and fixed
+  backup/rollback copies losing permission bits under the restrictive umask.
+  Twenty-two local transaction tests pass, including corruption, missing/extra
+  entries, permission and link changes, special files, legacy evidence, and
+  preserving installed data when a backup is damaged. The full suite ran 284
+  tests (283 passed, one filesystem skip); the subsequently added absent-backup
+  regression also passed, as did the final 22-test transaction suite. Ten signup
+  tests and Swift typecheck passed. Independent `public_release_review` caught
+  a Unicode-home regression, then accepted its filesystem-byte/JSON-path fix
+  after independent accented, Chinese, and decomposed-path fixtures and 91
+  focused tests (90 passed, one skip). No real user data or SSH migration was
+  used. This checkpoint has not yet been rebuilt into the packaged app.
+  Guided post-crash recovery that preserves displaced current data remains
+  release-blocking; this change supplies its integrity prerequisite, not the UI
+  or a clean second-Mac/power-loss proof.
+
 - Durable destination recovery evidence now precedes replacement. Backup
   files/directories and the atomically published pending record are fsynced,
   followed by the macOS `F_FULLFSYNC` barrier. Full and skills installers record
@@ -30,9 +52,9 @@ results, accessibility findings, and pre-signing work still open.
   engine startup/configuration checks; packaging verified its ad-hoc signature.
   ZIP SHA-256: `09a8cad7624a5defd94e8c0aa201ad5fdab114eb8cc84305d0cd8a42fa29cf7c`.
   This does not certify an actual packaged SSH migration or clean second Mac.
-  Before guided restore, add frozen backup integrity evidence and preserve any
-  current destination data being displaced. Today's journal is a durable scope
-  and outcome record, not a standalone proof against later backup corruption.
+  This earlier format-1 checkpoint recorded durable scope and outcome but no
+  frozen backup integrity. Format 2 above adds that evidence; guided restore
+  must still preserve any current destination data being displaced.
 
 - Destination-wide exclusion now covers staging directory/marker writes, rsync
   receivers, and the entire full/skills backup-install-verify-rollback phase.

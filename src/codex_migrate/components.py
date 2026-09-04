@@ -201,7 +201,7 @@ class ComponentExporter:
                 "  test -d {destination}\n"
                 "  test ! -L {destination}\n"
                 "  : > {existed}\n"
-                "  cp -c -R {destination} {backup_item}\n"
+                "  cp -c -Rp {destination} {backup_item}\n"
                 "  verify_backup {destination} {backup_item}\n"
                 "fi".format(
                     destination=shlex.quote(destination),
@@ -222,7 +222,7 @@ class ComponentExporter:
                 "  if test -L {backup_item}; then\n"
                 "    cp -P {backup_item} {destination}\n"
                 "  else\n"
-                "    cp -c -R {backup_item} {destination}\n"
+                "    cp -c -Rp {backup_item} {destination}\n"
                 "  fi\n"
                 "fi".format(
                     destination=shlex.quote(destination),
@@ -277,8 +277,11 @@ rollback() {{
   rollback_exit_code=$?
   if test "$rollback_needed" = 1; then
     set +e
-    {rollbacks}
-    {rollback_verification}
+    rollback_verified=0
+    if cm_transaction check-backup; then
+      {rollbacks}
+      {rollback_verification}
+    fi
     if test "$rollback_verified" = 1; then
       {restored_transaction} || rollback_verified=0
     fi

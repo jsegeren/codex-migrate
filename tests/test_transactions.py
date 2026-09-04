@@ -13,6 +13,7 @@ import test_backup as fixtures
 from codex_migrate.components import ComponentExporter, SkillExport
 from codex_migrate.destination_lock import locked_destination_script, locked_receiver_command
 from codex_migrate.transaction import TRANSACTION_NAME, TRANSACTION_RUNNER, pending_check_script, recovery_preflight_script
+from codex_migrate.workspaces import freeze_tree
 
 
 class TransactionTests(unittest.TestCase):
@@ -44,7 +45,10 @@ class TransactionTests(unittest.TestCase):
         self.assertFalse(self.journal.exists())
         record = json.loads((Path(receipt["backup"]) / "transaction-receipt.json").read_text())
         self.assertEqual(record["phase"], "installed")
+        self.assertEqual(record["format"], 2)
         self.assertTrue(all(item["existed"] for item in record["scope"]))
+        for item in record["scope"]:
+            self.assertEqual(item["backup_digest"], freeze_tree(item["backup"]))
         self.assertNotIn("fixture-auth", json.dumps(record))
         self.assertEqual((self.fixture.target / ".codex/auth.json").read_text(), "fixture-auth")
 
@@ -68,6 +72,7 @@ class TransactionTests(unittest.TestCase):
         record = json.loads((Path(receipt["backup"]) / "transaction-receipt.json").read_text())
         workspace = next(item for item in record["scope"] if item["original"].endswith("/Git"))
         self.assertFalse(workspace["existed"])
+        self.assertIsNone(workspace["backup_digest"])
         self.assertFalse(Path(workspace["backup"]).exists())
         self.assertFalse(self.journal.exists())
 
@@ -123,12 +128,163 @@ class TransactionTests(unittest.TestCase):
         self.assertEqual(json.loads((backup / "transaction-receipt.json").read_text())["phase"], "restored")
         self.assertEqual((self.fixture.target / ".codex/old.txt").read_text(), "original")
 
+    def test_backup_and_rollback_preserve_permission_bits(self):
+        target = self.fixture.target / "Git"
+        target.chmod(0o750)
+        (target / "old.txt").chmod(0o640)
+        self.inject(self.corrupt_installed)
+        with self.assertRaisesRegex(RuntimeError, "rollback was verified"):
+            self.engine._install_and_verify()
+        self.assertEqual(target.stat().st_mode & 0o777, 0o750)
+        self.assertEqual((target / "old.txt").stat().st_mode & 0o777, 0o640)
+
+    def test_corrupted_backup_blocks_rollback_before_any_current_data_removal(self):
+        def fault(script):
+            backup = Path(self.fixture.state.read()["pending_backup"])
+            return script.replace("\ncm_transaction installed || exit 78\n",
+                "\nprintf CORRUPTED > " + shlex.quote(str(backup / "home-relative/Git/old.txt"))
+                + "\ncm_transaction installed || exit 78\n")
+        self.inject(fault)
+        with self.assertRaisesRegex(RuntimeError, "rollback is unconfirmed") as error:
+            self.engine._install_and_verify()
+        self.assertNotIn("CORRUPTED", str(error.exception))
+        self.assertEqual((self.fixture.target / "Git/new.txt").read_text(), "new-work")
+        self.assertTrue((self.fixture.target / ".codex/sessions/chat.jsonl").exists())
+        self.assertEqual((self.fixture.target / ".codex/auth.json").read_text(), "fixture-auth")
+        self.assert_pending_blocks_writes()
+
+    def frozen_fixture(self):
+        """No real credentials or network: exercise the remote helper directly."""
+        original = self.fixture.target / "Git"
+        backup = self.fixture.target / "frozen-backup"
+        backup.mkdir()
+        shutil.copytree(original, backup / "Git", symlinks=True)
+        plan = {"format": 2, "id": "b" * 32, "home": str(self.fixture.target),
+                "backup": str(backup),
+                "scope": [{"original": str(original), "backup": str(backup / "Git")}]}
+        self.assertEqual(self.run_transaction("begin", plan).returncode, 0)
+        return plan, backup / "Git"
+
+    def run_transaction(self, mode, plan):
+        return subprocess.run(["/usr/bin/perl", "-e", TRANSACTION_RUNNER, "--", mode, json.dumps(plan)],
+                              capture_output=True, text=True, timeout=5)
+
+    def test_frozen_evidence_detects_changed_content_names_modes_links_and_absence(self):
+        original = self.fixture.target / "Git"
+        (original / "empty").mkdir()
+        (original / "alias").symlink_to("old.txt")
+        plan, copy = self.frozen_fixture()
+        mutations = {
+            "bytes": lambda: (copy / "old.txt").write_text("PRIVATE_CHANGED"),
+            "added": lambda: (copy / "new").write_text("PRIVATE_ADDED"),
+            "deleted": lambda: (copy / "old.txt").unlink(),
+            "file_mode": lambda: (copy / "old.txt").chmod(0o600),
+            "root_mode": lambda: copy.chmod(0o700),
+            "empty_directory": lambda: (copy / "empty").rmdir(),
+            "link": lambda: ((copy / "alias").unlink(), (copy / "alias").symlink_to("changed")),
+            "missing": lambda: shutil.rmtree(copy),
+            "root_link": lambda: (shutil.rmtree(copy), copy.symlink_to(original)),
+            "fifo": lambda: os.mkfifo(copy / "pipe"),
+        }
+        record = self.journal.read_bytes()
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                self.assertEqual(self.run_transaction("check-backup", plan).returncode, 0)
+                mutate()
+                result = self.run_transaction("check-backup", plan)
+                self.assertEqual(result.returncode, 78)
+                self.assertEqual(result.stdout, "")
+                self.assertNotIn("PRIVATE", result.stderr)
+                self.assertEqual(self.journal.read_bytes(), record)
+                if copy.is_symlink():
+                    copy.unlink()
+                elif copy.exists():
+                    shutil.rmtree(copy)
+                shutil.copytree(original, copy, symlinks=True)
+
+    def test_restored_must_match_frozen_digest_not_just_backup(self):
+        plan, copy = self.frozen_fixture()
+        (self.fixture.target / "Git/old.txt").write_text("PRIVATE_CHANGED")
+        result = self.run_transaction("restored", plan)
+        self.assertEqual(result.returncode, 78)
+        self.assertFalse((copy.parent / "transaction-receipt.json").exists())
+        self.assertTrue(self.journal.exists())
+
+    def test_unexpected_backup_for_previously_absent_item_is_rejected(self):
+        backup = self.fixture.target / "absent-backup"
+        backup.mkdir()
+        original = self.fixture.target / "absent-original"
+        copy = backup / "absent"
+        plan = {"format": 2, "id": "d" * 32, "home": str(self.fixture.target),
+                "backup": str(backup),
+                "scope": [{"original": str(original), "backup": str(copy)}]}
+        self.assertEqual(self.run_transaction("begin", plan).returncode, 0)
+        self.assertEqual(self.run_transaction("check-backup", plan).returncode, 0)
+        copy.mkdir()
+        self.assertEqual(self.run_transaction("check-backup", plan).returncode, 78)
+        self.assertTrue(self.journal.exists())
+        self.assertFalse(original.exists())
+
+    def test_old_or_missing_fingerprint_record_cannot_authorize_restore(self):
+        plan, copy = self.frozen_fixture()
+        original = json.loads(self.journal.read_text())
+        for kind in ("legacy", "missing", "invalid", "false_existence"):
+            with self.subTest(kind=kind):
+                record = json.loads(json.dumps(original))
+                if kind == "legacy":
+                    record["format"] = 1
+                elif kind == "missing":
+                    del record["scope"][0]["backup_digest"]
+                elif kind == "invalid":
+                    record["scope"][0]["backup_digest"] = "PRIVATE_INVALID"
+                else:
+                    record["scope"][0]["existed"] = "true"
+                self.journal.write_text(json.dumps(record))
+                result = self.run_transaction("check-backup", plan)
+                self.assertEqual(result.returncode, 78)
+                self.assertNotIn("PRIVATE", result.stderr)
+                self.assertTrue((copy / "old.txt").exists())
+
+    def test_reading_frozen_evidence_does_not_follow_linked_backup_parent(self):
+        plan, copy = self.frozen_fixture()
+        moved = self.fixture.target / "moved-backup"
+        copy.parent.rename(moved)
+        copy.parent.symlink_to(moved)
+        result = self.run_transaction("check-backup", plan)
+        self.assertEqual(result.returncode, 78)
+        self.assertTrue(self.journal.exists())
+
+    def test_unicode_home_backup_and_item_paths_keep_json_and_filesystem_identity(self):
+        for label in ("café", "测试", "e\u0301"):
+            with self.subTest(label=label):
+                home = self.fixture.target / label
+                original = home / "données-测试"
+                original.mkdir(parents=True)
+                (original / "empty-é").mkdir()
+                (original / "naïve\n测试").write_text("fixture unicode contents")
+                (original / "lien-é").symlink_to("naïve\n测试")
+                backup = home / "sauvegarde-测试"
+                backup.mkdir()
+                copy = backup / "copie-é"
+                shutil.copytree(original, copy, symlinks=True)
+                plan = {"format": 2, "id": "c" * 32, "home": str(home),
+                        "backup": str(backup),
+                        "scope": [{"original": str(original), "backup": str(copy)}]}
+                for mode in ("begin", "check-backup", "restored", "clear"):
+                    result = self.run_transaction(mode, plan)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout, "")
+                record = json.loads((backup / "transaction-receipt.json").read_text())
+                self.assertEqual(record["home"], str(home))
+                self.assertEqual(record["scope"][0]["backup_digest"], freeze_tree(str(copy)))
+                self.assertFalse((home / TRANSACTION_NAME).exists())
+
     def test_failed_rollback_keeps_pending_and_does_not_claim_verified(self):
         codex = shlex.quote(str(self.fixture.target / ".codex"))
         def fault(script):
             script = self.corrupt_installed(script)
             # Fail only rollback cloning, not the initial backup or identity copy.
-            return script.replace("cp -c -R ", "fixture_cp -c -R ").replace(
+            return script.replace("cp -c -Rp ", "fixture_cp -c -Rp ").replace(
                 "setopt NULL_GLOB", "setopt NULL_GLOB\nfixture_cp() { if test \"${4-}\" = " + codex
                 + "; then return 74; fi; command cp \"$@\"; }")
         self.inject(fault)

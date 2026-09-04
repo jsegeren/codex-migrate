@@ -9,11 +9,11 @@ import time
 from codex_migrate.errors import MigrationError
 from codex_migrate.exclusions import CODEX_EXCLUDES
 from codex_migrate.transport import _stop_process
+from codex_migrate.tree_digest import PERL_IMPORTS, TREE_FUNCTIONS
 
 
 PERL_COMMAND = ["/usr/bin/env", "-u", "PERL5OPT", "-u", "PERL5LIB", "-u", "PERLLIB",
                 "-u", "PERLIO", "-u", "PERL_UNICODE", "LC_ALL=C", "/usr/bin/perl"]
-PERL_IMPORTS = "use strict; use warnings; use bytes; use Digest::SHA; use Time::HiRes (); use Fcntl qw(:DEFAULT :mode);"
 PERL_PROBE = PERL_IMPORTS + "my $flags = O_NOFOLLOW | O_NONBLOCK; die unless length(Digest::SHA::sha256_hex('')) == 64;"
 WORKSPACE_TIMEOUT = 24 * 60 * 60
 
@@ -39,69 +39,7 @@ def _codex_filter():
 # Hashes do not include absolute roots, owners, timestamps, ACLs or xattrs.
 TREE_PROGRAM = PERL_IMPORTS + r'''
 my $codex_mode = @ARGV == 2 && $ARGV[1] eq 'codex';
-''' + _codex_filter() + r'''
-sub information {
-    my ($path) = @_;
-    my @s = Time::HiRes::lstat($path);
-    die unless @s;
-    return \@s;
-}
-sub stable {
-    my ($a, $b) = @_;
-    die unless @$b;
-    for my $index (0, 1, 2, 3, 7, 9, 10) { die unless $a->[$index] == $b->[$index]; }
-}
-sub field {
-    my ($sha, $value) = @_;
-    $sha->add(pack('N', length($value)), $value);
-}
-sub tree {
-    my ($path, $relative) = @_;
-    my $before = information($path);
-    my $sha = Digest::SHA->new(256);
-    field($sha, $codex_mode ? 'codex-migrate-retained-state-v1' : 'codex-migrate-tree-v1');
-    if (S_ISLNK($before->[2])) {
-        my $value = readlink($path);
-        die unless defined $value;
-        field($sha, 'link'); field($sha, $value);
-        die unless readlink($path) eq $value;
-    } elsif (S_ISDIR($before->[2])) {
-        field($sha, 'directory');
-        field($sha, sprintf('%04o', $before->[2] & 07777)) unless $codex_mode && $relative eq '';
-        opendir(my $directory, $path) or die;
-        $! = 0;
-        my @names = sort grep { $_ ne '.' && $_ ne '..' } readdir($directory);
-        die if $!;
-        closedir($directory) or die;
-        for my $name (@names) {
-            my $child = $relative eq '' ? $name : $relative . '/' . $name;
-            next if excluded($child, $path . '/' . $name);
-            field($sha, $name); field($sha, tree($path . '/' . $name, $child));
-        }
-    } elsif (S_ISREG($before->[2])) {
-        sysopen(my $file, $path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK) or die;
-        binmode($file) or die;
-        my @opened = Time::HiRes::stat($file);
-        stable($before, \@opened);
-        die unless S_ISREG($opened[2]);
-        my $content = Digest::SHA->new(256);
-        my $total = 0;
-        while (1) {
-            my $read = sysread($file, my $buffer, 1048576);
-            die unless defined $read;
-            last unless $read;
-            $content->add($buffer); $total += $read;
-        }
-        my @after = Time::HiRes::stat($file);
-        stable($before, \@after);
-        die unless $total == $before->[7];
-        close($file) or die;
-        field($sha, 'file'); field($sha, sprintf('%04o', $before->[2] & 07777));
-        field($sha, $content->digest);
-    } else { die; }
-    stable($before, information($path));
-    return $sha->digest;
-}
+''' + _codex_filter() + TREE_FUNCTIONS + r'''
 my $digest;
 my $ok = eval {
     local $SIG{__WARN__} = sub { die; };

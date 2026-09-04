@@ -751,7 +751,7 @@ class MigrationEngine:
                 + "if test -e {target} || test -L {target}; then\n"
                 "  test ! -L {backup}\n"
                 "  mkdir -p {backup_parent}\n"
-                "  if test -L {target}; then cp -P {target} {backup}; else cp -c -R {target} {backup}; fi\n"
+                "  if test -L {target}; then cp -P {target} {backup}; else cp -c -Rp {target} {backup}; fi\n"
                 "  verify_backup {target} {backup}\n"
                 "fi".format(
                     target=shlex.quote(target_root),
@@ -772,7 +772,7 @@ class MigrationEngine:
                 "if (\n{safe_parent}); then\n"
                 "  rm -rf {target}\n"
                 "  if test -L {backup}; then cp -P {backup} {target};\n"
-                "  elif test -e {backup}; then cp -c -R {backup} {target}; fi\n"
+                "  elif test -e {backup}; then cp -c -Rp {backup} {target}; fi\n"
                 "fi".format(
                     safe_parent=safe_parent,
                     target=shlex.quote(target_root),
@@ -835,7 +835,7 @@ verify_codex_state {staging}/.codex 2>/dev/null || {{ echo 'Codex state content 
 backup_required=$({backup_size})
 backup_space {home} "$((backup_required + {reserve}))"
 mkdir -p {backup}
-cp -c -R {codex} {backup}/.codex
+cp -c -Rp {codex} {backup}/.codex
 verify_backup {codex} {backup}/.codex
 mkdir -p {backup}/home-relative
 {workspace_backups}
@@ -851,10 +851,13 @@ rollback() {{
   rollback_exit_code=$?
   if test "$rollback_needed" = 1; then
     set +e
-    rm -rf {codex}
-    cp -c -R {backup}/.codex {codex}
-    {workspace_rollbacks}
-    {rollback_verification}
+    rollback_verified=0
+    if cm_transaction check-backup; then
+      rm -rf {codex}
+      cp -c -Rp {backup}/.codex {codex}
+      {workspace_rollbacks}
+      {rollback_verification}
+    fi
     if test "$rollback_verified" = 1; then
       {restored_transaction} || rollback_verified=0
     fi

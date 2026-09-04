@@ -64,10 +64,30 @@ without this protection, other apps, or manual shell commands.
 After a reboot the kernel lock is released, but that does not prove replacement
 finished. Before the first removal, the tool now saves an owner-only
 `.codex-migrate-transaction.json` in the destination home. It records the backup,
-selected paths, and whether each original existed. Backup files/directories and
+selected paths, whether each original existed, and frozen per-item backup
+checksums. The new format-2 record checks backup bytes, names, regular-file and
+directory permission bits, empty directories, and link text against the original
+before replacement. Backup files/directories and
 the record are synced, including a macOS device-flush barrier, before replacement
 can begin. Sync failures block progress rather than falling back to a weaker
-write. No source files or credentials are stored in this record.
+write. No source files or credential contents are stored in this record. The
+checksums stay in owner-only destination recovery records, not the UI, logs,
+or support report. The full destination backup check includes that Mac's retained
+identity files; it never reads the old Mac's excluded identity files.
+
+Before normal rollback removes any current destination data, all backup items
+must still match those frozen checksums. Restored data must also match the frozen
+checksums before rollback is called verified. A damaged, missing, unreadable, or
+unexpected backup stops rollback and keeps the pending record; it is not copied
+over the current files. Checks read the backed-up data again and can take time.
+Copies preserve permission bits, but ACLs, extended attributes, ownership,
+timestamps, and hard-link topology are not independently certified by the digest.
+These records detect accidental changes, not malicious same-account rewriting
+of both a backup and its record. Keep all writing apps closed.
+
+Older format-1 pending records have no frozen backup checksums. They still block
+new writes and require support review; upgrading does not silently trust or
+upgrade their backups.
 
 A pending record blocks new staging and installation writes, even from another
 source Mac or a different migration mode. Missing, malformed, or linked recovery
@@ -123,7 +143,7 @@ fails, Codex Migrate attempts to restore the destination Codex directory and
 every selected destination workspace and personal skill to their pre-install
 versions. The local
 state records `pending_backup` before any replacement begins. The rollback is
-reported as verified only after each original matches its backup (or is absent
+reported as verified only after each original matches its frozen backup checksum (or is absent
 when it did not previously exist), and the restored data and recovery receipt
 are synced. A failed check retains the pending record and blocks new writes.
 

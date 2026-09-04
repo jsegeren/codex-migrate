@@ -238,7 +238,7 @@ class MigrationTests(unittest.TestCase):
                  patch("codex_migrate.migration.freeze_tree", return_value="a" * 64):
                 receipt = engine._install_and_verify()
             self.assertTrue(receipt["auth_preserved"])
-            self.assertIn("cp -c -R /Users/person/Git", scripts[0])
+            self.assertIn("cp -c -Rp /Users/person/Git", scripts[0])
             self.assertIn("mv /Users/person/Codex-Migrate-Staging/.codex", scripts[0])
             self.assertIn("mv /Users/person/Codex-Migrate-Staging/home-relative/Git", scripts[0])
             self.assertIn("cp -p", scripts[0])
