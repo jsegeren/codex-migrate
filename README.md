@@ -360,6 +360,15 @@ switch. Failure or timeout stops with an unverified result, not an absence claim
 The check repeats before copying/source freezing and destination replacement.
 Inspecting another home does not attribute the caller's preferences to its owner.
 
+An explicit `config_file` key also stops full migration for scope review. Custom
+agent role files can be referenced outside the selected folders or contain their
+own configuration. This check detects the reference without resolving, opening,
+copying or printing its value; even an apparently in-scope reference needs review.
+It applies to the same inspected user/profile, project and system configuration
+layers on both Macs. It is conservative lexical detection, not proof that a role
+is active or changes database storage. Keep the files and references intact;
+removing a reference to bypass inspection is not a supported migration procedure.
+
 An override or unreadable/unsafe configuration stops the full migration for
 review. Keep the original files and settings intact; contact support rather
 than unsetting variables or deleting a setting just to bypass the guard. Any
@@ -373,7 +382,7 @@ if that project is not currently trusted or its profile is inactive. More than
 1,024 discovered project layers requires review, rather than silently skipping
 the rest. Ordinary directory-link targets are not traversed. The pass does not
 inspect other processes' environments, shell startup scripts, cloud-managed
-requirements, arbitrary role-config references or undisclosed custom storage
+requirements, the contents of arbitrary role-config references or undisclosed custom storage
 roots. Managed-preference presence is not a decoded policy comparison, MDM
 enrollment check or proof that no management exists. Preference visibility can
 differ in sandboxed or restricted launch contexts; real managed-Mac acceptance

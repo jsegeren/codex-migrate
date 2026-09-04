@@ -34,6 +34,24 @@ as a workaround.
 
 ## Candidate checks completed on the development Mac
 
+- Custom agent configuration references now stop full migration for explicit
+  scope review. A disposable source fixture reproduced inventory succeeding
+  without reporting a referenced role file outside the selection; independent
+  review also reproduced a referenced file escaping the storage-key screen.
+  The existing bounded lexical reader now detects `config_file` keys without
+  resolving/opening their targets or disclosing values. This includes in-scope
+  references; it is unsupported-configuration detection, not a reference resolver
+  or evidence that the referenced file actually relocates a database.
+  Eight new tests cover quoted/escaped/dotted/inline keys, profiles, ordinary
+  comments/value nonmatches, early source inspection, selected projects,
+  retained destination ancestors, fixed system defaults and late rejection
+  preserving original destination data/staging. Independent
+  `public_release_review` accepted the code and scoped documentation after 46
+  focused tests; the primary passed 59 focused tests. The full suite passed
+  530 of 537 tests with seven filesystem skips; all 16 Node tests, Swift
+  typecheck and diff checks passed. Suite notarization is mocked, not Apple
+  approval. Real cross-Mac/configuration acceptance remains open.
+
 - Shared Help keyboard behavior now retains a useful focus target after
   diagnostic preparation. A reproduced HTTP-error bug dropped focus onto the
   page body; failure now returns it to Prepare, and successful preparation
@@ -53,7 +71,7 @@ as a workaround.
   unsigned arm64 app; eight of nine actual packaged-engine startup/CLI/browser
   checks passed, with one case-sensitive-filename skip. ZIP SHA-256:
   `4043e42b0ef12a8bc6fd3dece86ac447f1cf6f14faee797b11026d37b4f96a43`.
-  Hosted run 33886223766 is in progress. The separate browser and sample server
+  Hosted run 33886223766 passed on Python 3.9 and 3.12. The separate browser and sample server
   were closed; the superseded inactive engineering build was moved recoverably
   to Trash after checking processes/open files. User-running apps stayed intact.
 

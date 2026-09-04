@@ -23,7 +23,8 @@ RUNNER = r'''
 use strict; use warnings; use Fcntl qw(:DEFAULT :mode);
 sub stop {
     my ($code) = @_;
-    my %why = (65 => 'Custom CODEX_HOME detected.', 66 => 'A sqlite_home configuration setting needs review.');
+    my %why = (65 => 'Custom CODEX_HOME detected.', 66 => 'A sqlite_home configuration setting needs review.',
+               70 => 'A config_file reference needs scope review. Referenced agent configuration is not resolved by this migration; do not remove the setting to bypass this check.');
     print STDERR ($why{$code} || 'Codex storage configuration could not be safely checked.'),
         " Keep existing files and settings intact; contact support before full migration. No migration data was changed.\n";
     exit $code;
@@ -77,7 +78,8 @@ for my $name ('auth.json', 'installation_id') {
 
 # Screen keys lexically, including quoted/escaped keys and legacy profile
 # tables. Values, comments and multiline strings are not interpreted as keys.
-# Any sqlite_home key requires review, even if a value happens to be default.
+# Storage overrides and external configuration references require review.
+# Do not resolve/open the reference or emit its value, even inside the scope.
 sub screen {
     my ($text) = @_;
     my $n = length($text); my $i = 0;
@@ -114,6 +116,7 @@ sub screen {
         } else { $i++; next; }
         my $next = $i; $next++ while $next < $n && substr($text, $next, 1) =~ /[ \t]/;
         stop(66) if $token eq 'sqlite_home' && $next < $n && substr($text, $next, 1) =~ /[=.]/;
+        stop(70) if $token eq 'config_file' && $next < $n && substr($text, $next, 1) =~ /[=.]/;
     }
 }
 opendir(my $dh, $root) or stop(67);
@@ -152,6 +155,7 @@ MESSAGES = {
     67: "Codex storage configuration could not be safely checked. Keep the files intact and contact support before full migration.",
     68: PRESENT_MESSAGE,
     69: UNKNOWN_MESSAGE,
+    70: "A config_file reference was found in Codex configuration. Referenced agent files need scope review before full migration. Keep the setting and files intact; contact support rather than removing the reference to bypass this check.",
 }
 
 

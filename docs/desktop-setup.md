@@ -30,6 +30,10 @@ available yet. Local unsigned builds are engineering artifacts, not releases.
   Visible Codex managed-preference keys stop full migration for administrator
   and support review. A failed or timed-out check also stops. There is no
   override; do not remove policy to bypass it.
+- Custom agent `config_file` references also need scope review before full
+  migration, including references inside selected folders. The tool flags the
+  reference without following or copying its target. Keep both intact and
+  contact support; removing the reference to bypass inspection is not supported.
 - If repositories are discovered, Apple Command Line Tools/Xcode and the
   guarded Git runtime must pass preflight on both Macs before staging. This
   early check does not inspect repository contents or prove Git integrity.
