@@ -42,6 +42,7 @@ class MigrationEngine:
         self._pause_requested = False
         self._lock = threading.RLock()
         self._personal_skills: Optional[List[SkillExport]] = None
+        self._recovery_cancelled = False
 
     def inventory(self) -> Inventory:
         # Personal skills are installed individually, never by replacing .agents.
@@ -83,8 +84,41 @@ class MigrationEngine:
         self.preflight()
         self._restore_requested_stop()
 
+    def start_recovery_check(self) -> None:
+        with self._lock:
+            if (self._thread and self._thread.is_alive()) or self.state.read().get("status") == "running":
+                raise MigrationError("Wait for the current migration action to finish")
+            self._recovery_cancelled = False
+            self.state.update(recovery={"status": "checking", "message":
+                "Checking destination recovery evidence and backup contents. This can take time; safe to stop. No files will be replaced."})
+            self._start(self._run_recovery_check)
+
+    def _run_recovery_check(self) -> None:
+        from codex_migrate.recovery import inspect_recovery
+        try:
+            report = inspect_recovery(self.config, self.transport, lambda: self._recovery_cancelled)
+        except Exception:
+            report = {"status": "failed", "message":
+                "Recovery could not be verified. Keep destination Codex closed, staging and backups intact, and contact support. No recovery changes were made."}
+        with self._lock:
+            if not self._recovery_cancelled:
+                report["checked_at"] = datetime.now(timezone.utc).isoformat()
+                self.state.update(recovery=report)
+
+    def stop_recovery_check(self) -> None:
+        with self._lock:
+            if self.state.read().get("recovery", {}).get("status") != "checking":
+                raise MigrationError("No recovery check is running")
+            self._recovery_cancelled = True
+            self.transport.cancel_all()
+            self.state.update(recovery={"status": "stopped", "message":
+                "Check stopped locally; no result is being claimed. A destination check may still be finishing. Wait if the next attempt reports busy. No recovery changes were made."})
+
     def reconcile_startup(self) -> None:
         current = self.state.read()
+        if current.get("recovery", {}).get("status") == "checking":
+            self.state.update(recovery={"status": "stopped", "message":
+                "The previous recovery check ended without a result. No recovery changes were made. Check again when ready."})
         if current.get("status") != "running":
             return
         if current.get("phase") == "installing":
@@ -105,6 +139,15 @@ class MigrationEngine:
             )
 
     def shutdown(self) -> None:
+        with self._lock:
+            recovery_checking = self.state.read().get("recovery", {}).get("status") == "checking"
+            if recovery_checking:
+                self.stop_recovery_check()
+                thread = self._thread
+        if recovery_checking:
+            if thread and thread.is_alive() and thread is not threading.current_thread():
+                thread.join(timeout=10)
+            return
         with self._lock:
             current = self.state.read()
             if current.get("status") != "running":

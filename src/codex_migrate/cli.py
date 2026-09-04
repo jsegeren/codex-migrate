@@ -68,6 +68,10 @@ def parser() -> argparse.ArgumentParser:
     )
     export.add_argument("--json", action="store_true")
 
+    recovery = commands.add_parser("recovery", help="Inspect an interrupted destination installation without changing files")
+    _migration_arguments(recovery)
+    recovery.add_argument("--json", action="store_true")
+
     return root
 
 
@@ -136,6 +140,20 @@ def main(argv: Optional[List[str]] = None) -> int:
             return 0
 
         config = _config(args)
+        if args.command == "recovery":
+            from codex_migrate.recovery import inspect_recovery
+            from codex_migrate.transport import SSHTransport
+            if config.apply:
+                raise ValueError("Recovery inspection is read-only; omit --apply. Guided restore is not available yet.")
+            result = inspect_recovery(config, SSHTransport(config))
+            if args.json:
+                print(json.dumps(result, indent=2, sort_keys=True))
+            else:
+                print(result["message"])
+                if result["status"] == "backup_verified":
+                    print("Backup items verified: %d" % result["inspected_items"])
+                    print("Destination backup: %s" % result["backup"])
+            return 0
         if args.command == "export":
             with Cancellation().signals() as cancellation:
                 components = args.component or list(SUPPORTED_COMPONENTS)

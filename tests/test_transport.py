@@ -1,4 +1,6 @@
 import unittest
+import threading
+import subprocess
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -7,6 +9,69 @@ from codex_migrate.transport import SSHTransport, TransferProcess, TransportErro
 
 
 class TransportTests(unittest.TestCase):
+    def test_remote_cancellation_during_guard_prevents_late_launch(self):
+        transport = SSHTransport(MigrationConfig(target="user@host.local", target_home="/Users/user").validate())
+        entered, release, cancelled = threading.Event(), threading.Event(), threading.Event()
+        errors = []
+        def guard():
+            entered.set()
+            self.assertTrue(release.wait(5))
+            return ""
+        def run():
+            try:
+                transport.run_remote_cancellable("", 5, cancelled.is_set)
+            except TransportError as error:
+                errors.append(error)
+        with patch.object(transport, "machine_guard", guard), patch("codex_migrate.transport.subprocess.Popen") as spawn:
+            thread = threading.Thread(target=run)
+            thread.start()
+            self.assertTrue(entered.wait(5))
+            cancelled.set()
+            transport.cancel_all()
+            release.set()
+            thread.join(5)
+            self.assertFalse(thread.is_alive())
+            spawn.assert_not_called()
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(transport._active_remote, [])
+
+    def test_remote_cancellation_waits_for_launch_registration_then_reaps_child(self):
+        transport = SSHTransport(MigrationConfig(target="user@host.local", target_home="/Users/user").validate())
+        spawned, release, cancelled = threading.Event(), threading.Event(), threading.Event()
+        real_spawn = subprocess.Popen
+        children, errors = [], []
+        def spawn(*args, **kwargs):
+            child = real_spawn(["/bin/sleep", "30"], **kwargs)
+            children.append(child)
+            spawned.set()
+            self.assertTrue(release.wait(5))
+            return child
+        def run():
+            try:
+                transport.run_remote_cancellable("", 5, cancelled.is_set)
+            except TransportError as error:
+                errors.append(error)
+        with patch.object(transport, "machine_guard", return_value=""), \
+             patch("codex_migrate.transport.subprocess.Popen", spawn):
+            worker = threading.Thread(target=run)
+            worker.start()
+            self.assertTrue(spawned.wait(5))
+            cancelled.set()
+            stop = threading.Thread(target=transport.cancel_all)
+            stop.start()
+            release.set()
+            stop.join(5)
+            worker.join(5)
+        for child in children:
+            if child.poll() is None:
+                child.kill()
+                child.wait(5)
+                self.fail("Cancelled child was not reaped")
+        self.assertFalse(worker.is_alive())
+        self.assertFalse(stop.is_alive())
+        self.assertEqual(transport._active_remote, [])
+        self.assertEqual(len(errors), 1)
+
     def test_darwin_exit_permission_race_requires_reaped_child(self):
         child = Mock(pid=12345)
         with patch("codex_migrate.transport.os.killpg", side_effect=PermissionError):

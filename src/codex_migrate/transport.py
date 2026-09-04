@@ -112,17 +112,29 @@ class SSHTransport:
         return " ".join(shlex.quote(item) for item in self.ssh_base())
 
     def run_remote(self, script: str, timeout: int = 60) -> subprocess.CompletedProcess:
+        return self._run_remote(script, timeout)
+
+    def run_remote_cancellable(self, script: str, timeout: int, cancelled) -> subprocess.CompletedProcess:
+        return self._run_remote(script, timeout, cancelled)
+
+    def _run_remote(self, script, timeout, cancelled=None):
+        if cancelled and cancelled():
+            raise TransportError("Recovery check stopped before connecting")
         script = self.machine_guard() + script
         command = self.ssh_base() + [self.config.target, "/bin/zsh -f -s"]
-        process = subprocess.Popen(
-            command,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            start_new_session=True,
-        )
         with self._remote_lock:
+            # Pair cancellation's active-child snapshot with launch/registration.
+            # The callback only reads a flag; it must not acquire engine locks.
+            if cancelled and cancelled():
+                raise TransportError("Recovery check stopped before connecting")
+            process = subprocess.Popen(
+                command,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                start_new_session=True,
+            )
             self._active_remote.append(process)
         try:
             try:

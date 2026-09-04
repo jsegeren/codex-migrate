@@ -79,6 +79,17 @@ class SupportTests(unittest.TestCase):
         state = {"support_history": [None] * 100 + [{"status": "running", "phase": "staging"}]}
         self.assertEqual(len(diagnostic_report(state)["recent_events"]), 1)
 
+    def test_recovery_check_events_include_only_fixed_status_not_private_report(self):
+        with tempfile.TemporaryDirectory() as root:
+            state = StateStore(root)
+            state.update(recovery={"status": "checking"})
+            state.update(recovery={"status": "backup_verified", "backup": "/Users/PRIVATE",
+                                   "items": [{"original": "PRIVATE"}], "backup_digest": "PRIVATE"})
+            report = diagnostic_report(state.read())
+            self.assertEqual(report["current"]["recovery_status"], "backup_verified")
+            self.assertEqual([e["recovery_status"] for e in report["recent_events"]], ["checking", "backup_verified"])
+            self.assertNotIn("PRIVATE", json.dumps(report))
+
     def test_help_is_available_before_configuration_and_during_failure(self):
         for document in (HTML, SETUP_HTML):
             self.assertIn('href="#migration-help"', document)

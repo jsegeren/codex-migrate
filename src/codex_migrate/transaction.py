@@ -30,7 +30,7 @@ def recovery_preflight_script(home):
 # macOS fcntl.h defines F_FULLFSYNC as 51. fsync each file/directory, then use
 # the device barrier before progressing past a durable transaction boundary.
 # See the local macOS fsync(2)/fcntl(2) manuals; failures never fall back to sync.
-TRANSACTION_RUNNER = PERL_IMPORTS + r'''
+TRANSACTION_LIBRARY = PERL_IMPORTS + r'''
 use IO::Handle;
 use JSON::PP;
 use Errno qw(ENOENT);
@@ -161,6 +161,9 @@ sub verify_frozen {
         !defined($item->{backup_digest}) && !present($path) or fail();
     }
 }
+'''
+
+TRANSACTION_RUNNER = TRANSACTION_LIBRARY + r'''
 @ARGV == 2 or fail();
 my ($mode, $payload) = @ARGV;
 $mode =~ /\A(?:begin|check-backup|installed|restored|clear)\z/ or fail();

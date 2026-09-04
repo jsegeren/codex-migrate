@@ -8,6 +8,25 @@ results, accessibility findings, and pre-signing work still open.
 
 ## Candidate checks completed on the development Mac
 
+- Read-only recovery inspection is now available through the collapsed browser
+  recovery panel and `codex-migrate recovery`. It opens the existing destination
+  lock read-only, reports a live writer as busy, validates bounded saved scope,
+  checks frozen backups, and never clears a record or restores files. Reports
+  distinguish absent/legacy evidence and historical terminal receipts from
+  current usability; no digest or credential contents leave the remote helper.
+  Browser checks preserve the migration state, support local Stop, recover from
+  an interrupted check, and record only allowlisted status in diagnostic events.
+  Independent `public_release_review` caught and accepted fixes for a late-child
+  cancellation race, lost keyboard focus, and mobile path overflow. Rendered
+  desktop/320px checks verified disclosures, Check → status → Check focus, and
+  expanded long-path wrapping. Final focused checks and corrected copy passed;
+  full suite: 303 tests (302 passed, one existing filesystem skip), 10 signup
+  tests, and Swift typecheck. Real local subprocess tests cover cancellation
+  before launch and during registration; no real SSH migration/user data was
+  used. VoiceOver, clean second-Mac behavior, and guided restoration that
+  preserves current destination data remain open. This checkpoint has not yet
+  been rebuilt into the packaged app.
+
 - Frozen backup integrity now uses version-2 destination recovery records. Each
   existing backup and original must match before replacement; all backups are
   rechecked before normal rollback can remove current destination data, and

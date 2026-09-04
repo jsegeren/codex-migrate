@@ -27,6 +27,8 @@ PHASES = frozenset(("not_started", "inspecting", "preflight_complete", "staging"
 FAILURES = frozenset(("none", "unknown", "disk_space", "connection", "permissions",
                       "verification", "process_guard", "interrupted", "git_scope", "machine_identity", "destination_lock", "recovery_pending"))
 HISTORY_LIMIT = 60
+RECOVERY_STATUSES = frozenset(("not_checked", "checking", "stopped", "failed", "busy",
+                               "no_pending_record", "legacy_record", "backup_verified"))
 
 
 def failure_category(error):
@@ -56,10 +58,13 @@ def _enum(value, allowed):
 
 
 def event_fields(state):
+    recovery = state.get("recovery")
+    recovery = recovery if isinstance(recovery, dict) else {}
     return {"status": _enum(state.get("status"), STATUSES),
             "phase": _enum(state.get("phase"), PHASES),
             "failure_category": failure_category(state.get("error")),
-            "space_check": _enum(state.get("space_check"), {"passed", "blocked"})}
+            "space_check": _enum(state.get("space_check"), {"passed", "blocked"}),
+            "recovery_status": _enum(recovery.get("status", "not_checked"), RECOVERY_STATUSES)}
 
 
 def _number(value):
@@ -105,6 +110,7 @@ def diagnostic_report(state):
             "phase": _enum(item.get("phase"), PHASES),
             "failure_category": _enum(item.get("failure_category"), FAILURES),
             "space_check": _enum(item.get("space_check"), {"passed", "blocked"}),
+            "recovery_status": _enum(item.get("recovery_status", "not_checked"), RECOVERY_STATUSES),
         })
     macos = platform.mac_ver()[0]
     return {

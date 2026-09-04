@@ -45,6 +45,35 @@ and continues instead of beginning from an empty destination.
 
 ## Finalization fails
 
+Open **Recover an interrupted installation** in the dashboard and choose
+**Check recovery**. The check is available even when migration changes are
+disabled. It reads the destination's saved record and backup contents without
+restoring, deleting, or clearing anything. Large backups take time to read;
+**Stop check** stops the local request. A destination-side check may still be
+finishing after a disconnect, so wait if another attempt reports busy.
+
+The result distinguishes a busy destination, no pending record, older evidence
+requiring support review, and a backup matching its frozen checksums. A failed
+inspection never becomes a success or clears the record. Expand **Last check
+details** for the timestamp, backup location, and original/current presence of
+each scoped destination item. Presence is not a check of current file contents.
+A terminal receipt describes an earlier outcome, not current usability. No
+pending record does not prove the migration finished. These are point-in-time
+findings; inspecting recovery does not change the migration's completion status.
+
+The same read-only check is available without the old local migration state:
+
+```bash
+./codex-migrate recovery \
+  --target new-user@new-mac.local \
+  --target-home /Users/new-user
+```
+
+Add `--json` for scoped details. Do not add `--apply`: this command does not
+perform restoration. Check statuses are recorded in the local diagnostic event
+history. Sharing a diagnostic report is optional; private paths, record contents,
+and backup checksums are not included in that report.
+
 Only one migration writer can use a destination home at a time. Full migrations
 and skills repairs share the same destination-side lock for staging writes and
 the complete backup/install/verify/rollback phase. If another operation holds

@@ -52,6 +52,9 @@ HTML = r"""<!doctype html>
     #backup-safety { margin-top:18px; padding:16px; border:1px solid var(--line); border-radius:12px; }
     #backup-safety p { margin:6px 0; overflow-wrap:anywhere; }
     #backup-safety.blocked { border:2px solid var(--red); background:#3a151a; }
+    #recovery-message:focus { outline:3px solid #d9cdff; outline-offset:4px; }
+    #recovery-items { padding-left:20px; }
+    #recovery-items li { overflow-wrap:anywhere; }
     button { appearance:none; border:1px solid var(--line); background:#182134; color:var(--text); border-radius:11px; padding:11px 15px; font-family:inherit; font-size:15px; font-weight:700; line-height:1; cursor:pointer; }
     button.primary { background:var(--action); border-color:var(--action); }
     button:disabled { opacity:.38; cursor:not-allowed; }
@@ -100,7 +103,13 @@ HTML = r"""<!doctype html>
       <p id="backup-location">No verified backup recorded for this migration.</p>
       <p>Keep the old Mac intact. Close apps writing to selected folders before finalizing.</p>
       <details><summary>Backup and verification details</summary><p>Installation is blocked if space is insufficient or backup verification fails. There is no skip-backup option. Same-disk backups protect against replacement mistakes, not disk failure.</p><p id="codex-state-proof">Retained Codex state verification is pending.</p></details>
-      <details><summary>How to recover</summary><p>Keep Codex and other writing apps closed. In the backup folder, read verification.json for original-to-backup paths. Move current destination files aside before restoring reviewed backup items. A pending folder without verification.json is not a verified backup. Never delete the source or backups until you have checked the restored work.</p></details>
+      <details id="recovery-help"><summary>Recover an interrupted installation</summary>
+        <p>Check the destination before trying again. This reads saved recovery evidence and backup contents; it does not restore or remove files.</p>
+        <div class="controls"><button id="check_recovery" disabled>Check recovery</button><button id="stop_recovery" disabled>Stop check</button></div>
+        <p id="recovery-message" role="status" aria-live="polite" tabindex="-1">No recovery check has run.</p>
+        <details id="recovery-details" hidden><summary>Last check details</summary><p id="recovery-time"></p><p id="recovery-backup"></p><p id="recovery-terminal"></p><ul id="recovery-items"></ul></details>
+        <p>Keep the old Mac, staging, and backups intact. Guided restore is not available yet; contact support before manually replacing files.</p>
+      </details>
     </section>
     <div class="controls">
       <button id="inspect" disabled>Inspect</button>
@@ -124,11 +133,13 @@ const token=incomingToken||sessionStorage.getItem(tokenKey)||"";
 history.replaceState(null,"",location.pathname);
 const $=id=>document.getElementById(id);
 let latestState={};
+let recoveryWasChecking=false;
 const fmt=n=>{if(!Number.isFinite(n))return "—";const u=["B","KB","MB","GB","TB"];let i=0;while(n>=1000&&i<u.length-1){n/=1000;i++}return `${n.toFixed(n>=100?0:n>=10?1:2)} ${u[i]}`};
-function renderBackup(s){const blocked=s.space_check==="blocked";$("backup-safety").classList.toggle("blocked",blocked);$("backup-heading").textContent=blocked?"Blocked — not enough space for a safe backup":"Backup required before replacement";$("backup-space").textContent=s.destination_bytes_required!=null?`Last space check: ${fmt(s.destination_bytes_free)} free; ${fmt(s.destination_bytes_required)} required, including ${fmt(s.backup_bytes_required)} for backups and ${fmt(s.reserve_bytes)} safety reserve. Space is checked again before replacement.`:"Destination space has not been checked yet.";const r=s.receipt||{};$("backup-location").textContent=s.pending_backup?`Pending backup on the destination: ${s.pending_backup}. Verification is not yet confirmed here; inspect verification.json before recovery.`:r.backup_verified?`Last verified backup on the destination: ${r.backup}. File contents, tree structure and link targets checked before replacement.`:"No verified backup recorded for this migration."}
+function renderBackup(s){const blocked=s.space_check==="blocked";$("backup-safety").classList.toggle("blocked",blocked);$("backup-heading").textContent=blocked?"Blocked — not enough space for a safe backup":"Backup required before replacement";$("backup-space").textContent=s.destination_bytes_required!=null?`Last space check: ${fmt(s.destination_bytes_free)} free; ${fmt(s.destination_bytes_required)} required, including ${fmt(s.backup_bytes_required)} for backups and ${fmt(s.reserve_bytes)} safety reserve. Space is checked again before replacement.`:"Destination space has not been checked yet.";const r=s.receipt||{};$("backup-location").textContent=s.pending_backup?`Pending backup on the destination: ${s.pending_backup}. Use Check recovery below; a saved path alone does not prove the backup is intact.`:r.backup_verified?`Last verified backup on the destination: ${r.backup}. File contents, tree structure and link targets checked before replacement.`:"No verified backup recorded for this migration."}
 async function api(path,options={}){const response=await fetch(path,{...options,headers:{"X-Codex-Migrate-Token":token,"Content-Type":"application/json",...(options.headers||{})}});const body=await response.json();if(!response.ok)throw new Error(body.error||`Request failed (${response.status})`);renderBackup(body);return body}
 function render(s){latestState=s;const p=Math.max(0,Math.min(100,Number(s.percent)||0));$("percent").textContent=`${p.toFixed(p===100?0:1)}%`;$("bar").style.width=`${p}%`;$("bar").parentElement.setAttribute("aria-valuenow",String(p));$("phase").textContent=String(s.phase||"unknown").replaceAll("_"," ");$("status").textContent=String(s.status||"unknown").replaceAll("_"," ");$("message").textContent=s.message||"";$("route").textContent=s.route||"—";$("bytes").textContent=`${fmt(s.bytes_staged||0)} / ${fmt(s.bytes_total||0)}`;$("item").textContent=s.current_item||"—";$("warning").style.display=s.warning?"block":"none";$("warning").textContent=s.warning||"";$("error").style.display=s.error?"block":"none";$("error").textContent=s.error||"";$("compat").textContent=s.compatibility_command?`Different macOS usernames: after installation, run on the new Mac: ${s.compatibility_command}`:"";const c=s.config||{};$("codex-scope").textContent=`${c.source_home||"—"}/.codex → ${c.target_home||"—"}/.codex`;$("ssh-target").textContent=`${c.target||"—"} · ${c.target_home||"—"}`;const roots=Array.isArray(c.workspace_roots)?c.workspace_roots:[];$("workspace-count").textContent=String(roots.length);$("workspace-list").replaceChildren(...roots.map(root=>{const li=document.createElement("li");const prefix=`${c.source_home}/`;const relative=root.startsWith(prefix)?root.slice(prefix.length):root;li.textContent=`${root} → ${c.target_home}/${relative}`;return li}));const active=s.status==="running";const canStart=["idle","ready"].includes(s.status);const canFinalize=s.status==="ready_to_finalize"||(s.status==="waiting"&&["close_source_codex","close_target_codex"].includes(s.phase));$("inspect").disabled=active;$("start").disabled=!canStart||!s.apply;$("pause").disabled=!active||!["staging","final_delta"].includes(s.phase);$("resume").disabled=!s.apply||!['paused','cancelled','failed','interrupted'].includes(s.status);$("finalize").disabled=!canFinalize||!s.apply;$("cancel").disabled=!((active&&["inspecting","staging","final_delta"].includes(s.phase))||s.status==="paused");}
 function renderSkills(s){
+  renderRecovery(s);
   $("codex-state-proof").hidden=s.migration_mode==="skills";
   $("codex-state-proof").textContent=s.status==="complete"&&s.receipt?.codex_state_content_verified===true?"Retained Codex state matched the source before and after installation, before database checks. Authentication and runtime exclusions apply.":s.status==="complete"?"No retained Codex state verification was recorded for this migration.":"Retained Codex state verification is pending.";
   if(s.status==="running"&&s.phase==="verifying_sources")$("cancel").disabled=false;
@@ -164,10 +175,26 @@ function renderGit(s){
   list("git-required",missing.map(path=>`Required folder not selected: ${path}`));
   list("git-issues",[...issues,...warnings]);
 }
-function renderEvents(events){const rows=(events||[]).map(event=>{const li=document.createElement('li');li.textContent=`${event.at||'Time unavailable'} · ${event.phase.replaceAll('_',' ')} · ${event.status}${event.failure_category==='none'?'':` · ${event.failure_category.replaceAll('_',' ')}`}`;return li});if(!rows.length){const li=document.createElement('li');li.textContent='No events recorded yet.';rows.push(li)}$('migration-events').replaceChildren(...rows)}
+function renderEvents(events){const rows=(events||[]).map(event=>{const li=document.createElement('li');const recovery=event.recovery_status&&event.recovery_status!=='not_checked'?` · recovery check: ${event.recovery_status.replaceAll('_',' ')}`:'';li.textContent=`${event.at||'Time unavailable'} · ${event.phase.replaceAll('_',' ')} · ${event.status}${event.failure_category==='none'?'':` · ${event.failure_category.replaceAll('_',' ')}`}${recovery}`;return li});if(!rows.length){const li=document.createElement('li');li.textContent='No events recorded yet.';rows.push(li)}$('migration-events').replaceChildren(...rows)}
+function renderRecovery(s){
+  const r=s.recovery||{}, checking=r.status==='checking';
+  const focused=document.activeElement?.id;
+  $('check_recovery').disabled=s.status==='running'||checking;
+  $('stop_recovery').disabled=!checking;
+  if(checking)for(const name of ['inspect','start','pause','resume','finalize','cancel'])$(name).disabled=true;
+  $('recovery-message').textContent=r.message||'No recovery check has run.';
+  $('recovery-details').hidden=!r.checked_at;
+  $('recovery-time').textContent=r.checked_at?`Checked at ${r.checked_at}. This is a point-in-time result, not a live guarantee.`:'';
+  $('recovery-backup').textContent=r.backup?`Destination backup: ${r.backup}`:'';
+  $('recovery-terminal').textContent=r.terminal_phase?`An earlier receipt records ${r.terminal_phase}. Current destination contents and usability have not been verified by this check.`:'';
+  $('recovery-items').replaceChildren(...(r.items||[]).map(item=>{const li=document.createElement('li');li.textContent=`${item.original} — ${item.existed?'backup verified':'originally absent'}; ${item.current_present?'current destination entry present':'current destination entry absent'}`;return li}));
+  if(checking&&focused==='check_recovery')$('recovery-message').focus();
+  else if(!checking&&recoveryWasChecking&&['recovery-message','stop_recovery'].includes(focused))$('check_recovery').focus();
+  recoveryWasChecking=checking;
+}
 async function refresh(){try{const s=await api("/api/status");render(s);renderSkills(s);renderEvents(s.support_events)}catch(error){$("error").style.display="block";$("error").textContent=error.message}}
 async function action(name){const c=latestState.config||{};const confirmation=latestState.migration_mode==="skills"?`Back up, then replace ${latestState.inventory?.skill_exports?.length||0} listed skill(s) on ${c.target}? Conversations, configuration and whole repositories will not be migrated. Other skills will be kept.`:`Back up, then replace ${c.target_home}/.codex, ${c.workspace_roots?.length||0} selected workspace root(s), and ${latestState.inventory?.personal_skills?.length||0} personal skill(s) on ${c.target}? Other destination skills will be kept.`;if(name==="finalize"&&!confirm(confirmation))return;try{const s=await api("/api/action",{method:"POST",body:JSON.stringify({action:name,confirmed:name==="finalize"})});render(s);renderSkills(s)}catch(error){$("error").style.display="block";$("error").textContent=error.message}}
-for(const name of ["inspect","start","pause","resume","finalize","cancel"]){$(name).addEventListener("click",()=>action(name))}
+for(const name of ["inspect","start","pause","resume","finalize","cancel","check_recovery","stop_recovery"]){$(name).addEventListener("click",()=>action(name))}
 refresh();setInterval(refresh,2500);
 </script>
 </body></html>"""
@@ -288,7 +315,11 @@ class Dashboard:
                     action = payload.get("action")
                     if action in ("start", "resume", "finalize") and not dashboard.engine.config.apply:
                         raise MigrationError("Changes are disabled; restart with --apply to enable migration")
-                    if action == "inspect":
+                    if action == "check_recovery":
+                        dashboard.engine.start_recovery_check()
+                    elif action == "stop_recovery":
+                        dashboard.engine.stop_recovery_check()
+                    elif action == "inspect":
                         if dashboard.state.read().get("status") == "running":
                             raise MigrationError("Wait for the current migration action to finish")
                         dashboard.engine.start_inspection()

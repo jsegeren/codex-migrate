@@ -81,6 +81,16 @@ class DashboardTests(unittest.TestCase):
         status, _ = self.request()
         self.assertEqual(status, 403)
 
+    def test_recovery_check_is_token_protected_and_available_without_apply(self):
+        with patch.object(self.dashboard.engine, "start_recovery_check") as start:
+            self.assertEqual(self.post({"action": "check_recovery"})[0], 403)
+            start.assert_not_called()
+            self.assertEqual(self.post({"action": "check_recovery"}, self.dashboard.token)[0], 202)
+            start.assert_called_once()
+        with patch.object(self.dashboard.engine, "stop_recovery_check") as stop:
+            self.assertEqual(self.post({"action": "stop_recovery"}, self.dashboard.token)[0], 202)
+            stop.assert_called_once()
+
     def test_loopback_startup_does_not_require_reverse_dns(self):
         with patch("socket.getfqdn", side_effect=AssertionError("Unexpected DNS lookup")):
             server = LoopbackHTTPServer(("127.0.0.1", 0), self.dashboard._handler())
@@ -96,7 +106,7 @@ class DashboardTests(unittest.TestCase):
         self.assertIn('r.backup_verified', HTML)
         self.assertIn('Blocked — not enough space', HTML)
         self.assertIn('not disk failure', HTML)
-        self.assertIn('verification.json', HTML)
+        self.assertIn('Use Check recovery below', HTML)
 
     def test_status_accepts_exact_token(self):
         status, body = self.request(self.dashboard.token)

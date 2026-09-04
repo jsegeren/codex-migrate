@@ -361,6 +361,13 @@ for you to review, save, and attach to your email. Nothing is uploaded or sent
 automatically. Keep source data, staging, and backups if something fails.
 See [support and diagnostic privacy](docs/support.md).
 
+After an interrupted installation, open **Recover an interrupted installation**
+and choose **Check recovery**. It checks saved backup evidence without restoring
+or deleting files; **Stop check** is available while it runs. CLI users can run
+`./codex-migrate recovery --target new-user@new-mac.local --target-home /Users/new-user`.
+An intact backup is not proof the workspace is restored. See the
+[recovery guide](docs/recovery.md); guided restoration remains a release gate.
+
 ## Contributing
 
 Start with [CONTRIBUTING.md](CONTRIBUTING.md). Migration code has an unusually
