@@ -22,6 +22,13 @@ results, accessibility findings, and pre-signing work still open.
   Ten signup tests, Swift typecheck and diff checks also passed. This proves
   observed-flag screening, not actual provider behavior, an eviction-proof
   snapshot, destination backup availability or Apple certification.
+  Clean source `708a1db` built a local-only unsigned arm64 app. Eight of nine
+  actual bundled-engine checks passed, with one case-sensitive-filename skip.
+  ZIP SHA-256:
+  `070bc4283bc73ac1aa454aa13f87e54bdcfbd714f2c1bba212c471994b9a9f70`.
+  These package checks are not cloud-provider tests. Superseded inactive
+  engineering builds were moved recoverably to Trash; running user apps were
+  left untouched. Hosted run 33881789542 is pending at this checkpoint.
 
 - Discovered Git scope now triggers an early source/destination runtime check
   before staging, using the existing sandbox probe with empty repository/read
