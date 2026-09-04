@@ -24,7 +24,8 @@ from codex_migrate.security import redact
 from codex_migrate.state import StateStore
 from codex_migrate.transport import SSHTransport, TransferProcess
 from codex_migrate.workspaces import (WORKSPACE_TIMEOUT, check_local_tools, freeze_tree,
-                                      remote_tool_check, remote_tree_function, tree_check)
+                                      remote_tool_check, remote_tree_function, tree_check,
+                                      validate_codex_identity_names)
 
 
 def codex_running() -> bool:
@@ -159,6 +160,7 @@ class MigrationEngine:
             raise MigrationError("No .codex directory exists in the source home")
         if Path(self.config.source_codex).is_symlink():
             raise MigrationError("The source .codex directory must not be a symbolic link")
+        validate_codex_identity_names(self.config.source_codex)
         if not Path(self.config.source_codex, "sessions").is_dir():
             raise MigrationError("No local Codex sessions directory was found")
         for root in self.config.workspace_roots:
@@ -367,6 +369,7 @@ class MigrationEngine:
         )
 
     def _transfers(self) -> List[Tuple[str, str, Sequence[str], str, bool]]:
+        validate_codex_identity_names(self.config.source_codex)
         staging = self.config.target_staging
         transfers: List[Tuple[str, str, Sequence[str], str, bool]] = [
             (self.config.source_codex, staging + "/.codex", CODEX_EXCLUDES, "Codex state", False)
@@ -671,11 +674,19 @@ class MigrationEngine:
                     absent_managed = True
             digest = None if absent_managed else freeze_tree(source, self._inspection_checkpoint)
             prepared.append((staged, installed, digest))
-        return prepared
+        with self._lock:
+            self._inspection_checkpoint()
+            self.state.update(status="running", phase="verifying_sources",
+                              message="Reading retained Codex state. Safe to stop; a stopped check restarts on Finalize.",
+                              current_item="Source Codex state verification")
+        return {"workspaces": prepared,
+                "codex_state": freeze_tree(self.config.source_codex, self._inspection_checkpoint, codex=True)}
 
     def _install_and_verify(self, prepared_workspaces=None) -> Dict[str, object]:
         if prepared_workspaces is None:
             prepared_workspaces = self._prepare_install()
+        codex_state_digest = prepared_workspaces["codex_state"]
+        prepared_workspaces = prepared_workspaces["workspaces"]
         self.state.update(phase="installing")
         recorded_inventory = self.state.read().get("inventory")
         if isinstance(recorded_inventory, dict):
@@ -810,7 +821,9 @@ test -f {marker}
 test ! -L {marker}
 test "$(cat {marker})" = {migration_id}
 test ! -e {staging}/.codex/auth.json
+test ! -L {staging}/.codex/auth.json
 test ! -e {staging}/.codex/installation_id
+test ! -L {staging}/.codex/installation_id
 test ! -e {backup}
 if ps -axo comm= | awk -F/ '$NF == "ChatGPT" || $NF == "Codex" {{ found=1 }} END {{ exit found ? 0 : 1 }}'; then
   echo 'Codex reopened on the destination' >&2
@@ -819,11 +832,17 @@ fi
 {workspace_preconditions}
 {workspace_functions}
 {workspace_stage_checks}
+{codex_state_function}
+verify_codex_state() {{
+  local workspace_digest
+  {codex_state_check}
+}}
 {skill_stage_checks}
 verify_conversations() {{
 {conversation_checks}
 }}
 verify_conversations {staging}/.codex 2>/dev/null || {{ echo 'Conversation content verification failed. Keep staging and backups; Resume to refresh the copy.' >&2; exit 74; }}
+verify_codex_state {staging}/.codex 2>/dev/null || {{ echo 'Codex state content verification failed before installation; staging was kept.' >&2; exit 74; }}
 backup_required=$({backup_size})
 backup_space {home} "$((backup_required + {reserve}))"
 mkdir -p {backup}
@@ -856,6 +875,7 @@ cp -p {backup}/.codex/installation_id {codex}/installation_id
 {workspace_installed_checks}
 {skill_installed_checks}
 verify_conversations {codex} 2>/dev/null || {{ echo 'Conversation content verification failed after installation; rollback will be attempted.' >&2; exit 74; }}
+verify_codex_state {codex} 2>/dev/null || {{ echo 'Codex state content verification failed after installation; rollback will be attempted.' >&2; exit 74; }}
 auth_after=$(shasum -a 256 {codex}/auth.json | awk '{{print $1}}')
 installation_after=$(shasum -a 256 {codex}/installation_id | awk '{{print $1}}')
 test "$auth_before" = "$auth_after"
@@ -874,7 +894,7 @@ done
 chmod 700 {codex}
 rollback_needed=0
 trap - EXIT
-printf 'INSTALLED=1\\nACTIVE=%s\\nARCHIVED=%s\\nAUTH_PRESERVED=1\\nINSTALLATION_ID_PRESERVED=1\\nBACKUP_VERIFIED=1\\nCONVERSATION_CONTENT_VERIFIED=1\\nWORKSPACE_CONTENT_VERIFIED=1\\nWORKSPACE_ROOTS_VERIFIED={workspace_count}\\nPERSONAL_SKILLS_VERIFIED={skill_count}\\nBACKUP=%s\\n' "$active" "$archived" {backup}
+printf 'INSTALLED=1\\nACTIVE=%s\\nARCHIVED=%s\\nAUTH_PRESERVED=1\\nINSTALLATION_ID_PRESERVED=1\\nBACKUP_VERIFIED=1\\nCONVERSATION_CONTENT_VERIFIED=1\\nCODEX_STATE_CONTENT_VERIFIED=1\\nWORKSPACE_CONTENT_VERIFIED=1\\nWORKSPACE_ROOTS_VERIFIED={workspace_count}\\nPERSONAL_SKILLS_VERIFIED={skill_count}\\nBACKUP=%s\\n' "$active" "$archived" {backup}
 """.format(
             backup_functions=BACKUP_FUNCTIONS,
             backup_size=size_command(self._backup_targets()),
@@ -898,6 +918,8 @@ printf 'INSTALLED=1\\nACTIVE=%s\\nARCHIVED=%s\\nAUTH_PRESERVED=1\\nINSTALLATION_
             skill_count=len(skills),
             conversation_checks=conversation_checks,
             workspace_functions=remote_tree_function(),
+            codex_state_function=remote_tree_function(codex=True),
+            codex_state_check=tree_check("CODEX_STATE_ROOT", codex_state_digest, codex=True).replace("CODEX_STATE_ROOT", '"$1"'),
             workspace_stage_checks="\n".join(workspace_stage_checks),
             workspace_installed_checks="\n".join(workspace_installed_checks),
             workspace_count=sum(digest is not None for _, _, digest in prepared_workspaces),
@@ -909,6 +931,8 @@ printf 'INSTALLED=1\\nACTIVE=%s\\nARCHIVED=%s\\nAUTH_PRESERVED=1\\nINSTALLATION_
             raise MigrationError("Destination backup verification receipt is missing")
         if _value(output, "CONVERSATION_CONTENT_VERIFIED") != "1":
             raise MigrationError("Conversation content verification receipt is missing")
+        if _value(output, "CODEX_STATE_CONTENT_VERIFIED") != "1":
+            raise MigrationError("Codex state content verification receipt is missing")
         workspace_count = sum(digest is not None for _, _, digest in prepared_workspaces)
         if (_value(output, "WORKSPACE_CONTENT_VERIFIED") != "1"
                 or _value(output, "WORKSPACE_ROOTS_VERIFIED") != str(workspace_count)):
@@ -930,6 +954,7 @@ printf 'INSTALLED=1\\nACTIVE=%s\\nARCHIVED=%s\\nAUTH_PRESERVED=1\\nINSTALLATION_
             "backup": _value(output, "BACKUP"),
             "backup_verified": True,
             "conversation_content_verified": True,
+            "codex_state_content_verified": True,
             "workspace_content_verified": True,
             "workspace_roots_verified": workspace_count,
             "personal_skills": [skill.as_dict() for skill in skills],

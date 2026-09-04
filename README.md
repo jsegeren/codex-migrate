@@ -247,6 +247,26 @@ components will follow the same stage → backup → install → verify contract
    Selected workspaces and `~/.codex/worktrees` must match the same frozen
    SHA-256 tree checks before and after installation, including file bytes,
    names, regular-file/directory permissions, empty directories, and link text.
+   Retained Codex state—including configuration, project organization, rules,
+   automations and database files—also receives a frozen content/tree check
+   before replacement and after installation, before SQLite validation runs.
+   The check uses the same root-anchored authentication/runtime exclusions as
+   transfer. Managed worktrees remain covered by their separate complete check.
+
+Retained-state verification adds a source read and two destination reads of
+that data, including transcripts already checked separately for stricter link
+rules. This increases verification time for large conversation histories. Like
+workspace verification, its source pass can be stopped safely. Only Codex's
+root-directory mode is omitted from this comparison: installation explicitly
+restricts that directory to mode 700. Retained child permissions are checked.
+SQLite validation can update database sidecars after the byte comparison;
+the receipt does not promise files never change afterward.
+
+Source `auth.json` and `installation_id` are never opened by this check.
+Noncanonical capitalization of these root filenames blocks transfer because
+case-insensitive Mac filesystems could otherwise expose them despite literal
+copy exclusions. These are path protections, not general secret detection:
+other retained configuration may contain credentials and requires your review.
 
 Workspace verification reads every regular file once on the source and twice
 on the destination. Large workspaces can take substantial time; verification

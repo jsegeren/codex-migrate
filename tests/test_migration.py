@@ -201,6 +201,7 @@ class MigrationTests(unittest.TestCase):
                             "AUTH_PRESERVED=1\nINSTALLATION_ID_PRESERVED=1\n"
                             "BACKUP_VERIFIED=1\n"
                             "CONVERSATION_CONTENT_VERIFIED=1\n"
+                            "CODEX_STATE_CONTENT_VERIFIED=1\n"
                             "WORKSPACE_CONTENT_VERIFIED=1\nWORKSPACE_ROOTS_VERIFIED=1\n"
                             "BACKUP=/Users/person/backup\n"
                         )

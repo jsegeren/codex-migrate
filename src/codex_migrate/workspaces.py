@@ -7,6 +7,7 @@ import subprocess
 import time
 
 from codex_migrate.errors import MigrationError
+from codex_migrate.exclusions import CODEX_EXCLUDES
 from codex_migrate.transport import _stop_process
 
 
@@ -16,10 +17,29 @@ PERL_IMPORTS = "use strict; use warnings; use bytes; use Digest::SHA; use Time::
 PERL_PROBE = PERL_IMPORTS + "my $flags = O_NOFOLLOW | O_NONBLOCK; die unless length(Digest::SHA::sha256_hex('')) == 64;"
 WORKSPACE_TIMEOUT = 24 * 60 * 60
 
+
+def _codex_filter():
+    # Compile only the deliberately small wildcard grammar our transfer uses.
+    # Directory-only exclusions must not hide files or symlinks of that name.
+    # Managed worktrees have their own complete-tree check, including absence.
+    lines = ["sub excluded { my ($relative, $path) = @_; return 0 unless $codex_mode;",
+             "die if (lc($relative) eq 'auth.json' && $relative ne 'auth.json') || (lc($relative) eq 'installation_id' && $relative ne 'installation_id');"]
+    for pattern in (*CODEX_EXCLUDES, "/worktrees/"):
+        if not re.fullmatch(r"/[A-Za-z0-9._*/-]+", pattern) or "**" in pattern:
+            raise MigrationError("Unsupported Codex verification exclusion")
+        expression = re.escape(pattern.strip("/")).replace(r"\*", "[^/]*")
+        condition = "$relative =~ m{\\A" + expression + "\\z}"
+        if pattern.endswith("/"):
+            condition += " && S_ISDIR(information($path)->[2])"
+        lines.append("return 1 if " + condition + ";")
+    return "\n".join(lines) + "\nreturn 0; }\n"
+
 # Names/link text are filesystem bytes, never decoded as Unicode. Each tree
 # node is domain-separated and length-framed; child names are sorted as bytes.
 # Hashes do not include absolute roots, owners, timestamps, ACLs or xattrs.
 TREE_PROGRAM = PERL_IMPORTS + r'''
+my $codex_mode = @ARGV == 2 && $ARGV[1] eq 'codex';
+''' + _codex_filter() + r'''
 sub information {
     my ($path) = @_;
     my @s = Time::HiRes::lstat($path);
@@ -36,23 +56,28 @@ sub field {
     $sha->add(pack('N', length($value)), $value);
 }
 sub tree {
-    my ($path) = @_;
+    my ($path, $relative) = @_;
     my $before = information($path);
     my $sha = Digest::SHA->new(256);
-    field($sha, 'codex-migrate-tree-v1');
+    field($sha, $codex_mode ? 'codex-migrate-retained-state-v1' : 'codex-migrate-tree-v1');
     if (S_ISLNK($before->[2])) {
         my $value = readlink($path);
         die unless defined $value;
         field($sha, 'link'); field($sha, $value);
         die unless readlink($path) eq $value;
     } elsif (S_ISDIR($before->[2])) {
-        field($sha, 'directory'); field($sha, sprintf('%04o', $before->[2] & 07777));
+        field($sha, 'directory');
+        field($sha, sprintf('%04o', $before->[2] & 07777)) unless $codex_mode && $relative eq '';
         opendir(my $directory, $path) or die;
         $! = 0;
         my @names = sort grep { $_ ne '.' && $_ ne '..' } readdir($directory);
         die if $!;
         closedir($directory) or die;
-        for my $name (@names) { field($sha, $name); field($sha, tree($path . '/' . $name)); }
+        for my $name (@names) {
+            my $child = $relative eq '' ? $name : $relative . '/' . $name;
+            next if excluded($child, $path . '/' . $name);
+            field($sha, $name); field($sha, tree($path . '/' . $name, $child));
+        }
     } elsif (S_ISREG($before->[2])) {
         sysopen(my $file, $path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK) or die;
         binmode($file) or die;
@@ -80,8 +105,8 @@ sub tree {
 my $digest;
 my $ok = eval {
     local $SIG{__WARN__} = sub { die; };
-    die unless @ARGV == 1 && S_ISDIR(information($ARGV[0])->[2]);
-    $digest = unpack('H*', tree($ARGV[0]));
+    die unless @ARGV == 2 && ($ARGV[1] eq 'workspace' || $ARGV[1] eq 'codex') && S_ISDIR(information($ARGV[0])->[2]);
+    $digest = unpack('H*', tree($ARGV[0], ''));
     1;
 };
 if (!$ok) { print STDERR "Workspace tree could not be verified. Close writing apps and review unreadable or special files.\n"; exit 74; }
@@ -101,12 +126,24 @@ def remote_tool_check():
     return command + " >/dev/null 2>&1 || { echo 'Destination workspace-verification tools are unavailable.' >&2; exit 74; }\n"
 
 
-def freeze_tree(root: str, checkpoint=lambda: None):
+def validate_codex_identity_names(root):
+    try:
+        with os.scandir(root) as entries:
+            for entry in entries:
+                if entry.name.casefold() in ("auth.json", "installation_id") and entry.name not in ("auth.json", "installation_id"):
+                    raise MigrationError("Codex identity filenames use noncanonical capitalization; resolve this before transfer")
+    except OSError as error:
+        raise MigrationError("Codex identity filenames could not be inspected safely") from error
+
+
+def freeze_tree(root: str, checkpoint=lambda: None, *, codex=False):
     checkpoint()
+    if codex:
+        validate_codex_identity_names(root)
     path = Path(root)
     if path.is_symlink() or not path.is_dir():
         raise MigrationError("Workspace verification requires a real source directory")
-    process = subprocess.Popen(PERL_COMMAND + ["-e", TREE_PROGRAM, os.fspath(path)],
+    process = subprocess.Popen(PERL_COMMAND + ["-e", TREE_PROGRAM, os.fspath(path), "codex" if codex else "workspace"],
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                text=True, start_new_session=True)
     deadline = time.monotonic() + WORKSPACE_TIMEOUT
@@ -129,12 +166,13 @@ def freeze_tree(root: str, checkpoint=lambda: None):
         raise
 
 
-def remote_tree_function():
+def remote_tree_function(*, codex=False):
     command = " ".join(shlex.quote(arg) for arg in PERL_COMMAND + ["-e", TREE_PROGRAM])
-    return "workspace_tree_digest() {\n" + command + ' "$1"\n}\n'
+    function = "codex_state_digest" if codex else "workspace_tree_digest"
+    return function + "() {\n" + command + ' "$1" ' + ("codex" if codex else "workspace") + "\n}\n"
 
 
-def tree_check(root, digest):
+def tree_check(root, digest, *, codex=False):
     quoted = shlex.quote(root)
     if digest is None:
         return "test ! -e %s && test ! -L %s" % (quoted, quoted)
@@ -142,5 +180,5 @@ def tree_check(root, digest):
         raise MigrationError("Invalid frozen workspace verification snapshot")
     # Assignment failure must return explicitly, not be hidden by command
     # substitution or zsh's ERR_EXIT/outer rollback-trap interaction.
-    return ('workspace_digest=$(workspace_tree_digest %s) || return 74\n'
-            'test "$workspace_digest" = %s') % (quoted, shlex.quote(digest))
+    return ('workspace_digest=$(%s %s) || return 74\n'
+            'test "$workspace_digest" = %s') % ("codex_state_digest" if codex else "workspace_tree_digest", quoted, shlex.quote(digest))

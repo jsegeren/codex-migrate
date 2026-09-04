@@ -27,6 +27,12 @@ Codex Migrate is a dependency-free Python 3.9 application around the macOS
   The same private source snapshots check staged and installed workspace roots,
   including Codex-managed worktrees. Absent managed storage is checked as absent,
   not as an empty directory. Digests are not saved in dashboard state or logs.
+  Its separately versioned retained-Codex mode compiles the canonical transfer
+  exclusions into byte-exact filters and omits real managed-worktree directories
+  only because the complete-workspace pass checks them separately. It ignores
+  only the Codex root's mode, which installation explicitly restricts to 700.
+  Source identity filenames are validated before transfer and hashing; their
+  contents are not read. Prepared source context carries both frozen snapshots.
 - `dashboard.py` exposes a token-protected loopback interface.
 - `setup.py` adds browser-first configuration and a fixed-script native folder
   picker. It attaches the existing dashboard and engine without a second
@@ -82,6 +88,10 @@ The subsequent protected transaction verifies staging before backups, installs,
 and checks the installed copy against those same snapshots under the rollback
 trap. A completion receipt requires the workspace verification marker and exact
 root count. This is content preservation, not Git operational acceptance.
+Retained Codex state requires its own success marker. Its installed byte/tree
+comparison runs before SQLite quick checks, which may change database sidecars.
+Transcript checks remain separate to reject linked transcript storage; this
+currently means an additional read of transcript data in the retained-state pass.
 
 ## Publication boundary
 

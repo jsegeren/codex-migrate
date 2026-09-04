@@ -527,7 +527,7 @@ This demonstrates representative local path compatibility with a reviewed
 alias, not automatic remapping, every Git feature/version, clean-Mac installation,
 real cross-Mac acceptance, or restored Codex chat reopening.
 
-### Open Codex configuration/state verification defect
+### Reproduced Codex configuration/state verification defect
 
 A disposable probe against `ddd598d` staged a full migration containing
 `config.toml` and `.codex-global-state.json`, then changed only those two staged
@@ -542,6 +542,57 @@ regressions for corruption, omissions/additions and rollback. It must share the
 actual transfer exclusions, never read/copy source authentication, preserve
 destination identity, and avoid treating runtime exclusions as migration data.
 Do not declare the release candidate complete while this gap remains.
+
+### Retained Codex state verification correction
+
+The reproduced configuration-copy verification gap above is corrected. The
+same disposable probe now fails before installation, with staging retained.
+The correction adds a separately versioned streaming tree snapshot for retained
+Codex state to the stoppable source phase. That frozen snapshot checks staging
+before backup/replacement and the installed copy under rollback; a distinct
+`codex_state_content_verified` receipt is required before completion.
+
+- The verifier compiles canonical transfer exclusions into byte-exact filters.
+  Directory-only rules skip real directories, not regular files or symlinks
+  with those names. Wildcards span newlines but not path separators. Managed
+  worktrees have their existing separate complete check, including absent/type
+  protection. Other retained state, including transcript data, is read by this
+  pass. Separate transcript checks remain for their stricter no-link contract.
+- Source `auth.json` and `installation_id` are not opened. Identity files with
+  noncanonical capitalization fail before remote contact, copy and hashing;
+  this protects against case-insensitive filesystem aliases. Unexpected staged
+  identity symlinks are rejected before replacement. These path guards are not
+  general detection of secrets under other retained names or inside workspaces.
+- Twelve focused tests cover staged configuration/organization/rules/automation
+  corruption, valid-but-changed SQLite before and after install, rollback,
+  added/missing/renamed state, frozen expectations, auth FIFOs, case variants,
+  staged identity links, missing receipts, failed hashing and actual rsync
+  filter equivalence for directories/files/links/newlines/nested names.
+- Independent reviewer `public_release_review` accepted code, docs and rendered
+  desktop/320px views after running 66 focused cross-feature tests (one explicit
+  filesystem filename-support skip), then all 12 final retained-state tests.
+  No blocker remained in this bounded change. A conservative existing Git
+  coverage-helper issue for regular files named `cache`/`logs` remains separate:
+  it can overblock selection but does not silently omit transferred data.
+- Playwright inspected actual local fixture completion and a deliberately held
+  source-state hashing phase at 1280/390/320px. All six selected axe-core 4.13
+  WCAG A/AA checks found no violations or horizontal overflow. Keyboard Stop
+  cancelled the source check and left Resume enabled. These are disposable
+  fixtures without destination SSH; preflight metrics were not populated.
+- Final local verification passed 211 Python tests with one explicit filesystem
+  filename-support skip and all 10 signup tests. `git diff --check` passed.
+
+Only the Codex root mode is excluded from comparison because install explicitly
+sets it to 700; retained child modes are checked. Installed bytes are compared
+before SQLite quick checks, which can change database sidecars. This adds one
+source and two destination reads of retained Codex state (including transcripts
+also checked separately). No atomic snapshot, semantic application validation,
+clean-Mac or cross-Mac acceptance, or whole-release certification is implied.
+
+Earlier hosted CI for Git acceptance `ddd598d` and its audit follow-up `5a68b9f`
+both passed on Python 3.9 and 3.12, including native and signup checks:
+[Git acceptance](https://github.com/jsegeren/codex-migrate/actions/runs/33859578368),
+[audit follow-up](https://github.com/jsegeren/codex-migrate/actions/runs/33859669625).
 
 ### Reference guidance
 

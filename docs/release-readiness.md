@@ -8,6 +8,18 @@ results, accessibility findings, and pre-signing work still open.
 
 ## Candidate checks completed on the development Mac
 
+- Retained Codex state now has frozen source-to-staged and source-to-installed
+  content/tree checks, fixing the reproduced configuration/organization-state
+  corruption acceptance defect. Twelve focused tests cover config, rules,
+  automations, valid-but-changed databases, rollback, missing receipts, literal
+  rsync filter equivalence and protected identity paths. Source identity names
+  with noncanonical capitalization fail before SSH/copy/hash; staged identity
+  symlinks fail before replacement. Independent code/docs and desktop/320px
+  review accepted the bounded change. The new source pass is safely stoppable;
+  six local browser checks found no overflow or selected axe A/AA violations.
+  Installed byte comparison precedes SQLite validation and does not certify
+  semantic configuration validity or that restored tasks open in Codex.
+
 - Full selected-workspace and managed-worktree content verification now rejects
   corrupted staged Git refs/objects and files before replacement and rolls back
   installed mismatches against the same frozen source snapshots. Twenty focused
@@ -82,11 +94,10 @@ cross-Mac migration. Failure tests use disposable fixtures, not user data.
   including linked worktrees, refs, status and different usernames. Workspace
   content verification fixes the corruption-acceptance defect reproduced against
   `04e3ffa`, but matching bytes alone do not establish usable destination paths.
-- Verify preservation of supported Codex configuration/state outside transcript,
-  personal-skill and workspace content checks. A disposable probe against
-  `ddd598d` installed altered staged `config.toml` and organization-state JSON
-  while returning completion. This is a reproduced blocker, not merely missing
-  test evidence. Also open representative restored chats on the separate Mac.
+- Open representative restored chats and verify settings/project organization
+  through Codex on the separate Mac. Frozen retained-state checks fix the
+  configuration-copy corruption defect reproduced against `ddd598d`; matching
+  files do not establish application-level compatibility.
 - Confirm Apple Developer membership activation and the intended account.
 - Create Developer ID signing credentials and notarization access securely.
 - Produce, notarize, staple, and verify the exact committed release artifact.

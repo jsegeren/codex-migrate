@@ -69,6 +69,23 @@ Both staged and installed skill contents are checked against the same frozen
 source snapshot. Existing destination aliases are backed up without following
 them. The one-pass CLI export remains separate from resumable browser staging.
 
+Retained Codex configuration, organization, rules, automations and databases are
+also compared against a frozen source tree before backup/replacement and after
+installation under rollback. The check derives exact root-anchored filters from
+transfer exclusions: directory-only patterns do not omit regular files or links
+with those names. Managed worktrees have a separate mandatory complete check.
+Canonical source `auth.json` and `installation_id` are not opened. Noncanonical
+capitalization of these filenames blocks copying/hashing to protect against
+case-insensitive filesystem aliases; unexpected staged identity links also
+block installation. This is not general detection of secrets copied under
+other retained names or stored inside user-selected workspaces.
+
+Only the Codex root mode is omitted from the content snapshot because the
+installer explicitly changes it to 700. Retained child modes remain checked.
+The installed byte comparison precedes SQLite validation, which may change
+sidecars. It is not a promise that runtime files or database bytes remain
+unchanged after verification or that Codex can reopen every restored task.
+
 ## Known limitations
 
 Selected workspaces and Codex-managed worktrees receive streaming SHA-256 tree
@@ -85,9 +102,9 @@ attributes, or hard-link topology, nor prove Git commands work on the new Mac.
 - Version 0.1 reports but does not automatically fix every stale historical
   worktree path.
 - Different macOS usernames require a reviewed compatibility alias.
-- Transcript/workspace checksums do not prove every other Codex configuration
-  byte in version 0.1. Git usability and old
-  workspace-path continuity still require separate validation.
+- Content checks cover the retained copy scope, not excluded runtime data,
+  semantic configuration validity, Git usability or old workspace-path
+  continuity. Those require separate validation.
 - Staging and rollback backups contain private user data and must remain
   owner-only.
 - Other tools and connectors may store their own credentials inside copied

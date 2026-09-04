@@ -45,6 +45,14 @@ and continues instead of beginning from an empty destination.
 
 ## Finalization fails
 
+Retained Codex state now has the same frozen before/after protection. Changed,
+missing or extra retained configuration, organization, rules, automations or
+database files block replacement or trigger rollback. A database can pass SQLite
+integrity checks yet differ from the source; that is not accepted as a complete
+copy. The byte comparison runs before SQLite checks can change sidecars.
+Authentication and runtime exclusions still apply. Source identity filenames
+using noncanonical capitalization require review before transfer.
+
 Full migration also freezes checks for every selected workspace and
 `~/.codex/worktrees` after its final copy. Staged file, Git object/ref, name,
 permission, or link-text mismatches block replacement. Installed mismatches
