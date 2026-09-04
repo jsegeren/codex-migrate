@@ -37,7 +37,15 @@ and continues instead of beginning from an empty destination.
 
 ## Finalization fails
 
-Finalization installs under an automatic rollback trap. If a post-backup step
+In browser **Custom skills only** mode, the same controls apply, but the
+replacement and rollback scope is only the listed skill destinations. Codex
+state and whole repositories are not copied or replaced. The saved categories
+and dedicated staging folder must match when resuming. This browser flow does
+not import one-pass CLI exports or native export staging. Skill backup mappings
+are in the component backup's `verification.json`; numbered `items` entries map
+to the exact original skill paths.
+
+Full-migration finalization installs under an automatic rollback trap. If a post-backup step
 fails, Codex Migrate attempts to restore the destination Codex directory and
 every selected destination workspace and personal skill to their pre-install
 versions. The local

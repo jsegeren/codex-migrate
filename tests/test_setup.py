@@ -172,3 +172,57 @@ class SetupTests(unittest.TestCase):
         self.assertNotIn("localStorage", SETUP_HTML)
         self.assertIn('$("apply").checked=false', SETUP_HTML)
         self.assertIn("A key stored inside a selected workspace is copied", SETUP_HTML)
+
+    def test_skills_mode_attaches_without_ssh_and_preserves_read_only_guard(self):
+        with patch("codex_migrate.transport.SSHTransport.run_remote", side_effect=AssertionError("Unexpected SSH")):
+            self.assertEqual(self.request("/api/setup", self.config(mode="skills", components=["personal-skills"]))[0], 200)
+            code, state = self.request("/api/status")
+        self.assertEqual(code, 200)
+        self.assertEqual(state["migration_mode"], "skills")
+        self.assertEqual(state["components"], ["personal-skills"])
+        self.assertFalse(state["apply"])
+        self.assertIsNone(state["compatibility_command"])
+        self.assertEqual(self.request("/api/action", {"action": "start"})[0], 400)
+
+    def test_skills_mode_restores_scope_and_separate_staging_without_apply(self):
+        self.helper.configure(self.config(mode="skills", components=["workspace-skills", "personal-skills"], apply=True))
+        original_root = self.helper.state.root
+        original_staging = self.helper.engine.config.target_staging
+        saved = self.helper.registry.read()["saved"]
+        self.assertEqual(saved["components"], ["personal-skills", "workspace-skills"])
+        self.assertNotIn("apply", saved)
+        self.assertNotEqual(original_staging, "/Users/user/Codex-Migrate-Staging")
+        self.server.shutdown()
+        self.server.server_close()
+        self.helper.close()
+        self.helper = SetupDashboard(str(self.home), str(self.home / "state"))
+        self.helper.configure(saved)
+        self.assertEqual(self.helper.state.root, original_root)
+        self.assertEqual(self.helper.engine.config.target_staging, original_staging)
+        self.assertFalse(self.helper.engine.config.apply)
+
+    def test_invalid_skills_modes_do_not_attach_or_save(self):
+        for extra in ({"mode": "skills"}, {"mode": "unknown"},
+                      {"mode": "skills", "components": ["everything"]},
+                      {"mode": "skills", "components": "personal-skills"},
+                      {"mode": "full", "components": ["personal-skills"]}):
+            self.assertEqual(self.request("/api/setup", self.config(**extra))[0], 400)
+            self.assertIsNone(self.helper.engine)
+            self.assertIsNone(self.helper.registry.read().get("saved"))
+
+    def test_skills_inspection_is_async_and_stoppable(self):
+        self.request("/api/setup", self.config(mode="skills", components=["personal-skills"]))
+        entered, release = threading.Event(), threading.Event()
+        def inspect():
+            entered.set()
+            release.wait(3)
+            self.helper.engine._inspection_checkpoint()
+        try:
+            with patch.object(self.helper.engine, "preflight", side_effect=inspect):
+                self.assertEqual(self.request("/api/action", {"action": "inspect"})[0], 202)
+                self.assertTrue(entered.wait(1))
+                self.assertEqual(self.request("/api/action", {"action": "cancel"})[0], 202)
+        finally:
+            release.set()
+            self.helper.engine._thread.join(timeout=3)
+        self.assertEqual(self.helper.state.read()["status"], "cancelled")

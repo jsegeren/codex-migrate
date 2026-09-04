@@ -43,6 +43,26 @@ class DesktopTests(unittest.TestCase):
                     state = json.load(response)
                 self.assertFalse(state["attached"])
                 self.assertIsNone(state["saved"])
+                # Exercise the bundled selective-engine import and real HTTP
+                # configuration, without inspecting or contacting a remote Mac.
+                headers = {"X-Codex-Migrate-Token": token,
+                           "Content-Type": "application/json", "Origin": base}
+                setup = dict(target="person@fixture.invalid", target_home="/Users/person",
+                             workspace_roots=[], mode="skills", components=["personal-skills"])
+                with urlopen(Request(base + "/api/setup", data=json.dumps(setup).encode(),
+                                     headers=headers), timeout=3) as response:
+                    self.assertEqual(response.status, 200)
+                with urlopen(Request(base + "/api/status", headers=headers), timeout=3) as response:
+                    configured = json.load(response)
+                self.assertEqual(configured["migration_mode"], "skills")
+                self.assertEqual(configured["components"], ["personal-skills"])
+                self.assertEqual(configured["status"], "idle")
+                self.assertFalse(configured["apply"])
+                with self.assertRaises(HTTPError) as denied:
+                    urlopen(Request(base + "/api/action", data=b'{"action":"start"}',
+                                    headers=headers), timeout=3)
+                self.assertEqual(denied.exception.code, 400)
+                denied.exception.close()
                 process.terminate()
                 process.wait(timeout=15)
             finally:

@@ -198,7 +198,8 @@ been represented as measurements of these changes.
   The correction in `4a476e8` passed both Python 3.9 and 3.12 CI. This is not a
   claim that the new browser candidate has already passed hosted CI.
 
-Remaining browser work: integrated skills-only exports, richer saved migration
+At that checkpoint, remaining browser work included integrated skills-only
+exports (addressed below), richer saved migration
 selection/import, and complete recovery/accessibility checks. Existing native
 and CLI migrations must resume using their original state/entry point; the new
 browser flow does not import them or adopt their staging. Native folder-picker
@@ -245,7 +246,8 @@ in the follow-up below. This does not close the other release gates.
   passed. Hosted CI and packaged validation of this candidate remain separate
   checks; no prior build is being represented as containing this code.
 
-Still open: browser selective-export controls, broader inventory/recovery
+Still open at that checkpoint: browser selective-export controls (addressed
+below), broader inventory/recovery
 coverage, clean-Mac and real cross-Mac acceptance, complete accessibility
 testing, Search Console submission, signing/notarization, and paid distribution.
 The prior packaged-helper check below predates these changes; it is not evidence
@@ -263,6 +265,48 @@ Mac, not clean-Mac, minimum-macOS, native-picker, signing, or Gatekeeper support
 
 Artifact: `Codex-Migrate-arm64-LOCAL-UNSIGNED.zip` (engineering only).
 SHA-256: `341e5e74585ecc1e03aca955bd5cc0a52cfeb89a8c56ac99a7afb549e1950d8f`.
+
+### Browser skills-only migration checkpoint
+
+- Browser setup now supports personal skills, workspace skills, or both. An
+  adapter uses the existing staging, pause/stop/resume, shutdown, and explicit
+  finalization state machine, with separate owned staging and saved scope.
+  Full-migration state keys remain compatible. This does not adopt older CLI
+  or native export staging.
+- Replacement is limited to listed skills. Conversations, configuration, whole
+  repositories, and unrelated destination skills are not replaced. Selected
+  destinations receive mandatory verified backups; both staged and installed
+  skills must match the same frozen source file-content and tree snapshot.
+- Eight disposable local rsync/APFS adapter tests cover successful selective
+  installation, preservation of full staging and unrelated destination data,
+  restart and owner identity, changed scope, foreign staging, workspace-only
+  selection, post-install corruption with rollback, and pause/safe-stop/resume
+  after at least 32 KiB of real file data is staged while rsync remains live.
+  These are not network-disconnection, power-loss, or real cross-Mac tests.
+- Actual browser setup → stage → explicit Finalize → complete succeeded against
+  disposable skill data, with SSH replaced by local fixture transport. The UI
+  reported one selected and one verified skill with a backup receipt. No real
+  workspace or remote Mac was modified.
+- Desktop and 390/320px checks found a long-path overflow and corrected it.
+  Independent review found invalid button font shorthand falling back to
+  13.3333px; explicit properties now render all six buttons at 15px. Fresh
+  completion checks at all three widths show no overflow and zero axe-core
+  4.13 violations under selected WCAG A/AA tags. These checks do not establish
+  full WCAG conformance or VoiceOver acceptance.
+- Independent reviewer `public_release_review` accepted the bounded change
+  with fixes after reviewing fresh desktop/320px setup, staged, and completed
+  views and running 39 focused tests. No remaining blocker was identified
+  within this checkpoint; native and real cross-Mac acceptance remain separate.
+- Local regression suite: 141 Python tests and 10 signup tests passed. The
+  real-helper startup test also configures the skills adapter in read-only
+  mode and confirms Start is rejected without enabling destination changes;
+  it can run against the packaged engine with a system-only subprocess PATH.
+  Candidate-specific hosted CI and packaged checks are separate evidence.
+
+The overall release remains open: broader inventory and interruption/recovery
+acceptance, clean-Mac and real cross-Mac packaged testing, complete accessibility
+checks, Search Console submission, signing/notarization, and paid distribution
+are not closed by this checkpoint.
 
 ### Reference guidance
 

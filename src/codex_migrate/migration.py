@@ -338,7 +338,7 @@ class MigrationEngine:
         finally:
             self._process = None
 
-    def _prepare_staging(self) -> None:
+    def _prepare_staging(self, include_codex: bool = True) -> None:
         staging = shlex.quote(self.config.target_staging)
         migration_id = self.state.read().get("migration_id")
         if not isinstance(migration_id, str) or not re.fullmatch(r"[0-9a-f]{32}", migration_id):
@@ -357,14 +357,17 @@ class MigrationEngine:
             "  mkdir {staging}\n"
             "  printf '%s\\n' {migration_id} > {marker}\n"
             "fi\n"
-            "test ! -L {staging}/.codex\n"
-            "test ! -L {staging}/home-relative\n"
-            "mkdir -p {staging}/.codex {staging}/home-relative\n"
-            "rm -f {staging}/.codex/auth.json {staging}/.codex/installation_id\n"
+            "{codex_preparation}"
             "chmod 700 {staging}\n".format(
                 staging=staging,
                 marker=marker,
                 migration_id=shlex.quote(migration_id),
+                codex_preparation=(
+                    "test ! -L {s}/.codex\n"
+                    "test ! -L {s}/home-relative\n"
+                    "mkdir -p {s}/.codex {s}/home-relative\n"
+                    "rm -f {s}/.codex/auth.json {s}/.codex/installation_id\n"
+                ).format(s=staging) if include_codex else "",
             )
         )
 
@@ -605,26 +608,31 @@ class MigrationEngine:
             current_item="Destination installation",
         )
         receipt = self._install_and_verify()
-        warning = None
-        source_user = Path(self.config.source_home).name
-        target_user = Path(self.config.target_home).name
-        if source_user != target_user:
-            warning = (
-                "Home-directory names differ. Run the compatibility command shown in Recovery "
-                "before resuming older chats."
-            )
         self.state.update(
             status="complete",
             phase="verified",
-            message="Migration installed and verified. You may open Codex on the new Mac.",
+            message=self.completion_message(),
             current_item=None,
             bytes_staged=self.state.read().get("bytes_total", 0),
             percent=100.0,
-            warning=warning,
+            warning=self.completion_warning(),
             receipt=receipt,
             pending_backup=None,
             error=None,
         )
+
+    def completion_message(self) -> str:
+        return "Migration installed and verified. You may open Codex on the new Mac."
+
+    def completion_warning(self) -> Optional[str]:
+        source_user = Path(self.config.source_home).name
+        target_user = Path(self.config.target_home).name
+        if source_user != target_user:
+            return (
+                "Home-directory names differ. Run the compatibility command shown in Recovery "
+                "before resuming older chats."
+            )
+        return None
 
     def _remote_codex_state(self) -> str:
         return self.transport.run_remote(

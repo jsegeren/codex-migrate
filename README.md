@@ -154,6 +154,19 @@ HTTP server or remote Mac.
 
 ## Selective component export
 
+For a browser-guided repair, run `./codex-migrate launch` and choose **Custom
+skills only**. Select personal skills, workspace skills, or both. Workspace
+folders are searched for `.agents/skills`; the rest of those projects is not
+copied. Inspect the destination list, start staging, then quit Codex on both
+Macs and confirm Finalize. Only the listed skills are backed up and replaced.
+
+Browser skills repairs have a separate saved setup and owned staging folder.
+Pause, Stop safely, and Resume use the same transfer controls as a full
+migration. Reopening restores the mode and categories, but destination changes
+must be enabled again. Existing full-migration staging is not adopted or
+overwritten. The CLI `export` command below remains a one-pass alternative; its
+older staging is not imported into the browser flow.
+
 You do not need to repeat a large migration to repair a missing skill. The
 `export` command can independently stage, back up, install, and verify personal
 skills or repository-scoped workspace skills. It materializes top-level skill
@@ -185,7 +198,9 @@ Apply both personal and workspace skill repairs:
 
 Each destination skill is backed up before replacement. Other skills and all
 conversation, configuration, authentication, and repository data are left
-untouched. Rerunning the command is safe. Additional independently selectable
+untouched. Staged and installed skills are compared with a frozen source
+file-content and directory-tree snapshot. Rerunning the command is safe.
+Additional independently selectable
 components will follow the same stage → backup → install → verify contract.
 
 ## Migration phases

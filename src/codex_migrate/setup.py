@@ -15,6 +15,7 @@ import threading
 from codex_migrate.config import MigrationConfig, SSHOptions
 from codex_migrate.dashboard import Dashboard
 from codex_migrate.migration import MigrationEngine, MigrationError
+from codex_migrate.component_migration import ComponentMigrationEngine
 from codex_migrate.state import StateStore
 
 
@@ -24,7 +25,7 @@ SETUP_HTML = r'''<!doctype html>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#080b10;color:#f7f8fa;font:500 17px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow-wrap:anywhere}
 main{width:min(800px,calc(100% - 32px));margin:40px auto}h1{font-size:clamp(32px,6vw,48px);line-height:1.1}h2{font-size:24px}p{color:#cbd2df}section,fieldset{background:#111722;border:1px solid #465268;border-radius:16px;padding:24px;margin:24px 0;min-width:0}
-label{display:block;margin:16px 0 6px}input,textarea,button{font:inherit}input:not([type=checkbox]),textarea{display:block;width:100%;padding:12px;border:1px solid #8996ad;border-radius:8px;color:#f7f8fa;background:#080b10}textarea{min-height:120px}button,a.button{display:inline-block;padding:12px 18px;border:1px solid #a08bd3;border-radius:9px;background:#6042a6;color:white;font-weight:700;cursor:pointer;text-decoration:none;max-width:100%;white-space:normal}button:disabled{opacity:.6;cursor:wait}.controls{display:flex;gap:12px;flex-wrap:wrap}.check{display:flex;gap:12px;align-items:flex-start}.check input{width:22px;height:22px;flex:none;margin-top:4px}a{color:#d9cdff}:focus-visible{outline:3px solid #d9cdff;outline-offset:4px}#error{color:#ffc3c8}#message{color:#cbd2df}footer{font-size:15px;color:#cbd2df}legend{font-weight:700;font-size:24px}[hidden]{display:none!important}@media(max-width:480px){section,fieldset{padding:16px}main{margin:24px auto}}
+label{display:block;margin:16px 0 6px}input,textarea,button,select{font:inherit}input:not([type=checkbox]),textarea,select{display:block;width:100%;padding:12px;border:1px solid #8996ad;border-radius:8px;color:#f7f8fa;background:#080b10}textarea{min-height:120px}button,a.button{display:inline-block;padding:12px 18px;border:1px solid #a08bd3;border-radius:9px;background:#6042a6;color:white;font-weight:700;cursor:pointer;text-decoration:none;max-width:100%;white-space:normal}button:disabled{opacity:.6;cursor:wait}.controls{display:flex;gap:12px;flex-wrap:wrap}.check{display:flex;gap:12px;align-items:flex-start}.check input{width:22px;height:22px;flex:none;margin-top:4px}a{color:#d9cdff}:focus-visible{outline:3px solid #d9cdff;outline-offset:4px}#error{color:#ffc3c8}#message{color:#cbd2df}footer{font-size:15px;color:#cbd2df}legend{font-weight:700;font-size:24px}[hidden]{display:none!important}@media(max-width:480px){section,fieldset{padding:16px}main{margin:24px auto}}
 </style></head><body><main>
 <h1>Keep the work. Change the Mac.</h1><p>Set up your Mac-to-Mac migration here. This page is served by the helper on your old Mac. Your workspace travels directly between your Macs over SSH—not through our website.</p>
 <div id="error" role="alert"></div><p id="message" role="status" aria-live="polite">Connecting to your local helper…</p>
@@ -34,10 +35,12 @@ label{display:block;margin:16px 0 6px}input,textarea,button{font:inherit}input:n
 <p>Wi-Fi or a compatible USB-C/Thunderbolt network connection can carry the transfer. A charging-only cable cannot. Both Macs must remain awake and connected.</p>
 <details><summary>SSH connection and permissions</summary><p>Set up SSH key login from the old Mac and verify the new Mac’s host fingerprint through a trusted channel. Connect once in Terminal using <code>ssh new-user@new-mac.local</code>. We never disable host verification. The helper cannot answer an interactive password prompt.</p></details>
 <h2>2 · Destination and scope</h2>
+<label for="mode">What do you want to move?</label><select id="mode"><option value="full">Full Codex migration and selected workspaces</option><option value="skills">Custom skills only</option></select>
+<fieldset id="skill-components" hidden><legend>Skills to include</legend><label class="check"><input type="checkbox" id="personal-skills" checked><span>Personal custom skills (.agents/skills and legacy .codex/skills)</span></label><label class="check"><input type="checkbox" id="workspace-skills"><span>Workspace skills inside the project folders selected below</span></label><p>Skills only: conversations, configuration and whole repositories are not copied. Other destination skills are kept. Inspect the list, stage it, then confirm Finalize separately.</p></fieldset>
 <label for="target">New Mac’s SSH address</label><input id="target" autocomplete="off" placeholder="new-user@new-mac.local" required>
 <label for="target-home">New Mac’s home folder</label><input id="target-home" autocomplete="off" placeholder="/Users/new-user" required>
 <p>Use the new Mac’s exact username and home folder; they can differ from the old Mac. Check with <code>whoami</code> and <code>echo "$HOME"</code> in its Terminal.</p>
-<label for="workspaces">Workspace folders on this Mac, one per line</label><textarea id="workspaces" spellcheck="false" aria-describedby="scope-help"></textarea>
+<label for="workspaces" id="workspace-label">Workspace folders on this Mac, one per line</label><textarea id="workspaces" spellcheck="false" aria-describedby="scope-help"></textarea>
 <p id="scope-help">Selected folders include complete Git metadata and unfinished work, including secrets stored inside them. Leave this empty to migrate Codex state and discovered personal custom skills without project folders. Personal skills from .agents/skills and legacy .codex/skills are included automatically; inspection lists them before transfer. Other home folders are not automatically included.</p>
 <div class="controls"><button type="button" id="folders">Choose folders on this Mac…</button><button type="button" id="suggest">Suggest common folders</button></div>
 <label for="identity">Existing SSH key path (optional)</label><input id="identity" autocomplete="off" spellcheck="false" aria-describedby="key-help"><p id="key-help">Leave empty to use your SSH configuration. Selecting a key does not add it to the migration, and this selection is not saved. A key stored inside a selected workspace is copied with that workspace.</p>
@@ -45,7 +48,7 @@ label{display:block;margin:16px 0 6px}input,textarea,button{font:inherit}input:n
 <label class="check"><input id="apply" type="checkbox"><span>Enable destination changes for this session. Opening the dashboard does not start a transfer; I will inspect and start it explicitly.</span></label>
 <button type="submit" id="open">Open migration dashboard</button>
 </fieldset></form>
-<section><h2>Recovery and selective exports</h2><p>For migrations started in this browser setup, reopen the helper after interruption, review the restored setup, enable changes if appropriate, and use Resume in the dashboard. Staged data and backup receipts remain on your Macs. Never delete them just because a progress bar reaches 100%.</p><p>Already started with the CLI or native setup? Resume using that same entry point and configuration. This browser setup does not import those older migration records, and it will not adopt or overwrite their staging.</p><p>For a skills-only repair, the native app’s skills controls and the CLI export command remain available. This browser setup currently configures full migrations.</p></section>
+<section><h2>Recovery and selective exports</h2><p>For migrations started in this browser setup, reopen the helper after interruption, review the restored setup, enable changes if appropriate, and use Resume in the dashboard. Staged data and backup receipts remain on your Macs. Never delete them just because a progress bar reaches 100%.</p><p>Already started with the CLI or native setup? Resume using that same entry point and configuration. This browser setup does not import those older migration records, and it will not adopt or overwrite their staging.</p><p>Choose Custom skills only above for a smaller repair. It has its own saved staging, pause/resume controls and verified destination backups; a full migration’s staging is left alone.</p></section>
 <footer>Codex Migrate is independent software. Not affiliated with or endorsed by OpenAI. Mac-to-Mac only.</footer>
 </main><script>
 const $=id=>document.getElementById(id);
@@ -55,12 +58,16 @@ if(incoming)sessionStorage.setItem(storageKey,incoming);
 const token=incoming||sessionStorage.getItem(storageKey)||"";
 history.replaceState(null,"",location.pathname);
 const roots=()=>$("workspaces").value.split("\n").map(x=>x.trim()).filter(Boolean);
+const fullScopeHelp=$("scope-help").textContent;
+const fullKeyHelp=$("key-help").textContent;
+function modeChanged(){const skills=$("mode").value==="skills";$("key-help").textContent=skills?"Selecting an SSH key does not add it to the migration, and the selection is not saved. Only selected skill contents are copied; review them for private files. Protected SSH and Codex login files are rejected.":fullKeyHelp;$("skill-components").hidden=!skills;$("workspace-label").textContent=skills?"Project folders to search for workspace skills, one per line":"Workspace folders on this Mac, one per line";$("scope-help").textContent=skills?"These folders are searched only when Workspace skills is checked. Only discovered .agents/skills directories are copied, not the whole project. Personal skills need no project-folder selection. Skill contents can include private files; review the discovered list before transfer.":fullScopeHelp;}
+$("mode").onchange=modeChanged;
 async function api(path,body){const r=await fetch(path,{method:body?"POST":"GET",headers:{"X-Codex-Migrate-Token":token,"Content-Type":"application/json"},...(body?{body:JSON.stringify(body)}:{})});const result=await r.json();if(!r.ok)throw Error(result.error||"The request failed");return result}
 function attached(){ $("attached").hidden=false;$("setup").hidden=true;$("continue").href="/migration#token="+encodeURIComponent(token);$("message").textContent="The helper is ready. No transfer was started automatically."; }
-async function load(){try{const s=await api("/api/setup");if(s.attached){attached();return}const c=s.saved||{};$("target").value=c.target||"";$("target-home").value=c.target_home||"";$("workspaces").value=(c.workspace_roots||[]).join("\n");$("apply").checked=false;$("fields").disabled=false;$("message").textContent=s.saved?"Restored your last setup. Review it before continuing; changes remain disabled.":"Ready to configure. No destination changes are enabled."}catch(e){$("error").textContent=e.message+". Reopen the browser from the local helper if its token is missing."}}
+async function load(){try{const s=await api("/api/setup");if(s.attached){attached();return}const c=s.saved||{};$("target").value=c.target||"";$("target-home").value=c.target_home||"";$("workspaces").value=(c.workspace_roots||[]).join("\n");$("mode").value=c.mode||"full";$("personal-skills").checked=!c.components||c.components.includes("personal-skills");$("workspace-skills").checked=(c.components||[]).includes("workspace-skills");modeChanged();$("apply").checked=false;$("fields").disabled=false;$("message").textContent=s.saved?"Restored your last setup. Review it before continuing; changes remain disabled.":"Ready to configure. No destination changes are enabled."}catch(e){$("error").textContent=e.message+". Reopen the browser from the local helper if its token is missing."}}
 async function folders(path){$("folders").disabled=true;$("suggest").disabled=true;try{const r=await api(path,{});$("workspaces").value=[...new Set([...roots(),...r.paths])].join("\n");$("message").textContent=r.message}catch(e){$("error").textContent=e.message}finally{$("folders").disabled=false;$("suggest").disabled=false}}
 $("folders").onclick=()=>folders("/api/folders");$("suggest").onclick=()=>folders("/api/suggestions");
-$("setup").onsubmit=async e=>{e.preventDefault();$("open").disabled=true;$("error").textContent="";try{await api("/api/setup",{target:$("target").value.trim(),target_home:$("target-home").value.trim(),workspace_roots:roots(),identity_file:$("identity").value.trim(),apply:$("apply").checked});location.href="/migration#token="+encodeURIComponent(token)}catch(e){$("error").textContent=e.message;$("open").disabled=false}};
+$("setup").onsubmit=async e=>{e.preventDefault();$("open").disabled=true;$("error").textContent="";try{await api("/api/setup",{target:$("target").value.trim(),target_home:$("target-home").value.trim(),workspace_roots:roots(),identity_file:$("identity").value.trim(),apply:$("apply").checked,mode:$("mode").value,components:$("mode").value==="skills"?["personal-skills","workspace-skills"].filter(id=>$(id).checked):[]});location.href="/migration#token="+encodeURIComponent(token)}catch(e){$("error").textContent=e.message;$("open").disabled=false}};
 load();
 </script></body></html>'''
 
@@ -86,11 +93,21 @@ class SetupDashboard(Dashboard):
         with self._setup_lock:
             if self.engine is not None:
                 raise MigrationError("A migration is already configured. Restart the helper to change scope.")
-            allowed = {"target", "target_home", "workspace_roots", "identity_file", "apply"}
+            allowed = {"target", "target_home", "workspace_roots", "identity_file", "apply", "mode", "components"}
             if not isinstance(payload, dict) or set(payload) - allowed:
                 raise MigrationError("Unexpected setup fields")
             if not isinstance(payload.get("apply", False), bool):
                 raise MigrationError("Enable changes must be true or false")
+            mode = payload.get("mode", "full")
+            if mode not in ("full", "skills"):
+                raise MigrationError("Choose full migration or skills only")
+            components = payload.get("components", [])
+            if not isinstance(components, list) or not all(isinstance(x, str) for x in components):
+                raise MigrationError("Invalid skills selection")
+            if mode == "full" and components:
+                raise MigrationError("Component choices apply only to skills-only migration")
+            if mode == "skills" and (not components or set(components) - {"personal-skills", "workspace-skills"}):
+                raise MigrationError("Choose personal skills, workspace skills, or both")
             roots = payload.get("workspace_roots", [])
             if not isinstance(roots, list) or len(roots) > 100 or not all(isinstance(x, str) for x in roots):
                 raise MigrationError("Select at most 100 workspace roots")
@@ -106,6 +123,8 @@ class SetupDashboard(Dashboard):
             ).validate()
             saved = {"target": config.target, "target_home": config.target_home,
                      "workspace_roots": sorted(config.workspace_roots)}
+            if mode == "skills":
+                saved.update(mode="skills", components=sorted(set(components)))
             key = hashlib.sha256(json.dumps(saved, sort_keys=True).encode()).hexdigest()
             from dataclasses import replace
             config = replace(config, workspace_roots=saved["workspace_roots"],
@@ -113,7 +132,8 @@ class SetupDashboard(Dashboard):
             state = StateStore(config.state_dir)
             state.acquire_process_lock()
             try:
-                engine = MigrationEngine(config, state)
+                engine = (ComponentMigrationEngine(config, state, components)
+                          if mode == "skills" else MigrationEngine(config, state))
                 engine.reconcile_startup()
                 self.registry.update(saved=saved)
             except BaseException:

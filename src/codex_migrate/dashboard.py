@@ -47,10 +47,11 @@ HTML = r"""<!doctype html>
     .scope { margin-top:18px; border-top:1px solid var(--line); padding-top:16px; color:var(--muted); }
     .scope p { margin:5px 0; overflow-wrap:anywhere; }
     .scope ul { margin:7px 0 0; padding-left:22px; }
+    .scope li { overflow-wrap:anywhere; }
     #backup-safety { margin-top:18px; padding:16px; border:1px solid var(--line); border-radius:12px; }
     #backup-safety p { margin:6px 0; overflow-wrap:anywhere; }
     #backup-safety.blocked { border:2px solid var(--red); background:#3a151a; }
-    button { appearance:none; border:1px solid var(--line); background:#182134; color:var(--text); border-radius:11px; padding:11px 15px; font:700 15px/1 inherit; cursor:pointer; }
+    button { appearance:none; border:1px solid var(--line); background:#182134; color:var(--text); border-radius:11px; padding:11px 15px; font-family:inherit; font-size:15px; font-weight:700; line-height:1; cursor:pointer; }
     button.primary { background:var(--action); border-color:var(--action); }
     button:disabled { opacity:.38; cursor:not-allowed; }
     #warning,#error { display:none; margin-top:16px; border-radius:12px; padding:13px 15px; }
@@ -74,17 +75,17 @@ HTML = r"""<!doctype html>
     <div id="message" role="status" aria-live="polite">Connecting to the local migration service…</div>
     <div class="grid">
       <div class="metric"><span class="eyebrow">Route</span><strong id="route">—</strong></div>
-      <div class="metric"><span class="eyebrow">Staged</span><strong id="bytes">—</strong></div>
+      <div class="metric"><span class="eyebrow" id="size-heading">Staged / estimated total</span><strong id="bytes">—</strong></div>
       <div class="metric"><span class="eyebrow">Current item</span><strong id="item">—</strong></div>
     </div>
     <div class="scope">
       <div class="eyebrow">Configured migration scope</div>
       <p><strong>Codex:</strong> <code id="codex-scope">—</code></p>
       <p><strong>SSH destination:</strong> <code id="ssh-target">—</code></p>
-      <p><strong>Selected workspaces:</strong> <span id="workspace-count">0</span></p>
+      <p><strong id="workspace-heading">Selected workspaces:</strong> <span id="workspace-count">0</span></p>
       <ul id="workspace-list"></ul>
-      <p><strong>Personal skills:</strong> <span id="skill-count">Not inspected yet</span></p>
-      <p>Custom skills are included from .agents/skills and legacy .codex/skills, with the current location taking precedence. Other destination skills are kept.</p>
+      <p><strong id="skill-heading">Personal skills:</strong> <span id="skill-count">Not inspected yet</span></p>
+      <p id="skill-explanation">Custom skills are included from .agents/skills and legacy .codex/skills, with the current location taking precedence. Other destination skills are kept.</p>
       <ul id="skill-list"></ul>
     </div>
     <section id="backup-safety" aria-label="Backup protection" aria-live="polite">
@@ -104,7 +105,7 @@ HTML = r"""<!doctype html>
       <button id="cancel" disabled>Stop safely</button>
     </div>
     <div id="warning"></div><div id="error" role="alert"></div>
-    <details><summary>What is protected?</summary><p>The source is never modified. Destination Codex account authentication and installation identity are excluded from transfer and checked after installation. The destination receives a timestamped backup before replacement. Interrupted rsync staging is kept so Resume can continue.</p><p id="compat"></p></details>
+    <details><summary>What is protected?</summary><p id="protection-explanation">The source is never modified. Destination Codex account authentication and installation identity are excluded from transfer and checked after installation. The destination receives a timestamped backup before replacement. Interrupted rsync staging is kept so Resume can continue.</p><p id="compat"></p></details>
   </section>
   <footer>Codex Migrate is an independent open-source project. It is not made by, affiliated with, or endorsed by OpenAI.</footer>
 </main>
@@ -120,9 +121,29 @@ const fmt=n=>{if(!Number.isFinite(n))return "—";const u=["B","KB","MB","GB","T
 function renderBackup(s){const blocked=s.space_check==="blocked";$("backup-safety").classList.toggle("blocked",blocked);$("backup-heading").textContent=blocked?"Blocked — not enough space for a safe backup":"Backup required before replacement";$("backup-space").textContent=s.destination_bytes_required!=null?`Last space check: ${fmt(s.destination_bytes_free)} free; ${fmt(s.destination_bytes_required)} required, including ${fmt(s.backup_bytes_required)} for backups and ${fmt(s.reserve_bytes)} safety reserve. Space is checked again before replacement.`:"Destination space has not been checked yet.";const r=s.receipt||{};$("backup-location").textContent=s.pending_backup?`Pending backup on the destination: ${s.pending_backup}. Verification is not yet confirmed here; inspect verification.json before recovery.`:r.backup_verified?`Last verified backup on the destination: ${r.backup}. File contents, tree structure and link targets checked before replacement.`:"No verified backup recorded for this migration."}
 async function api(path,options={}){const response=await fetch(path,{...options,headers:{"X-Codex-Migrate-Token":token,"Content-Type":"application/json",...(options.headers||{})}});const body=await response.json();if(!response.ok)throw new Error(body.error||`Request failed (${response.status})`);renderBackup(body);return body}
 function render(s){latestState=s;const p=Math.max(0,Math.min(100,Number(s.percent)||0));$("percent").textContent=`${p.toFixed(p===100?0:1)}%`;$("bar").style.width=`${p}%`;$("bar").parentElement.setAttribute("aria-valuenow",String(p));$("phase").textContent=String(s.phase||"unknown").replaceAll("_"," ");$("status").textContent=String(s.status||"unknown").replaceAll("_"," ");$("message").textContent=s.message||"";$("route").textContent=s.route||"—";$("bytes").textContent=`${fmt(s.bytes_staged||0)} / ${fmt(s.bytes_total||0)}`;$("item").textContent=s.current_item||"—";$("warning").style.display=s.warning?"block":"none";$("warning").textContent=s.warning||"";$("error").style.display=s.error?"block":"none";$("error").textContent=s.error||"";$("compat").textContent=s.compatibility_command?`Different macOS usernames: after installation, run on the new Mac: ${s.compatibility_command}`:"";const c=s.config||{};$("codex-scope").textContent=`${c.source_home||"—"}/.codex → ${c.target_home||"—"}/.codex`;$("ssh-target").textContent=`${c.target||"—"} · ${c.target_home||"—"}`;const roots=Array.isArray(c.workspace_roots)?c.workspace_roots:[];$("workspace-count").textContent=String(roots.length);$("workspace-list").replaceChildren(...roots.map(root=>{const li=document.createElement("li");const prefix=`${c.source_home}/`;const relative=root.startsWith(prefix)?root.slice(prefix.length):root;li.textContent=`${root} → ${c.target_home}/${relative}`;return li}));const active=s.status==="running";const canStart=["idle","ready"].includes(s.status);const canFinalize=s.status==="ready_to_finalize"||(s.status==="waiting"&&["close_source_codex","close_target_codex"].includes(s.phase));$("inspect").disabled=active;$("start").disabled=!canStart||!s.apply;$("pause").disabled=!active||!["staging","final_delta"].includes(s.phase);$("resume").disabled=!s.apply||!['paused','cancelled','failed','interrupted'].includes(s.status);$("finalize").disabled=!canFinalize||!s.apply;$("cancel").disabled=!((active&&["inspecting","staging","final_delta"].includes(s.phase))||s.status==="paused");}
-function renderSkills(s){const skills=s.inventory?.personal_skills;const verified=s.status==="complete"?s.receipt?.personal_skills_verified:null;$("skill-count").textContent=Array.isArray(skills)?`${skills.length} selected${verified!=null?` · ${verified} verified`:" · not yet verified"}`:"Not inspected yet";$("skill-list").replaceChildren(...(skills||[]).map(skill=>{const li=document.createElement("li");li.textContent=`${skill.name} → ${skill.destination}`;return li}));}
+function renderSkills(s){
+  const waiting=s.status==="ready_to_finalize"||s.status==="waiting";
+  $("percent").hidden=waiting;$("bar").parentElement.hidden=waiting;
+  $("size-heading").textContent=s.status==="complete"?"Migration size estimate":"Staged / estimated total";
+  if(s.status==="complete")$("bytes").textContent=fmt(s.bytes_total||0);
+  const repair=s.migration_mode==="skills";
+  const skills=repair?s.inventory?.skill_exports:s.inventory?.personal_skills;
+  const verified=s.status==="complete"?(repair?s.receipt?.skills_verified:s.receipt?.personal_skills_verified):null;
+  $("skill-count").textContent=Array.isArray(skills)?`${skills.length} selected${verified!=null?` · ${verified} verified`:" · not yet verified"}`:"Not inspected yet";
+  $("skill-list").replaceChildren(...(skills||[]).map(skill=>{const li=document.createElement("li");li.textContent=`${skill.name} → ${skill.destination}`;return li}));
+  if(repair){
+    document.querySelector(".lede").textContent="Custom skills only. Stage selected personal or workspace skills, then finalize with verified backups. Conversations, configuration and whole repositories are not migrated.";
+    $("codex-scope").textContent="Not included — conversations and configuration stay unchanged";
+    $("workspace-heading").textContent="Folders searched for workspace skills (not copied whole):";
+    if(!(s.components||[]).includes("workspace-skills")){$("workspace-count").textContent="0";$("workspace-list").replaceChildren();}
+    else{$("workspace-list").replaceChildren(...(s.config?.workspace_roots||[]).map(root=>{const li=document.createElement("li");li.textContent=root;return li}));}
+    $("skill-heading").textContent="Selected skills:";
+    $("skill-explanation").textContent="Only skills from the chosen categories are included. Each listed destination is backed up before replacement. Other skills and files are kept.";
+    $("protection-explanation").textContent="The source is never modified. Only listed skill destinations are replaced after verified backups. Codex conversations, configuration and authentication are not copied or replaced. Interrupted staging is kept so Resume can continue.";
+  }
+}
 async function refresh(){try{const s=await api("/api/status");render(s);renderSkills(s)}catch(error){$("error").style.display="block";$("error").textContent=error.message}}
-async function action(name){const c=latestState.config||{};if(name==="finalize"&&!confirm(`Back up, then replace ${c.target_home}/.codex, ${c.workspace_roots?.length||0} selected workspace root(s), and ${latestState.inventory?.personal_skills?.length||0} personal skill(s) on ${c.target}? Other destination skills will be kept.`))return;try{const s=await api("/api/action",{method:"POST",body:JSON.stringify({action:name,confirmed:name==="finalize"})});render(s);renderSkills(s)}catch(error){$("error").style.display="block";$("error").textContent=error.message}}
+async function action(name){const c=latestState.config||{};const confirmation=latestState.migration_mode==="skills"?`Back up, then replace ${latestState.inventory?.skill_exports?.length||0} listed skill(s) on ${c.target}? Conversations, configuration and whole repositories will not be migrated. Other skills will be kept.`:`Back up, then replace ${c.target_home}/.codex, ${c.workspace_roots?.length||0} selected workspace root(s), and ${latestState.inventory?.personal_skills?.length||0} personal skill(s) on ${c.target}? Other destination skills will be kept.`;if(name==="finalize"&&!confirm(confirmation))return;try{const s=await api("/api/action",{method:"POST",body:JSON.stringify({action:name,confirmed:name==="finalize"})});render(s);renderSkills(s)}catch(error){$("error").style.display="block";$("error").textContent=error.message}}
 for(const name of ["inspect","start","pause","resume","finalize","cancel"]){$(name).addEventListener("click",()=>action(name))}
 refresh();setInterval(refresh,2500);
 </script>

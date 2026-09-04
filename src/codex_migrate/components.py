@@ -18,7 +18,7 @@ from codex_migrate.backup import (
 from codex_migrate.migration import MigrationEngine, MigrationError, _value
 from codex_migrate.transport import SSHTransport
 from codex_migrate.skills import (
-    SkillExport, discover_personal_skills, discover_workspace_skills,
+    SkillExport, discover_personal_skills, discover_workspace_skills, skill_verification_script,
 )
 
 
@@ -68,6 +68,10 @@ class ComponentExporter:
             raise MigrationError("SSH home does not match the configured destination home")
         if _value(remote, "FILESYSTEM") != "apfs":
             raise MigrationError("The destination home must be on APFS for rollback backups")
+        home = Path(self.config.target_home)
+        checks = ["test -d %s" % shlex.quote(str(home))]
+        checks.extend("test ! -L %s" % shlex.quote(str(path)) for path in (home, *home.parents))
+        self.transport.run_remote("set -eu\n" + "\n".join(checks) + "\n")
 
     def run(self) -> Dict[str, object]:
         exports = self.discover()
@@ -139,9 +143,10 @@ class ComponentExporter:
         exports: Sequence[SkillExport],
         staging: str,
         migration_id: str,
+        backup: str = "",
     ) -> Dict[str, object]:
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        backup = str(
+        backup = backup or str(
             Path(self.config.target_home)
             / ("Codex-Migrate-Component-Backup-" + timestamp)
         )
@@ -151,6 +156,7 @@ class ComponentExporter:
         rollbacks = []
         verifications = []
         mappings = []
+        stage_verifications = []
         for index, item in enumerate(exports):
             destination = item.destination
             parent = str(Path(destination).parent)
@@ -174,6 +180,7 @@ class ComponentExporter:
             preconditions.append(
                 workspace_requirement
                 + safe_parent
+                + MigrationEngine._safe_directory_script(staging, str(Path(staged_item).parent))
                 + "test -d {stage}\n"
                 "test ! -L {stage}\n"
                 "test -f {stage}/SKILL.md\n"
@@ -223,6 +230,14 @@ class ComponentExporter:
                     destination=shlex.quote(destination)
                 )
             )
+            # Freeze once and verify both staging and installation against the
+            # same source bytes. Explicit top-level exit preserves zsh rollback.
+            function = "verify_component_%d" % index
+            checks = skill_verification_script(item, self.config.source_home)
+            failure = " || { echo 'Skill verification failed. Keep staging and backups; review and retry.' >&2; exit 74; }"
+            stage_verifications.append("%s() {\n%s\n}\n%s %s%s" % (
+                function, checks, function, shlex.quote(staged_item), failure))
+            verifications.append("%s %s%s" % (function, shlex.quote(destination), failure))
         script = """set -eu
 setopt NULL_GLOB
 umask 077
@@ -230,9 +245,14 @@ umask 077
 {target_home_chain}
 test -d {staging}
 test ! -L {staging}
+{staging_chain}
+test -f {marker}
+test ! -L {marker}
 test "$(cat {marker})" = {migration_id}
 test ! -e {backup}
+test ! -L {backup}
 {preconditions}
+{stage_verifications}
 backup_required=$({backup_size})
 backup_space {home} "$((backup_required + {reserve}))"
 mkdir -p {backup}/items {backup}/existed
@@ -266,10 +286,12 @@ printf 'INSTALLED=1\\nITEMS=%s\\nBACKUP_VERIFIED=1\\nBACKUP=%s\\n' {item_count} 
                 "/", self.config.target_home
             ),
             staging=shlex.quote(staging),
+            staging_chain=MigrationEngine._safe_directory_script(self.config.target_home, staging),
             marker=shlex.quote(str(Path(staging) / ".codex-migrate-owner")),
             migration_id=shlex.quote(migration_id),
             backup=shlex.quote(backup),
             preconditions="\n".join(preconditions),
+            stage_verifications="\n".join(stage_verifications),
             backups="\n".join(backups),
             rollbacks="\n".join(rollbacks),
             installs="\n".join(installs),

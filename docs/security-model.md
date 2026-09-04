@@ -40,6 +40,14 @@ and backups must pass content-checksum, structure, and symlink verification
 before replacement. Verification receipts stay in the owner-only backup folder.
 See [Recovery](recovery.md) for the exact coverage and limitations.
 
+Browser skills-only migrations use the same explicit staging/finalization and
+normal-shutdown protection, but their replacement scope contains only selected
+skills. They do not copy or replace Codex state or whole repositories, and do
+not claim to verify conversation counts or destination login-file hashes.
+Both staged and installed skill contents are checked against the same frozen
+source snapshot. Existing destination aliases are backed up without following
+them. The one-pass CLI export remains separate from resumable browser staging.
+
 ## Known limitations
 
 - Codex's local storage format is not a documented public migration API and can

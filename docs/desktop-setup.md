@@ -35,7 +35,8 @@ finalization guards are unchanged. The helper refuses a normal close while
 inspection, a transfer, a paused process, or installation is active. Use **Stop
 safely**, or wait for installation and verification to finish, before closing.
 
-Browser-created migrations save the latest destination and selected roots under
+Browser-created migrations save the latest mode, destination, selected roots,
+and skill categories under
 `~/.local/state/codex-migrate-browser`. Reopen the helper with the same scope to
 reuse that migration's state. Change permission, key selections, and account
 credentials are not saved. The private control token is kept in browser
@@ -46,8 +47,17 @@ state directories are separate and are not imported by this flow. Resume using
 the original controls. Similarly, restarting with a different scope does not
 adopt existing destination staging. Preserve it and review recovery instructions.
 
-This browser flow currently configures full migrations. Skills-only repair
-remains available through the native controls below or the CLI `export` command.
+Choose **Custom skills only** to repair personal skills, workspace skills, or
+both without copying conversations, configuration, or entire repositories.
+Workspace folders are searched only when workspace skills are selected. Review
+the individual destination skills in the dashboard before staging. Finalize
+requires both Codex apps closed and backs up and verifies those skills only;
+unrelated destination skills and files remain unchanged.
+
+Skills-only browser migrations use separate owned staging from full migrations
+and support the same Pause, Stop safely, and Resume controls. Reopen with the
+same mode, categories, destination, and folders to resume. The CLI `export`
+command remains a one-pass alternative; its staging is not imported here.
 Native picker permission behavior and the full browser recovery journey still
 require clean-Mac validation before release.
 

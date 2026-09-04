@@ -19,6 +19,11 @@ Codex Migrate is a dependency-free Python 3.9 application around the macOS
   checks protect setup APIs; requests and normal shutdown are serialized.
 - `components.py` performs small, independently selectable repair exports with
   per-item destination backups.
+- `component_migration.py` adapts those skill transactions to the existing
+  migration state machine for browser inspection, staging, pause/stop/resume,
+  explicit finalization, and crash reconciliation. It does not copy `.codex`
+  or whole workspace roots. Its deterministic staging namespace and saved
+  scope are separate from full migrations.
 - `cli.py` provides inventory, inspect, and dashboard entry points.
 
 `launch` starts guided local setup on a free port. The `/migration` view uses
@@ -26,6 +31,14 @@ the same engine and state transitions as `serve`. Browser-created records use
 a stable key over normalized destination and sorted selected roots; the
 browser does not import older CLI/native state. Restarting cannot silently
 claim another migration's destination staging.
+
+Skills-only keys also include the mode and sorted component categories.
+Full-mode keys are unchanged, preserving existing browser resumes. The
+destination replacement set is frozen at successful staging; changes require
+restaging and a fresh finalization confirmation. Both full and selective
+personal-skill transactions verify materialized regular-file bytes and the
+directory tree before and after replacement, with automatic rollback on a
+post-backup failure.
 
 Dashboard inspection runs on the engine's worker thread. Local inventory
 walks and disk-usage subprocesses check cancellation; stopping inspection
