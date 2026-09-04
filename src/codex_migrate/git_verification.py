@@ -22,6 +22,31 @@ def fingerprint(value):
                                      ensure_ascii=True).encode("ascii")).hexdigest()
 
 
+def require_runtime(home, transport=None, cancelled=lambda: False):
+    """Preflight only: check the guarded executable with no repository read grants."""
+    def checkpoint():
+        if cancelled():
+            raise MigrationError("Git readiness check stopped")
+    checkpoint()
+    try:
+        if transport is None:
+            report = probe_local(home, [], [], checkpoint)
+        else:
+            result = transport.run_remote_cancellable(
+                probe_script(home, [], []), timeout=PROBE_TIMEOUT, cancelled=cancelled)
+            report = parse_report(result.stdout, 0)
+        checkpoint()
+        return report["git_version"]
+    except Exception as error:
+        checkpoint()
+        side = "source" if transport is None else "destination"
+        raise MigrationError(
+            "Git verification is unavailable on the %s Mac. Transfer is blocked. "
+            "Check the Apple Command Line Tools/Xcode installation, then inspect again; "
+            "contact support if it is already installed. No files were changed by this check." % side
+        ) from error
+
+
 def source_plan(config, checkpoint):
     plan = inspect_git(config.source_home, config.workspace_roots, checkpoint)
     if plan.issues or plan.missing_paths:
@@ -48,6 +73,7 @@ def freeze_baseline(config, migration_id, prepared, checkpoint):
             # A missing Git installation/unsupported layout is not copy damage.
             # A cancellation must still stop finalization, never become a warning.
             checkpoint()
+            raise MigrationError("The source Git baseline could not be saved. Finalization stopped before replacement; staging and the destination were kept. Resolve Git verification, choose Resume to refresh staging, then Finalize.") from None
     checkpoint()
     return {"format": 1, "attempt": secrets.token_hex(16), "migration_id": migration_id,
             "source_home": config.source_home, "target_home": config.target_home,

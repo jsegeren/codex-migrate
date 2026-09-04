@@ -19,7 +19,7 @@ from codex_migrate.storage_scope import require_source_storage, storage_scope_sc
 from codex_migrate.conversations import conversation_verification_script
 from codex_migrate.errors import MigrationError
 from codex_migrate.git_verification import (check_installed, fingerprint, freeze_baseline,
-                                           installation_verified)
+                                           installation_verified, require_runtime)
 from codex_migrate.exclusions import CODEX_EXCLUDES
 from codex_migrate.skills import SkillExport, discover_personal_skills, skill_verification_script
 from codex_migrate.backup import BACKUP_FUNCTIONS, size_command, verification_receipt
@@ -348,6 +348,9 @@ class MigrationEngine:
                                  "Restart setup, add these folders to the selection, and inspect again: "
                                  + "; ".join(inventory.git_missing_paths[:10]))
         check_local_tools()
+        git_runtime = {}
+        if inventory.git_repositories:
+            git_runtime["source"] = require_runtime(self.config.source_home, cancelled=lambda: self._cancel_requested)
         remote = self.transport.check()
         self.transport.run_remote(remote_tool_check())
         self._inspection_checkpoint()
@@ -366,6 +369,9 @@ class MigrationEngine:
             raise MigrationError(
                 "The destination home must be on APFS for copy-on-write rollback backups"
             )
+        if inventory.git_repositories:
+            git_runtime["destination"] = require_runtime(self.config.target_home, self.transport, lambda: self._cancel_requested)
+        self.state.update(git_runtime=git_runtime)
         paths = check_compatibility(self.config, self.transport, lambda: self._cancel_requested)
         self.state.update(path_compatibility=paths)
         if paths["status"] not in PATHS_READY | {"missing"}:

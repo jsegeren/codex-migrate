@@ -16,6 +16,12 @@ available yet. Local unsigned builds are engineering artifacts, not releases.
   The application cannot use an interactive password prompt. It never disables
   host verification or copies private SSH keys to the new Mac.
 - The destination home must use APFS. Make enough room for staging and rollback.
+- If repositories are discovered, Apple Command Line Tools/Xcode and the
+  guarded Git runtime must pass preflight on both Macs before staging. This
+  early check does not inspect repository contents or prove Git integrity.
+  A missing/unsupported toolchain blocks transfer with a review message; do not
+  change ownership or weaken checks to bypass it. Skills-only repairs and
+  full migrations without discovered repositories do not require this check.
 - Backups are mandatory and verified before replacement. Insufficient space
   blocks installation, including skills-only exports. Free destination space
   and retry; there is no override or external-backup picker in this release.
@@ -113,10 +119,26 @@ use disposable accounts on **both** Macs. A temporary folder under the everyday
 account is not process isolation. Opening restored chats still requires access
 to the test account's graphical session; no logout of the everyday user is needed.
 
-The tool makes a destination backup,
-installs, and verifies. Do not shut down either Mac during this phase. If it fails,
-review the backup path and verification output before resuming. See
-[recovery](recovery.md) for the existing engine's recovery contract.
+The tool makes a destination backup, installs, and verifies. Do not shut down
+either Mac during this protected phase. If replacement is interrupted or its
+outcome is uncertain, keep destination Codex closed and use **Check recovery**
+before attempting another migration. See [recovery](recovery.md).
+
+After installation, home-path and Git checks are separate from copying. Resolve
+the **Home-path compatibility** panel first. Then use **Git verification → Check
+Git** to compare discovered repositories with the saved source baseline.
+**Stop Git check** is safe during its home-path precheck or Git probe. Check-only
+retry does not recopy, restore or fetch anything, even if changes are disabled.
+Do not start another transfer to resolve a failed post-install check.
+
+If the source baseline cannot be captured before replacement, finalization
+stops and keeps staging. Fix that issue, choose **Resume** to refresh staging,
+then **Finalize**. For an older
+installation with no original baseline, a retry cannot reconstruct it from
+today's files: keep backups and contact support. A report of changed Git state
+may reflect work you have already resumed. A passing point-in-time Git check
+does not prove every chat, integration, hook or development command works;
+validate representative work before retiring the old Mac.
 
 ## Skills only
 
@@ -153,8 +175,9 @@ python3 -m venv .venv
 ```
 
 The bundle includes the Python runtime and migration engine. Customers should
-not need Python, Git, or Xcode just to launch it. Git is still needed for normal
-development work after migration. Build output lives in a unique `build/desktop-*`
+not need Python, Git, or Xcode just to launch it. The guarded Git verification
+step for discovered repositories requires a supported root-owned Apple-toolchain
+Git executable on both Macs. Build output lives in a unique `build/desktop-*`
 directory; local builds are explicitly marked unsigned and must not be sold.
 Each app includes its source revision and build mode in `build-info.json`, plus
 offline setup, recovery, and security documents. The ZIP has a SHA-256 checksum

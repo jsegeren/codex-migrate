@@ -149,9 +149,36 @@ class GitVerificationTests(unittest.TestCase):
         self.engine._run_git_check()
         self.assertEqual(self.state.read()["status"], "complete")
 
-    def test_source_unavailable_is_not_recreated_from_new_work(self):
+    def test_source_unavailable_stops_before_replacement(self):
         with patch("codex_migrate.git_verification.probe_local", side_effect=MigrationError("Unavailable")):
-            receipt = self.install()
+            with self.assertRaisesRegex(MigrationError, "stopped before replacement"):
+                self.install()
+        self.fixture.assert_destination_original()
+        self.assertIsNone(self.state.read().get("receipt"))
+        self.assertTrue(Path(self.engine.config.target_staging).exists())
+
+    def test_source_baseline_failure_offers_the_actual_guarded_retry_path(self):
+        self.fixture.prepare()
+        with patch("codex_migrate.git_verification.probe_local", side_effect=MigrationError("Unavailable")):
+            self.engine._guarded(self.engine._prepare_install)
+        current = self.state.read()
+        self.assertEqual(current["status"], "failed")
+        self.assertIn("Resume", current["message"])
+        self.assertIn("then Finalize", current["message"])
+        with self.assertRaises(MigrationError):
+            self.engine.start_finalize()
+        with patch.object(self.engine, "_run_preseed") as resume:
+            self.engine.resume()
+            self.engine._thread.join(5)
+            resume.assert_called_once()
+        self.fixture.assert_destination_original()
+
+    def test_legacy_unavailable_baseline_is_not_recreated_from_new_work(self):
+        receipt = self.install()
+        baseline = self.state.read()["git_baseline"]
+        baseline["report"] = None
+        receipt["git_baseline_id"] = fingerprint(baseline)
+        self.state.update(git_baseline=baseline, receipt=receipt)
         with patch.object(self.engine.transport, "run_remote_cancellable") as remote:
             self.finish(receipt)
             remote.assert_not_called()

@@ -84,6 +84,14 @@ real-account or packaged application acceptance test.
 
 ## Integrated lifecycle
 
+When Git locations are discovered, source and destination preflight run the
+same sandboxed bootstrap with empty repository/read-root lists. Unsupported Git
+runtime stops staging early; successful startup does not prove repository
+usability. Destination account/home/filesystem identity is validated first.
+Source cancellation stops before SSH, and failures return fixed side-specific
+messages without raw command output. No Git runtime is required for skills-only
+repair or an empty discovered Git scope.
+
 The source plan is rediscovered before its Git probe; newly missing dependencies
 or unsafe metadata block installation. The owner-only baseline includes the
 ordered locations, read scopes, both homes, migration ID, per-attempt nonce,
@@ -92,6 +100,9 @@ is durably saved before the installation RPC; the installation receipt binds its
 fingerprint. Status/API/preflight JSON and diagnostic reports omit that private
 comparison material. No destination Git probe is sent when the saved
 baseline/receipt binding is invalid; a retry may first check home paths over SSH.
+If the source probe becomes unavailable after preflight, finalization stops
+before replacement, retaining staging. A saved unavailable baseline from an
+older installation is not recreated from subsequently edited files.
 
 After saving and syncing installation evidence, the engine checks home paths
 and then Git. The path-to-Git handoff publishes its checking state under the same
@@ -122,15 +133,16 @@ per-repository percentages for a batch that has not returned.
    including unavailable Git, unsupported flags/sandbox, external metadata,
    partial clones, unborn/merged/conflicted/sparse and submodule layouts,
    destination changes, disconnects, cancellation and restart reconciliation.
-2. Confirm the hosted macOS CI provisioning fix: runs 33878246468 and
-   33879706844 failed because the hosted Xcode Git was owned by runner UID 501,
+2. Validate toolchain configurations on actual supported customer Macs. Runs
+   33878246468 and 33879706844 failed because hosted Xcode Git was owned by runner UID 501,
    unlike the required root-owned executable here. The workflow now validates
    the exact canonical, regular, non-group/world-writable Apple-signed executable
    and provisions its owner on the disposable runner only. Product ownership
    and sandbox checks are unchanged. A focused test also forces observed
    non-root ownership and requires rejection. This is not a recommendation to
    change toolchain ownership on a customer's Mac or evidence that arbitrary
-   toolchain layouts are supported.
+   toolchain layouts are supported. Hosted run 33880262265 on `923b987` passed
+   both Python 3.9 and 3.12 after that CI-only provisioning fix.
 3. Complete native/VoiceOver acceptance and validate representative Codex chats.
 
 The broader release gates in [release-readiness.md](release-readiness.md) remain

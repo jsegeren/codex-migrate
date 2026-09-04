@@ -8,6 +8,23 @@ results, accessibility findings, and pre-signing work still open.
 
 ## Candidate checks completed on the development Mac
 
+- Discovered Git scope now triggers an early source/destination runtime check
+  before staging, using the existing sandbox probe with empty repository/read
+  scopes. It validates destination identity first and never reads repositories
+  for this startup check. Missing/unsupported Git is a preflight failure, not a
+  surprise after a large transfer. If the source baseline later becomes
+  unavailable, finalization stops before replacement, keeps staging and names
+  the actual retry path: Resume, then Finalize. Older installed null-baseline
+  records still receive a read-only unavailable result rather than a recreated
+  baseline. Skills-only repair and no-Git scope remain independent.
+  The local full suite passed 459 of 466 tests, with seven filesystem skips;
+  the subsequently added guarded-retry regression passed separately.
+  Independent `public_release_review` accepted the current diff after 29
+  readiness/integration tests with ResourceWarning treated as errors and an
+  independent pass of that final retry regression. The bundled setup guide now
+  distinguishes pre-install retries from post-install Check Git and recovery.
+  No new rendered layout or real second-Mac acceptance is claimed for this slice.
+
 - Full finalization now durably saves an installation-bound source Git baseline
   and runs separate destination Git checks after home-path verification. The
   dashboard has collapsed Check Git/Stop Git check controls, read-only retry and
@@ -49,8 +66,10 @@ results, accessibility findings, and pre-signing work still open.
   non-group/world-writable, Apple-signature-verified executable on its
   disposable runner. No product ownership/sandbox guard was relaxed. Customer
   user-owned/custom toolchains remain explicitly unavailable for this probe;
-  changing their permissions to bypass checks is not recommended. The next CI
-  result, actual second-Mac acceptance and native/VoiceOver remain open gates.
+  changing their permissions to bypass checks is not recommended. Hosted run
+  33880262265 on source `923b987` subsequently passed both Python 3.9 and 3.12;
+  its 455-test suite had seven filesystem skips. This resolves that CI
+  provisioning failure, not actual second-Mac or native/VoiceOver acceptance.
 
 - An internal sandboxed Git-probe primitive now checks explicit repository
   locations, HEAD, refs, index/status and local objects without granting Git

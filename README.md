@@ -372,6 +372,12 @@ verification, the dashboard separately checks discovered destination Git
 locations: local object/connectivity checks, HEAD, refs, index and status.
 Skills-only repairs do not run or require this repository check.
 
+When repositories are discovered, preflight first checks that the guarded Git
+runtime can start on both Macs, without reading repository contents. An
+unavailable runtime blocks staging. If the source baseline later cannot be
+captured during finalization, replacement stops and staged data is retained.
+These early runtime checks are not repository integrity or usability checks.
+
 Open **Git verification → Check Git** to repeat only the read-only check.
 **Stop Git check** also stops its preceding home-path check. These actions do
 not require changes to be enabled. A failed check, missing Git, disconnect or
@@ -385,7 +391,7 @@ Git runs with restricted reads and without writes, network access or subprocess
 helpers. Partial clones, custom object-check policies, filters, unsupported
 layouts and Git storage outside the probe's selected-folder/managed-worktree
 read scopes can need review. Shallow repositories remain shallow. If the source
-baseline was unavailable or this migration predates it, retry cannot reconstruct
+baseline is unavailable in an older installation, retry cannot reconstruct
 the original baseline from today's files: keep the backup and contact support.
 The probe currently requires a root-owned Apple-toolchain Git executable;
 user-owned/custom toolchain installations can be unavailable for verification.
