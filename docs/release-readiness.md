@@ -51,6 +51,16 @@ as a workaround.
   530 of 537 tests with seven filesystem skips; all 16 Node tests, Swift
   typecheck and diff checks passed. Suite notarization is mocked, not Apple
   approval. Real cross-Mac/configuration acceptance remains open.
+  Clean source `904bfdf8e3a3862130b7e11ea7d05a54d4761d4d` produced a local-only
+  unsigned arm64 app. Eight of nine actual packaged-engine checks passed, with
+  one case-sensitive-filename skip. The subsequently added, independently
+  reviewed engine assertion confirms selected-project reference rejection,
+  private-value suppression and unchanged fixture configuration in that binary.
+  ZIP SHA-256:
+  `92df762aa77ddcdfa4bb43b81c36608071dc49617da21357a7e7c821da6c4b19`.
+  Hosted run 33886955990 is in progress. The previous inactive engineering build
+  was moved recoverably to Trash after checking open files and running processes;
+  user-running apps were left intact.
 
 - Shared Help keyboard behavior now retains a useful focus target after
   diagnostic preparation. A reproduced HTTP-error bug dropped focus onto the
