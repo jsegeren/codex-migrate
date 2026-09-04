@@ -49,6 +49,15 @@ as a workaround.
   is reaped, not every descendant PID independently. This is not MDM enrollment,
   effective-policy, restricted-launch visibility or real managed-account/SSH
   certification. Those acceptance gates remain open.
+  Clean source `30b48473a23e26005adc535eaf0e43b5dd073ebe` produced a local-only
+  unsigned arm64 app. Eight of nine actual packaged-engine startup/CLI/browser
+  checks passed, with one case-sensitive-filename skip. ZIP SHA-256:
+  `7e7037cffc6d4d8fe86eecaaca540750df5c552cfdb2266078f2210cce5511f9`.
+  Hosted run 33885738099 is in progress. The previous inactive engineering build
+  was moved recoverably to Trash after checking open files/processes; running
+  apps were not stopped or replaced. Native access was rechecked: the Mac is
+  still locked and cannot be automatically unlocked. This does not certify the
+  managed-preference probe in a real signed/restricted or destination SSH context.
 
 - Fixed macOS system defaults are now screened for storage overrides on both
   Macs: `/etc/codex/config.toml` and `/etc/codex/managed_config.toml`. The reader
