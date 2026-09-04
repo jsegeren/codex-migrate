@@ -18,14 +18,19 @@ results, accessibility findings, and pre-signing work still open.
   backup/rollback copies losing permission bits under the restrictive umask.
   Twenty-two local transaction tests pass, including corruption, missing/extra
   entries, permission and link changes, special files, legacy evidence, and
-  preserving installed data when a backup is damaged. The full suite ran 284
-  tests (283 passed, one filesystem skip); the subsequently added absent-backup
-  regression also passed, as did the final 22-test transaction suite. Ten signup
+  preserving installed data when a backup is damaged. The final full suite ran
+  285 tests (284 passed, one filesystem skip), including the 22-test transaction
+  suite. Ten signup
   tests and Swift typecheck passed. Independent `public_release_review` caught
   a Unicode-home regression, then accepted its filesystem-byte/JSON-path fix
   after independent accented, Chinese, and decomposed-path fixtures and 91
   focused tests (90 passed, one skip). No real user data or SSH migration was
-  used. This checkpoint has not yet been rebuilt into the packaged app.
+  used. Clean source `40fa834` built an unsigned arm64 engineering app and passed
+  all eight bundled-engine checks; packaging verified its ad-hoc signature.
+  ZIP SHA-256: `549027d5dc03a26f4721075bdb9366bf4a668e87ca4d86ce66f91426c84f2d8c`.
+  The build is local-test-only, not Apple signed/notarized. Its startup/config
+  checks do not exercise a real packaged SSH migration. CI was still running
+  when this local checkpoint was recorded.
   Guided post-crash recovery that preserves displaced current data remains
   release-blocking; this change supplies its integrity prerequisite, not the UI
   or a clean second-Mac/power-loss proof.
