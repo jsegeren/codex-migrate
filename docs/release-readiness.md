@@ -55,6 +55,13 @@ cross-Mac migration. Failure tests use disposable fixtures, not user data.
 
 ## Remaining paid-release gates
 
+- Add source-to-staging and post-install workspace/Git verification. A
+  disposable full-install probe against `04e3ffa` replaced a staged branch ref
+  with forty zeroes; installation returned a completion receipt and retained
+  the corrupted ref. Transcript and backup verification do not cover this.
+  The next verification work must reject altered staged refs/files before
+  replacement and trigger rollback for post-install mismatches. This is a
+  known release blocker, not a waived limitation of dependency inventory.
 - Confirm Apple Developer membership activation and the intended account.
 - Create Developer ID signing credentials and notarization access securely.
 - Produce, notarize, staple, and verify the exact committed release artifact.

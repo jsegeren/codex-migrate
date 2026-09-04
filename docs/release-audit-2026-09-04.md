@@ -422,6 +422,22 @@ suite to 176 passing Python tests.
 Artifact: `Codex-Migrate-arm64-LOCAL-UNSIGNED.zip` (engineering only).
 SHA-256: `923649072724b82aa311acfd798acf54bc35e66a7769b424cb281ec279f2bd86`.
 
+### Open workspace-verification defect
+
+After the Git dependency checkpoint, a disposable full-migration probe against
+`04e3ffa` initialized a committed source repository, selected its workspace,
+ran the actual local rsync staging and APFS installation fixture, and changed
+only the staged `.git/refs/heads/main` to forty zeroes. `_install_and_verify`
+returned a completion receipt and installed that corrupted ref. Source refs
+were not changed; the fixture cleaned up both disposable homes afterward.
+
+The existing transcript checks and destination rollback-backup checks do not
+prove source workspace/Git preservation. Required follow-up: reject staged
+workspace-content mismatches before replacement, compare installed data with
+the same frozen source expectations, exercise post-install rollback, and test
+destination Git usability independently. Do not represent this alpha as a
+verified paid release while this blocker remains.
+
 ### Reference guidance
 
 - [Lighthouse scoring excludes manual checks](https://developer.chrome.com/docs/lighthouse/accessibility/scoring).
