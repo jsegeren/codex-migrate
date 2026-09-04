@@ -120,6 +120,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print("Active conversations: %d" % result.active_sessions.files)
                 print("Archived conversations: %d" % result.archived_sessions.files)
                 print("Git repositories: %d" % result.git_repositories)
+                print("Personal custom skills: %d" % len(result.personal_skills))
                 print("Estimated bytes: %d" % result.estimated_transfer_bytes)
                 if result.unreadable_paths:
                     print("Unreadable paths: %d" % len(result.unreadable_paths))
