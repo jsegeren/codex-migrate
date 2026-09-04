@@ -3,7 +3,7 @@
 This is not a TOML evaluator or discovery of every running process's settings.
 It checks visible CODEX_HOME and user/project config/profile keys without
 emitting configuration values. The system-Perl file guard runs on either Mac;
-project-layer discovery currently runs only on the source.
+source project discovery and retained destination ancestor checks are explicit.
 """
 
 import os
@@ -27,10 +27,23 @@ sub stop {
         " Keep existing files and settings intact; contact support before full migration. No migration data was changed.\n";
     exit $code;
 }
-my ($home, $check_env, $identity_home) = @ARGV;
-(@ARGV == 2 || @ARGV == 3) && defined($home) && $home =~ m{\A/[^\r\n\0]+\z} or stop(67);
+my ($home, $check_env, $identity_home, $boundary) = @ARGV;
+(@ARGV >= 2 && @ARGV <= 4) && defined($home) && $home =~ m{\A/[^\r\n\0]+\z} or stop(67);
 $identity_home = $home unless defined($identity_home);
 $identity_home =~ m{\A/[^\r\n\0]+\z} or stop(67);
+if (defined($boundary)) {
+    $boundary =~ m{\A/[^\r\n\0]+\z} && index($home, "$boundary/") == 0 or stop(67);
+    my @base = lstat($boundary);
+    @base && S_ISDIR($base[2]) or stop(67);
+    my $path = $boundary;
+    for my $part (split(m{/}, substr($home, length($boundary) + 1), -1)) {
+        length($part) && $part ne '.' && $part ne '..' or stop(67);
+        $path .= "/$part";
+        my @s = lstat($path);
+        if (!@s) { $!{ENOENT} ? exit(0) : stop(67); }
+        S_ISDIR($s[2]) or stop(67);
+    }
+}
 my $root = "$home/.codex";
 if ($check_env eq '1' && exists($ENV{CODEX_HOME}) && length($ENV{CODEX_HOME})) {
     my $configured = $ENV{CODEX_HOME};
@@ -125,11 +138,43 @@ MESSAGES = {
 }
 
 
-def storage_scope_script(home, check_environment=True, *, identity_home=None):
+def _runner_command():
     return ("/usr/bin/env -u PERL5OPT -u PERL5LIB -u PERLLIB -u PERLIO -u PERL_UNICODE "
-            "LC_ALL=C /usr/bin/perl -e " + shlex.quote(RUNNER) + " -- "
+            "LC_ALL=C /usr/bin/perl -e " + shlex.quote(RUNNER) + " -- ")
+
+
+def storage_scope_script(home, check_environment=True, *, identity_home=None):
+    return (_runner_command()
             + shlex.quote(home) + (" 1" if check_environment else " 0")
             + (" " + shlex.quote(identity_home) if identity_home is not None else "") + "\n")
+
+
+def retained_ancestor_storage_script(home, workspace_roots):
+    """Check only destination project layers outside replaced workspace roots.
+
+    Paths are remote lexical paths, never resolved on the caller's filesystem.
+    The remote reader rejects linked/non-directory ancestor chains before reads.
+    """
+    base = Path(home)
+    ancestors = set()
+    for root in map(Path, workspace_roots):
+        if not root.is_absolute() or ".." in root.parts or base not in root.parents:
+            raise MigrationError(MESSAGES[67])
+        for parent in root.parents:
+            if parent == base:
+                break
+            ancestors.add(parent)
+            if len(ancestors) > 1024:
+                raise MigrationError(MESSAGES[67])
+    if not ancestors:
+        return ""
+    # Define the file reader once, rather than repeating its source for each
+    # ancestor. Fixed diagnostics contain neither configuration nor path values.
+    script = 'cm_check_retained_config() {\n' + _runner_command() + '"$1" 0 "$2" "$2"\n}\n'
+    for parent in sorted(ancestors, key=lambda path: (len(path.parts), str(path))):
+        script += ("cm_check_retained_config " + shlex.quote(str(parent)) + " "
+                   + shlex.quote(home) + " || exit $?\n")
+    return script
 
 
 def require_source_storage(home, checkpoint=lambda: None, *, identity_home=None):

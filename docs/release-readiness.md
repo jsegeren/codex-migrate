@@ -8,7 +8,7 @@ results, accessibility findings, and pre-signing work still open.
 
 ## Current gate map
 
-Checked September 4 against source `708a1db` and the live public site. Historical
+Checked September 4 against the source checkpoints below and the live public site. Historical
 checkpoints below are evidence, not separate promises that their then-pending
 work is still missing. Neither the full release nor the release-candidate
 handoff is complete while the engineering acceptance gates remain open.
@@ -16,7 +16,7 @@ handoff is complete while the engineering acceptance gates remain open.
 | Requirement | Evidence now | Next proof / owner |
 | --- | --- | --- |
 | Supported conversations, organization, settings, skills and complete selected workspaces | Frozen content/tree checks, retained destination identity, Git dependency discovery and bound Git baseline; local installation/rollback fixtures | Codex must reopen representative restored chats, settings and projects on the separate Mac. Codex leads; Josh provides disposable accounts. |
-| Scope is explicit, not “everything on the Mac” | Selected roots and dependency issues are reported; unsupported visible storage overrides, source project configuration, filenames and cloud-only flags stop early | Real configuration/version/provider matrix; destination project/ancestor and system/managed overrides, arbitrary role references and unflagged cloud storage remain unverified. Codex owns testing and any resulting fixes. |
+| Scope is explicit, not “everything on the Mac” | Selected roots and dependency issues are reported; unsupported visible storage overrides, source project configuration, retained destination ancestor configuration, filenames and cloud-only flags stop early | Real configuration/version/provider matrix; system/managed overrides, arbitrary role references and unflagged cloud storage remain unverified. Codex owns testing and any resulting fixes. |
 | Full and selective migration, pause/resume and recovery | Full/skills-only staging, persisted setup, mandatory verified backups, guarded replacement, guided reconciliation and preserved displaced work have local fixture coverage | Packaged full and skills-only runs across the two Macs, including disconnect, restart, low space and recovery. Never use Josh's active migrated workspace. |
 | Git and old-home paths remain usable | Local linked-worktree/alternate-storage checks with source home offline; read-only path/Git rechecks preserve installed work | Different-user cross-Mac acceptance and representative development commands. Matching fingerprints alone do not prove every future command works. |
 | Browser-first local-data experience and clear status/help | Loopback helper, SSH transfer, saved setup, collapsed optional Help, bounded private-free diagnostic events and operation-specific controls | Native permission/VoiceOver checks and real route interruption acceptance. Automatic route selection and updating are not implemented. |
@@ -33,6 +33,23 @@ engineering work. Do not create another Apple purchase or enable live checkout
 as a workaround.
 
 ## Candidate checks completed on the development Mac
+
+- Destination retained ancestor configuration is now screened at inspection
+  and again before backup/replacement. The bounded check covers in-home parents
+  above selected roots, not unrelated projects or settings inside replaced
+  folders. Remote ancestor chains reject links/non-directories before config
+  reads, and both ancestor readers and staged user-config readers protect the
+  actual destination identity-file inodes. A failed initial user-config check
+  cannot be masked by a later successful ancestor check. Independent reviewer
+  `public_release_review` accepted the code, tests and scoped documentation,
+  independently passing 56 focused tests. All 12 destination-scope tests passed,
+  including real generated preflight execution and local rsync/APFS fixtures
+  preserving original destination data and staging after a late override.
+  The full local suite passed 495 of 502 tests with seven filesystem skips;
+  the final preflight regression passed separately afterward. Ten signup tests,
+  Swift typecheck and diff checks passed. System/managed settings and arbitrary
+  role references remain engineering gates; this is not effective-config or
+  real cross-Mac certification.
 
 - Source project configuration now receives conservative storage-override
   screening in selected descendants, managed worktrees and in-home ancestor
@@ -58,7 +75,7 @@ as a workaround.
   `ea246e45ecffdfa9d98c83abb51aa02f3a32c3b14bad4f7968c4b184c2ac65e5`.
   The previous inactive engineering build was moved recoverably to Trash;
   the two running user apps were not stopped or replaced. Hosted run
-  33883734376 is in progress at this checkpoint.
+  33883734376 subsequently passed on Python 3.9 and 3.12.
 
 - Source availability now screens the macOS `SF_DATALESS` flag before selected
   content reads and directory enumeration, including configuration profiles,

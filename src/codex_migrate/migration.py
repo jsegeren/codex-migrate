@@ -15,7 +15,8 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 from codex_migrate.config import MigrationConfig
 from codex_migrate.compatibility import READY as PATHS_READY, check_compatibility, compatibility_command
-from codex_migrate.storage_scope import require_source_storage, require_project_storage, storage_scope_script
+from codex_migrate.storage_scope import (require_source_storage, require_project_storage,
+                                       storage_scope_script, retained_ancestor_storage_script)
 from codex_migrate.conversations import conversation_verification_script
 from codex_migrate.errors import MigrationError
 from codex_migrate.git_verification import (check_installed, fingerprint, freeze_baseline,
@@ -376,7 +377,7 @@ class MigrationEngine:
         self.state.update(path_compatibility=paths)
         if paths["status"] not in PATHS_READY | {"missing"}:
             raise MigrationError(paths["message"])
-        self.transport.run_remote_cancellable(storage_scope_script(self.config.target_home), 30,
+        self.transport.run_remote_cancellable(self._destination_storage_script(), 30,
                                               lambda: self._cancel_requested)
         target_codex = shlex.quote(self.config.target_codex)
         target_home = shlex.quote(self.config.target_home)
@@ -941,6 +942,12 @@ class MigrationEngine:
             for root in self.config.workspace_roots
         ] + [skill.destination for skill in self._skill_plan()]
 
+    def _destination_storage_script(self):
+        roots = [str(Path(self.config.target_home) / Path(root).relative_to(self.config.source_home))
+                 for root in self.config.workspace_roots]
+        return (storage_scope_script(self.config.target_home).rstrip() + " || exit $?\n"
+                + retained_ancestor_storage_script(self.config.target_home, roots))
+
     def _prepare_install(self):
         require_source_storage(self.config.source_home, self._inspection_checkpoint)
         require_project_storage(self.config.source_home, self.config.workspace_roots, self._inspection_checkpoint)
@@ -1115,8 +1122,8 @@ class MigrationEngine:
 setopt NULL_GLOB
 umask 077
 {backup_functions}
-{storage_guard}
 {target_home_chain}
+{storage_guard}
 test -d {home}
 test ! -L {home}
 test ! -L {codex}
@@ -1227,8 +1234,9 @@ trap - EXIT
 printf 'INSTALLED=1\\nACTIVE=%s\\nARCHIVED=%s\\nAUTH_PRESERVED=1\\nINSTALLATION_ID_PRESERVED=1\\nBACKUP_VERIFIED=1\\nCONVERSATION_CONTENT_VERIFIED=1\\nCODEX_STATE_CONTENT_VERIFIED=1\\nWORKSPACE_CONTENT_VERIFIED=1\\nWORKSPACE_ROOTS_VERIFIED={workspace_count}\\nPERSONAL_SKILLS_VERIFIED={skill_count}\\nBACKUP=%s\\n' "$active" "$archived" {backup}
 """.format(
             backup_functions=BACKUP_FUNCTIONS,
-            storage_guard=storage_scope_script(self.config.target_home),
-            staged_storage_guard=storage_scope_script(self.config.target_staging, check_environment=False),
+            storage_guard=self._destination_storage_script(),
+            staged_storage_guard=storage_scope_script(self.config.target_staging, check_environment=False,
+                                                     identity_home=self.config.target_home),
             begin_transaction=begin_transaction,
             installed_transaction=installed_transaction,
             restored_transaction=restored_transaction,

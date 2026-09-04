@@ -337,8 +337,13 @@ descendants, managed worktrees and selected folders' ancestors within the home.
 The project pass is repeated before copying/resume and source freezing. Linked
 project configuration directories and unsafe configuration files require review;
 the pass protects the actual source account's identity files, not just files
-named `auth.json` in each project. Destination and staged user configuration are
-checked before replacement.
+named `auth.json` in each project. Destination user configuration and retained
+in-home ancestors above selected folders are checked at inspection and again
+before replacement. Linked or non-directory ancestor chains require review.
+Destination project folders being replaced are not searched for settings that
+will be removed; the incoming project settings receive the source checks and
+frozen workspace verification. Staged user configuration is rechecked using
+the destination account's identity-file protections.
 
 An override or unreadable/unsafe configuration stops the full migration for
 review. Keep the original files and settings intact; contact support rather
