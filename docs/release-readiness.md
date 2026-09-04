@@ -31,6 +31,13 @@ results, accessibility findings, and pre-signing work still open.
   account data or real SSH migration was used. Review fixtures were cleaned up.
   See [the restoration contract](restore-engine.md). This is not Apple release
   certification, VoiceOver conformance, or real packaged cross-Mac acceptance.
+  Clean source `17ff1ec` built an unsigned arm64 engineering app and passed all
+  eight bundled-engine tests, including the guided-control HTML and missing
+  recovery-proof rejection before any SSH request. Packaging verified its
+  ad-hoc signature. ZIP SHA-256:
+  `c785735f713c926583d7cce48e183da43649dce9feb0b93573eb5428dce23dee`.
+  The actual restore fixtures used the source engine; these bundled checks do
+  not claim a packaged restoration over SSH. No running user app was replaced.
 
 - The preceding internal post-crash restoration checkpoint restored frozen destination
   backups while retaining displaced current entries in a separate, indexed
