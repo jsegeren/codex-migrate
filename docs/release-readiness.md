@@ -22,6 +22,11 @@ results, accessibility findings, and pre-signing work still open.
   skip), 10 signup tests, and native Swift typecheck. This is not a real
   cross-Mac disconnect test or power-loss recovery certification. Old versions
   and manual filesystem writes do not participate in this lock.
+  Clean source `5fc092a` produced an unsigned arm64 app; all eight bundled-engine
+  checks passed and packaging verified its ad-hoc signature. ZIP SHA-256:
+  `20f59981f6e85cfc73c25ab9aa1245ef1114ef6c3aa8e2c2e176d7db6416dd59`.
+  These startup/configuration tests do not exercise a real packaged SSH transfer
+  or certify a clean second Mac.
 
 - Same-source-Mac rejection now runs before every migration remote-shell body
   and rsync receiver. It compares ephemeral salted platform identities, rejects
