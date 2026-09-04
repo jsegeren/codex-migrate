@@ -81,6 +81,13 @@ class DashboardTests(unittest.TestCase):
         status, _ = self.request()
         self.assertEqual(status, 403)
 
+    def test_path_check_requires_token_but_not_apply(self):
+        with patch.object(self.dashboard.engine, "start_path_check") as check:
+            self.assertEqual(self.post({"action": "check_paths"})[0], 403)
+            check.assert_not_called()
+            self.assertEqual(self.post({"action": "check_paths"}, self.dashboard.token)[0], 202)
+            check.assert_called_once()
+
     def test_recovery_check_is_token_protected_and_available_without_apply(self):
         with patch.object(self.dashboard.engine, "start_recovery_check") as start:
             self.assertEqual(self.post({"action": "check_recovery"})[0], 403)

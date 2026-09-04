@@ -20,10 +20,10 @@ SUPPORT_URL = "mailto:" + SUPPORT_EMAIL + "?" + urlencode({
             "Do not send passwords, keys, conversations, or workspace contents.\r\n",
 }, quote_via=quote)
 STATUSES = frozenset(("idle", "ready", "running", "paused", "cancelled", "failed",
-                      "interrupted", "waiting", "ready_to_finalize", "complete"))
+                      "interrupted", "waiting", "ready_to_finalize", "complete", "needs_attention"))
 PHASES = frozenset(("not_started", "inspecting", "preflight_complete", "staging",
                     "staged", "close_source_codex", "close_target_codex", "final_delta",
-                    "verifying_sources", "installing", "verified", "restoring", "restored", "recovery_required"))
+                    "verifying_sources", "installing", "verified", "restoring", "restored", "recovery_required", "path_compatibility"))
 FAILURES = frozenset(("none", "unknown", "disk_space", "connection", "permissions",
                       "verification", "process_guard", "interrupted", "git_scope", "machine_identity", "destination_lock", "recovery_pending"))
 HISTORY_LIMIT = 60
@@ -31,6 +31,7 @@ RECOVERY_STATUSES = frozenset(("not_checked", "checking", "stopped", "failed", "
                                "no_pending_record", "legacy_record", "backup_verified", "restoring",
                                "different_transaction", "restore_incomplete", "restore_unconfirmed",
                                "restore_verified", "restore_pending_cleanup", "restore_changed"))
+PATH_STATUSES = frozenset(("not_checked", "checking", "not_needed", "mapped", "missing", "conflict", "unsupported", "unverified"))
 
 
 def failure_category(error):
@@ -62,11 +63,14 @@ def _enum(value, allowed):
 def event_fields(state):
     recovery = state.get("recovery")
     recovery = recovery if isinstance(recovery, dict) else {}
+    paths = state.get("path_compatibility")
+    paths = paths if isinstance(paths, dict) else {}
     return {"status": _enum(state.get("status"), STATUSES),
             "phase": _enum(state.get("phase"), PHASES),
             "failure_category": failure_category(state.get("error")),
             "space_check": _enum(state.get("space_check"), {"passed", "blocked"}),
-            "recovery_status": _enum(recovery.get("status", "not_checked"), RECOVERY_STATUSES)}
+            "recovery_status": _enum(recovery.get("status", "not_checked"), RECOVERY_STATUSES),
+            "path_status": _enum(paths.get("status", "not_checked"), PATH_STATUSES)}
 
 
 def _number(value):
@@ -113,6 +117,7 @@ def diagnostic_report(state):
             "failure_category": _enum(item.get("failure_category"), FAILURES),
             "space_check": _enum(item.get("space_check"), {"passed", "blocked"}),
             "recovery_status": _enum(item.get("recovery_status", "not_checked"), RECOVERY_STATUSES),
+            "path_status": _enum(item.get("path_status", "not_checked"), PATH_STATUSES),
         })
     macos = platform.mac_ver()[0]
     return {

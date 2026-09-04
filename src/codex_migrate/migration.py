@@ -14,6 +14,7 @@ import threading
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from codex_migrate.config import MigrationConfig
+from codex_migrate.compatibility import READY as PATHS_READY, check_compatibility, compatibility_command
 from codex_migrate.conversations import conversation_verification_script
 from codex_migrate.errors import MigrationError
 from codex_migrate.exclusions import CODEX_EXCLUDES
@@ -32,6 +33,8 @@ from codex_migrate.workspaces import (WORKSPACE_TIMEOUT, check_local_tools, free
 
 
 class MigrationEngine:
+    requires_home_compatibility = True
+
     def __init__(self, config: MigrationConfig, state: StateStore) -> None:
         self.config = config.validate()
         self.state = state
@@ -43,6 +46,7 @@ class MigrationEngine:
         self._lock = threading.RLock()
         self._personal_skills: Optional[List[SkillExport]] = None
         self._recovery_cancelled = False
+        self._path_cancelled = False
 
     def inventory(self) -> Inventory:
         # Personal skills are installed individually, never by replacing .agents.
@@ -74,7 +78,7 @@ class MigrationEngine:
 
     def start_inspection(self) -> None:
         with self._lock:
-            self._require_recovery_resolved()
+            self._require_ready_for_migration()
             if self._thread and self._thread.is_alive():
                 raise MigrationError("A migration action is already running")
             self.state.update(status="running", phase="inspecting",
@@ -133,6 +137,11 @@ class MigrationEngine:
                 raise ValueError("Unverified recovery state")
         except (KeyError, TypeError, ValueError) as error:
             raise MigrationError("Check recovery and resolve the previous restoration before starting another migration action") from error
+
+    def _require_ready_for_migration(self) -> None:
+        self._require_recovery_resolved()
+        if self.state.read().get("phase") == "path_compatibility":
+            raise MigrationError("Installation is already verified. Resolve Home-path compatibility and check home paths before starting another migration.")
 
     def _publish_recovery(self, report, reconciling=False) -> None:
         report["checked_at"] = datetime.now(timezone.utc).isoformat()
@@ -209,6 +218,9 @@ class MigrationEngine:
 
     def reconcile_startup(self) -> None:
         current = self.state.read()
+        if current.get("path_compatibility", {}).get("status") == "checking":
+            self.state.update(path_compatibility={"status": "unverified", "message":
+                "The previous path check ended without a result. Check home paths again; no path changes were requested."})
         if current.get("recovery", {}).get("status") == "restoring" or current.get("phase") == "restoring":
             self.state.update(status="failed", phase="recovery_required", staging_complete=False,
                               message="Restoration outcome is unconfirmed. Keep destination Codex closed and choose Check recovery.",
@@ -242,10 +254,17 @@ class MigrationEngine:
             if self.state.read().get("phase") == "restoring" and self.state.read().get("status") == "running":
                 raise MigrationError("Restoration is a protected step; wait for its result before quitting")
             recovery_checking = self.state.read().get("recovery", {}).get("status") == "checking"
+            paths_checking = self.state.read().get("path_compatibility", {}).get("status") == "checking"
+            if paths_checking:
+                self._path_cancelled = True
+                self.transport.cancel_all()
+                self.state.update(path_compatibility={"status": "unverified", "message":
+                    "Path check stopped. No path changes were requested. Check home paths again when ready."})
+                thread = self._thread
             if recovery_checking:
                 self.stop_recovery_check()
                 thread = self._thread
-        if recovery_checking:
+        if recovery_checking or paths_checking:
             if thread and thread.is_alive() and thread is not threading.current_thread():
                 thread.join(timeout=10)
             return
@@ -280,7 +299,7 @@ class MigrationEngine:
 
     def preflight(self, require_full_staging_space: bool = True) -> Dict[str, object]:
         with self._lock:
-            self._require_recovery_resolved()
+            self._require_ready_for_migration()
             if (
                 self._thread
                 and self._thread.is_alive()
@@ -327,6 +346,10 @@ class MigrationEngine:
             raise MigrationError(
                 "The destination home must be on APFS for copy-on-write rollback backups"
             )
+        paths = check_compatibility(self.config, self.transport, lambda: self._cancel_requested)
+        self.state.update(path_compatibility=paths)
+        if paths["status"] not in PATHS_READY | {"missing"}:
+            raise MigrationError(paths["message"])
         target_codex = shlex.quote(self.config.target_codex)
         target_home = shlex.quote(self.config.target_home)
         self.transport.run_remote(recovery_preflight_script(self.config.target_home))
@@ -417,7 +440,7 @@ class MigrationEngine:
         return state
 
     def start_preseed(self) -> None:
-        self._require_recovery_resolved()
+        self._require_ready_for_migration()
         current = self.state.read()
         if current.get("status") not in (
             "idle",
@@ -431,7 +454,7 @@ class MigrationEngine:
         self._start(self._run_preseed)
 
     def start_finalize(self) -> None:
-        self._require_recovery_resolved()
+        self._require_ready_for_migration()
         current = self.state.read()
         allowed = current.get("status") == "ready_to_finalize" or (
             current.get("status") == "waiting"
@@ -750,29 +773,69 @@ class MigrationEngine:
                 current_item="Destination verification and installation",
             )
         receipt = self._install_and_verify(prepared_workspaces)
-        self.state.update(
-            status="complete",
-            phase="verified",
-            message=self.completion_message(),
-            current_item=None,
-            bytes_staged=self.state.read().get("bytes_total", 0),
-            percent=100.0,
-            warning=self.completion_warning(),
-            receipt=receipt,
-            pending_backup=None,
-            error=None,
-        )
+        self._complete_installation(receipt)
+
+    def _complete_installation(self, receipt) -> None:
+        # Save installation evidence before a fallible post-install SSH check.
+        # A lost path-check reply must not masquerade as a failed installation.
+        with self._lock:
+            self._path_cancelled = self._cancel_requested
+            self.state.update(
+                status="needs_attention" if self.requires_home_compatibility else "complete",
+                phase="path_compatibility" if self.requires_home_compatibility else "verified",
+                message="Files installed and verified. Checking home-path compatibility before opening old work." if self.requires_home_compatibility else self.completion_message(),
+                current_item=None,
+                bytes_staged=self.state.read().get("bytes_total", 0),
+                percent=100.0,
+                warning=self.completion_warning(),
+                receipt=receipt,
+                pending_backup=None,
+                error=None,
+            )
+            if self.requires_home_compatibility:
+                self.state.update(path_compatibility={"status": "unverified" if self._path_cancelled else "checking",
+                    "message": "Check home paths before opening old work." if self._path_cancelled else "Checking destination home paths. No files are being changed."})
+        if self.requires_home_compatibility and not self._path_cancelled:
+            self._run_path_check()
+
+    def start_path_check(self) -> None:
+        with self._lock:
+            if not self.requires_home_compatibility:
+                raise MigrationError("A skills-only repair does not change home-path compatibility")
+            self._require_recovery_resolved()
+            if (self._thread and self._thread.is_alive()) or self.state.read().get("status") == "running":
+                raise MigrationError("Wait for the current migration action to finish")
+            self._path_cancelled = False
+            self.state.update(path_compatibility={"status": "checking", "message": "Checking destination home paths. No files are being changed."})
+            self._start(self._run_path_check)
+
+    def _run_path_check(self) -> None:
+        report = check_compatibility(self.config, self.transport, lambda: self._path_cancelled)
+        with self._lock:
+            if self._path_cancelled:
+                return
+            current = self.state.read()
+            changes = {"path_compatibility": report}
+            if current.get("phase") in ("path_compatibility", "verified"):
+                receipt = current.get("receipt")
+                valid_receipt = (isinstance(receipt, dict)
+                    and all(receipt.get(key) is True for key in ("backup_verified", "auth_preserved", "installation_id_preserved", "conversation_content_verified", "codex_state_content_verified", "workspace_content_verified"))
+                    and receipt.get("source_home") == self.config.source_home
+                    and receipt.get("target_home") == self.config.target_home)
+                ready = valid_receipt and report["status"] in PATHS_READY
+                changes.update(status="complete" if ready else "needs_attention",
+                               phase="verified" if ready else "path_compatibility",
+                               message=self.completion_message() if ready else "Files were installed and verified, but old home paths are not ready. Check the Home-path compatibility panel before opening old work." if valid_receipt else "Installation evidence could not be validated. Keep the backup and current files intact and contact support.",
+                               warning=None if ready else report["message"] if valid_receipt else "A home-path check does not prove installation succeeded.", error=None)
+            self.state.update(**changes)
 
     def completion_message(self) -> str:
-        return "Migration installed and verified. You may open Codex on the new Mac."
+        return "Files installed and verified; home paths checked. Open representative Codex chats and repositories to confirm they work before retiring the old Mac."
 
     def completion_warning(self) -> Optional[str]:
-        source_user = Path(self.config.source_home).name
-        target_user = Path(self.config.target_home).name
-        if source_user != target_user:
+        if self.config.source_home != self.config.target_home:
             return (
-                "Home-directory names differ. Run the compatibility command shown in Recovery "
-                "before resuming older chats."
+                "Home paths differ. Check Home-path compatibility before resuming older chats."
             )
         return None
 
@@ -1149,12 +1212,7 @@ printf 'INSTALLED=1\\nACTIVE=%s\\nARCHIVED=%s\\nAUTH_PRESERVED=1\\nINSTALLATION_
         return "set -eu\n" + "\n".join(lines) + "\n"
 
     def compatibility_command(self) -> Optional[str]:
-        if self.config.source_home == self.config.target_home:
-            return None
-        return "sudo ln -s %s %s" % (
-            shlex.quote(self.config.target_home),
-            shlex.quote(self.config.source_home),
-        )
+        return compatibility_command(self.config, self.state.read().get("path_compatibility"))
 
 
 def _value(text: str, key: str) -> Optional[str]:

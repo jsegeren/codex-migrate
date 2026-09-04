@@ -2,6 +2,7 @@ import tempfile
 import subprocess
 import shutil
 import unittest
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -155,10 +156,107 @@ class MigrationTests(unittest.TestCase):
                 target_home="/Users/new",
             ).validate()
             engine = MigrationEngine(different, StateStore(temporary + "/different"))
-            self.assertEqual(
-                engine.compatibility_command(),
-                "sudo ln -s /Users/new /Users/old",
-            )
+            self.assertIsNone(engine.compatibility_command())
+            engine.state.update(path_compatibility={"status": "missing", "source_home": "/Users/old", "target_home": "/Users/new"})
+            self.assertTrue(engine.compatibility_command().startswith("sudo /usr/bin/env "))
+            self.assertNotIn("ln -s", engine.compatibility_command())
+
+    def test_same_basename_in_different_roots_still_requires_path_review(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            config = MigrationConfig(target="person@host", source_home="/Volumes/old/person", target_home="/Users/person").validate()
+            engine = MigrationEngine(config, StateStore(temporary))
+            self.assertIsNotNone(engine.completion_warning())
+            self.assertIsNone(engine.compatibility_command())
+
+    def test_post_install_path_failure_keeps_receipt_and_requires_recheck(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            config = MigrationConfig(target="person@host", source_home="/Users/old", target_home="/Users/person").validate()
+            state = StateStore(temporary)
+            engine = MigrationEngine(config, state)
+            receipt = {key: True for key in ("backup_verified", "auth_preserved", "installation_id_preserved", "conversation_content_verified", "codex_state_content_verified", "workspace_content_verified")}
+            receipt.update(backup="/Users/person/backup", source_home=config.source_home, target_home=config.target_home)
+            for status in ("missing", "unverified", "conflict", "unsupported"):
+                report = {"status": status, "message": "Fixture path check " + status}
+                with patch("codex_migrate.migration.check_compatibility", return_value=report):
+                    engine._complete_installation(receipt)
+                self.assertEqual(state.read()["receipt"], receipt)
+                self.assertEqual(state.read()["status"], "needs_attention")
+                self.assertEqual(state.read()["phase"], "path_compatibility")
+                self.assertIsNone(state.read()["pending_backup"])
+                for operation in (engine.start_inspection, engine.start_preseed, engine.start_finalize):
+                    with self.assertRaisesRegex(MigrationError, "Installation is already verified"):
+                        operation()
+            with patch("codex_migrate.migration.check_compatibility", return_value={"status": "mapped", "message": "Fixture verified"}):
+                engine.start_path_check()
+                engine._thread.join(5)
+            self.assertEqual(state.read()["status"], "complete")
+            self.assertEqual(state.read()["receipt"], receipt)
+            self.assertIsNone(state.read()["warning"])
+            with patch("codex_migrate.migration.check_compatibility", return_value={"status": "conflict", "message": "Changed alias"}):
+                engine._run_path_check()
+            self.assertEqual(state.read()["status"], "needs_attention")
+            self.assertEqual(state.read()["receipt"], receipt)
+            for bad in (None, {}, {"backup_verified": True}, dict(receipt, source_home="/Users/other")):
+                state.update(receipt=bad)
+                with patch("codex_migrate.migration.check_compatibility", return_value={"status": "mapped", "message": "Fixture verified"}):
+                    engine._run_path_check()
+                self.assertEqual(state.read()["status"], "needs_attention")
+                self.assertIn("Installation evidence", state.read()["message"])
+
+    def test_interrupted_path_check_reopens_without_losing_installation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            config = MigrationConfig(target="person@host", source_home="/Users/old", target_home="/Users/person").validate()
+            state = StateStore(temporary)
+            receipt = {"backup_verified": True}
+            state.update(status="needs_attention", phase="path_compatibility", receipt=receipt,
+                         path_compatibility={"status": "checking"})
+            engine = MigrationEngine(config, state)
+            engine.reconcile_startup()
+            self.assertEqual(state.read()["path_compatibility"]["status"], "unverified")
+            self.assertEqual(state.read()["receipt"], receipt)
+
+    def test_path_check_shutdown_cancels_and_suppresses_late_result(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            config = MigrationConfig(target="person@host", source_home="/Users/old", target_home="/Users/person").validate()
+            state = StateStore(temporary)
+            state.update(status="needs_attention", phase="path_compatibility", receipt={"fixture": True})
+            engine = MigrationEngine(config, state)
+            entered, release = threading.Event(), threading.Event()
+            def held(*args):
+                entered.set()
+                self.assertTrue(release.wait(5))
+                return {"status": "mapped", "message": "Late fixture result"}
+            with patch("codex_migrate.migration.check_compatibility", held), patch.object(engine.transport, "cancel_all", side_effect=release.set) as cancel:
+                engine.start_path_check()
+                self.assertTrue(entered.wait(5))
+                engine.shutdown()
+                cancel.assert_called_once()
+                self.assertFalse(engine._thread.is_alive())
+            self.assertEqual(state.read()["path_compatibility"]["status"], "unverified")
+            self.assertEqual(state.read()["receipt"], {"fixture": True})
+
+    def test_automatic_post_install_path_check_reaps_real_child_on_shutdown(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            config = MigrationConfig(target="person@host", source_home="/Users/old", target_home="/Users/person").validate()
+            state = StateStore(temporary)
+            engine = MigrationEngine(config, state)
+            spawned = threading.Event()
+            real_spawn, children = subprocess.Popen, []
+            def spawn(*args, **kwargs):
+                child = real_spawn(["/bin/sleep", "30"], **kwargs)
+                children.append(child)
+                spawned.set()
+                return child
+            with patch.object(engine.transport, "machine_guard", return_value=""), patch("codex_migrate.transport.subprocess.Popen", spawn):
+                engine._start(lambda: engine._complete_installation({"fixture": True}))
+                self.assertTrue(spawned.wait(5))
+                engine.shutdown()
+            self.assertFalse(engine._thread.is_alive())
+            self.assertEqual(engine.transport._active_remote, [])
+            for child in children:
+                self.assertIsNotNone(child.poll())
+            self.assertEqual(state.read()["path_compatibility"]["status"], "unverified")
+            self.assertEqual(state.read()["receipt"], {"fixture": True})
 
     def test_safe_stop_is_not_overwritten_by_transfer_exit(self):
         with tempfile.TemporaryDirectory() as temporary:

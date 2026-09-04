@@ -101,6 +101,16 @@ class SupportTests(unittest.TestCase):
             self.assertNotIn("__SUPPORT", document)
         self.assertIn('id="migration-events"', HTML)
 
+    def test_path_events_exclude_commands_paths_and_account_records(self):
+        with tempfile.TemporaryDirectory() as root:
+            state = StateStore(root)
+            for status in ("checking", "missing", "checking", "mapped"):
+                state.update(path_compatibility={"status": status, "message": "PRIVATE", "source_home": "PRIVATE"},
+                             compatibility_command="PRIVATE")
+            report = diagnostic_report(state.read())
+            self.assertEqual([event["path_status"] for event in report["recent_events"]], ["checking", "missing", "checking", "mapped"])
+            self.assertNotIn("PRIVATE", json.dumps(report))
+
     def test_restoration_events_never_export_bound_private_evidence(self):
         with tempfile.TemporaryDirectory() as root:
             state = StateStore(root)

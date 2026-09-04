@@ -245,6 +245,16 @@ and packaged recovery acceptance remain open.
 
 ## Different usernames
 
-If an older conversation still references `/Users/old-user`, create the
-dashboard-provided compatibility link on the new Mac. The command requires an
-administrator password and should be reviewed before execution.
+Open **Home-path compatibility** and choose **Check home paths**. For a missing
+ordinary `/Users/old-user` path, the optional command panel offers a reviewed,
+exact-path link command to run on the new Mac with an administrator password.
+It checks the destination owner and local account records again, requires
+`--apply`, and never replaces an existing directory, file or link. A conflicting
+or unsupported path needs support review, not deletion or a forced command.
+
+Check home paths again after running it. A failed/disconnected check preserves
+the successful installation receipt and reports compatibility as unverified;
+it does not imply rollback or require repeating the copy. If the app closes
+during a check, reopen and check again. This read-only check can establish a
+direct old-home-to-new-home mapping, not that every historical task or repository
+works. Keep both the old Mac and the destination backup until you confirm that.

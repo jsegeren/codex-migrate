@@ -245,7 +245,7 @@ class BackupTests(unittest.TestCase):
             def remote_free_bytes(inner, path):
                 return MIN_RESERVE_BYTES + inventory.estimated_transfer_bytes
         engine.transport = Transport()
-        with self.assertRaisesRegex(MigrationError, "Installation blocked"):
+        with patch("codex_migrate.migration.check_compatibility", return_value={"status": "not_needed"}), self.assertRaisesRegex(MigrationError, "Installation blocked"):
             engine.preflight()
         self.assertEqual(self.state.read()["space_check"], "blocked")
         self.assertEqual(self.state.read()["backup_bytes_required"], 10000)

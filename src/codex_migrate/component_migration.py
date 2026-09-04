@@ -21,6 +21,8 @@ class ComponentMigrationEngine(MigrationEngine):
     separate Finalize action. Both Codex apps must be closed for finalization.
     """
 
+    requires_home_compatibility = False
+
     def __init__(self, config, state, components):
         exporter = ComponentExporter(config, components)
         self.components = tuple(sorted(exporter.components))
@@ -55,7 +57,7 @@ class ComponentMigrationEngine(MigrationEngine):
         return current
 
     def preflight(self, require_full_staging_space=True):
-        self._require_recovery_resolved()
+        self._require_ready_for_migration()
         if platform.system() != "Darwin":
             raise MigrationError("Codex Migrate currently supports macOS sources only")
         exports = self._discover()

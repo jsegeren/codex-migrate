@@ -52,7 +52,8 @@ HTML = r"""<!doctype html>
     #backup-safety { margin-top:18px; padding:16px; border:1px solid var(--line); border-radius:12px; }
     #backup-safety p { margin:6px 0; overflow-wrap:anywhere; }
     #backup-safety.blocked { border:2px solid var(--red); background:#3a151a; }
-    #recovery-message:focus { outline:3px solid #d9cdff; outline-offset:4px; }
+    #recovery-message:focus,#path-message:focus { outline:3px solid #d9cdff; outline-offset:4px; }
+    #path-next[hidden] { display:none; }
     #recovery-items { padding-left:20px; }
     #recovery-items li { overflow-wrap:anywhere; }
     button { appearance:none; border:1px solid var(--line); background:#182134; color:var(--text); border-radius:11px; padding:11px 15px; font-family:inherit; font-size:15px; font-weight:700; line-height:1; cursor:pointer; }
@@ -63,6 +64,7 @@ HTML = r"""<!doctype html>
     #error { background:#3a151a; color:#ffc3c8; border:1px solid #7b2e37; }
     details { margin-top:18px; color:var(--muted); }
     code { color:#dbe5ff; overflow-wrap:anywhere; }
+    #path-command pre { white-space:pre-wrap; overflow-wrap:anywhere; font-size:15px; }
     footer { margin:20px 4px; color:var(--muted); font-size:14px; }
     @media (max-width:680px) { main{margin:24px auto}.grid{grid-template-columns:1fr}.status-row{align-items:flex-end}.panel{padding:18px}header{display:block}.tag{display:inline-block;margin-top:16px} }
   </style>
@@ -120,7 +122,17 @@ HTML = r"""<!doctype html>
       <button id="cancel" disabled>Stop safely</button>
     </div>
     <div id="warning"></div><div id="error" role="alert"></div>
-    <details><summary>What is protected?</summary><p id="protection-explanation">The source is never modified. Destination Codex account authentication and installation identity are excluded from transfer and checked after installation. The destination receives a timestamped backup before replacement. Interrupted rsync staging is kept so Resume can continue.</p><p id="compat"></p></details>
+    <a id="path-next" class="support-link" href="#path-help" hidden>Review home-path setup</a>
+    <details id="path-help"><summary>Home-path compatibility</summary>
+      <p id="path-message" role="status" tabindex="-1">Home paths have not been checked.</p>
+      <button id="check_paths" disabled>Check home paths</button>
+      <details id="path-command" hidden><summary>Fix a missing old home path</summary>
+        <p>Run this command in Terminal on the new Mac only. It requires an administrator password, rechecks local accounts, and creates one home-directory link. It never replaces an existing entry. Then choose Check home paths.</p>
+        <button id="copy-path-command">Copy command</button><pre><code id="compat"></code></pre>
+        <p>A matching link is not proof that every chat or Git repository works. Keep the old Mac until you validate your work.</p>
+      </details>
+    </details>
+    <details><summary>What is protected?</summary><p id="protection-explanation">The source is never modified. Destination Codex account authentication and installation identity are excluded from transfer and checked after installation. The destination receives a timestamped backup before replacement. Interrupted rsync staging is kept so Resume can continue.</p></details>
   </section>
   <details class="scope"><summary>Recent migration events</summary><p>Up to 60 phase, status, and failure-category changes. Times are UTC. This is not raw command output.</p><ol id="migration-events"><li>No events recorded yet.</li></ol></details>
   <footer>Codex Migrate is an independent open-source project. It is not made by, affiliated with, or endorsed by OpenAI.</footer>
@@ -137,10 +149,11 @@ let recoveryWasChecking=false;
 const fmt=n=>{if(!Number.isFinite(n))return "—";const u=["B","KB","MB","GB","TB"];let i=0;while(n>=1000&&i<u.length-1){n/=1000;i++}return `${n.toFixed(n>=100?0:n>=10?1:2)} ${u[i]}`};
 function renderBackup(s){const blocked=s.space_check==="blocked";$("backup-safety").classList.toggle("blocked",blocked);$("backup-heading").textContent=blocked?"Blocked — not enough space for a safe backup":"Backup required before replacement";$("backup-space").textContent=s.destination_bytes_required!=null?`Last space check: ${fmt(s.destination_bytes_free)} free; ${fmt(s.destination_bytes_required)} required, including ${fmt(s.backup_bytes_required)} for backups and ${fmt(s.reserve_bytes)} safety reserve. Space is checked again before replacement.`:"Destination space has not been checked yet.";const r=s.receipt||{};$("backup-location").textContent=s.pending_backup?`Pending backup on the destination: ${s.pending_backup}. Use Check recovery below; a saved path alone does not prove the backup is intact.`:r.backup_verified?`Last verified backup on the destination: ${r.backup}. File contents, tree structure and link targets checked before replacement.`:"No verified backup recorded for this migration."}
 async function api(path,options={}){const response=await fetch(path,{...options,headers:{"X-Codex-Migrate-Token":token,"Content-Type":"application/json",...(options.headers||{})}});const body=await response.json();if(!response.ok)throw new Error(body.error||`Request failed (${response.status})`);renderBackup(body);return body}
-function render(s){latestState=s;const p=Math.max(0,Math.min(100,Number(s.percent)||0));$("percent").textContent=`${p.toFixed(p===100?0:1)}%`;$("bar").style.width=`${p}%`;$("bar").parentElement.setAttribute("aria-valuenow",String(p));$("phase").textContent=String(s.phase||"unknown").replaceAll("_"," ");$("status").textContent=String(s.status||"unknown").replaceAll("_"," ");$("message").textContent=s.message||"";$("route").textContent=s.route||"—";$("bytes").textContent=`${fmt(s.bytes_staged||0)} / ${fmt(s.bytes_total||0)}`;$("item").textContent=s.current_item||"—";$("warning").style.display=s.warning?"block":"none";$("warning").textContent=s.warning||"";$("error").style.display=s.error?"block":"none";$("error").textContent=s.error||"";$("compat").textContent=s.compatibility_command?`Different macOS usernames: after installation, run on the new Mac: ${s.compatibility_command}`:"";const c=s.config||{};$("codex-scope").textContent=`${c.source_home||"—"}/.codex → ${c.target_home||"—"}/.codex`;$("ssh-target").textContent=`${c.target||"—"} · ${c.target_home||"—"}`;const roots=Array.isArray(c.workspace_roots)?c.workspace_roots:[];$("workspace-count").textContent=String(roots.length);$("workspace-list").replaceChildren(...roots.map(root=>{const li=document.createElement("li");const prefix=`${c.source_home}/`;const relative=root.startsWith(prefix)?root.slice(prefix.length):root;li.textContent=`${root} → ${c.target_home}/${relative}`;return li}));const active=s.status==="running";const canStart=["idle","ready"].includes(s.status);const canFinalize=s.status==="ready_to_finalize"||(s.status==="waiting"&&["close_source_codex","close_target_codex"].includes(s.phase));$("inspect").disabled=active;$("start").disabled=!canStart||!s.apply;$("pause").disabled=!active||!["staging","final_delta"].includes(s.phase);$("resume").disabled=!s.apply||!['paused','cancelled','failed','interrupted'].includes(s.status);$("finalize").disabled=!canFinalize||!s.apply;$("cancel").disabled=!((active&&["inspecting","staging","final_delta"].includes(s.phase))||s.status==="paused");}
+function render(s){latestState=s;const p=Math.max(0,Math.min(100,Number(s.percent)||0));$("percent").textContent=`${p.toFixed(p===100?0:1)}%`;$("bar").style.width=`${p}%`;$("bar").parentElement.setAttribute("aria-valuenow",String(p));$("phase").textContent=String(s.phase||"unknown").replaceAll("_"," ");$("status").textContent=String(s.status||"unknown").replaceAll("_"," ");$("message").textContent=s.message||"";$("route").textContent=s.route||"—";$("bytes").textContent=`${fmt(s.bytes_staged||0)} / ${fmt(s.bytes_total||0)}`;$("item").textContent=s.current_item||"—";$("warning").style.display=s.warning?"block":"none";$("warning").textContent=s.warning||"";$("error").style.display=s.error?"block":"none";$("error").textContent=s.error||"";const c=s.config||{};$("codex-scope").textContent=`${c.source_home||"—"}/.codex → ${c.target_home||"—"}/.codex`;$("ssh-target").textContent=`${c.target||"—"} · ${c.target_home||"—"}`;const roots=Array.isArray(c.workspace_roots)?c.workspace_roots:[];$("workspace-count").textContent=String(roots.length);$("workspace-list").replaceChildren(...roots.map(root=>{const li=document.createElement("li");const prefix=`${c.source_home}/`;const relative=root.startsWith(prefix)?root.slice(prefix.length):root;li.textContent=`${root} → ${c.target_home}/${relative}`;return li}));const active=s.status==="running";const canStart=["idle","ready"].includes(s.status);const canFinalize=s.status==="ready_to_finalize"||(s.status==="waiting"&&["close_source_codex","close_target_codex"].includes(s.phase));$("inspect").disabled=active;$("start").disabled=!canStart||!s.apply;$("pause").disabled=!active||!["staging","final_delta"].includes(s.phase);$("resume").disabled=!s.apply||!['paused','cancelled','failed','interrupted'].includes(s.status);$("finalize").disabled=!canFinalize||!s.apply;$("cancel").disabled=!((active&&["inspecting","staging","final_delta"].includes(s.phase))||s.status==="paused");}
 function renderSkills(s){
+  const installed=s.status==='complete'||s.phase==='path_compatibility';
   $("codex-state-proof").hidden=s.migration_mode==="skills";
-  $("codex-state-proof").textContent=s.status==="complete"&&s.receipt?.codex_state_content_verified===true?"Retained Codex state matched the source before and after installation, before database checks. Authentication and runtime exclusions apply.":s.status==="complete"?"No retained Codex state verification was recorded for this migration.":"Retained Codex state verification is pending.";
+  $("codex-state-proof").textContent=installed&&s.receipt?.codex_state_content_verified===true?"Retained Codex state matched the source before and after installation, before database checks. Authentication and runtime exclusions apply.":installed?"No retained Codex state verification was recorded for this migration.":"Retained Codex state verification is pending.";
   if(s.status==="running"&&s.phase==="verifying_sources")$("cancel").disabled=false;
   renderGit(s);
   const waiting=s.status==="ready_to_finalize"||s.status==="waiting"||["verifying_sources","installing"].includes(s.phase);
@@ -149,7 +162,7 @@ function renderSkills(s){
   if(s.status==="complete")$("bytes").textContent=fmt(s.bytes_total||0);
   const repair=s.migration_mode==="skills";
   const skills=repair?s.inventory?.skill_exports:s.inventory?.personal_skills;
-  const verified=s.status==="complete"?(repair?s.receipt?.skills_verified:s.receipt?.personal_skills_verified):null;
+  const verified=installed?(repair?s.receipt?.skills_verified:s.receipt?.personal_skills_verified):null;
   $("skill-count").textContent=Array.isArray(skills)?`${skills.length} selected${verified!=null?` · ${verified} verified`:" · not yet verified"}`:"Not inspected yet";
   $("skill-list").replaceChildren(...(skills||[]).map(skill=>{const li=document.createElement("li");li.textContent=`${skill.name} → ${skill.destination}`;return li}));
   if(repair){
@@ -163,10 +176,28 @@ function renderSkills(s){
     $("protection-explanation").textContent="The source is never modified. Only listed skill destinations are replaced after verified backups. Codex conversations, configuration and authentication are not copied or replaced. Interrupted staging is kept so Resume can continue.";
   }
   renderRecovery(s);
+  renderPaths(s);
+}
+let pathsWereChecking=false;
+function renderPaths(s){
+  const p=s.path_compatibility||{}, checking=p.status==='checking', focused=document.activeElement?.id;
+  $('path-help').hidden=s.migration_mode==='skills';
+  $('path-next').hidden=s.migration_mode==='skills'||s.phase!=='path_compatibility';
+  $('check_paths').disabled=s.status==='running'||checking||['restoring','recovery_required'].includes(s.phase)||(s.recovery_attempt&&s.recovery_attempt.resolved!==true)||s.recovery?.status==='checking';
+  $('path-message').textContent=(p.message||'Home paths have not been checked.')+(p.checked_at?` Checked at ${p.checked_at}.`:'');
+  $('path-command').hidden=!s.compatibility_command;
+  $('compat').textContent=s.compatibility_command||'';
+  if(checking||s.phase==='path_compatibility')for(const name of ['inspect','start','pause','resume','finalize','cancel'])$(name).disabled=true;
+  if(checking)for(const name of ['check_recovery','restore_recovery'])$(name).disabled=true;
+  if(s.phase==='path_compatibility'){$('bar').parentElement.hidden=true;$('percent').textContent='—';}
+  if(checking&&focused==='check_paths')$('path-message').focus();
+  else if(!checking&&pathsWereChecking&&focused==='path-message')$('check_paths').focus();
+  pathsWereChecking=checking;
 }
 function renderGit(s){
+  const installed=s.status==='complete'||s.phase==='path_compatibility';
   $("git-scope").hidden=s.migration_mode==="skills";
-  $("workspace-proof").textContent=s.status==="complete"&&s.receipt?.workspace_content_verified===true?`Workspace content verification passed for ${s.receipt.workspace_roots_verified} root(s). File bytes, names, permissions and link text matched before and after installation.`:s.status==="complete"?"No workspace-content verification was recorded for this migration.":"Workspace content verification is pending.";
+  $("workspace-proof").textContent=installed&&s.receipt?.workspace_content_verified===true?`Workspace content verification passed for ${s.receipt.workspace_roots_verified} root(s). File bytes, names, permissions and link text matched before and after installation.`:installed?"No workspace-content verification was recorded for this migration.":"Workspace content verification is pending.";
   const inventory=s.inventory||{};
   const repos=inventory.git_details, missing=inventory.git_missing_paths||[], issues=inventory.git_issues||[], warnings=inventory.git_warnings||[];
   $("git-summary").textContent=!Array.isArray(repos)?"Git scope has not been inspected with this version.":`${repos.length} Git locations found. ${issues.length?"Metadata needs review before transfer.":missing.length?`${missing.length} additional folder(s) required before transfer.`:repos.length?"Inspected storage dependencies are inside the selected scope.":"No repositories were found in the searched folders."}`;
@@ -175,7 +206,7 @@ function renderGit(s){
   list("git-required",missing.map(path=>`Required folder not selected: ${path}`));
   list("git-issues",[...issues,...warnings]);
 }
-function renderEvents(events){const rows=(events||[]).map(event=>{const li=document.createElement('li');const recovery=event.recovery_status&&event.recovery_status!=='not_checked'?` · recovery check: ${event.recovery_status.replaceAll('_',' ')}`:'';li.textContent=`${event.at||'Time unavailable'} · ${event.phase.replaceAll('_',' ')} · ${event.status}${event.failure_category==='none'?'':` · ${event.failure_category.replaceAll('_',' ')}`}${recovery}`;return li});if(!rows.length){const li=document.createElement('li');li.textContent='No events recorded yet.';rows.push(li)}$('migration-events').replaceChildren(...rows)}
+function renderEvents(events){const rows=(events||[]).map(event=>{const li=document.createElement('li');const recovery=event.recovery_status&&event.recovery_status!=='not_checked'?` · recovery check: ${event.recovery_status.replaceAll('_',' ')}`:'';const paths=event.path_status&&event.path_status!=='not_checked'?` · home paths: ${event.path_status.replaceAll('_',' ')}`:'';li.textContent=`${event.at||'Time unavailable'} · ${event.phase.replaceAll('_',' ')} · ${event.status}${event.failure_category==='none'?'':` · ${event.failure_category.replaceAll('_',' ')}`}${recovery}${paths}`;return li});if(!rows.length){const li=document.createElement('li');li.textContent='No events recorded yet.';rows.push(li)}$('migration-events').replaceChildren(...rows)}
 function renderRecovery(s){
   const r=s.recovery||{}, checking=r.status==='checking', restoring=r.status==='restoring', attempt=s.recovery_attempt||{};
   const unresolved=['restoring','recovery_required'].includes(s.phase)||(s.recovery_attempt&&attempt.resolved!==true);
@@ -204,7 +235,9 @@ function renderRecovery(s){
 }
 async function refresh(){try{const s=await api("/api/status");render(s);renderSkills(s);renderEvents(s.support_events)}catch(error){$("error").style.display="block";$("error").textContent=error.message}}
 async function action(name){const c=latestState.config||{};const confirmation=latestState.migration_mode==="skills"?`Back up, then replace ${latestState.inventory?.skill_exports?.length||0} listed skill(s) on ${c.target}? Conversations, configuration and whole repositories will not be migrated. Other skills will be kept.`:`Back up, then replace ${c.target_home}/.codex, ${c.workspace_roots?.length||0} selected workspace root(s), and ${latestState.inventory?.personal_skills?.length||0} personal skill(s) on ${c.target}? Other destination skills will be kept.`;if(name==="finalize"&&!confirm(confirmation))return;try{const s=await api("/api/action",{method:"POST",body:JSON.stringify({action:name,confirmed:name==="finalize"})});render(s);renderSkills(s)}catch(error){$("error").style.display="block";$("error").textContent=error.message}}
-for(const name of ["inspect","start","pause","resume","finalize","cancel","check_recovery","stop_recovery"]){$(name).addEventListener("click",()=>action(name))}
+for(const name of ["inspect","start","pause","resume","finalize","cancel","check_recovery","stop_recovery","check_paths"]){$(name).addEventListener("click",()=>action(name))}
+$('copy-path-command').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(latestState.compatibility_command||'');$('path-message').textContent='Command copied. Run it on the new Mac, then check home paths again.'}catch(error){$('path-message').textContent='Clipboard access was unavailable. Select and copy the command below.'}});
+$('path-next').addEventListener('click',event=>{event.preventDefault();$('path-help').open=true;$('path-help').scrollIntoView({block:'start'});$('path-help').querySelector('summary').focus()});
 $('restore_recovery').addEventListener('click',async()=>{
   const r=latestState.recovery||{}, attempt=latestState.recovery_attempt||{}, c=latestState.config||{};
   const id=r.status==='backup_verified'?r.transaction_id:attempt.reference?.transaction_id;
@@ -336,6 +369,8 @@ class Dashboard:
                         raise MigrationError("Changes are disabled; restart with --apply to enable migration")
                     if action == "check_recovery":
                         dashboard.engine.start_recovery_check()
+                    elif action == "check_paths":
+                        dashboard.engine.start_path_check()
                     elif action == "stop_recovery":
                         dashboard.engine.stop_recovery_check()
                     elif action == "restore_recovery":

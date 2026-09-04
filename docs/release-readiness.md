@@ -8,6 +8,34 @@ results, accessibility findings, and pre-signing work still open.
 
 ## Candidate checks completed on the development Mac
 
+- Home-path compatibility now has a separate read-only check before transfer
+  and after installation. Missing ordinary `/Users/name` paths receive an
+  optional, manually invoked administrator command. The command repeats owner,
+  local-account and path checks and uses an exact symlink syscall, not `ln`'s
+  directory-destination behavior. Existing entries and account conflicts are
+  never replaced; unsupported/custom homes receive no privileged command.
+  Full installation evidence is saved before the post-install check. Missing,
+  conflicting or unverified paths leave the app in needs-attention state,
+  without losing that receipt or blindly repeating installation. A recheck
+  can complete only with matching home paths and a valid bound installation
+  receipt. Skills-only repairs do not use this whole-home mapping flow.
+  The reviewer caught a shutdown/late-publication race; cancellation now reaches
+  the tracked child, joins the worker, and suppresses late results. Tests cover
+  actual disposable symlinks, conflicting entries, late-entry races, Unicode,
+  private/malformed account evidence, receipt retention and real child reaping.
+  A read-only check using this Mac's actual account provider also passed; it
+  emitted only the fixed result, not account records. Desktop/320px UI review
+  verified readable text, disclosure/keyboard behavior, exact command copying,
+  and focus. Independent `public_release_review` accepted the final bounded
+  code, UI and documentation after 58 focused tests, including a fresh keyboard
+  check of the disclosure shortcut. Main verification passed 371 Python tests
+  (370 passed, one filesystem skip), 10 signup tests, Swift typecheck and diff
+  checks; a final 17-test skills/path regression check also passed. Playwright
+  fixture review covered desktop/320px wrapping and keyboard focus. Review
+  browsers and disposable servers were closed. Diagnostic events include only
+  allowlisted path statuses, never the command or local-account records.
+  These are not a privileged real-account repair or cross-Mac usability proof.
+
 - Guided recovery is implemented in source: the collapsed browser panel now
   requires a checked backup, enabled changes, and explicit scope confirmation.
   Restoration keeps displaced destination files separately, then verifies both

@@ -302,17 +302,24 @@ in every Codex version or that all old workspace paths already resolve.
 
 ## Different macOS usernames
 
-Older Codex conversation files can contain absolute working-directory paths.
-When the two Macs use different usernames, the fastest compatibility approach
-is an alias on the new Mac:
+Older Codex conversation files and Git metadata can contain absolute home paths.
+The dashboard checks those home paths during preflight and again after
+installation. It distinguishes a direct matching link, a missing old path,
+conflicting files or local accounts, and an unverified/unsupported layout.
 
-```bash
-sudo ln -s /Users/new-user /Users/old-user
-```
+For a missing ordinary `/Users/name` path, open **Home-path compatibility → Fix
+a missing old home path**. Review and copy the generated command, run it in
+Terminal on the new Mac, then choose **Check home paths**. It needs an
+administrator password and explicitly requires `--apply`. It rechecks local
+accounts and creates an exact-path symlink; it cannot overwrite an existing
+entry or put a nested link inside a folder. Nothing runs automatically.
 
-The dashboard prints the exact command after validating both home paths. Review
-it before running it. A future release will offer a slower full metadata rewrite
-for users who do not want a compatibility alias.
+Do not use a blind `ln -s` command or remove a conflicting home. Custom home
+locations and conflicts require review; no privileged command is offered for
+them. The tool does not rewrite historical metadata. A successful installation
+keeps its receipt but remains **needs attention** until home paths are verified.
+Matching home paths still do not prove every chat opens or every repository
+works: validate representative work before retiring the old Mac.
 
 ## Transfer routes
 
