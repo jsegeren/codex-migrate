@@ -16,7 +16,8 @@ from typing import Dict, List, Optional, Sequence, Tuple
 from codex_migrate.config import MigrationConfig
 from codex_migrate.compatibility import READY as PATHS_READY, check_compatibility, compatibility_command
 from codex_migrate.storage_scope import (require_source_storage, require_project_storage,
-                                       storage_scope_script, retained_ancestor_storage_script)
+                                       storage_scope_script, retained_ancestor_storage_script,
+                                       system_storage_script)
 from codex_migrate.conversations import conversation_verification_script
 from codex_migrate.errors import MigrationError
 from codex_migrate.git_verification import (check_installed, fingerprint, freeze_baseline,
@@ -945,7 +946,8 @@ class MigrationEngine:
     def _destination_storage_script(self):
         roots = [str(Path(self.config.target_home) / Path(root).relative_to(self.config.source_home))
                  for root in self.config.workspace_roots]
-        return (storage_scope_script(self.config.target_home).rstrip() + " || exit $?\n"
+        return (system_storage_script(self.config.target_home).rstrip() + " || exit $?\n"
+                + storage_scope_script(self.config.target_home).rstrip() + " || exit $?\n"
                 + retained_ancestor_storage_script(self.config.target_home, roots))
 
     def _prepare_install(self):

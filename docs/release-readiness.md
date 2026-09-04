@@ -16,7 +16,7 @@ handoff is complete while the engineering acceptance gates remain open.
 | Requirement | Evidence now | Next proof / owner |
 | --- | --- | --- |
 | Supported conversations, organization, settings, skills and complete selected workspaces | Frozen content/tree checks, retained destination identity, Git dependency discovery and bound Git baseline; local installation/rollback fixtures | Codex must reopen representative restored chats, settings and projects on the separate Mac. Codex leads; Josh provides disposable accounts. |
-| Scope is explicit, not “everything on the Mac” | Selected roots and dependency issues are reported; unsupported visible storage overrides, source project configuration, retained destination ancestor configuration, filenames and cloud-only flags stop early | Real configuration/version/provider matrix; system/managed overrides, arbitrary role references and unflagged cloud storage remain unverified. Codex owns testing and any resulting fixes. |
+| Scope is explicit, not “everything on the Mac” | Selected roots and dependency issues are reported; unsupported visible storage overrides, source project configuration, retained destination ancestor configuration, fixed system config/default files, filenames and cloud-only flags stop early | Real configuration/version/provider matrix; MDM preferences, cloud-managed policy, arbitrary role references and unflagged cloud storage remain unverified. Codex owns testing and any resulting fixes. |
 | Full and selective migration, pause/resume and recovery | Full/skills-only staging, persisted setup, mandatory verified backups, guarded replacement, guided reconciliation and preserved displaced work have local fixture coverage | Packaged full and skills-only runs across the two Macs, including disconnect, restart, low space and recovery. Never use Josh's active migrated workspace. |
 | Git and old-home paths remain usable | Local linked-worktree/alternate-storage checks with source home offline; read-only path/Git rechecks preserve installed work | Different-user cross-Mac acceptance and representative development commands. Matching fingerprints alone do not prove every future command works. |
 | Browser-first local-data experience and clear status/help | Loopback helper, SSH transfer, saved setup, collapsed optional Help, bounded private-free diagnostic events and operation-specific controls | Native permission/VoiceOver checks and real route interruption acceptance. Automatic route selection and updating are not implemented. |
@@ -33,6 +33,24 @@ engineering work. Do not create another Apple purchase or enable live checkout
 as a workaround.
 
 ## Candidate checks completed on the development Mac
+
+- Fixed macOS system defaults are now screened for storage overrides on both
+  Macs: `/etc/codex/config.toml` and `/etc/codex/managed_config.toml`. The reader
+  verifies `/etc` against its canonical directory, rejects configuration links,
+  special/oversized files and account-identity hardlinks, and retains bounded
+  parsing and private-free errors. Checks run before source inventory, copy and
+  freezing, and before destination staging/replacement; system files are never
+  copied or changed. Independent `public_release_review` accepted the code and
+  documentation and passed all 13 disposable system tests. These include late
+  source/destination overrides retaining original destination data and staging,
+  with replacement blocked before backup. The full suite passed 509 of 516
+  tests with seven filesystem skips; ten signup tests, Swift typecheck and diff
+  checks passed. Suite notarization results are mocked, not Apple approval.
+  MDM preferences, cloud-managed requirements, role references and real managed
+  Mac acceptance remain open. A separate read-only Foundation probe found
+  neither documented managed-preference key in this account; it printed only
+  presence booleans, not values. That observation is not integrated detection
+  and does not certify the destination, cloud policy or absence of management.
 
 - Destination retained ancestor configuration is now screened at inspection
   and again before backup/replacement. The bounded check covers in-home parents
@@ -55,7 +73,7 @@ as a workaround.
   one case-sensitive-filename skip; these are packaged startup/CLI/browser
   checks, not the missing two-Mac acceptance. ZIP SHA-256:
   `4f3dd3c7bec4219e2ea89c6c13ef670e44e1cf62b50c122a8acec3c2bec08a58`.
-  Its hosted run 33884310112 is in progress. The superseded inactive engineering
+  Its hosted run 33884310112 passed on Python 3.9 and 3.12. The superseded inactive engineering
   build was moved recoverably to Trash; running user apps were left intact.
 
 - Source project configuration now receives conservative storage-override

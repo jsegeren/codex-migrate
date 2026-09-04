@@ -27,11 +27,13 @@ sub stop {
         " Keep existing files and settings intact; contact support before full migration. No migration data was changed.\n";
     exit $code;
 }
-my ($home, $check_env, $identity_home, $boundary) = @ARGV;
-(@ARGV >= 2 && @ARGV <= 4) && defined($home) && $home =~ m{\A/[^\r\n\0]+\z} or stop(67);
+my ($home, $check_env, $identity_home, $boundary, $scope) = @ARGV;
+(@ARGV >= 2 && @ARGV <= 5) && defined($home) && $home =~ m{\A/[^\r\n\0]+\z} or stop(67);
+$scope = 'user' unless defined($scope);
+$scope eq 'user' || $scope eq 'system' or stop(67);
 $identity_home = $home unless defined($identity_home);
 $identity_home =~ m{\A/[^\r\n\0]+\z} or stop(67);
-if (defined($boundary)) {
+if (defined($boundary) && length($boundary)) {
     $boundary =~ m{\A/[^\r\n\0]+\z} && index($home, "$boundary/") == 0 or stop(67);
     my @base = lstat($boundary);
     @base && S_ISDIR($base[2]) or stop(67);
@@ -45,6 +47,17 @@ if (defined($boundary)) {
     }
 }
 my $root = "$home/.codex";
+if ($scope eq 'system') {
+    # /etc is a standard macOS alias. Prove its canonical directory identity
+    # rather than following arbitrary configuration-directory links.
+    for my $parent ('/private', '/private/etc') {
+        my @s = lstat($parent);
+        @s && S_ISDIR($s[2]) or stop(67);
+    }
+    my @canonical = stat('/private/etc'); my @alias = stat('/etc');
+    @alias && @canonical && $alias[0] == $canonical[0] && $alias[1] == $canonical[1] or stop(67);
+    $root = '/private/etc/codex';
+}
 if ($check_env eq '1' && exists($ENV{CODEX_HOME}) && length($ENV{CODEX_HOME})) {
     my $configured = $ENV{CODEX_HOME};
     my @actual = stat($configured); my @expected = stat($root);
@@ -109,7 +122,8 @@ while (1) {
     my $name = readdir($dh);
     if (!defined($name)) { $! ? stop(67) : last; }
     ++$entries <= 10000 or stop(67);
-    next unless lc($name) eq 'config.toml' || $name =~ /\.config\.toml\z/i;
+    next unless lc($name) eq 'config.toml' ||
+        ($scope eq 'system' ? lc($name) eq 'managed_config.toml' : $name =~ /\.config\.toml\z/i);
     ++$files <= 64 or stop(67);
     my $path = "$root/$name";
     my @before = lstat($path);
@@ -147,6 +161,12 @@ def storage_scope_script(home, check_environment=True, *, identity_home=None):
     return (_runner_command()
             + shlex.quote(home) + (" 1" if check_environment else " 0")
             + (" " + shlex.quote(identity_home) if identity_home is not None else "") + "\n")
+
+
+def system_storage_script(home):
+    """Screen fixed macOS system/default files; never copy or change policy."""
+    return (_runner_command() + shlex.quote(home) + " 0 " + shlex.quote(home)
+            + " '' system\n")
 
 
 def retained_ancestor_storage_script(home, workspace_roots):
@@ -203,6 +223,10 @@ def require_source_storage(home, checkpoint=lambda: None, *, identity_home=None)
     except (OSError, KeyError, ValueError):
         raise MigrationError(MESSAGES[67]) from None
     script = storage_scope_script(home, own_home, identity_home=identity_home)
+    if identity_home is None:
+        # Only the source-account pass checks machine defaults. Project readers
+        # share the account's identity protection without repeating this check.
+        script = system_storage_script(home).rstrip() + " || exit $?\n" + script
     checkpoint()
     process = subprocess.Popen(["/bin/zsh", "-f", "-s"], stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE,

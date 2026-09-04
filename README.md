@@ -345,6 +345,12 @@ will be removed; the incoming project settings receive the source checks and
 frozen workspace verification. Staged user configuration is rechecked using
 the destination account's identity-file protections.
 
+Both Macs also screen the fixed `/etc/codex/config.toml` and
+`/etc/codex/managed_config.toml` files for storage overrides. The check verifies
+the standard macOS `/etc` directory alias, rejects linked configuration paths
+and unsafe files, and never copies or changes system settings. It runs before
+source inventory/copy/freezing and destination inspection/replacement.
+
 An override or unreadable/unsafe configuration stops the full migration for
 review. Keep the original files and settings intact; contact support rather
 than unsetting variables or deleting a setting just to bypass the guard. Any
@@ -357,8 +363,12 @@ effective-config resolver. Project configuration is checked conservatively even
 if that project is not currently trusted or its profile is inactive. More than
 1,024 discovered project layers requires review, rather than silently skipping
 the rest. Ordinary directory-link targets are not traversed. The pass does not
-inspect other processes' environments, shell startup scripts, system/managed
-layers, arbitrary role-config references or undisclosed custom storage roots.
+inspect other processes' environments, shell startup scripts, macOS managed
+preferences (MDM), cloud-managed requirements, arbitrary role-config references
+or undisclosed custom storage roots. `requirements.toml` is policy, not a
+storage-default file, and is not parsed or transferred by this check. Managed
+machines still need their administrator to confirm approved policy and required
+tools on the new Mac; do not disable management to bypass an inspection failure.
 The destination check sees the SSH environment, which may differ from Finder's.
 Skills-only repair still uses the documented skill roots; it does not migrate
 custom databases or resolve custom storage. Configuration values and credential
@@ -366,8 +376,9 @@ contents never appear in these reports.
 
 OpenAI documents these storage/profile distinctions in
 [configuration precedence](https://learn.chatgpt.com/docs/config-file/config-basic#configuration-precedence),
-[advanced configuration](https://developers.openai.com/codex/config-advanced/)
-and the [`sqlite_home` reference](https://learn.chatgpt.com/docs/config-file/config-reference).
+[advanced configuration](https://developers.openai.com/codex/config-advanced/),
+the [`sqlite_home` reference](https://learn.chatgpt.com/docs/config-file/config-reference)
+and [managed configuration](https://learn.chatgpt.com/docs/enterprise/managed-configuration).
 
 ## Different macOS usernames
 
