@@ -3,16 +3,21 @@
 from __future__ import annotations
 
 import os
+import base64
+from dataclasses import asdict
+import json
 from pathlib import Path
 import shlex
 import signal
 import socket
 import subprocess
+import sys
 import threading
 import time
 from typing import Callable, List, Optional, Sequence, Tuple
 
 from codex_migrate.config import MigrationConfig
+from codex_migrate.machines import destination_guard, machine_comparison
 
 
 OutputCallback = Callable[[str], None]
@@ -55,6 +60,29 @@ class SSHTransport:
         self.config = config
         self._remote_lock = threading.Lock()
         self._active_remote: List[subprocess.Popen] = []
+        self._machine_comparison: Optional[Tuple[str, str]] = None
+
+    def machine_guard(self) -> str:
+        return destination_guard(self.machine_comparison())
+
+    def machine_comparison(self) -> Tuple[str, str]:
+        with self._remote_lock:
+            if self._machine_comparison is None:
+                self._machine_comparison = machine_comparison()
+            return self._machine_comparison
+
+    def rsync_bridge_command(self) -> str:
+        # A local SSH adapter owns remote quoting. Apple openrsync splits
+        # --rsync-path differently from classic rsync; neither may strip our guard.
+        payload = base64.urlsafe_b64encode(json.dumps({
+            "target": self.config.target, "ssh": asdict(self.config.ssh),
+            "comparison": self.machine_comparison(),
+        }).encode()).decode()
+        if getattr(sys, "frozen", False):
+            entry = [sys.executable]
+        else:
+            entry = [sys.executable, str(Path(__file__).resolve().with_name("__main__.py"))]
+        return " ".join(shlex.quote(arg) for arg in entry + ["_ssh-rsync", payload])
 
     def ssh_base(self) -> List[str]:
         options = self.config.ssh
@@ -83,7 +111,8 @@ class SSHTransport:
         return " ".join(shlex.quote(item) for item in self.ssh_base())
 
     def run_remote(self, script: str, timeout: int = 60) -> subprocess.CompletedProcess:
-        command = self.ssh_base() + [self.config.target, "/bin/zsh -s"]
+        script = self.machine_guard() + script
+        command = self.ssh_base() + [self.config.target, "/bin/zsh -f -s"]
         process = subprocess.Popen(
             command,
             stdin=subprocess.PIPE,
@@ -216,7 +245,7 @@ class SSHTransport:
         source_path = str(Path(source))
         if not source_path.endswith("/"):
             source_path += "/"
-        remote = "%s:%s" % (self.config.target, shlex.quote(destination.rstrip("/") + "/"))
+        remote = "%s:%s" % (self.config.target, destination.rstrip("/") + "/")
         command = [
             "/usr/bin/rsync",
             "-aE",
@@ -225,7 +254,7 @@ class SSHTransport:
             "--progress",
             "--timeout=120",
             "-e",
-            self.ssh_transport_string(),
+            self.rsync_bridge_command(),
         ]
         if self.config.compress:
             command.append("-z")

@@ -8,6 +8,20 @@ results, accessibility findings, and pre-signing work still open.
 
 ## Candidate checks completed on the development Mac
 
+- Same-source-Mac rejection now runs before every migration remote-shell body
+  and rsync receiver. It compares ephemeral salted platform identities, rejects
+  unknown identities, and retains strict SSH host-key verification. Stable
+  hardware identifiers are not saved or emitted. Local real-shell and real
+  Apple openrsync protocol fixtures verify both rejection and allowed copying
+  with spaces/quotes in paths; a separate source-entry regression runs without
+  inherited Python paths. Independent reviewer `public_release_review` caught
+  and then accepted the corrected launcher issue. Local suite: 254 Python tests
+  (253 passed, one explicit skip). No real cross-Mac transfer was performed;
+  classic rsync argument conventions are unit-tested, not a separately installed
+  client. This does not identify an unintended *other* trusted Mac, certify
+  virtual machines, or cover the unused benchmark helper. Destination-wide
+  locking and power-loss reconciliation remain open in the failure-mode matrix.
+
 - In-app Help now offers a support email draft and an opt-in diagnostic report
   with preview/manual attachment. A bounded, persistent 60-event stream records
   phase/status/failure-category changes without raw console output or private

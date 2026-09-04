@@ -17,6 +17,20 @@ from codex_migrate.cli import _port
 
 
 class DesktopTests(unittest.TestCase):
+    def test_real_engine_internal_bridge_rejects_invalid_payload(self):
+        binary = os.environ.get("CODEX_MIGRATE_TEST_ENGINE")
+        root = Path(__file__).resolve().parents[1]
+        command = [binary] if binary else [sys.executable, str(root / "src/codex_migrate/__main__.py")]
+        env = {key: value for key, value in os.environ.items()
+               if not key.startswith(("PYTHON", "DYLD_"))}
+        env["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin"
+        with tempfile.TemporaryDirectory() as temporary:
+            result = subprocess.run(command + ["_ssh-rsync", "invalid-payload"], cwd=temporary,
+                                    env=env, capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 76, result.stderr)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("could not safely start the rsync SSH connection", result.stderr)
+
     def test_real_engine_inventories_git_storage_dependencies(self):
         from test_git_inventory import GitInventoryTests
 

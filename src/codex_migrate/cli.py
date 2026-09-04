@@ -106,6 +106,15 @@ def _config(args: argparse.Namespace) -> MigrationConfig:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    internal = argv if argv is not None else sys.argv[1:]
+    if internal[:1] == ["_ssh-rsync"]:
+        from codex_migrate.ssh_bridge import run
+        try:
+            run(internal[1:])
+        except Exception:
+            print("Codex Migrate could not safely start the rsync SSH connection. Review the destination and contact support.", file=sys.stderr)
+            return 76
+        return 76  # exec is not expected to return; never fall through to commands.
     args = parser().parse_args(argv)
     try:
         if args.command == "launch":

@@ -112,6 +112,7 @@ class CancellationTests(unittest.TestCase):
             return original(*args, **kwargs)
         try:
             with patch("codex_migrate.transport.subprocess.Popen", return_value=process), \
+                 patch.object(transport, "machine_guard", return_value=""), \
                  patch.object(process, "communicate", side_effect=interrupted):
                 with self.assertRaises(KeyboardInterrupt):
                     transport.run_remote("read-only fixture")
