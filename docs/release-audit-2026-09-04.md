@@ -594,6 +594,16 @@ both passed on Python 3.9 and 3.12, including native and signup checks:
 [Git acceptance](https://github.com/jsegeren/codex-migrate/actions/runs/33859578368),
 [audit follow-up](https://github.com/jsegeren/codex-migrate/actions/runs/33859669625).
 
+Clean source `1b8bb35ffddc42cb158b9c672a98ed459775ef53` built a fresh unsigned
+Apple Silicon engineering app. All seven packaged-engine tests passed with
+system-only subprocess PATH and no Python/DYLD overrides. This covers startup,
+configuration and inventory on the development Mac, not a complete packaged
+migration or clean-Mac acceptance. The local keychain still reports zero valid
+code-signing identities; this is not a determination of Apple membership status.
+
+Artifact: `Codex-Migrate-arm64-LOCAL-UNSIGNED.zip` (engineering only).
+SHA-256: `864d75aa3ff7732a91e500ee7f5cdd7982521d8948b5893a4ec694011899ee64`.
+
 ### Reference guidance
 
 - [Lighthouse scoring excludes manual checks](https://developer.chrome.com/docs/lighthouse/accessibility/scoring).

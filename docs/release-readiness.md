@@ -19,6 +19,10 @@ results, accessibility findings, and pre-signing work still open.
   six local browser checks found no overflow or selected axe A/AA violations.
   Installed byte comparison precedes SQLite validation and does not certify
   semantic configuration validity or that restored tasks open in Codex.
+  Full local verification passed 211 Python tests (one explicit filename-support
+  skip) and 10 signup tests. Clean source `1b8bb35` built successfully, and seven
+  packaged-engine checks passed on the development Mac. No valid signing
+  identity is currently installed in this Mac's keychain.
 
 - Full selected-workspace and managed-worktree content verification now rejects
   corrupted staged Git refs/objects and files before replacement and rolls back
