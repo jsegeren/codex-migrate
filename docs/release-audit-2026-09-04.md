@@ -688,6 +688,43 @@ These checks cover bundled startup/configuration/inventory, not a full packaged
 cross-Mac transfer or signed first launch. The read-only UI fixture was stopped
 and its browser tab closed after review.
 
+### Versioned packaging and notarization evidence
+
+Source `417431f57632196b50fb7f2261e8942efdf4de7c` adds app version/build numbers
+to archive names and receipts, rejects packaged engine/app version mismatches,
+and rechecks clean source at the same revision before submitting to Apple.
+Notarization submission and waiting are separate steps: the submission ID is
+saved first, and only the same ID's explicit `Accepted` status advances to
+stapling, validation and Gatekeeper assessment. Only ID/status are retained,
+not profile names or raw Apple diagnostics. Interrupted processing must be
+inspected through that saved ID; automatic packaging resume is not implemented.
+
+Independent reviewer `public_release_review` reproduced a partial final ZIP
+left under its release filename when archiving failed. The accepted fix builds
+and hashes privately, writes completion metadata, then exposes the final ZIP as
+the last step. New failure tests cover partial archiving, hashing, receipt writes
+and final rename, alongside signing, source/version drift, rejected/ambiguous
+notarization, mismatched submission IDs, stapling and Gatekeeper failures. These
+are mocked orchestration tests, not actual Apple acceptance.
+
+Final local verification ran 230 Python tests: 229 passed and one explicit
+filesystem filename-support skip. Independent review ran 13 builder/desktop
+tests successfully and accepted the corrected code and maintainer docs.
+No migration UI changed in this checkpoint. Earlier account-guard CI also
+completed successfully on Python 3.9 and 3.12:
+[account-guard CI](https://github.com/jsegeren/codex-migrate/actions/runs/33862103551).
+
+A clean-source Apple Silicon local build produced
+`Codex-Migrate-0.1.0-build1-arm64-LOCAL-UNSIGNED.zip`, SHA-256
+`5e274d864a040b79bc0b441b099f3647913b6c8e8648b1f028b9f5cef0183987`.
+Its checksum passed, the extracted app passed ad-hoc signature verification,
+and all seven packaged-engine tests passed against that extracted ZIP's engine.
+This proves the development-Mac packaging/startup path, not Developer ID trust,
+notarization, clean-Mac launch or genuine cross-Mac restoration. No Apple
+submission or payment occurred. Disposable test extraction and the superseded
+unused engineering build were moved to Trash after checking for open handles;
+the current build and pre-existing running apps were retained.
+
 ### Reference guidance
 
 - [Lighthouse scoring excludes manual checks](https://developer.chrome.com/docs/lighthouse/accessibility/scoring).

@@ -18,6 +18,10 @@ results, accessibility findings, and pre-signing work still open.
   Six mocked orchestration tests cover rejection, ambiguous responses, failed
   commands, version/source drift and downstream packaging failures. These tests
   do not contact Apple and do not establish successful signing or notarization.
+  Independent review accepted the fix after reproducing the partial-ZIP defect.
+  Final local suite: 230 tests run, 229 passed, one explicit skip. Clean source
+  `417431f` produced a versioned unsigned ZIP; checksum/ad-hoc signature checks
+  and seven packaged-engine checks passed against its extracted contents.
 
 - Codex process checks are now scoped to the migration account, including the
   known app and CLI/background-engine executable names. Unrelated logged-in
