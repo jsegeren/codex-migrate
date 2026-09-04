@@ -39,7 +39,8 @@ and continues instead of beginning from an empty destination.
 
 Finalization installs under an automatic rollback trap. If a post-backup step
 fails, Codex Migrate attempts to restore the destination Codex directory and
-every selected destination workspace to their pre-install versions. The local
+every selected destination workspace and personal skill to their pre-install
+versions. The local
 state records `pending_backup` before any replacement begins.
 
 Do not delete remaining staging or the timestamped backup. Keep Codex closed on
@@ -49,6 +50,12 @@ failed install. Do not assume rollback succeeded if the Mac lost power or its
 disk failed during rollback.
 
 ## Dashboard or Mac shuts down
+
+The staged personal-skill selection is saved locally. If that selection changes,
+or staging was created by an older version without this record, Finalize stops.
+Choose Resume to refresh staging, review the listed skill scope, and confirm
+Finalize again. No newly discovered skill is silently added to a previously
+confirmed replacement scope.
 
 Normal dashboard shutdown terminates its active SSH and rsync process groups.
 On the next launch, a persisted `running` state is reconciled to `interrupted`
@@ -72,6 +79,11 @@ under the receipt's `home-relative` directory. Restore them with the same care:
 quit development tools, move the current workspace aside, and move or copy the
 reviewed backup back to its original path. A workspace that did not exist on
 the destination has no prior version to back up.
+
+Full-migration personal-skill backups are under `personal-skills/<name>` inside
+the recorded backup folder. Existing skill aliases are backed up as links,
+without copying or modifying their targets. Unrelated destination skills are
+not replaced. Use `verification.json` to identify the exact recovery mapping.
 
 ## Different usernames
 

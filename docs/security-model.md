@@ -14,7 +14,11 @@ same person. It does not make an untrusted destination safe.
 ## Trust boundaries
 
 The source process may read only the selected source home, `~/.codex`, and
-workspace roots. The SSH destination is accepted only after ordinary SSH
+workspace roots, plus validated personal skills in `~/.agents/skills` and legacy
+`~/.codex/skills`. Personal skill aliases and file links are materialized only
+inside the source home; references to the protected SSH directory or Codex
+authentication/installation files are rejected, including relocated aliases.
+The SSH destination is accepted only after ordinary SSH
 host-key verification succeeds. The dashboard binds only to loopback and
 requires an owner-only random token for status and controls.
 

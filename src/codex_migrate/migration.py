@@ -13,6 +13,8 @@ import threading
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from codex_migrate.config import MigrationConfig
+from codex_migrate.errors import MigrationError
+from codex_migrate.skills import SkillExport, discover_personal_skills, skill_verification_script
 from codex_migrate.backup import BACKUP_FUNCTIONS, size_command, verification_receipt
 from codex_migrate.inventory import Inventory, collect
 from codex_migrate.security import redact
@@ -45,10 +47,6 @@ CODEX_EXCLUDES = (
 )
 
 
-class MigrationError(RuntimeError):
-    pass
-
-
 def codex_running() -> bool:
     result = subprocess.run(
         ["/bin/ps", "-axo", "comm="],
@@ -74,9 +72,31 @@ class MigrationEngine:
         self._cancel_requested = False
         self._pause_requested = False
         self._lock = threading.RLock()
+        self._personal_skills: Optional[List[SkillExport]] = None
 
     def inventory(self) -> Inventory:
-        return collect(self.config.source_home, self.config.workspace_roots, self._inspection_checkpoint)
+        # Personal skills are installed individually, never by replacing .agents.
+        # Reject intersecting workspace replacements rather than allow two writers
+        # to the same destination in one rollback transaction.
+        skill_root = Path(self.config.source_home) / ".agents/skills"
+        for root in map(Path, self.config.workspace_roots):
+            if root == skill_root or root in skill_root.parents or skill_root in root.parents:
+                raise MigrationError(
+                    "Personal skills are included automatically. Remove the workspace "
+                    "selection overlapping .agents/skills; select project folders instead."
+                )
+        result = collect(self.config.source_home, self.config.workspace_roots,
+                         self._inspection_checkpoint, self.config.target_home)
+        self._personal_skills = result.personal_skills
+        return result
+
+    def _skill_plan(self) -> List[SkillExport]:
+        current = discover_personal_skills(self.config.source_home, self.config.target_home)
+        if self._personal_skills is None:
+            self._personal_skills = current
+        elif current != self._personal_skills:
+            raise MigrationError("Personal skill selection changed. Inspect and resume before installing.")
+        return current
 
     def _inspection_checkpoint(self) -> None:
         if self._cancel_requested:
@@ -164,6 +184,7 @@ class MigrationEngine:
         for root in self.config.workspace_roots:
             if not Path(root).is_dir():
                 raise MigrationError("Workspace root does not exist: %s" % root)
+        inventory = self.inventory()
         remote = self.transport.check()
         self._inspection_checkpoint()
         expected_user = self.config.target.split("@", 1)[0]
@@ -207,7 +228,6 @@ class MigrationEngine:
         )
         if _value(result.stdout, "TARGET_CODEX_READY") != "1":
             raise MigrationError("Open and sign in to Codex once on the target Mac first")
-        inventory = self.inventory()
         self._inspection_checkpoint()
         backup_bytes = int(self.transport.run_remote(
             "set -eu\n" + BACKUP_FUNCTIONS + size_command(self._backup_targets()) + "\n",
@@ -348,17 +368,20 @@ class MigrationEngine:
             )
         )
 
-    def _transfers(self) -> List[Tuple[str, str, Sequence[str], str]]:
+    def _transfers(self) -> List[Tuple[str, str, Sequence[str], str, bool]]:
         staging = self.config.target_staging
-        transfers: List[Tuple[str, str, Sequence[str], str]] = [
-            (self.config.source_codex, staging + "/.codex", CODEX_EXCLUDES, "Codex state")
+        transfers: List[Tuple[str, str, Sequence[str], str, bool]] = [
+            (self.config.source_codex, staging + "/.codex", CODEX_EXCLUDES, "Codex state", False)
         ]
         source_home = self.config.source_home.rstrip("/")
         for root in self.config.workspace_roots:
             relative = root[len(source_home) + 1 :]
             transfers.append(
-                (root, staging + "/home-relative/" + relative, (), "Workspace · %s" % relative)
+                (root, staging + "/home-relative/" + relative, (), "Workspace · %s" % relative, False)
             )
+        for skill in self._skill_plan():
+            transfers.append((skill.source, staging + "/personal-skills/" + skill.name,
+                              (), "Personal skill · " + skill.name, True))
         return transfers
 
     def _run_preseed(self) -> None:
@@ -393,11 +416,12 @@ class MigrationEngine:
             current_item=None,
             percent=min(99.0, self.state.read().get("percent", 0.0)),
             staging_complete=True,
+            staged_personal_skills=[skill.as_dict() for skill in self._skill_plan()],
         )
 
     def _copy_all(self) -> None:
         transfers = self._transfers()
-        for index, (source, destination, excludes, label) in enumerate(transfers, 1):
+        for index, (source, destination, excludes, label, copy_links) in enumerate(transfers, 1):
             if self._cancel_requested:
                 return
             self.state.update(
@@ -407,7 +431,10 @@ class MigrationEngine:
             self.transport.run_remote(
                 self._safe_directory_script(self.config.target_staging, destination)
             )
-            process = self.transport.rsync_process(source, destination, excludes)
+            if copy_links:
+                self._skill_plan()  # Revalidate aliases before dereferencing them.
+            process = self.transport.rsync_process(source, destination, excludes,
+                                                   copy_links=copy_links)
             self._process = process
             if self._pause_requested or self._cancel_requested:
                 self._process = None
@@ -521,7 +548,15 @@ class MigrationEngine:
     def _run_finalize(self) -> None:
         if not self.config.apply:
             raise MigrationError("Planning mode is read-only; restart with --apply to finalize")
+        staged_skills = self.state.read().get("staged_personal_skills")
+        if staged_skills is None:
+            raise MigrationError("Staging has no personal-skill scope record. Choose Resume to refresh staging before finalizing.")
+        confirmed_skills = [skill.as_dict() for skill in self._skill_plan()]
+        if confirmed_skills != staged_skills:
+            raise MigrationError("Personal skill selection changed since staging. Choose Resume to refresh and review the new scope before finalizing.")
         self.preflight(require_full_staging_space=False)
+        if [skill.as_dict() for skill in self._skill_plan()] != staged_skills:
+            raise MigrationError("Personal skill selection changed during inspection. Resume and review the new scope before finalizing.")
         if codex_running():
             self.state.update(
                 status="waiting",
@@ -603,7 +638,7 @@ class MigrationEngine:
         return [self.config.target_codex] + [
             self.config.target_home + "/" + str(Path(root).relative_to(self.config.source_home))
             for root in self.config.workspace_roots
-        ]
+        ] + [skill.destination for skill in self._skill_plan()]
 
     def _install_and_verify(self) -> Dict[str, object]:
         recorded_inventory = self.state.read().get("inventory")
@@ -632,11 +667,29 @@ class MigrationEngine:
         backup_workspaces = []
         rollback_workspaces = []
         mappings = [(self.config.target_codex, backup + "/.codex")]
+        skills = self._skill_plan()
+        skill_stage_checks = []
+        skill_installed_checks = []
+        for index, skill in enumerate(skills):
+            stage_skill = self.config.target_staging + "/personal-skills/" + skill.name
+            # Hash once: install verification must use the exact same snapshot
+            # as staging, even if source files change while SSH is running.
+            checks = skill_verification_script(skill, self.config.source_home)
+            function = "verify_personal_skill_%d" % index
+            failure = " || { echo 'Personal skill verification failed. Keep staging and any backup, then Resume to retry.' >&2; exit 74; }"
+            skill_stage_checks.append("%s() {\n%s\n}\n%s %s%s" % (
+                function, checks, function, shlex.quote(stage_skill), failure))
+            skill_installed_checks.append("%s %s%s" % (function, shlex.quote(skill.destination), failure))
+        replacements = []
         for root in self.config.workspace_roots:
             relative = root[len(self.config.source_home.rstrip("/")) + 1 :]
-            stage_root = self.config.target_staging + "/home-relative/" + relative
-            target_root = self.config.target_home + "/" + relative
-            backup_root = backup + "/home-relative/" + relative
+            replacements.append((self.config.target_staging + "/home-relative/" + relative,
+                                 self.config.target_home + "/" + relative,
+                                 backup + "/home-relative/" + relative, False))
+        for skill in skills:
+            replacements.append((self.config.target_staging + "/personal-skills/" + skill.name,
+                                 skill.destination, backup + "/personal-skills/" + skill.name, True))
+        for stage_root, target_root, backup_root, is_skill in replacements:
             mappings.append((target_root, backup_root))
             safe_parent = self._safe_directory_script(
                 self.config.target_home,
@@ -644,22 +697,25 @@ class MigrationEngine:
             )
             workspace_preconditions.append(
                 safe_parent
+                + self._safe_directory_script(self.config.target_staging, str(Path(stage_root).parent))
                 +
                 "test \"$(stat -f %d {source})\" = "
                 "\"$(stat -f %d {target_parent})\"\n"
-                "if test -e {target}; then test ! -L {target}; fi".format(
+                "test -d {source}\ntest ! -L {source}\n"
+                "{link_check}\n"
+                "if test -e {target} && test ! -L {target}; then test -d {target}; fi".format(
                     source=shlex.quote(stage_root),
                     target=shlex.quote(target_root),
                     target_parent=shlex.quote(str(Path(target_root).parent)),
+                    link_check="true" if is_skill else "test ! -L " + shlex.quote(target_root),
                 )
             )
             backup_workspaces.append(
                 safe_parent
-                + "if test -e {target}; then\n"
-                "  test ! -L {target}\n"
+                + "if test -e {target} || test -L {target}; then\n"
                 "  test ! -L {backup}\n"
                 "  mkdir -p {backup_parent}\n"
-                "  cp -c -R {target} {backup}\n"
+                "  if test -L {target}; then cp -P {target} {backup}; else cp -c -R {target} {backup}; fi\n"
                 "  verify_backup {target} {backup}\n"
                 "fi".format(
                     target=shlex.quote(target_root),
@@ -669,7 +725,7 @@ class MigrationEngine:
             )
             install_workspaces.append(
                 safe_parent
-                + "if test -e {target}; then rm -rf {target}; fi\n"
+                + "if test -e {target} || test -L {target}; then rm -rf {target}; fi\n"
                 "mv {source} {target}".format(
                     source=shlex.quote(stage_root),
                     target=shlex.quote(target_root),
@@ -679,7 +735,8 @@ class MigrationEngine:
             rollback_workspaces.append(
                 "if (\n{safe_parent}); then\n"
                 "  rm -rf {target}\n"
-                "  if test -e {backup}; then cp -c -R {backup} {target}; fi\n"
+                "  if test -L {backup}; then cp -P {backup} {target};\n"
+                "  elif test -e {backup}; then cp -c -R {backup} {target}; fi\n"
                 "fi".format(
                     safe_parent=safe_parent,
                     target=shlex.quote(target_root),
@@ -703,6 +760,7 @@ test -d {staging}/.codex/sessions
 test ! -L {staging}
 test ! -L {staging}/.codex
 test ! -L {staging}/home-relative
+test ! -L {staging}/personal-skills
 test -f {marker}
 test ! -L {marker}
 test "$(cat {marker})" = {migration_id}
@@ -714,6 +772,7 @@ if ps -axo comm= | awk -F/ '$NF == "ChatGPT" || $NF == "Codex" {{ found=1 }} END
   exit 70
 fi
 {workspace_preconditions}
+{skill_stage_checks}
 backup_required=$({backup_size})
 backup_space {home} "$((backup_required + {reserve}))"
 mkdir -p {backup}
@@ -743,6 +802,7 @@ mv {staging}/.codex {codex}
 cp -p {backup}/.codex/auth.json {codex}/auth.json
 cp -p {backup}/.codex/installation_id {codex}/installation_id
 {workspace_installs}
+{skill_installed_checks}
 auth_after=$(shasum -a 256 {codex}/auth.json | awk '{{print $1}}')
 installation_after=$(shasum -a 256 {codex}/installation_id | awk '{{print $1}}')
 test "$auth_before" = "$auth_after"
@@ -761,7 +821,7 @@ done
 chmod 700 {codex}
 rollback_needed=0
 trap - EXIT
-printf 'INSTALLED=1\\nACTIVE=%s\\nARCHIVED=%s\\nAUTH_PRESERVED=1\\nINSTALLATION_ID_PRESERVED=1\\nBACKUP_VERIFIED=1\\nBACKUP=%s\\n' "$active" "$archived" {backup}
+printf 'INSTALLED=1\\nACTIVE=%s\\nARCHIVED=%s\\nAUTH_PRESERVED=1\\nINSTALLATION_ID_PRESERVED=1\\nBACKUP_VERIFIED=1\\nPERSONAL_SKILLS_VERIFIED={skill_count}\\nBACKUP=%s\\n' "$active" "$archived" {backup}
 """.format(
             backup_functions=BACKUP_FUNCTIONS,
             backup_size=size_command(self._backup_targets()),
@@ -780,12 +840,17 @@ printf 'INSTALLED=1\\nACTIVE=%s\\nARCHIVED=%s\\nAUTH_PRESERVED=1\\nINSTALLATION_
             workspace_backups="\n".join(backup_workspaces),
             workspace_installs="\n".join(install_workspaces),
             workspace_rollbacks="\n".join(rollback_workspaces),
+            skill_stage_checks="\n".join(skill_stage_checks),
+            skill_installed_checks="\n".join(skill_installed_checks),
+            skill_count=len(skills),
         )
         output = self.transport.run_remote(script, timeout=3600).stdout
         if _value(output, "INSTALLED") != "1":
             raise MigrationError("Destination installation did not produce a valid receipt")
         if _value(output, "BACKUP_VERIFIED") != "1":
             raise MigrationError("Destination backup verification receipt is missing")
+        if skills and _value(output, "PERSONAL_SKILLS_VERIFIED") != str(len(skills)):
+            raise MigrationError("Personal skill verification receipt is missing")
         active = int(_value(output, "ACTIVE") or -1)
         archived = int(_value(output, "ARCHIVED") or -1)
         if active != expected_active:
@@ -800,6 +865,8 @@ printf 'INSTALLED=1\\nACTIVE=%s\\nARCHIVED=%s\\nAUTH_PRESERVED=1\\nINSTALLATION_
             "installation_id_preserved": _value(output, "INSTALLATION_ID_PRESERVED") == "1",
             "backup": _value(output, "BACKUP"),
             "backup_verified": True,
+            "personal_skills": [skill.as_dict() for skill in skills],
+            "personal_skills_verified": len(skills),
             "source_home": self.config.source_home,
             "target_home": self.config.target_home,
         }

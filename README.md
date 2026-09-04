@@ -52,13 +52,28 @@ open project so nobody else has to reconstruct the process under pressure.
   uncommitted or untracked files contained in those roots
 - Relevant local Codex state required to resume work
 
+Full migrations also discover personal custom skills in `~/.agents/skills`
+and legacy `~/.codex/skills`. A current-location skill takes precedence over a
+legacy skill with the same name. Each selected skill is materialized at the new
+Mac's `~/.agents/skills/<name>` with verified backup and file-content checks;
+unrelated destination skills are retained. The dashboard lists the selection
+and distinguishes selected from verified skills.
+
+The personal-skill pass excludes `.system` and ordinary files directly in a
+skill root, such as Finder metadata. Broken aliases, unreadable skills,
+unsupported skill-directory names, external links, and nested directory links
+stop inspection instead of silently omitting a skill. Do not select a workspace
+overlapping `~/.agents/skills`; it is handled separately. This does not change
+the byte-for-byte copying of skills inside selected project workspaces.
+
 ## What it deliberately does not transfer
 
 - `~/.codex/auth.json`
 - `~/.codex/installation_id`
 - The source Mac's `~/.ssh` directory and its private keys
 - Runtime sockets, process locks, logs, and disposable caches
-- Anything outside the explicitly selected source home and workspace roots
+- Other home-directory data outside Codex state, discovered personal skills,
+  and explicitly selected workspace roots
 
 Selected workspace roots are copied byte-for-byte. Audit them before transfer:
 a credential stored inside a selected repository or workspace is part of that
@@ -186,6 +201,8 @@ components will follow the same stage → backup → install → verify contract
    the same volume without creating a second full-size copy.
 5. **Verify** — compare conversation counts, run SQLite integrity checks, and
    prove destination authentication and installation identity did not change.
+   Personal skills also receive exact file-content and directory-tree checks
+   before and after installation.
 
 ## Different macOS usernames
 

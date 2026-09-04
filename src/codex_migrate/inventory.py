@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 import os
 from pathlib import Path
 import platform
@@ -10,6 +10,7 @@ import subprocess
 import time
 from typing import Callable, Dict, List, Tuple
 from codex_migrate.transport import _stop_process
+from codex_migrate.skills import SkillExport, discover_personal_skills
 
 
 def _continue() -> None:
@@ -35,10 +36,13 @@ class Inventory:
     workspace_roots: List[TreeSummary]
     git_repositories: int
     unreadable_paths: List[str]
+    personal_skills: List[SkillExport] = field(default_factory=list)
+    personal_skill_bytes: int = 0
 
     @property
     def estimated_transfer_bytes(self) -> int:
-        return self.codex_bytes + sum(item.bytes for item in self.workspace_roots)
+        return (self.codex_bytes + self.personal_skill_bytes
+                + sum(item.bytes for item in self.workspace_roots))
 
     def as_dict(self) -> Dict[str, object]:
         value = asdict(self)
@@ -137,8 +141,21 @@ def _count_git_repositories(roots: List[Path], checkpoint: Callable[[], None] = 
 
 
 def collect(source_home: str, workspace_roots: List[str],
-            checkpoint: Callable[[], None] = _continue) -> Inventory:
+            checkpoint: Callable[[], None] = _continue,
+            target_home: str = "") -> Inventory:
     home = Path(source_home)
+    skills = discover_personal_skills(source_home, target_home or source_home)
+    skill_bytes = 0
+    def unreadable_skill(error):
+        raise error
+    for skill in skills:
+        for current, directories, files in os.walk(skill.source, onerror=unreadable_skill):
+            checkpoint()
+            skill_bytes += 4096 * (1 + len(directories))
+            for name in files:
+                checkpoint()
+                info = (Path(current) / name).stat()
+                skill_bytes += max(info.st_size, info.st_blocks * 512)
     codex = home / ".codex"
     active, active_unreadable = _tree_summary(codex / "sessions", ".jsonl", checkpoint)
     archived, archived_unreadable = _tree_summary(codex / "archived_sessions", ".jsonl", checkpoint)
@@ -160,4 +177,6 @@ def collect(source_home: str, workspace_roots: List[str],
         workspace_roots=root_summaries,
         git_repositories=_count_git_repositories(roots, checkpoint),
         unreadable_paths=unreadable[:100],
+        personal_skills=skills,
+        personal_skill_bytes=skill_bytes,
     )

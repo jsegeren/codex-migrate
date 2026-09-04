@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 import os
 from pathlib import Path
-import re
 import secrets
 import shlex
 import sys
-from typing import Dict, Iterable, List, Sequence
+from typing import Dict, List, Sequence
 
 from codex_migrate.config import MigrationConfig
 from codex_migrate.cancellation import Cancellation
@@ -19,133 +17,12 @@ from codex_migrate.backup import (
 )
 from codex_migrate.migration import MigrationEngine, MigrationError, _value
 from codex_migrate.transport import SSHTransport
+from codex_migrate.skills import (
+    SkillExport, discover_personal_skills, discover_workspace_skills,
+)
 
 
 SUPPORTED_COMPONENTS = ("personal-skills", "workspace-skills")
-SKILL_NAME = re.compile(r"^[A-Za-z0-9._-]+$")
-
-
-@dataclass(frozen=True)
-class SkillExport:
-    name: str
-    source: str
-    destination: str
-    scope: str
-
-    def as_dict(self) -> Dict[str, str]:
-        return asdict(self)
-
-
-def _inside(path: Path, root: Path) -> bool:
-    try:
-        path.relative_to(root)
-        return True
-    except ValueError:
-        return False
-
-
-def _validated_skill(path: Path, source_home: Path) -> Path:
-    resolved = path.resolve(strict=True)
-    if not _inside(resolved, source_home):
-        raise MigrationError("Skill path resolves outside the source home: %s" % path)
-    if not resolved.is_dir() or not (resolved / "SKILL.md").is_file():
-        raise MigrationError("Skill is missing a regular SKILL.md file: %s" % path)
-    for current, directories, files in os.walk(str(resolved), followlinks=False):
-        for name in directories + files:
-            candidate = Path(current) / name
-            if not candidate.is_symlink():
-                continue
-            try:
-                target = candidate.resolve(strict=True)
-            except FileNotFoundError as error:
-                raise MigrationError(
-                    "Skill contains a broken symbolic link: %s" % candidate
-                ) from error
-            if not _inside(target, source_home):
-                raise MigrationError(
-                    "Skill contains a symbolic link outside the source home: %s" % candidate
-                )
-            if target.is_dir():
-                raise MigrationError(
-                    "Nested directory symlinks are not supported in exported skills: %s"
-                    % candidate
-                )
-    return resolved
-
-
-def discover_personal_skills(source_home: str, target_home: str) -> List[SkillExport]:
-    """Discover user-wide skills, preferring the current documented root."""
-    source = Path(source_home).resolve()
-    selected: Dict[str, SkillExport] = {}
-    roots = (
-        (source / ".codex/skills", "legacy-user"),
-        (source / ".agents/skills", "user"),
-    )
-    for root, scope in roots:
-        if not root.exists():
-            continue
-        resolved_root = root.resolve(strict=True)
-        if not _inside(resolved_root, source):
-            raise MigrationError("Skill root resolves outside the source home: %s" % root)
-        if not resolved_root.is_dir():
-            raise MigrationError("Skill root is not a directory: %s" % root)
-        for candidate in sorted(resolved_root.iterdir(), key=lambda item: item.name):
-            if candidate.name == ".system" or not SKILL_NAME.fullmatch(candidate.name):
-                continue
-            try:
-                resolved = _validated_skill(candidate, source)
-            except FileNotFoundError:
-                continue
-            selected[candidate.name] = SkillExport(
-                name=candidate.name,
-                source=str(resolved),
-                destination=str(Path(target_home) / ".agents/skills" / candidate.name),
-                scope=scope,
-            )
-    return [selected[name] for name in sorted(selected)]
-
-
-def _walk_workspace_skill_dirs(root: Path) -> Iterable[Path]:
-    ignored = {".git", "node_modules", ".next", "dist", "build", "coverage"}
-    for current, directories, _files in os.walk(str(root), followlinks=False):
-        directories[:] = [name for name in directories if name not in ignored]
-        current_path = Path(current)
-        if current_path.name == "skills" and current_path.parent.name == ".agents":
-            for candidate in sorted(current_path.iterdir(), key=lambda item: item.name):
-                if SKILL_NAME.fullmatch(candidate.name):
-                    yield candidate
-            directories[:] = []
-
-
-def discover_workspace_skills(
-    source_home: str,
-    target_home: str,
-    workspace_roots: Sequence[str],
-) -> List[SkillExport]:
-    source = Path(source_home).resolve()
-    exports: List[SkillExport] = []
-    seen = set()
-    for workspace in workspace_roots:
-        root = Path(workspace).resolve()
-        for candidate in _walk_workspace_skill_dirs(root):
-            try:
-                resolved = _validated_skill(candidate, source)
-            except FileNotFoundError:
-                continue
-            relative = candidate.relative_to(source)
-            destination = str(Path(target_home) / relative)
-            if destination in seen:
-                continue
-            seen.add(destination)
-            exports.append(
-                SkillExport(
-                    name=candidate.name,
-                    source=str(resolved),
-                    destination=destination,
-                    scope="workspace",
-                )
-            )
-    return sorted(exports, key=lambda item: item.destination)
 
 
 class ComponentExporter:

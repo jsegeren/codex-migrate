@@ -205,13 +205,51 @@ browser flow does not import them or adopt their staging. Native folder-picker
 permissions, VoiceOver, and clean-Mac/cross-Mac behavior remain unverified.
 The overall project remains **not release-ready**.
 
-Full-scope blocker confirmed by `_transfers()` and `_backup_targets()`: the
-current full path selects `.codex` and explicit workspace roots, but does not
-automatically include personal skills in `.agents/skills`. The selective
-exporter supports that location separately. Integrate its validated discovery
-and backup/install coverage into the full flow before describing that flow as
-complete custom-skill migration; do not treat the separate export capability
-as proof of full-flow coverage.
+The previously identified full-flow personal-skill coverage gap is addressed
+in the follow-up below. This does not close the other release gates.
+
+### Full-migration personal skills
+
+- Full inspection now discovers current and legacy personal custom skills,
+  includes materialized sizes in incoming-space estimates, and lists their
+  individual destination paths. Current-location skills win same-name ties.
+  Ordinary root metadata and `.system` are excluded from the personal pass;
+  invalid skill directories and broken aliases stop inspection rather than
+  silently disappear. The full `.codex` copy remains otherwise unchanged.
+- Skills share the full staging/backup/install/rollback transaction. Existing
+  destination skill aliases are backed up as links without following them;
+  unrelated destination skills remain intact. Personal skills receive frozen
+  SHA-256 regular-file and exact directory-tree verification before backup and
+  after installation. No file contents or checksum values are logged.
+- Skills cannot silently expand the confirmed replacement scope after staging
+  or restart. Changed scope or older staging without a scope record requires
+  Resume, review, and a fresh Finalize confirmation.
+- Real disposable local rsync/APFS fixtures cover different home names,
+  materialized file links, current-versus-legacy precedence, destination backup,
+  corrupted staging, installed corruption with rollback, and destination aliases.
+  Additional tests cover scope collisions, metadata, unsupported names, broken
+  aliases, protected credential references (including relocated SSH roots), and
+  unexpected special files. No real workspace or remote Mac was transferred.
+- Independent reviewer `public_release_review` found and prompted fixes for
+  silent omission, relocated protected paths, special-file validation, and
+  confirmation-scope expansion. A corruption fixture exposed zsh ERR_EXIT
+  inside a verifier function bypassing the caller's EXIT trap; explicit
+  function returns and top-level exits now trigger rollback, with regression
+  proof. Review outcome: accepted with fixes, no remaining blocking finding
+  within this bounded change. Independent focused suite: 61 tests passed.
+- Actual dashboard fixture at 1280/390/320px showed skill counts, destinations,
+  and selected-versus-verified status with no page overflow. Axe-core 4.13 found
+  zero selected WCAG A/AA tag violations at 320px; independent desktop/320px
+  visual review passed. This is not VoiceOver or full WCAG certification.
+- Full local regression suite: 129 Python tests passed; all 10 signup tests
+  passed. Hosted CI and packaged validation of this candidate remain separate
+  checks; no prior build is being represented as containing this code.
+
+Still open: browser selective-export controls, broader inventory/recovery
+coverage, clean-Mac and real cross-Mac acceptance, complete accessibility
+testing, Search Console submission, signing/notarization, and paid distribution.
+The prior packaged-helper check below predates these changes; it is not evidence
+that the new skills code has been validated in a packaged release.
 
 ### Packaged browser-helper check
 
