@@ -30,6 +30,14 @@ results, accessibility findings, and pre-signing work still open.
   recovery-state reconciliation, lost-reply handling, real cross-Mac/drive
   power-loss acceptance and Intel coverage remain gates. This is not a claim
   that the downloadable app can perform guided restoration yet.
+  Clean source `ad49883` also built a local unsigned arm64 engineering app;
+  all eight bundled-engine regression tests passed and packaging verified the
+  ad-hoc signature. ZIP SHA-256:
+  `eb908bff5026b443b53bcf2e4818eeb47ef5c1793180a3abb7b12f9f87f5dee4`.
+  The internal restore entry point is not included in the customer flow; these
+  checks cover the existing bundled controls, not packaged guided restoration.
+  No running app or actual workspace was changed. The prior inactive engineering
+  build was moved to Trash, not permanently deleted.
 
 - Read-only recovery inspection is now available through the collapsed browser
   recovery panel and `codex-migrate recovery`. It opens the existing destination
