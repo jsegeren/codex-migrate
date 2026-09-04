@@ -17,6 +17,20 @@ from codex_migrate.cli import _port
 
 
 class DesktopTests(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == "darwin", "native macOS persistence")
+    def test_native_saved_setup_permissions_and_recovery(self):
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as temporary:
+            binary = Path(temporary) / "saved-setup-checks"
+            subprocess.run(["xcrun", "swiftc", "-parse-as-library",
+                            str(root / "desktop/SavedSetup.swift"),
+                            str(root / "tests/SavedSetupChecks.swift"), "-o", str(binary)],
+                           check=True, capture_output=True, text=True, timeout=60)
+            result = subprocess.run([str(binary), temporary], capture_output=True,
+                                    text=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Saved setup checks passed", result.stdout)
+
     def test_port_zero_selects_an_ephemeral_port(self):
         self.assertEqual(_port("0"), 0)
 

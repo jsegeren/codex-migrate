@@ -129,7 +129,49 @@ sample states. The fixture has no migration engine or SSH and rejects POSTs.
 They are labeled as sample data, not evidence of a live 184 GB transfer or
 clean-Mac certification. No customer paths, credentials or conversations appear.
 
-## Reference guidance
+## Follow-up implementation — September 4
+
+Implemented after the baseline audit; this does not change the overall
+**not release-ready** outcome:
+
+- Inspection and skills-export controls now request cooperative cancellation.
+  Skills backup/replacement defers cancellation through verification, receipt
+  output, and lock release. Shutdown messages do not assert an unverified
+  pre-replacement state. Force Quit and power loss are not covered by this
+  cooperative guarantee.
+- Transport abort cleanup terminates and reaps the local process group with
+  bounded pipe draining, including when its leader has already exited.
+- The native shell restores the last launched non-secret setup from an
+  owner-only atomic local file. Changes reset to disabled; SSH key selection
+  and dashboard tokens are not persisted. Multiple saved migrations and the
+  browser-first setup flow remain outstanding.
+- Workspace Remove controls have contextual accessibility labels. Bundled
+  setup, recovery, and security guides have offline entry points.
+- Closing CTA and narrow header wrapping were corrected. Homepage text-only
+  200% stress checks at 1280, 390, and 320 CSS pixels have no page overflow.
+  The offscreen, clipped honeypot is intentionally excluded from visible-layout
+  interpretation. Normal mobile rendering was also inspected.
+- Legal-page canonicals were added; unnecessary homepage ARIA labels removed.
+- Verification: 95 Python tests, 10 signup tests, and native Swift typechecking
+  passed. Tests include actual subprocess signal cleanup, exited-leader pipe
+  cleanup, late-stop receipt reporting, and compiled Swift persistence checks
+  for permissions, corruption, symlinks, and replacement.
+- Independent review by `public_release_review` found the exited-leader cleanup
+  and late-stop reporting bugs; both received fixes and regression tests.
+  Native rendered/VoiceOver checks remain unverified because native UI access
+  failed. A local unsigned engineering build succeeded, but it predates the
+  final transport corrections and is not a release artifact.
+- The independent reviewer also verified normal and enlarged-text website
+  rendering at all three widths. A stop/exit race finding was fixed using the
+  known process-group ID and an already-exited guard, with a regression test.
+
+Still open: full browser-first setup/recovery, icon delivery performance,
+comprehensive accessibility checks, real clean-Mac/cross-Mac recovery tests,
+signing/notarization, Search Console verification/submission, and tested paid
+purchase/delivery/refund flow. The baseline Lighthouse results above have not
+been represented as measurements of these changes.
+
+### Reference guidance
 
 - [Lighthouse scoring excludes manual checks](https://developer.chrome.com/docs/lighthouse/accessibility/scoring).
 - [Submitting a sitemap does not guarantee crawling or indexing](https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap).

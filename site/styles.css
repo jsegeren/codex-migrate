@@ -23,6 +23,7 @@ body {
   font-weight: 500;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
+  overflow-wrap: anywhere;
 }
 a { color: inherit; }
 .shell { width: min(1160px, calc(100% - 48px)); margin: 0 auto; }
@@ -149,10 +150,12 @@ summary { cursor: pointer; font-size: 17px; font-weight: 720; }
 details p { margin: 14px 28px 0 0; color: var(--muted); }
 
 .closing { padding: 72px 0; background: var(--purple); color: var(--white); }
-.closing-inner { display: flex; align-items: center; justify-content: space-between; gap: 40px; }
+.closing-inner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 40px; }
+.closing-inner > div { min-width: 0; }
 .closing .eyebrow { color: var(--purple-bright); }
 .closing h2 { margin-bottom: 0; }
-.closing .actions { flex: 0 0 auto; margin: 0; }
+.closing .actions { flex: 0 1 auto; max-width: 100%; margin: 0; }
+.closing .button { max-width: 100%; overflow-wrap: anywhere; text-align: center; }
 .closing .button-primary { background: var(--white); color: var(--ink); border-color: var(--white); }
 
 footer { padding: 68px 0 24px; background: var(--ink); color: #d7d4cb; }
@@ -186,7 +189,7 @@ footer p { color: #8e8b83; font-size: 14px; }
 
 @media (max-width: 680px) {
   .shell, .site-header { width: min(100% - 30px, 1160px); }
-  .site-header { height: 72px; }
+  .site-header { min-height: 72px; height: auto; padding: 16px 0; flex-wrap: wrap; gap: 12px; }
   .header-compatibility { margin-right: 0; margin-left: 16px; font-size: 14px; gap: 5px; }
   .site-header:has(.header-compatibility) nav { display: none; }
   nav a:not(:last-child) { display: none; }

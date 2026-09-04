@@ -26,6 +26,19 @@ class _DocumentParser(HTMLParser):
 
 
 class SiteTests(unittest.TestCase):
+    def test_indexed_pages_have_canonical_urls(self):
+        for name in ("privacy", "terms", "refunds", "moving-to-a-new-mac", "backup-and-recovery"):
+            self.assertIn('<link rel="canonical" href="https://migrate.segeren.com/' + name + '">',
+                          (SITE / (name + ".html")).read_text())
+
+    def test_closing_actions_can_wrap_when_text_is_enlarged(self):
+        styles = (SITE / "styles.css").read_text()
+        closing = styles.split("\n.closing-inner {", 1)[1].split("}", 1)[0]
+        actions = styles.split("\n.closing .actions {", 1)[1].split("}", 1)[0]
+        self.assertIn("flex-wrap: wrap", closing)
+        self.assertIn("max-width: 100%", actions)
+        self.assertNotIn("flex: 0 0 auto", actions)
+
     def parse(self, filename: str) -> _DocumentParser:
         parser = _DocumentParser()
         parser.feed((SITE / filename).read_text(encoding="utf-8"))

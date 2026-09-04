@@ -82,7 +82,7 @@ def main():
             shutil.copy2(ROOT / "docs" / document, resources / document)
         (resources / "build-info.json").write_text(json.dumps(receipt, indent=2) + "\n")
         run("xcrun", "swiftc", "-parse-as-library", "-O", "-target", arch + "-apple-macos13.0",
-            ROOT / "desktop/CodexMigrate.swift", "-o", executable)
+            ROOT / "desktop/CodexMigrate.swift", ROOT / "desktop/SavedSetup.swift", "-o", executable)
         signing = ["codesign", "--force", "--sign", args.identity or "-"]
         if args.identity:
             signing += ["--options", "runtime", "--timestamp"]

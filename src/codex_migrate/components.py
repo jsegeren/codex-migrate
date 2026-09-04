@@ -9,9 +9,11 @@ from pathlib import Path
 import re
 import secrets
 import shlex
+import sys
 from typing import Dict, Iterable, List, Sequence
 
 from codex_migrate.config import MigrationConfig
+from codex_migrate.cancellation import Cancellation
 from codex_migrate.backup import (
     BACKUP_FUNCTIONS, MIN_RESERVE_BYTES, size_command, verification_receipt,
 )
@@ -149,7 +151,9 @@ def discover_workspace_skills(
 class ComponentExporter:
     """Stage, back up, and install selected skill components over strict SSH."""
 
-    def __init__(self, config: MigrationConfig, components: Sequence[str]) -> None:
+    def __init__(self, config: MigrationConfig, components: Sequence[str],
+                 cancellation=None) -> None:
+        self.cancellation = cancellation or Cancellation()
         self.config = config.validate()
         unknown = sorted(set(components) - set(SUPPORTED_COMPONENTS))
         if unknown:
@@ -243,7 +247,12 @@ class ComponentExporter:
                 copy_links=True,
             )
             process.start()
-        receipt = self._install(exports, staging, migration_id)
+        # A stop request must not kill SSH while destination paths are being
+        # replaced. Complete this transaction (or its rollback) and then exit.
+        with self.cancellation.replacement():
+            print("Backing up, installing and verifying skills. Stop requests will "
+                  "wait for this phase to finish.", file=sys.stderr, flush=True)
+            receipt = self._install(exports, staging, migration_id)
         result.update(receipt)
         result["applied"] = True
         return result

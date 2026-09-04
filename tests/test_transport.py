@@ -1,12 +1,20 @@
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from codex_migrate.config import MigrationConfig, SSHOptions
 from codex_migrate.transport import SSHTransport, TransferProcess, TransportError
 
 
 class TransportTests(unittest.TestCase):
+    def test_cancel_tolerates_exit_between_term_and_continue(self):
+        transfer = TransferProcess(["/usr/bin/true"])
+        transfer.process = Mock(pid=12345)
+        transfer.process.poll.return_value = None
+        with patch("codex_migrate.transport.os.killpg", side_effect=[None, ProcessLookupError]):
+            transfer.cancel()
+        self.assertTrue(transfer._cancel_requested)
+
     def test_remote_check_uses_diskutil_plist_for_filesystem_type(self):
         config = MigrationConfig(
             target="user@host.local",

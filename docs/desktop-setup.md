@@ -28,6 +28,14 @@ Mac's `/Users/new-user` home directory. Optionally select an existing SSH key.
 Choose the workspace folders to transfer. “Suggest common folders” checks
 Git, Projects, and Developer under your home; it is not an exhaustive scan.
 
+The last launched destination, folder selection, and skills choices are saved
+in an owner-only local file under `~/Library/Application Support/Codex Migrate`.
+They are restored when you reopen the app; **changes are always disabled**.
+Review the restored scope before continuing. SSH key selections, credentials,
+and dashboard tokens are not saved. Reselect a custom SSH key if needed.
+“Restore last launched setup” also restores these values after editing the form.
+Only the most recent setup is saved; this is not a multiple-migration library.
+
 Folders are copied with their Git metadata and unfinished work. Credentials
 stored inside a selected workspace are also copied. Review the scope carefully.
 
@@ -43,6 +51,12 @@ open while the dashboard is in use. This edition uses a native setup window and
 the existing browser-based progress dashboard, not an all-native progress view.
 
 ## Interrupted transfers
+
+During inspection or a skills export, use **Stop operation** in the setup
+window. Inspection and staging can stop; any staged files are retained. Once
+skills backup/replacement starts, a stop request waits for that transaction and
+verification (or rollback) to finish. Keep both Macs connected and wait for the
+reported outcome. Force Quit and power loss cannot provide this guarantee.
 
 Use Stop safely in the dashboard before closing it. Paused transfers must be
 stopped safely or resumed; the native app refuses to quit while its engine is
@@ -63,6 +77,10 @@ requires an additional confirmation and backs up matching destination skills.
 Restart Codex if updated skills do not immediately appear.
 
 ## Support
+
+Setup, recovery, and security guides are bundled with the app. Use the **Read
+… offline** buttons even when the network is unavailable. Online links remain
+available for current documentation and issue reporting.
 
 Support is best-effort. We aim to provide an initial response within a few
 business days, depending on availability, complexity, and the information

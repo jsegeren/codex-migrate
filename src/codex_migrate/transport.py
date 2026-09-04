@@ -22,6 +22,25 @@ class TransportError(RuntimeError):
     pass
 
 
+def _stop_process(process: subprocess.Popen) -> None:
+    """Reap our local child group, including suspended transfers, on abort."""
+    # The group leader may already have exited while a descendant still owns
+    # a pipe. Clean the whole group and bound pipe draining, not just wait().
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+        os.killpg(process.pid, signal.SIGCONT)
+    except ProcessLookupError:
+        pass
+    try:
+        process.communicate(timeout=5)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.communicate(timeout=5)
+
+
 class SSHTransport:
     def __init__(self, config: MigrationConfig) -> None:
         self.config = config
@@ -62,7 +81,7 @@ class SSHTransport:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            preexec_fn=os.setsid,
+            start_new_session=True,
         )
         with self._remote_lock:
             self._active_remote.append(process)
@@ -70,12 +89,10 @@ class SSHTransport:
             try:
                 stdout, stderr = process.communicate(input=script, timeout=timeout)
             except subprocess.TimeoutExpired as error:
-                try:
-                    os.killpg(os.getpgid(process.pid), signal.SIGTERM)
-                except OSError:
-                    pass
-                process.communicate()
                 raise TransportError("remote command timed out") from error
+        except BaseException:
+            _stop_process(process)
+            raise
         finally:
             with self._remote_lock:
                 if process in self._active_remote:
@@ -232,13 +249,19 @@ class TransferProcess:
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
-                preexec_fn=os.setsid,
+                start_new_session=True,
             )
         assert self.process.stdout is not None
-        for line in self.process.stdout:
-            if on_output:
-                on_output(line.rstrip())
-        return_code = self.process.wait()
+        try:
+            for line in self.process.stdout:
+                if on_output:
+                    on_output(line.rstrip())
+            return_code = self.process.wait()
+        except BaseException:
+            _stop_process(self.process)
+            raise
+        finally:
+            self.process.stdout.close()
         if return_code != 0:
             raise TransportError("rsync exited with status %d" % return_code)
 
@@ -254,4 +277,8 @@ class TransferProcess:
         with self._lock:
             self._cancel_requested = True
             if self.process and self.process.poll() is None:
-                os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
+                try:
+                    os.killpg(self.process.pid, signal.SIGTERM)
+                    os.killpg(self.process.pid, signal.SIGCONT)
+                except ProcessLookupError:
+                    pass

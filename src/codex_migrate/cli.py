@@ -9,6 +9,7 @@ import sys
 from typing import List, Optional
 
 from codex_migrate import __version__
+from codex_migrate.cancellation import Cancellation
 from codex_migrate.components import ComponentExporter, SUPPORTED_COMPONENTS
 from codex_migrate.config import MigrationConfig, SSHOptions
 from codex_migrate.dashboard import Dashboard
@@ -116,36 +117,38 @@ def main(argv: Optional[List[str]] = None) -> int:
 
         config = _config(args)
         if args.command == "export":
-            components = args.component or list(SUPPORTED_COMPONENTS)
-            state = StateStore(config.state_dir)
-            state.acquire_process_lock()
-            try:
-                result = ComponentExporter(config, components).run()
-            finally:
-                state.release_process_lock()
-            if args.json:
-                print(json.dumps(result, indent=2, sort_keys=True))
-            else:
-                verb = "Exported" if result["applied"] else "Would export"
-                print("%s %d skill component(s)." % (verb, result["item_count"]))
-                print("Components: %s" % ", ".join(result["components"]))
-                for item in result["items"]:
-                    print(
-                        "- %s [%s] -> %s"
-                        % (item["name"], item["scope"], item["destination"])
-                    )
-                if not result["applied"]:
-                    print("Planning mode only; add --apply to make changes.")
+            with Cancellation().signals() as cancellation:
+                components = args.component or list(SUPPORTED_COMPONENTS)
+                state = StateStore(config.state_dir)
+                state.acquire_process_lock()
+                try:
+                    result = ComponentExporter(config, components, cancellation).run()
+                finally:
+                    state.release_process_lock()
+                if args.json:
+                    print(json.dumps(result, indent=2, sort_keys=True))
                 else:
-                    print("Rollback backup: %s" % result["backup"])
-                    print("Restart Codex if the updated skills do not appear automatically.")
-            return 0
+                    verb = "Exported" if result["applied"] else "Would export"
+                    print("%s %d skill component(s)." % (verb, result["item_count"]))
+                    print("Components: %s" % ", ".join(result["components"]))
+                    for item in result["items"]:
+                        print(
+                            "- %s [%s] -> %s"
+                            % (item["name"], item["scope"], item["destination"])
+                        )
+                    if not result["applied"]:
+                        print("Planning mode only; add --apply to make changes.")
+                    else:
+                        print("Rollback backup: %s" % result["backup"])
+                        print("Restart Codex if the updated skills do not appear automatically.")
+                return 0
         state = StateStore(config.state_dir)
         engine = MigrationEngine(config, state)
         if args.command == "inspect":
             state.acquire_process_lock()
             try:
-                result = engine.preflight()
+                with Cancellation().signals():
+                    result = engine.preflight()
                 if args.json:
                     print(json.dumps(result, indent=2, sort_keys=True))
                 else:
@@ -160,6 +163,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             return 0
         return 2
     except KeyboardInterrupt:
+        print("Operation interrupted. No completion is being claimed. Source data "
+              "was not changed. Review migration status and backup receipts "
+              "before retrying.", file=sys.stderr)
         return 130
     except Exception as error:
         protected = []
