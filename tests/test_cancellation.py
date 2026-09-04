@@ -142,7 +142,8 @@ except KeyboardInterrupt:
             self.assertTrue(select.select([process.stdout], [], [], 10)[0])
             child_pid = int(process.stdout.readline())
             process.terminate()
-            self.assertEqual(process.wait(timeout=10), 130)
+            status = process.wait(timeout=10)
+            self.assertEqual(status, 130, process.stderr.read().decode())
             with self.assertRaises(ProcessLookupError):
                 os.kill(child_pid, 0)
         finally:

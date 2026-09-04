@@ -13,6 +13,8 @@ class TransportTests(unittest.TestCase):
             child.poll.return_value = 0
             _signal_group(child, 15)
             child.poll.return_value = None
+            import subprocess
+            child.wait.side_effect = subprocess.TimeoutExpired("fixture", 0.1)
             with self.assertRaises(PermissionError):
                 _signal_group(child, 15)
 

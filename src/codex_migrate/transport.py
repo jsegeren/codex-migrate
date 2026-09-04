@@ -27,11 +27,14 @@ def _signal_group(process: subprocess.Popen, number: int) -> None:
         os.killpg(process.pid, number)
     except ProcessLookupError:
         pass
-    except PermissionError:
+    except PermissionError as error:
         # Darwin may report EPERM, rather than ESRCH, during exit. Only
         # tolerate it after reaping this exact child; live failures stay loud.
         if process.poll() is None:
-            raise
+            try:
+                process.wait(timeout=0.1)
+            except subprocess.TimeoutExpired:
+                raise error
 
 
 def _stop_process(process: subprocess.Popen) -> None:
