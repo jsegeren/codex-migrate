@@ -34,6 +34,22 @@ as a workaround.
 
 ## Candidate checks completed on the development Mac
 
+- Shared Help keyboard behavior now retains a useful focus target after
+  diagnostic preparation. A reproduced HTTP-error bug dropped focus onto the
+  page body; failure now returns it to Prepare, and successful preparation
+  focuses the preview only if the user has not moved to another control.
+  Repeated preparation while pending is ignored. Six new deterministic Node
+  regressions cover success, HTTP failure, invalid JSON, moved focus and duplicate
+  activation; these and all ten signup tests pass and run in CI. All 54 focused
+  Python support/dashboard/setup tests pass. Independent `public_release_review`
+  accepted the diff, reproduced failure recovery on setup and dashboard at
+  1280px/320px, and verified delayed responses preserve moved focus. The primary
+  also verified successful preview focus and delayed success after Tab in the
+  real browser. Optional details remain collapsed; no horizontal overflow was
+  observed in the reviewed Help states. Fixtures contain sample data and cannot
+  migrate, SSH or send email. This is bounded keyboard evidence, not VoiceOver
+  or WCAG-conformance certification.
+
 - Full migration now checks presence of the two documented macOS managed
   preference keys for the executing source account and destination SSH account.
   No policy payload is converted, decoded, printed or changed. Present keys

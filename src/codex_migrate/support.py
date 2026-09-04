@@ -192,7 +192,10 @@ Response times and fixes aren’t guaranteed. If no email app opens, copy the ad
 SUPPORT_SCRIPT = r"""
 let reviewedSupportReport=null;
 document.getElementById('prepare-support').onclick=async()=>{
-  const button=document.getElementById('prepare-support');button.disabled=true;
+  const button=document.getElementById('prepare-support');
+  if(button.disabled)return;
+  const ownsFocus=()=>document.activeElement===button||document.activeElement===document.body;
+  button.disabled=true;
   reviewedSupportReport=null;document.getElementById('support-preview').hidden=true;
   document.getElementById('support-status').textContent='Preparing a local diagnostic report…';
   try {
@@ -203,10 +206,14 @@ document.getElementById('prepare-support').onclick=async()=>{
     document.getElementById('support-preview').hidden=false;
     document.getElementById('support-status').textContent='Review, save, and manually attach this report to your email. It has not been sent.';
     const preview=document.getElementById('support-report');
-    preview.setSelectionRange(0,0);preview.focus();preview.scrollTop=0;
+    preview.setSelectionRange(0,0);preview.scrollTop=0;
+    if(ownsFocus())preview.focus();
   } catch (_) {
     document.getElementById('support-status').textContent='The helper could not prepare a report. You can still email support. Describe the visible phase and what happened; do not send private paths or credentials.';
-  } finally {button.disabled=false;}
+  } finally {
+    button.disabled=false;
+    if(ownsFocus())button.focus();
+  }
 };
 document.getElementById('save-support').onclick=()=>{
   if(reviewedSupportReport===null)return;
