@@ -171,6 +171,40 @@ signing/notarization, Search Console verification/submission, and tested paid
 purchase/delivery/refund flow. The baseline Lighthouse results above have not
 been represented as measurements of these changes.
 
+## Browser-first follow-up
+
+- `launch` and the native **Open browser setup** button now open real local
+  setup. Destination/folder selection, explicit per-session change permission,
+  private saved setup, and navigation to the existing migration dashboard are
+  implemented. No destination connection or transfer runs during configuration.
+- Browser refresh retains the tab-scoped control token. Setup APIs require the
+  loopback Host, a matching Origin when supplied, and the control token.
+- Inspection is asynchronous and has cancellation checkpoints during local
+  scans; Stop remains responsive. Setup/action requests are serialized against
+  normal shutdown. Stale setup tabs cannot open a picker after attachment.
+- Independent review found and prompted fixes for synchronous inspection
+  blocking Stop, restored-root ordering invalidating staging credit, and stale
+  picker requests blocking actions. Regression tests cover each case.
+- Current local suite: 113 Python tests passed; Swift shell typechecking passed.
+  Real HTTP fixtures cover token/origin rejection, path validation, planning
+  guards, state reuse, secret-field exclusion, stop responsiveness, and shutdown
+  serialization. A browser fixture with SSH disabled passed setup → dashboard
+  → refresh; Start remained disabled. Setup rendering had no page overflow at
+  1280/390/320px and axe-core found zero violations in the selected WCAG A/AA tags.
+- Independent rendered review at 1280/320px confirmed readable controls and
+  recovery limitations. Its key-copy wording finding was corrected: selecting
+  an SSH key does not add it to scope, but workspace-contained keys are included.
+- CI exposed a Darwin process-exit signalling race after the prior follow-up.
+  The correction in `4a476e8` passed both Python 3.9 and 3.12 CI. This is not a
+  claim that the new browser candidate has already passed hosted CI.
+
+Remaining browser work: integrated skills-only exports, richer saved migration
+selection/import, and complete recovery/accessibility checks. Existing native
+and CLI migrations must resume using their original state/entry point; the new
+browser flow does not import them or adopt their staging. Native folder-picker
+permissions, VoiceOver, and clean-Mac/cross-Mac behavior remain unverified.
+The overall project remains **not release-ready**.
+
 ### Reference guidance
 
 - [Lighthouse scoring excludes manual checks](https://developer.chrome.com/docs/lighthouse/accessibility/scoring).

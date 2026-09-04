@@ -76,7 +76,23 @@ class MigrationEngine:
         self._lock = threading.RLock()
 
     def inventory(self) -> Inventory:
-        return collect(self.config.source_home, self.config.workspace_roots)
+        return collect(self.config.source_home, self.config.workspace_roots, self._inspection_checkpoint)
+
+    def _inspection_checkpoint(self) -> None:
+        if self._cancel_requested:
+            raise MigrationError("Inspection stopped")
+
+    def start_inspection(self) -> None:
+        with self._lock:
+            if self._thread and self._thread.is_alive():
+                raise MigrationError("A migration action is already running")
+            self.state.update(status="running", phase="inspecting",
+                              message="Inspecting both Macs. Safe to stop.", error=None)
+            self._start(self._run_inspection)
+
+    def _run_inspection(self) -> None:
+        self.preflight()
+        self._restore_requested_stop()
 
     def reconcile_startup(self) -> None:
         current = self.state.read()
@@ -149,6 +165,7 @@ class MigrationEngine:
             if not Path(root).is_dir():
                 raise MigrationError("Workspace root does not exist: %s" % root)
         remote = self.transport.check()
+        self._inspection_checkpoint()
         expected_user = self.config.target.split("@", 1)[0]
         actual_user = _value(remote, "USER")
         actual_home = _value(remote, "HOME")
@@ -191,6 +208,7 @@ class MigrationEngine:
         if _value(result.stdout, "TARGET_CODEX_READY") != "1":
             raise MigrationError("Open and sign in to Codex once on the target Mac first")
         inventory = self.inventory()
+        self._inspection_checkpoint()
         backup_bytes = int(self.transport.run_remote(
             "set -eu\n" + BACKUP_FUNCTIONS + size_command(self._backup_targets()) + "\n",
             timeout=300,
@@ -198,6 +216,7 @@ class MigrationEngine:
         if backup_bytes < 0:
             raise MigrationError("Invalid destination backup size")
         available_bytes = self.transport.remote_free_bytes(self.config.target_home)
+        self._inspection_checkpoint()
         reserve_bytes = min(
             20 * 1024**3,
             max(2 * 1024**3, inventory.estimated_transfer_bytes // 20),
@@ -232,6 +251,7 @@ class MigrationEngine:
         else:
             warning = None
         route = self.transport.route()
+        self._inspection_checkpoint()
         state = self.state.update(
             status="ready",
             phase="preflight_complete",
@@ -471,6 +491,8 @@ class MigrationEngine:
             self._pause_requested = False
             if self._process:
                 self._process.cancel()
+            if current.get("phase") == "inspecting":
+                self.transport.cancel_all()
             self.state.update(
                 status="cancelled",
                 phase="staging",

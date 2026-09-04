@@ -34,6 +34,12 @@ def parser() -> argparse.ArgumentParser:
     root.add_argument("--version", action="version", version=__version__)
     commands = root.add_subparsers(dest="command", required=True)
 
+    launch = commands.add_parser("launch", help="Open guided setup in your browser")
+    launch.add_argument("--source-home", default=str(Path.home()))
+    launch.add_argument("--state-dir", default=str(Path.home() / ".local/state/codex-migrate-browser"))
+    launch.add_argument("--port", type=_port, default=0)
+    launch.add_argument("--no-open", action="store_true")
+
     inventory = commands.add_parser("inventory", help="Inspect local data without changing it")
     inventory.add_argument("--source-home", default=str(Path.home()))
     inventory.add_argument("--workspace", action="append", default=[])
@@ -102,6 +108,10 @@ def _config(args: argparse.Namespace) -> MigrationConfig:
 def main(argv: Optional[List[str]] = None) -> int:
     args = parser().parse_args(argv)
     try:
+        if args.command == "launch":
+            from codex_migrate.setup import SetupDashboard
+            SetupDashboard(args.source_home, args.state_dir, args.port).serve(open_browser=not args.no_open)
+            return 0
         if args.command == "inventory":
             result = collect(args.source_home, args.workspace)
             if args.json:

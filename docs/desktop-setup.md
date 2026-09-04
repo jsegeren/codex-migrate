@@ -21,7 +21,37 @@ available yet. Local unsigned builds are engineering artifacts, not releases.
   and retry; there is no override or external-backup picker in this release.
   The dashboard shows space requirements, backup paths, and recovery guidance.
 
-## Native setup
+## Browser-first setup
+
+Open Codex Migrate on the **old Mac**, then choose **Open browser setup**.
+The helper serves setup and the real migration dashboard on a private loopback
+address. Enter the destination, choose local workspace folders, and review the
+scope. Existing SSH configuration is used unless you enter a custom key path.
+This is not a hosted upload: workspace data stays on the Macs.
+
+Destination changes start disabled. Enabling them only makes the dashboard's
+transfer controls available; you still inspect and start explicitly. Backup and
+finalization guards are unchanged. The helper refuses a normal close while
+inspection, a transfer, a paused process, or installation is active. Use **Stop
+safely**, or wait for installation and verification to finish, before closing.
+
+Browser-created migrations save the latest destination and selected roots under
+`~/.local/state/codex-migrate-browser`. Reopen the helper with the same scope to
+reuse that migration's state. Change permission, key selections, and account
+credentials are not saved. The private control token is kept in browser
+session storage so refreshing the same tab works; it is not sent to our site.
+
+Do not switch an ongoing native/CLI migration into browser setup: their older
+state directories are separate and are not imported by this flow. Resume using
+the original controls. Similarly, restarting with a different scope does not
+adopt existing destination staging. Preserve it and review recovery instructions.
+
+This browser flow currently configures full migrations. Skills-only repair
+remains available through the native controls below or the CLI `export` command.
+Native picker permission behavior and the full browser recovery journey still
+require clean-Mac validation before release.
+
+## Alternative native setup
 
 Open Codex Migrate on the **old Mac**. Enter `new-user@new-mac.local` and the new
 Mac's `/Users/new-user` home directory. Optionally select an existing SSH key.
@@ -47,8 +77,8 @@ automatically by this app.
 Enable changes only after reviewing the plan. Open the migration dashboard,
 then choose Start transfer. It uses a free local port and opens in your browser.
 The URL includes a private control token—do not share it. Keep the native app
-open while the dashboard is in use. This edition uses a native setup window and
-the existing browser-based progress dashboard, not an all-native progress view.
+open while the dashboard is in use. These alternative controls use the native
+setup window and the same browser-based progress dashboard.
 
 ## Interrupted transfers
 

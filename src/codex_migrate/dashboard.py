@@ -106,7 +106,10 @@ HTML = r"""<!doctype html>
   <footer>Codex Migrate is an independent open-source project. It is not made by, affiliated with, or endorsed by OpenAI.</footer>
 </main>
 <script>
-const token=new URLSearchParams(location.hash.slice(1)).get("token")||"";
+const tokenKey="codex-migrate-token:"+location.origin;
+const incomingToken=new URLSearchParams(location.hash.slice(1)).get("token");
+if(incomingToken)sessionStorage.setItem(tokenKey,incomingToken);
+const token=incomingToken||sessionStorage.getItem(tokenKey)||"";
 history.replaceState(null,"",location.pathname);
 const $=id=>document.getElementById(id);
 let latestState={};
@@ -173,23 +176,26 @@ class Dashboard:
                 self.end_headers()
                 self.wfile.write(encoded)
 
+            def _html(self, document: str) -> None:
+                encoded = document.encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.send_header("Referrer-Policy", "no-referrer")
+                self.send_header(
+                    "Content-Security-Policy",
+                    "default-src 'self'; connect-src 'self'; img-src 'self' data:; "
+                    "style-src 'unsafe-inline'; script-src 'unsafe-inline'; "
+                    "frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+                )
+                self.send_header("Content-Length", str(len(encoded)))
+                self.end_headers()
+                self.wfile.write(encoded)
+
             def do_GET(self) -> None:
                 if self.path == "/" or self.path.startswith("/?"):
-                    encoded = HTML.encode("utf-8")
-                    self.send_response(200)
-                    self.send_header("Content-Type", "text/html; charset=utf-8")
-                    self.send_header("Cache-Control", "no-store")
-                    self.send_header("X-Content-Type-Options", "nosniff")
-                    self.send_header("Referrer-Policy", "no-referrer")
-                    self.send_header(
-                        "Content-Security-Policy",
-                        "default-src 'self'; connect-src 'self'; img-src 'self' data:; "
-                        "style-src 'unsafe-inline'; script-src 'unsafe-inline'; "
-                        "frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
-                    )
-                    self.send_header("Content-Length", str(len(encoded)))
-                    self.end_headers()
-                    self.wfile.write(encoded)
+                    self._html(HTML)
                     return
                 if self.path == "/api/status":
                     if not self._authorized():
@@ -222,7 +228,7 @@ class Dashboard:
                     if action == "inspect":
                         if dashboard.state.read().get("status") == "running":
                             raise MigrationError("Wait for the current migration action to finish")
-                        dashboard.engine.preflight()
+                        dashboard.engine.start_inspection()
                     elif action == "start":
                         dashboard.engine.start_preseed()
                     elif action == "pause":
@@ -255,10 +261,14 @@ class Dashboard:
         previous_handlers = {}
 
         def interrupt_for_shutdown(_signum, _frame):
+            if not self.can_shutdown():
+                print("An operation is active. Use Stop safely in the dashboard, "
+                      "or wait for installation and verification to finish.", flush=True)
+                return
             raise KeyboardInterrupt
 
         if threading.current_thread() is threading.main_thread():
-            for name in ("SIGTERM", "SIGHUP"):
+            for name in ("SIGINT", "SIGTERM", "SIGHUP"):
                 if hasattr(signal, name):
                     value = getattr(signal, name)
                     previous_handlers[value] = signal.getsignal(value)
@@ -280,3 +290,6 @@ class Dashboard:
     def close(self) -> None:
         self.engine.shutdown()
         self.state.release_process_lock()
+
+    def can_shutdown(self) -> bool:
+        return True

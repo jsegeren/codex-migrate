@@ -75,6 +75,7 @@ import CryptoKit
     }
 
     func arguments(command: String, apply: Bool) throws -> [String] {
+        if command == "launch" { return ["launch", "--port", "0", "--no-open"] }
         let destination = target.trimmingCharacters(in: .whitespacesAndNewlines)
         let destinationHome = targetHome.trimmingCharacters(in: .whitespacesAndNewlines)
         guard destination.contains("@"), destinationHome.hasPrefix("/Users/") else {
@@ -120,10 +121,12 @@ import CryptoKit
             let child = Process()
             child.executableURL = binary
             child.arguments = try arguments(command: command, apply: apply)
-            try setupStore.save(SavedSetup(target: target.trimmingCharacters(in: .whitespacesAndNewlines),
+            if command != "launch" {
+                try setupStore.save(SavedSetup(target: target.trimmingCharacters(in: .whitespacesAndNewlines),
                                           targetHome: targetHome.trimmingCharacters(in: .whitespacesAndNewlines),
                                           workspaces: workspaces, personalSkills: personalSkills,
                                           workspaceSkills: workspaceSkills))
+            }
             child.currentDirectoryURL = home
             // Keep SSH agent support, but do not forward Python loader overrides.
             child.environment = ProcessInfo.processInfo.environment.filter {
@@ -135,7 +138,7 @@ import CryptoKit
             child.standardInput = FileHandle.nullDevice
             buffer = Data()
             dashboardURL = nil
-            output = command == "serve" ? "Starting a private local dashboard…" : "Inspecting…"
+            output = ["serve", "launch"].contains(command) ? "Starting a private local dashboard…" : "Inspecting…"
             if command == "export" && apply { output = "Preparing the selected skills export…" }
             pipe.fileHandleForReading.readabilityHandler = { handle in
                 let chunk = handle.availableData
@@ -193,6 +196,12 @@ import CryptoKit
 
     func stopDashboard() {
         guard dashboardURL != nil, let child = process, child.isRunning else { return }
+        if operation == "launch" {
+            // The browser helper refuses shutdown while a transfer, paused
+            // process, picker, or replacement is active.
+            child.terminate()
+            return
+        }
         // Never offer shutdown while the engine is installing, inspecting, or
         // holding a paused transfer. Use its own safe-stop control first.
         guard let state = stateDirectory,
@@ -234,7 +243,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if MigrationModel.shared.running {
             let alert = NSAlert()
             alert.messageText = "The migration engine is still open"
-            alert.informativeText = MigrationModel.shared.operation == "serve"
+            alert.informativeText = ["serve", "launch"].contains(MigrationModel.shared.operation ?? "")
                 ? "Use Stop safely in the dashboard, then Close dashboard here before quitting. During installation, wait for verification to finish."
                 : "Use Stop operation in the setup window. If backup/replacement has begun, wait for it to finish before quitting."
             alert.runModal()
@@ -253,6 +262,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 VStack(alignment: .leading, spacing: 20) {
                     Text("Keep the work. Change the Mac.").font(.largeTitle.bold())
                     Text("Run this app on the old Mac. Data moves directly over SSH; we do not receive your workspace.")
+                    Button("Open browser setup") { model.launch("launch") }.disabled(model.running)
+                    Text("Use guided local browser setup for a full migration. The native controls below remain available for advanced setup and skills-only repairs.")
                     GroupBox("1 · Prepare the new Mac") {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Install Codex, open it, and sign in once. Enable Remote Login in System Settings → General → Sharing. Allow access to your user account.")
@@ -309,7 +320,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         }
                     }
                     if model.running { ProgressView("Migration engine is open") }
-                    if model.running && model.operation != "serve" {
+                    if model.running && ["inspect", "export"].contains(model.operation ?? "") {
                         Button(model.stopRequested ? "Waiting for safe stop…" : "Stop operation") { model.stopOperation() }
                             .disabled(model.stopRequested)
                     }

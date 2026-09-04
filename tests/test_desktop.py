@@ -17,6 +17,39 @@ from codex_migrate.cli import _port
 
 
 class DesktopTests(unittest.TestCase):
+    def test_real_browser_helper_starts_without_destination_and_stops(self):
+        root = Path(__file__).resolve().parents[1]
+        binary = os.environ.get("CODEX_MIGRATE_TEST_ENGINE")
+        command = [binary] if binary else [sys.executable, "-m", "codex_migrate"]
+        with tempfile.TemporaryDirectory() as temporary:
+            env = dict(os.environ, PYTHONPATH=str(root / "src"))
+            if binary:
+                env = {key: value for key, value in env.items() if not key.startswith(("PYTHON", "DYLD_"))}
+                env["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin"
+            process = subprocess.Popen(command + ["launch", "--port", "0", "--no-open",
+                                       "--source-home", temporary, "--state-dir", temporary + "/state"],
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
+            try:
+                self.assertTrue(select.select([process.stdout], [], [], 60)[0])
+                line = process.stdout.readline().decode()
+                prefix = "Codex Migrate dashboard: "
+                self.assertTrue(line.startswith(prefix), "Helper startup failed")
+                url = urlparse(line[len(prefix):].strip())
+                self.assertEqual(url.hostname, "127.0.0.1")
+                token = parse_qs(url.fragment)["token"][0]
+                base = "http://127.0.0.1:%d" % url.port
+                request = Request(base + "/api/setup", headers={"X-Codex-Migrate-Token": token})
+                with urlopen(request, timeout=3) as response:
+                    state = json.load(response)
+                self.assertFalse(state["attached"])
+                self.assertIsNone(state["saved"])
+                process.terminate()
+                process.wait(timeout=15)
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                process.communicate(timeout=5)
+
     @unittest.skipUnless(sys.platform == "darwin", "native macOS persistence")
     def test_native_saved_setup_permissions_and_recovery(self):
         root = Path(__file__).resolve().parents[1]

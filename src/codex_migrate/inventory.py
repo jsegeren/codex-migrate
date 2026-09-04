@@ -7,7 +7,13 @@ import os
 from pathlib import Path
 import platform
 import subprocess
-from typing import Dict, List, Tuple
+import time
+from typing import Callable, Dict, List, Tuple
+from codex_migrate.transport import _stop_process
+
+
+def _continue() -> None:
+    pass
 
 
 @dataclass(frozen=True)
@@ -43,6 +49,7 @@ class Inventory:
 def _tree_summary(
     root: Path,
     counted_suffix: str = "",
+    checkpoint: Callable[[], None] = _continue,
 ) -> Tuple[TreeSummary, List[str]]:
     if not root.exists():
         return TreeSummary(str(root), 0, 0, False), []
@@ -51,10 +58,12 @@ def _tree_summary(
     unreadable: List[str] = []
     stack = [root]
     while stack:
+        checkpoint()
         current = stack.pop()
         try:
             with os.scandir(str(current)) as entries:
                 for entry in entries:
+                    checkpoint()
                     try:
                         if entry.is_symlink():
                             if not counted_suffix or entry.name.endswith(counted_suffix):
@@ -73,23 +82,36 @@ def _tree_summary(
     return TreeSummary(str(root), files, total, not unreadable), unreadable
 
 
-def _disk_usage(path: Path) -> int:
+def _disk_usage(path: Path, checkpoint: Callable[[], None] = _continue) -> int:
+    checkpoint()
     if not path.exists():
         return 0
-    result = subprocess.run(
+    process = subprocess.Popen(
         ["/usr/bin/du", "-sk", str(path)],
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
         text=True,
-        timeout=300,
-        check=False,
+        start_new_session=True,
     )
-    if result.returncode != 0 or not result.stdout.strip():
+    started = time.monotonic()
+    try:
+        while True:
+            checkpoint()
+            try:
+                output, _ = process.communicate(timeout=0.2)
+                break
+            except subprocess.TimeoutExpired:
+                if time.monotonic() - started >= 300:
+                    raise
+    except BaseException:
+        _stop_process(process)
+        raise
+    if process.returncode != 0 or not output.strip():
         return 0
-    return int(result.stdout.split()[0]) * 1024
+    return int(output.split()[0]) * 1024
 
 
-def _count_git_repositories(roots: List[Path]) -> int:
+def _count_git_repositories(roots: List[Path], checkpoint: Callable[[], None] = _continue) -> int:
     repositories = 0
     ignored = {
         "node_modules",
@@ -105,6 +127,7 @@ def _count_git_repositories(roots: List[Path]) -> int:
         if not root.is_dir():
             continue
         for current, directories, files in os.walk(str(root), followlinks=False):
+            checkpoint()
             directories[:] = [item for item in directories if item not in ignored]
             if ".git" in directories or ".git" in files:
                 repositories += 1
@@ -113,17 +136,18 @@ def _count_git_repositories(roots: List[Path]) -> int:
     return repositories
 
 
-def collect(source_home: str, workspace_roots: List[str]) -> Inventory:
+def collect(source_home: str, workspace_roots: List[str],
+            checkpoint: Callable[[], None] = _continue) -> Inventory:
     home = Path(source_home)
     codex = home / ".codex"
-    active, active_unreadable = _tree_summary(codex / "sessions", ".jsonl")
-    archived, archived_unreadable = _tree_summary(codex / "archived_sessions", ".jsonl")
+    active, active_unreadable = _tree_summary(codex / "sessions", ".jsonl", checkpoint)
+    archived, archived_unreadable = _tree_summary(codex / "archived_sessions", ".jsonl", checkpoint)
     roots = [Path(item) for item in workspace_roots]
     root_summaries: List[TreeSummary] = []
     unreadable = active_unreadable + archived_unreadable
     for root in roots:
-        summary, root_unreadable = _tree_summary(root)
-        summary = TreeSummary(summary.path, summary.files, _disk_usage(root), summary.readable)
+        summary, root_unreadable = _tree_summary(root, checkpoint=checkpoint)
+        summary = TreeSummary(summary.path, summary.files, _disk_usage(root, checkpoint), summary.readable)
         root_summaries.append(summary)
         unreadable.extend(root_unreadable)
     return Inventory(
@@ -132,8 +156,8 @@ def collect(source_home: str, workspace_roots: List[str]) -> Inventory:
         codex_present=codex.is_dir(),
         active_sessions=active,
         archived_sessions=archived,
-        codex_bytes=_disk_usage(codex),
+        codex_bytes=_disk_usage(codex, checkpoint),
         workspace_roots=root_summaries,
-        git_repositories=_count_git_repositories(roots),
+        git_repositories=_count_git_repositories(roots, checkpoint),
         unreadable_paths=unreadable[:100],
     )

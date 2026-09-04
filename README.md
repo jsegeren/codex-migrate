@@ -98,7 +98,15 @@ cd codex-migrate
 chmod +x ./codex-migrate
 ```
 
-Inspect the local source without changing anything:
+For guided local browser setup instead of command-line configuration, run
+`./codex-migrate launch` on the old Mac. It opens destination and folder
+selection, then the real migration dashboard. No transfer starts automatically;
+changes are disabled unless you explicitly enable them for that session.
+Browser-created migrations restore their last configuration on reopening.
+If you already started through `serve` or native setup, resume through that
+same entry point; browser setup does not import its migration records.
+
+Or inspect the local source from the command line:
 
 ```bash
 ./codex-migrate inventory \
