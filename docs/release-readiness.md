@@ -6,6 +6,32 @@ informational website does not open checkout or certify a customer download.
 See the [September 4 audit](release-audit-2026-09-04.md) for current automated
 results, accessibility findings, and pre-signing work still open.
 
+## Current gate map
+
+Checked September 4 against source `708a1db` and the live public site. Historical
+checkpoints below are evidence, not separate promises that their then-pending
+work is still missing. Neither the full release nor the release-candidate
+handoff is complete while the engineering acceptance gates remain open.
+
+| Requirement | Evidence now | Next proof / owner |
+| --- | --- | --- |
+| Supported conversations, organization, settings, skills and complete selected workspaces | Frozen content/tree checks, retained destination identity, Git dependency discovery and bound Git baseline; local installation/rollback fixtures | Codex must reopen representative restored chats, settings and projects on the separate Mac. Codex leads; Josh provides disposable accounts. |
+| Scope is explicit, not “everything on the Mac” | Selected roots and dependency issues are reported; unsupported visible storage overrides, filenames and cloud-only flags stop early | Real configuration/version/provider matrix; effective project/managed overrides and unflagged cloud storage remain unverified. Codex owns testing and any resulting fixes. |
+| Full and selective migration, pause/resume and recovery | Full/skills-only staging, persisted setup, mandatory verified backups, guarded replacement, guided reconciliation and preserved displaced work have local fixture coverage | Packaged full and skills-only runs across the two Macs, including disconnect, restart, low space and recovery. Never use Josh's active migrated workspace. |
+| Git and old-home paths remain usable | Local linked-worktree/alternate-storage checks with source home offline; read-only path/Git rechecks preserve installed work | Different-user cross-Mac acceptance and representative development commands. Matching fingerprints alone do not prove every future command works. |
+| Browser-first local-data experience and clear status/help | Loopback helper, SSH transfer, saved setup, collapsed optional Help, bounded private-free diagnostic events and operation-specific controls | Native permission/VoiceOver checks and real route interruption acceptance. Automatic route selection and updating are not implemented. |
+| Public website, useful guides, screenshots, price and launch intake | Six live pages; two informative guides; sample-labelled real UI screenshots; $50 planned edition with checkout closed; prior controlled SendGrid inbox receipt and signup tests | Preserve the existing rate-limit and launch-only consent. No new email was sent in the latest read-only audit. |
+| Website accessibility and performance | Prior Lighthouse/axe results plus fresh desktop/320px rendering, six-page text-spacing and 200% text-size overflow checks | Manual assistive-technology and broader keyboard acceptance remain open; no WCAG-conformance claim. See the audit for exact scope. |
+| Domain, search discovery and cross-promotion | Live canonical domain/robots/sitemap; recorded Search Console ownership, successful sitemap submission and accepted homepage request; You.one link on the live homepage; fresh HTTP 200 check of segeren.com confirms its “Explore Codex Migrate” link to the canonical domain | Actual indexing/ranking is not guaranteed. No repeated indexing request needed. |
+| Reproducible identifiable packaged app | Clean-source unsigned arm64 bundle, checksum and eight passing actual engine checks (one filesystem skip); signing/notarization pipeline has mocked tests | Confirm intended Apple membership/team, install signing credentials securely, then notarize/staple and test the exact quarantined download on a clean Mac. Josh's account access is required. |
+| Paid purchase, delivery, support and refunds | Best-effort support/legal pages; actual sandbox payment and full manual refund recorded, test link deactivated | Josh selects merchant/tax arrangement. Codex then implements and tests server-verified, replay-safe fulfillment and recoverable delivery of the exact signed artifact before checkout opens. |
+
+Current access limits: the Mac remains locked for native/browser account work,
+and the source test user `codexmigratesource` is absent. The destination test
+account is not yet confirmed. These block real-account acceptance, not all
+engineering work. Do not create another Apple purchase or enable live checkout
+as a workaround.
+
 ## Candidate checks completed on the development Mac
 
 - Source availability now screens the macOS `SF_DATALESS` flag before selected
@@ -29,6 +55,9 @@ results, accessibility findings, and pre-signing work still open.
   These package checks are not cloud-provider tests. Superseded inactive
   engineering builds were moved recoverably to Trash; running user apps were
   left untouched. Hosted run 33881789542 is pending at this checkpoint.
+  Follow-up: that exact run passed both Python 3.9 and 3.12. The source
+  availability checkpoint is hosted-tested; real provider behavior and
+  clean/cross-Mac acceptance remain separate gates.
 
 - Discovered Git scope now triggers an early source/destination runtime check
   before staging, using the existing sandbox probe with empty repository/read

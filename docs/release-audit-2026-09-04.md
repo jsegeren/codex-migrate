@@ -16,6 +16,45 @@ end for the authoritative result. The paid-release outcome remains unchanged.
 
 ## Evidence
 
+### Fresh live-site check, 14:08–14:12 UTC
+
+- A separate Playwright test browser loaded the live custom domain without
+  touching the user's locked browser session. All six sitemap pages returned
+  HTTP 200, one H1 and the correct self-canonical; no HTML robots restriction
+  was present. Live robots and sitemap returned 200 with all six expected URLs.
+- Homepage screenshots were visually inspected at 1280×900 and 320×900.
+  The hero icon stays beside the headline, text is upright/heavier, the main
+  links are readable, images load, and no horizontal overflow was measured.
+  Sampled visible paragraphs/links/buttons/labels/summaries/captions were at
+  least 14px. This is not a measurement of every possible visible text node.
+- All six pages had no horizontal overflow at 320px with line height 1.5,
+  letter spacing 0.12em, word spacing 0.16em and paragraph spacing 2em. Computed
+  styles confirmed application. An initial injected stylesheet was blocked by
+  the site's CSP and was not counted; direct CSSOM user-style overrides were
+  used instead, without changing the deployed CSP.
+- All six pages had no horizontal overflow at 1280px when each element's
+  computed font size was doubled. This is a text-enlargement stress check, not
+  a complete browser zoom, clipping or screen-reader conformance test.
+- The launch CTA reaches its form. Submitting it empty moves focus to the
+  required email field and uses native validation; no signup request or email
+  was sent. The site had no console errors before the deliberate CSP-rejected
+  test injection. The form was visually checked with expanded spacing and
+  visible input focus. The separate test browser was then closed.
+
+Lighthouse and axe were not rerun in this follow-up; their earlier dated
+measurements below remain historical evidence, not freshly reproduced scores.
+VoiceOver, native permissions and real cross-Mac acceptance remain open.
+
+Independent `public_release_review` accepted the docs-only reconciliation and
+visually inspected the desktop, mobile and expanded-spacing form screenshots.
+It found no visible clipping and confirmed clear focus; it did not independently
+reproduce the six-page measurements or certify WCAG conformance. A fresh
+39-test guided-recovery/reconciliation/support run also passed while reconciling
+the checklist. A separate HTTP 200 check of `https://segeren.com/` confirmed its
+“Explore Codex Migrate” link to the canonical migration site.
+
+### Earlier evidence
+
 - Baseline: commit `5b73b698126d709bcdafe486ce9607e12534f6f3`.
 - Baseline Python suite: 79 passing tests, including disposable local APFS
   backup/install/rollback fixtures and real dashboard subprocess checks.
