@@ -122,9 +122,15 @@ per-repository percentages for a batch that has not returned.
    including unavailable Git, unsupported flags/sandbox, external metadata,
    partial clones, unborn/merged/conflicted/sparse and submodule layouts,
    destination changes, disconnects, cancellation and restart reconciliation.
-2. Resolve the hosted macOS CI primitive failures from run 33878246468 rather
-   than assuming this development Mac's toolchain is representative. Runtime
-   metadata is collected without configuration contents or credentials.
+2. Confirm the hosted macOS CI provisioning fix: runs 33878246468 and
+   33879706844 failed because the hosted Xcode Git was owned by runner UID 501,
+   unlike the required root-owned executable here. The workflow now validates
+   the exact canonical, regular, non-group/world-writable Apple-signed executable
+   and provisions its owner on the disposable runner only. Product ownership
+   and sandbox checks are unchanged. A focused test also forces observed
+   non-root ownership and requires rejection. This is not a recommendation to
+   change toolchain ownership on a customer's Mac or evidence that arbitrary
+   toolchain layouts are supported.
 3. Complete native/VoiceOver acceptance and validate representative Codex chats.
 
 The broader release gates in [release-readiness.md](release-readiness.md) remain

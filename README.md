@@ -387,6 +387,9 @@ layouts and Git storage outside the probe's selected-folder/managed-worktree
 read scopes can need review. Shallow repositories remain shallow. If the source
 baseline was unavailable or this migration predates it, retry cannot reconstruct
 the original baseline from today's files: keep the backup and contact support.
+The probe currently requires a root-owned Apple-toolchain Git executable;
+user-owned/custom toolchain installations can be unavailable for verification.
+Do not change ownership or bypass checks simply to obtain a passing result.
 
 These are point-in-time checks, not an atomic snapshot, proof that every chat
 opens, or tests of future hooks, Git LFS, credentials, remotes and development

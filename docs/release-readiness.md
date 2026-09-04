@@ -35,6 +35,22 @@ results, accessibility findings, and pre-signing work still open.
   a fixture-only compatibility alias produces two matching Git locations.
   This extra test was added after the 453-test full run. No real user workspace,
   SSH destination, system alias or running app was changed.
+  The final clean `2ca8f27` full run passed 447 of 454 tests, with the same seven
+  skips. That source produced a local-only unsigned arm64 bundle; eight of nine
+  actual bundled-engine tests passed, with the case-sensitive-name fixture
+  skipped on this volume. ZIP SHA-256:
+  `becb312afbe3c69a354261a9e4d544c30b951010eb08ba8fa4d8113ef49e78f7`.
+  The superseded inactive engineering build was moved recoverably to Trash;
+  the two user-running apps were not stopped or replaced.
+
+  Hosted run 33879706844 identified the primitive startup cause: its canonical
+  Xcode Git executable belongs to runner UID 501, while the product requires
+  root ownership. CI now provisions only that exact regular, canonical,
+  non-group/world-writable, Apple-signature-verified executable on its
+  disposable runner. No product ownership/sandbox guard was relaxed. Customer
+  user-owned/custom toolchains remain explicitly unavailable for this probe;
+  changing their permissions to bypass checks is not recommended. The next CI
+  result, actual second-Mac acceptance and native/VoiceOver remain open gates.
 
 - An internal sandboxed Git-probe primitive now checks explicit repository
   locations, HEAD, refs, index/status and local objects without granting Git

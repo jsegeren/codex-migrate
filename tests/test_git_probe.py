@@ -46,6 +46,7 @@ class GitProbeTests(unittest.TestCase):
         clean = self.probe()["repositories"][0]
         self.assertEqual(clean["status"], "checked", clean)
         self.assertEqual(before, freeze_tree(str(self.repo)))
+
         (self.repo / "work.txt").write_text("staged fixture\n")
         self.git("-C", str(self.repo), "add", "work.txt")
         (self.repo / "work.txt").write_text("unstaged fixture\n")
@@ -57,6 +58,14 @@ class GitProbeTests(unittest.TestCase):
         self.assertNotEqual(clean["checks"]["status"], dirty["checks"]["status"])
         self.assertEqual(clean["checks"]["refs"], dirty["checks"]["refs"])
         self.assertEqual(before, freeze_tree(str(self.repo)))
+
+    def test_user_owned_git_executable_is_rejected_before_execution(self):
+        # Override only observed metadata in the disposable runner, not the
+        # production predicate or the real developer toolchain's ownership.
+        instrumented = RUNNER.replace("my @g = lstat($git);", "my @g = lstat($git); $g[4] = $<;")
+        self.assertNotEqual(instrumented, RUNNER)
+        with patch("codex_migrate.git_probe.RUNNER", instrumented), self.assertRaises(MigrationError):
+            self.probe()
 
     def test_optional_and_required_filters_cannot_run_or_false_pass(self):
         marker = self.home / "MUST_NOT_BE_CREATED"

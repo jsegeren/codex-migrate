@@ -33,6 +33,23 @@ jobs:
                  "owner_uid": info.st_uid, "mode": oct(info.st_mode), "runner_uid": os.getuid()})
           subprocess.run([str(path), "--version"], env=env, check=True)
           PY
+      - name: Provision root-owned Apple Git on disposable CI runner
+        run: |
+          # Hosted Xcode is runner-owned. Keep the product's root-owner guard;
+          # provision only this exact Apple-signed executable for the fixture.
+          python - <<'PY'
+          import os, pathlib, re, stat, subprocess
+          assert os.environ.get("GITHUB_ACTIONS") == "true"
+          env = {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "LC_ALL": "C", "HOME": "/var/empty"}
+          path = pathlib.Path(subprocess.check_output(["/usr/bin/xcrun", "--find", "git"], env=env, text=True).strip())
+          assert re.fullmatch(r"/Applications/Xcode[^/]*\.app/Contents/Developer/usr/bin/git", str(path))
+          assert path.resolve() == path and stat.S_ISREG(path.lstat().st_mode)
+          assert not path.lstat().st_mode & 0o022
+          subprocess.run(["/usr/bin/codesign", "--verify", "--strict", "-R=anchor apple", str(path)], check=True)
+          subprocess.run(["/usr/bin/sudo", "-n", "/usr/sbin/chown", "root:wheel", str(path)], check=True)
+          assert path.stat().st_uid == 0
+          print("Provisioned the exact Apple-signed Git executable; production guards unchanged.")
+          PY
       - name: Test
         run: PYTHONPATH=src python -m unittest discover -s tests -v
       - name: Check CLI
