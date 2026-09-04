@@ -3,10 +3,19 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from codex_migrate.state import StateStore
+from codex_migrate.state import StateStore, public_state
 
 
 class StateTests(unittest.TestCase):
+    def test_public_state_hides_git_comparison_material_without_changing_saved_state(self):
+        state = {"git_baseline": {"private": "BASELINE"},
+                 "receipt": {"git_baseline_id": "HASH", "workspace_content_verified": True}}
+        result = public_state(state)
+        self.assertNotIn("git_baseline", result)
+        self.assertNotIn("git_baseline_id", result["receipt"])
+        self.assertEqual(state["receipt"]["git_baseline_id"], "HASH")
+        self.assertEqual(state["git_baseline"]["private"], "BASELINE")
+
     def test_recovery_checkpoint_requires_durable_file_and_directory_sync(self):
         with tempfile.TemporaryDirectory() as temporary:
             store = StateStore(temporary)

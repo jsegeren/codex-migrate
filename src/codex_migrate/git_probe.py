@@ -1,4 +1,4 @@
-"""Read-only Git probe primitive; not yet a migration-completion receipt.
+"""Read-only Git probe primitive; a report alone is not an installation receipt.
 
 One system-Perl runner can be used locally or through the strict SSH transport.
 Raw Git output stays in bounded pipes and is never included in the report.

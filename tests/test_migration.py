@@ -189,7 +189,9 @@ class MigrationTests(unittest.TestCase):
             with patch("codex_migrate.migration.check_compatibility", return_value={"status": "mapped", "message": "Fixture verified"}):
                 engine.start_path_check()
                 engine._thread.join(5)
-            self.assertEqual(state.read()["status"], "complete")
+            self.assertEqual(state.read()["status"], "needs_attention")
+            self.assertEqual(state.read()["git_verification"]["status"], "unavailable")
+            self.assertIn("baseline", state.read()["git_verification"]["message"])
             self.assertEqual(state.read()["receipt"], receipt)
             self.assertIsNone(state.read()["warning"])
             with patch("codex_migrate.migration.check_compatibility", return_value={"status": "conflict", "message": "Changed alias"}):
@@ -334,6 +336,7 @@ class MigrationTests(unittest.TestCase):
             )
             with patch("codex_migrate.migration.conversation_verification_script", return_value="return 0"), \
                  patch("codex_migrate.migration.require_source_storage"), \
+                 patch("codex_migrate.git_verification.source_plan", return_value={"roots": ["/Users/source/Git"], "repositories": []}), \
                  patch("codex_migrate.migration.freeze_tree", return_value="a" * 64):
                 receipt = engine._install_and_verify()
             self.assertTrue(receipt["auth_preserved"])

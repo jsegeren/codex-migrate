@@ -13,7 +13,7 @@ import webbrowser
 
 from codex_migrate.migration import MigrationEngine, MigrationError
 from codex_migrate.security import redact
-from codex_migrate.state import StateStore
+from codex_migrate.state import StateStore, public_state
 from codex_migrate.support import diagnostic_report, with_support
 
 
@@ -52,7 +52,7 @@ HTML = r"""<!doctype html>
     #backup-safety { margin-top:18px; padding:16px; border:1px solid var(--line); border-radius:12px; }
     #backup-safety p { margin:6px 0; overflow-wrap:anywhere; }
     #backup-safety.blocked { border:2px solid var(--red); background:#3a151a; }
-    #recovery-message:focus,#path-message:focus { outline:3px solid #d9cdff; outline-offset:4px; }
+    #recovery-message:focus,#path-message:focus,#git-check-message:focus { outline:3px solid #d9cdff; outline-offset:4px; }
     #path-next[hidden] { display:none; }
     #recovery-items { padding-left:20px; }
     #recovery-items li { overflow-wrap:anywhere; }
@@ -98,6 +98,11 @@ HTML = r"""<!doctype html>
       <p id="workspace-proof">Workspace content verification is pending.</p>
       <p>Dependency inspection searches selected workspace folders and Codex’s worktrees folder, then checks linked Git storage. It does not test whether Git commands work on the destination. Workspace directory links are not searched for additional repositories. Other home folders are not searched.</p>
       <ul id="git-list"></ul><ul id="git-required"></ul><ul id="git-issues"></ul>
+    </details>
+    <details id="git-check-help" hidden><summary>Git verification</summary>
+      <p id="git-check-message" role="status" tabindex="-1">Git checks run after installation and home-path verification.</p>
+      <div class="controls"><button id="check_git" disabled>Check Git</button><button id="stop_git" disabled>Stop Git check</button></div>
+      <details><summary>What this check means</summary><p>Compares discovered repositories with the saved source baseline: local object checks, HEAD, refs, index and status. It never copies, restores, fetches objects or runs repository helpers. Keep writing apps closed for a stable comparison.</p><p>Changes after installation may be your new work, not damage. Source issues, unavailable Git, filtered files and unsupported layouts can require review. Shallow history is not full remote history. Future hooks, remotes and development commands are not tested. Keep the backup and old Mac until you validate your work.</p></details>
     </details>
     <section id="backup-safety" aria-label="Backup protection" aria-live="polite">
       <strong id="backup-heading">Backup required before replacement</strong>
@@ -151,7 +156,7 @@ function renderBackup(s){const blocked=s.space_check==="blocked";$("backup-safet
 async function api(path,options={}){const response=await fetch(path,{...options,headers:{"X-Codex-Migrate-Token":token,"Content-Type":"application/json",...(options.headers||{})}});const body=await response.json();if(!response.ok)throw new Error(body.error||`Request failed (${response.status})`);renderBackup(body);return body}
 function render(s){latestState=s;const p=Math.max(0,Math.min(100,Number(s.percent)||0));$("percent").textContent=`${p.toFixed(p===100?0:1)}%`;$("bar").style.width=`${p}%`;$("bar").parentElement.setAttribute("aria-valuenow",String(p));$("phase").textContent=String(s.phase||"unknown").replaceAll("_"," ");$("status").textContent=String(s.status||"unknown").replaceAll("_"," ");$("message").textContent=s.message||"";$("route").textContent=s.route||"—";$("bytes").textContent=`${fmt(s.bytes_staged||0)} / ${fmt(s.bytes_total||0)}`;$("item").textContent=s.current_item||"—";$("warning").style.display=s.warning?"block":"none";$("warning").textContent=s.warning||"";$("error").style.display=s.error?"block":"none";$("error").textContent=s.error||"";const c=s.config||{};$("codex-scope").textContent=`${c.source_home||"—"}/.codex → ${c.target_home||"—"}/.codex`;$("ssh-target").textContent=`${c.target||"—"} · ${c.target_home||"—"}`;const roots=Array.isArray(c.workspace_roots)?c.workspace_roots:[];$("workspace-count").textContent=String(roots.length);$("workspace-list").replaceChildren(...roots.map(root=>{const li=document.createElement("li");const prefix=`${c.source_home}/`;const relative=root.startsWith(prefix)?root.slice(prefix.length):root;li.textContent=`${root} → ${c.target_home}/${relative}`;return li}));const active=s.status==="running";const canStart=["idle","ready"].includes(s.status);const canFinalize=s.status==="ready_to_finalize"||(s.status==="waiting"&&["close_source_codex","close_target_codex"].includes(s.phase));$("inspect").disabled=active;$("start").disabled=!canStart||!s.apply;$("pause").disabled=!active||!["staging","final_delta"].includes(s.phase);$("resume").disabled=!s.apply||!['paused','cancelled','failed','interrupted'].includes(s.status);$("finalize").disabled=!canFinalize||!s.apply;$("cancel").disabled=!((active&&["inspecting","staging","final_delta"].includes(s.phase))||s.status==="paused");}
 function renderSkills(s){
-  const installed=s.status==='complete'||s.phase==='path_compatibility';
+  const installed=s.status==='complete'||['path_compatibility','git_verification'].includes(s.phase);
   $("codex-state-proof").hidden=s.migration_mode==="skills";
   $("codex-state-proof").textContent=installed&&s.receipt?.codex_state_content_verified===true?"Retained Codex state matched the source before and after installation, before database checks. Authentication and runtime exclusions apply.":installed?"No retained Codex state verification was recorded for this migration.":"Retained Codex state verification is pending.";
   if(s.status==="running"&&s.phase==="verifying_sources")$("cancel").disabled=false;
@@ -177,6 +182,23 @@ function renderSkills(s){
   }
   renderRecovery(s);
   renderPaths(s);
+  renderGitCheck(s);
+}
+let gitWasChecking=false;
+function renderGitCheck(s){
+  const g=s.git_verification||{}, checking=g.status==='checking', pathsChecking=s.path_compatibility?.status==='checking', focused=document.activeElement?.id;
+  const installed=Boolean(s.receipt), full=s.migration_mode!=='skills';
+  const busy=checking||(pathsChecking&&installed&&full);
+  $('git-check-help').hidden=!full||!installed;
+  $('git-check-message').textContent=pathsChecking?'Checking home paths before Git. Safe to stop; no files are being changed.':(g.message||'Git checks run after installation and home-path verification.')+(g.checked_at?` Checked at ${g.checked_at}.`:'');
+  if(busy&&focused==='check_git')$('git-check-message').focus();
+  $('check_git').disabled=!full||!installed||s.status==='running'||busy||s.recovery?.status==='checking'||['restoring','restored','recovery_required'].includes(s.phase)||(s.recovery_attempt&&s.recovery_attempt.resolved!==true);
+  $('stop_git').disabled=!busy;
+  if(full&&installed)for(const name of ['inspect','start','pause','resume','finalize','cancel'])$(name).disabled=true;
+  if(checking)for(const name of ['check_paths','check_recovery','restore_recovery'])$(name).disabled=true;
+  if(s.phase==='git_verification'){$('bar').parentElement.hidden=true;$('percent').textContent='—';}
+  if(!busy&&gitWasChecking&&['git-check-message','stop_git'].includes(focused))$('check_git').focus();
+  gitWasChecking=busy;
 }
 let pathsWereChecking=false;
 function renderPaths(s){
@@ -191,11 +213,14 @@ function renderPaths(s){
   if(checking)for(const name of ['check_recovery','restore_recovery'])$(name).disabled=true;
   if(s.phase==='path_compatibility'){$('bar').parentElement.hidden=true;$('percent').textContent='—';}
   if(checking&&focused==='check_paths')$('path-message').focus();
-  else if(!checking&&pathsWereChecking&&focused==='path-message')$('check_paths').focus();
+  else if(!checking&&pathsWereChecking&&focused==='path-message'){
+    if(s.git_verification?.status==='checking'){$('git-check-help').open=true;$('git-check-message').focus();}
+    else $('check_paths').focus();
+  }
   pathsWereChecking=checking;
 }
 function renderGit(s){
-  const installed=s.status==='complete'||s.phase==='path_compatibility';
+  const installed=s.status==='complete'||['path_compatibility','git_verification'].includes(s.phase);
   $("git-scope").hidden=s.migration_mode==="skills";
   $("workspace-proof").textContent=installed&&s.receipt?.workspace_content_verified===true?`Workspace content verification passed for ${s.receipt.workspace_roots_verified} root(s). File bytes, names, permissions and link text matched before and after installation.`:installed?"No workspace-content verification was recorded for this migration.":"Workspace content verification is pending.";
   const inventory=s.inventory||{};
@@ -206,7 +231,7 @@ function renderGit(s){
   list("git-required",missing.map(path=>`Required folder not selected: ${path}`));
   list("git-issues",[...issues,...warnings]);
 }
-function renderEvents(events){const rows=(events||[]).map(event=>{const li=document.createElement('li');const recovery=event.recovery_status&&event.recovery_status!=='not_checked'?` · recovery check: ${event.recovery_status.replaceAll('_',' ')}`:'';const paths=event.path_status&&event.path_status!=='not_checked'?` · home paths: ${event.path_status.replaceAll('_',' ')}`:'';li.textContent=`${event.at||'Time unavailable'} · ${event.phase.replaceAll('_',' ')} · ${event.status}${event.failure_category==='none'?'':` · ${event.failure_category.replaceAll('_',' ')}`}${recovery}${paths}`;return li});if(!rows.length){const li=document.createElement('li');li.textContent='No events recorded yet.';rows.push(li)}$('migration-events').replaceChildren(...rows)}
+function renderEvents(events){const rows=(events||[]).map(event=>{const li=document.createElement('li');const recovery=event.recovery_status&&event.recovery_status!=='not_checked'?` · recovery check: ${event.recovery_status.replaceAll('_',' ')}`:'';const paths=event.path_status&&event.path_status!=='not_checked'?` · home paths: ${event.path_status.replaceAll('_',' ')}`:'';const git=event.git_status&&event.git_status!=='not_checked'?` · Git: ${event.git_status.replaceAll('_',' ')}`:'';li.textContent=`${event.at||'Time unavailable'} · ${event.phase.replaceAll('_',' ')} · ${event.status}${event.failure_category==='none'?'':` · ${event.failure_category.replaceAll('_',' ')}`}${recovery}${paths}${git}`;return li});if(!rows.length){const li=document.createElement('li');li.textContent='No events recorded yet.';rows.push(li)}$('migration-events').replaceChildren(...rows)}
 function renderRecovery(s){
   const r=s.recovery||{}, checking=r.status==='checking', restoring=r.status==='restoring', attempt=s.recovery_attempt||{};
   const unresolved=['restoring','recovery_required'].includes(s.phase)||(s.recovery_attempt&&attempt.resolved!==true);
@@ -235,7 +260,7 @@ function renderRecovery(s){
 }
 async function refresh(){try{const s=await api("/api/status");render(s);renderSkills(s);renderEvents(s.support_events)}catch(error){$("error").style.display="block";$("error").textContent=error.message}}
 async function action(name){const c=latestState.config||{};const confirmation=latestState.migration_mode==="skills"?`Back up, then replace ${latestState.inventory?.skill_exports?.length||0} listed skill(s) on ${c.target}? Conversations, configuration and whole repositories will not be migrated. Other skills will be kept.`:`Back up, then replace ${c.target_home}/.codex, ${c.workspace_roots?.length||0} selected workspace root(s), and ${latestState.inventory?.personal_skills?.length||0} personal skill(s) on ${c.target}? Other destination skills will be kept.`;if(name==="finalize"&&!confirm(confirmation))return;try{const s=await api("/api/action",{method:"POST",body:JSON.stringify({action:name,confirmed:name==="finalize"})});render(s);renderSkills(s)}catch(error){$("error").style.display="block";$("error").textContent=error.message}}
-for(const name of ["inspect","start","pause","resume","finalize","cancel","check_recovery","stop_recovery","check_paths"]){$(name).addEventListener("click",()=>action(name))}
+for(const name of ["inspect","start","pause","resume","finalize","cancel","check_recovery","stop_recovery","check_paths","check_git","stop_git"]){$(name).addEventListener("click",()=>action(name))}
 $('copy-path-command').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(latestState.compatibility_command||'');$('path-message').textContent='Command copied. Run it on the new Mac, then check home paths again.'}catch(error){$('path-message').textContent='Clipboard access was unavailable. Select and copy the command below.'}});
 $('path-next').addEventListener('click',event=>{event.preventDefault();$('path-help').open=true;$('path-help').scrollIntoView({block:'start'});$('path-help').querySelector('summary').focus()});
 $('restore_recovery').addEventListener('click',async()=>{
@@ -344,6 +369,7 @@ class Dashboard:
                         self._json(409, {"error": "Migration state could not be read. Email support; keep staging and backups."})
                         return
                     body["support_events"] = diagnostic_report(body)["recent_events"]
+                    body = public_state(body)
                     body["apply"] = dashboard.engine.config.apply
                     body["config"] = dashboard.engine.config.to_public_dict()
                     body["compatibility_command"] = dashboard.engine.compatibility_command()
@@ -371,6 +397,10 @@ class Dashboard:
                         dashboard.engine.start_recovery_check()
                     elif action == "check_paths":
                         dashboard.engine.start_path_check()
+                    elif action == "check_git":
+                        dashboard.engine.start_git_check()
+                    elif action == "stop_git":
+                        dashboard.engine.stop_git_check()
                     elif action == "stop_recovery":
                         dashboard.engine.stop_recovery_check()
                     elif action == "restore_recovery":
@@ -396,6 +426,7 @@ class Dashboard:
                     else:
                         raise MigrationError("Unknown action")
                     body = dashboard.state.read()
+                    body = public_state(body)
                     body["apply"] = dashboard.engine.config.apply
                     body["config"] = dashboard.engine.config.to_public_dict()
                     body["compatibility_command"] = dashboard.engine.compatibility_command()

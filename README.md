@@ -70,11 +70,11 @@ add the reported folders, and inspect again. Dependencies are never silently
 added to the copy scope. Already-missing registered worktrees are reported as
 warnings; their registrations are not removed.
 
-This is dependency discovery, not a scan of every folder on the Mac or a proof
-of Git integrity. Workspace directory links are not searched for additional
-repositories. Unsupported pointers, broken metadata links, unreadable metadata,
-and dependencies outside the source home require review. Git object integrity,
-destination refs/status, and historical path usability need separate validation.
+This is dependency discovery, not a scan of every folder on the Mac. Workspace
+directory links are not searched for additional repositories. Unsupported
+pointers, broken metadata links, unreadable metadata, and dependencies outside
+the source home require review. A separate post-install Git check compares the
+discovered scope with a saved source baseline; see Git verification below.
 
 Folder selection rejects case/Unicode aliases of protected Codex, SSH, personal
 skills and migration-control paths, including relocated protected directories.
@@ -136,6 +136,8 @@ verified after installation.
   both Macs (checked during full-migration inspection)
 - An APFS destination home volume (required for space-efficient rollback)
 - An SSH connection whose host key has already been verified
+- Apple Command Line Tools or Xcode with compatible Git and working macOS
+  sandbox support on both Macs for the separate Git verification step
 - Enough free destination space for staging, a safety backup, and the final
   workspace
 
@@ -361,6 +363,37 @@ them. The tool does not rewrite historical metadata. A successful installation
 keeps its receipt but remains **needs attention** until home paths are verified.
 Matching home paths still do not prove every chat opens or every repository
 works: validate representative work before retiring the old Mac.
+
+## Git verification after installation
+
+Full finalization saves an owner-only source Git baseline bound to the migration,
+selected folders and frozen content evidence. After installation and home-path
+verification, the dashboard separately checks discovered destination Git
+locations: local object/connectivity checks, HEAD, refs, index and status.
+Skills-only repairs do not run or require this repository check.
+
+Open **Git verification → Check Git** to repeat only the read-only check.
+**Stop Git check** also stops its preceding home-path check. These actions do
+not require changes to be enabled. A failed check, missing Git, disconnect or
+restart retains the installation receipt and does not recopy or restore files.
+The app stays **needs attention** until checks pass; it does not offer Resume
+copying over an installed workspace. Changes since the baseline may be work
+you have done on the new Mac, not corruption. Source-existing issues are
+reported separately.
+
+Git runs with restricted reads and without writes, network access or subprocess
+helpers. Partial clones, custom object-check policies, filters, unsupported
+layouts and Git storage outside the probe's selected-folder/managed-worktree
+read scopes can need review. Shallow repositories remain shallow. If the source
+baseline was unavailable or this migration predates it, retry cannot reconstruct
+the original baseline from today's files: keep the backup and contact support.
+
+These are point-in-time checks, not an atomic snapshot, proof that every chat
+opens, or tests of future hooks, Git LFS, credentials, remotes and development
+commands. Keep writing apps closed for a stable comparison and validate your
+restored work. Comparison hashes stay in local owner-only state, not dashboard
+responses or support reports. Actual packaged second-Mac acceptance remains a
+release gate; see the [engineering evidence](docs/git-verification-plan.md).
 
 ## Transfer routes
 

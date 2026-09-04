@@ -59,6 +59,14 @@ class FullSkillTests(unittest.TestCase):
     def prepare(self, prefix=""):
         config = self.config
         class LocalTransport:
+            def run_remote_cancellable(self, script, timeout, cancelled):
+                if cancelled():
+                    raise MigrationError("Fixture check cancelled")
+                return self.run_remote(script, timeout)
+
+            def cancel_all(self):
+                pass
+
             def run_remote(self, script, timeout=60):
                 result = subprocess.run(
                     ["/bin/zsh", "-s"], input=fixture_prefix(closed_codex_script(script), prefix),

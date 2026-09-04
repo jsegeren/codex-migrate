@@ -32,6 +32,15 @@ INITIAL_STATE = {
 }
 
 
+def public_state(state):
+    """A response copy without private comparison evidence; persistence is unchanged."""
+    result = {key: value for key, value in state.items() if key != "git_baseline"}
+    if isinstance(result.get("receipt"), dict):
+        result["receipt"] = {key: value for key, value in result["receipt"].items()
+                             if key != "git_baseline_id"}
+    return result
+
+
 class StateStore:
     def __init__(self, root: str) -> None:
         self.root = Path(root)

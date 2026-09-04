@@ -81,3 +81,12 @@ def locked_destination_script(home: str, script: str) -> str:
 def locked_receiver_command(home: str, command: str) -> str:
     """Keep stdin untouched: it carries rsync's binary protocol, not a script."""
     return lock_command(home) + " " + shlex.quote(command)
+
+
+def readonly_destination_script(home: str, script: str) -> str:
+    """Check installed data under the existing inode; never create a lock file."""
+    runner = LOCK_RUNNER.replace("O_RDWR | O_CREAT | O_NOFOLLOW", "O_RDONLY | O_NOFOLLOW")
+    runner = runner.replace("LOCK_EX | LOCK_NB", "LOCK_SH | LOCK_NB")
+    # The normal pending-transaction guard still applies to installed Git checks.
+    return ("exec /usr/bin/perl -e " + shlex.quote(runner) + " -- "
+            + shlex.quote(home) + " " + shlex.quote(script) + "\n")

@@ -98,6 +98,28 @@ class DashboardTests(unittest.TestCase):
             self.assertEqual(self.post({"action": "stop_recovery"}, self.dashboard.token)[0], 202)
             stop.assert_called_once()
 
+    def test_git_checks_require_token_but_not_apply(self):
+        for action, method in (("check_git", "start_git_check"), ("stop_git", "stop_git_check")):
+            with patch.object(self.dashboard.engine, method) as call:
+                self.assertEqual(self.post({"action": action})[0], 403)
+                call.assert_not_called()
+                self.assertEqual(self.post({"action": action}, self.dashboard.token)[0], 202)
+                call.assert_called_once()
+
+    def test_private_git_baseline_never_leaves_status_or_action_response(self):
+        self.dashboard.state.update(git_baseline={"private": "PRIVATE_BASELINE"},
+                                    receipt={"git_baseline_id": "PRIVATE_HASH", "backup_verified": True})
+        code, result = self.request(self.dashboard.token)
+        self.assertEqual(code, 200)
+        self.assertNotIn("PRIVATE_", json.dumps(result))
+        with patch.object(self.dashboard.engine, "start_git_check"):
+            code, result = self.post({"action": "check_git"}, self.dashboard.token)
+        self.assertEqual(code, 202)
+        self.assertNotIn("PRIVATE_", json.dumps(result))
+        persisted = self.dashboard.state.read()
+        self.assertEqual(persisted["git_baseline"]["private"], "PRIVATE_BASELINE")
+        self.assertEqual(persisted["receipt"]["git_baseline_id"], "PRIVATE_HASH")
+
     def test_restore_requires_token_apply_and_explicit_confirmation(self):
         payload = {"action": "restore_recovery", "confirmed": True, "transaction_id": "a" * 32}
         with patch.object(self.dashboard.engine, "start_restore_recovery") as restore:

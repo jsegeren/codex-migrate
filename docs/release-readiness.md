@@ -8,6 +8,34 @@ results, accessibility findings, and pre-signing work still open.
 
 ## Candidate checks completed on the development Mac
 
+- Full finalization now durably saves an installation-bound source Git baseline
+  and runs separate destination Git checks after home-path verification. The
+  dashboard has collapsed Check Git/Stop Git check controls, read-only retry and
+  distinct unavailable/changed/source-issue/cancelled results. Saved installation
+  evidence blocks Resume-copy after installation; interruption cannot silently
+  trigger a replacement or rollback. The destination check uses the existing
+  lock read-only/shared and rejects active writers and pending transactions.
+  Private baseline hashes do not leave public status/preflight JSON or support
+  reports; the diagnostic event stream includes only allowlisted Git states.
+  The local suite passed 446 of 453 tests, with seven filesystem skips; ten
+  signup tests, Swift typecheck and diff checks also passed. Disposable actual
+  rsync/APFS installation fixtures cover source Git taken offline, destination
+  edits, unavailable Git, source issues, bound-receipt mismatch, pending/active
+  locks and cancellation/restart without recopying. Independent review found
+  and prompted fixes for a shutdown handoff race, CLI baseline disclosure and
+  keyboard-focus loss across the path/Git check. This is not yet clean
+  second-Mac or native/VoiceOver acceptance. Hosted CI run 33878246468 exposed
+  16 primitive bootstrap failures on its Mac toolchain; diagnostic runtime
+  evidence is being collected without relaxing the sandbox or skipping tests.
+  Reviewer `public_release_review` accepted the final bounded integration,
+  independently passing 53 focused tests and checking desktop/320px rendering,
+  slow path-to-Git transitions, Stop, keyboard focus recovery and wrapping.
+  A subsequent focused linked-worktree installation test also passed: with the
+  entire disposable old home offline, missing historical paths need review;
+  a fixture-only compatibility alias produces two matching Git locations.
+  This extra test was added after the 453-test full run. No real user workspace,
+  SSH destination, system alias or running app was changed.
+
 - An internal sandboxed Git-probe primitive now checks explicit repository
   locations, HEAD, refs, index/status and local objects without granting Git
   writes, network or subprocess helpers. Independent `public_release_review`
@@ -19,10 +47,9 @@ results, accessibility findings, and pre-signing work still open.
   test-only additions; 10 signup tests and Swift typecheck also passed.
   A disposable linked-worktree copy matches source Git fingerprints after the
   original home is taken offline and a fixture-only compatibility alias is
-  added. Both trees remain byte-identical. This is not yet connected to migration
-  completion or shipped as a UI/CLI capability; source-baseline binding,
-  destination/restart state, accessible controls and actual packaged cross-Mac
-  acceptance remain required. See the exact
+  added. Both trees remain byte-identical. That primitive checkpoint preceded
+  the integration described above; actual packaged cross-Mac acceptance remains
+  required. See the exact
   [Git verification integration plan](git-verification-plan.md).
 
 - Nested filename screening now rejects conservative case-fold/decomposition

@@ -20,6 +20,19 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Compile
         run: PYTHONPATH=src python -m compileall -q src
+      - name: Git probe runtime evidence
+        run: |
+          # Public toolchain metadata only; no user configuration or credentials.
+          /usr/bin/env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin LC_ALL=C /usr/bin/xcrun --find git
+          python - <<'PY'
+          import os, pathlib, subprocess
+          env = {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "LC_ALL": "C", "HOME": "/var/empty"}
+          path = pathlib.Path(subprocess.check_output(["/usr/bin/xcrun", "--find", "git"], env=env, text=True).strip())
+          info = path.lstat()
+          print({"selected_git": str(path), "resolved_git": str(path.resolve()),
+                 "owner_uid": info.st_uid, "mode": oct(info.st_mode), "runner_uid": os.getuid()})
+          subprocess.run([str(path), "--version"], env=env, check=True)
+          PY
       - name: Test
         run: PYTHONPATH=src python -m unittest discover -s tests -v
       - name: Check CLI

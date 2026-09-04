@@ -23,7 +23,7 @@ STATUSES = frozenset(("idle", "ready", "running", "paused", "cancelled", "failed
                       "interrupted", "waiting", "ready_to_finalize", "complete", "needs_attention"))
 PHASES = frozenset(("not_started", "inspecting", "preflight_complete", "staging",
                     "staged", "close_source_codex", "close_target_codex", "final_delta",
-                    "verifying_sources", "installing", "verified", "restoring", "restored", "recovery_required", "path_compatibility"))
+                    "verifying_sources", "installing", "verified", "restoring", "restored", "recovery_required", "path_compatibility", "git_verification"))
 FAILURES = frozenset(("none", "unknown", "disk_space", "connection", "permissions",
                       "verification", "process_guard", "interrupted", "git_scope", "machine_identity", "destination_lock", "recovery_pending"))
 HISTORY_LIMIT = 60
@@ -32,6 +32,7 @@ RECOVERY_STATUSES = frozenset(("not_checked", "checking", "stopped", "failed", "
                                "different_transaction", "restore_incomplete", "restore_unconfirmed",
                                "restore_verified", "restore_pending_cleanup", "restore_changed"))
 PATH_STATUSES = frozenset(("not_checked", "checking", "not_needed", "mapped", "missing", "conflict", "unsupported", "unverified"))
+GIT_STATUSES = frozenset(("not_checked", "checking", "verified", "needs_review", "cancelled", "unavailable"))
 
 
 def failure_category(error):
@@ -65,12 +66,15 @@ def event_fields(state):
     recovery = recovery if isinstance(recovery, dict) else {}
     paths = state.get("path_compatibility")
     paths = paths if isinstance(paths, dict) else {}
+    git = state.get("git_verification")
+    git = git if isinstance(git, dict) else {}
     return {"status": _enum(state.get("status"), STATUSES),
             "phase": _enum(state.get("phase"), PHASES),
             "failure_category": failure_category(state.get("error")),
             "space_check": _enum(state.get("space_check"), {"passed", "blocked"}),
             "recovery_status": _enum(recovery.get("status", "not_checked"), RECOVERY_STATUSES),
-            "path_status": _enum(paths.get("status", "not_checked"), PATH_STATUSES)}
+            "path_status": _enum(paths.get("status", "not_checked"), PATH_STATUSES),
+            "git_status": _enum(git.get("status", "not_checked"), GIT_STATUSES)}
 
 
 def _number(value):
@@ -118,6 +122,7 @@ def diagnostic_report(state):
             "space_check": _enum(item.get("space_check"), {"passed", "blocked"}),
             "recovery_status": _enum(item.get("recovery_status", "not_checked"), RECOVERY_STATUSES),
             "path_status": _enum(item.get("path_status", "not_checked"), PATH_STATUSES),
+            "git_status": _enum(item.get("git_status", "not_checked"), GIT_STATUSES),
         })
     macos = platform.mac_ver()[0]
     return {

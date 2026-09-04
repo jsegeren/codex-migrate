@@ -18,6 +18,8 @@ from codex_migrate.compatibility import READY as PATHS_READY, check_compatibilit
 from codex_migrate.storage_scope import require_source_storage, storage_scope_script
 from codex_migrate.conversations import conversation_verification_script
 from codex_migrate.errors import MigrationError
+from codex_migrate.git_verification import (check_installed, fingerprint, freeze_baseline,
+                                           installation_verified)
 from codex_migrate.exclusions import CODEX_EXCLUDES
 from codex_migrate.skills import SkillExport, discover_personal_skills, skill_verification_script
 from codex_migrate.backup import BACKUP_FUNCTIONS, size_command, verification_receipt
@@ -26,7 +28,7 @@ from codex_migrate.transaction import transaction_commands, rollback_checks, rec
 from codex_migrate.inventory import Inventory, collect
 from codex_migrate.security import redact
 from codex_migrate.processes import codex_running, process_state_script, require_codex_closed_script
-from codex_migrate.state import StateStore
+from codex_migrate.state import StateStore, public_state
 from codex_migrate.transport import SSHTransport, TransferProcess
 from codex_migrate.workspaces import (WORKSPACE_TIMEOUT, check_local_tools, freeze_tree,
                                       remote_tool_check, remote_tree_function, tree_check,
@@ -48,6 +50,7 @@ class MigrationEngine:
         self._personal_skills: Optional[List[SkillExport]] = None
         self._recovery_cancelled = False
         self._path_cancelled = False
+        self._git_cancelled = False
 
     def inventory(self) -> Inventory:
         # Personal skills are installed individually, never by replacing .agents.
@@ -141,8 +144,10 @@ class MigrationEngine:
 
     def _require_ready_for_migration(self) -> None:
         self._require_recovery_resolved()
-        if self.state.read().get("phase") == "path_compatibility":
-            raise MigrationError("Installation is already verified. Resolve Home-path compatibility and check home paths before starting another migration.")
+        current = self.state.read()
+        if self.requires_home_compatibility and (current.get("receipt") is not None
+                or current.get("phase") in ("path_compatibility", "git_verification", "verified")):
+            raise MigrationError("Installation is already verified or has saved evidence. Use the read-only home-path and Git checks; do not restart copying over installed work.")
 
     def _publish_recovery(self, report, reconciling=False) -> None:
         report["checked_at"] = datetime.now(timezone.utc).isoformat()
@@ -219,6 +224,16 @@ class MigrationEngine:
 
     def reconcile_startup(self) -> None:
         current = self.state.read()
+        if (self.requires_home_compatibility and current.get("phase") == "verified"
+                and current.get("git_verification", {}).get("status") != "verified"):
+            self.state.update(status="needs_attention", phase="git_verification",
+                              message="Installation has saved evidence, but this version has no completed Git check. Choose Check Git; the transfer will not restart.")
+            current = self.state.read()
+        if current.get("git_verification", {}).get("status") == "checking":
+            self.state.update(status="needs_attention", phase="git_verification",
+                              message="The previous Git check ended without a result. Choose Check Git; installed files will not be recopied.",
+                              git_verification={"status": "cancelled", "message": "Git check interrupted. No files were changed; check again when ready."}, error=None)
+            current = self.state.read()
         if current.get("path_compatibility", {}).get("status") == "checking":
             self.state.update(path_compatibility={"status": "unverified", "message":
                 "The previous path check ended without a result. Check home paths again; no path changes were requested."})
@@ -256,6 +271,10 @@ class MigrationEngine:
                 raise MigrationError("Restoration is a protected step; wait for its result before quitting")
             recovery_checking = self.state.read().get("recovery", {}).get("status") == "checking"
             paths_checking = self.state.read().get("path_compatibility", {}).get("status") == "checking"
+            git_checking = self.state.read().get("git_verification", {}).get("status") == "checking"
+            if git_checking:
+                self.stop_git_check()
+                thread = self._thread
             if paths_checking:
                 self._path_cancelled = True
                 self.transport.cancel_all()
@@ -265,7 +284,7 @@ class MigrationEngine:
             if recovery_checking:
                 self.stop_recovery_check()
                 thread = self._thread
-        if recovery_checking or paths_checking:
+        if recovery_checking or paths_checking or git_checking:
             if thread and thread.is_alive() and thread is not threading.current_thread():
                 thread.join(timeout=10)
             return
@@ -440,7 +459,7 @@ class MigrationEngine:
             config=self.config.to_public_dict(),
             error=None,
         )
-        return state
+        return public_state(state)
 
     def start_preseed(self) -> None:
         self._require_ready_for_migration()
@@ -788,6 +807,7 @@ class MigrationEngine:
         # A lost path-check reply must not masquerade as a failed installation.
         with self._lock:
             self._path_cancelled = self._cancel_requested
+            self._git_cancelled = self._cancel_requested
             self.state.update(
                 status="needs_attention" if self.requires_home_compatibility else "complete",
                 phase="path_compatibility" if self.requires_home_compatibility else "verified",
@@ -800,6 +820,7 @@ class MigrationEngine:
                 pending_backup=None,
                 error=None,
             )
+            self.state.sync_recovery_checkpoint()
             if self.requires_home_compatibility:
                 self.state.update(path_compatibility={"status": "unverified" if self._path_cancelled else "checking",
                     "message": "Check home paths before opening old work." if self._path_cancelled else "Checking destination home paths. No files are being changed."})
@@ -814,31 +835,85 @@ class MigrationEngine:
             if (self._thread and self._thread.is_alive()) or self.state.read().get("status") == "running":
                 raise MigrationError("Wait for the current migration action to finish")
             self._path_cancelled = False
+            self._git_cancelled = False
+            if self.state.read().get("receipt") is not None:
+                self.state.update(status="needs_attention", phase="path_compatibility",
+                                  message="Rechecking current home paths before Git. No files are being changed.")
             self.state.update(path_compatibility={"status": "checking", "message": "Checking destination home paths. No files are being changed."})
             self._start(self._run_path_check)
 
     def _run_path_check(self) -> None:
         report = check_compatibility(self.config, self.transport, lambda: self._path_cancelled)
+        check_git = False
         with self._lock:
             if self._path_cancelled:
                 return
             current = self.state.read()
             changes = {"path_compatibility": report}
-            if current.get("phase") in ("path_compatibility", "verified"):
+            if current.get("phase") in ("path_compatibility", "git_verification", "verified"):
                 receipt = current.get("receipt")
-                valid_receipt = (isinstance(receipt, dict)
-                    and all(receipt.get(key) is True for key in ("backup_verified", "auth_preserved", "installation_id_preserved", "conversation_content_verified", "codex_state_content_verified", "workspace_content_verified"))
-                    and receipt.get("source_home") == self.config.source_home
-                    and receipt.get("target_home") == self.config.target_home)
+                valid_receipt = installation_verified(self.config, receipt)
                 ready = valid_receipt and report["status"] in PATHS_READY
-                changes.update(status="complete" if ready else "needs_attention",
-                               phase="verified" if ready else "path_compatibility",
-                               message=self.completion_message() if ready else "Files were installed and verified, but old home paths are not ready. Check the Home-path compatibility panel before opening old work." if valid_receipt else "Installation evidence could not be validated. Keep the backup and current files intact and contact support.",
+                check_git = ready
+                if ready:
+                    # Publish the handoff atomically with path readiness so shutdown
+                    # cannot miss both checks and permit a late probe/completion.
+                    changes["git_verification"] = {"status": "checking", "message": "Checking installed Git repositories. Safe to stop; no files are being changed."}
+                changes.update(status="needs_attention",
+                               phase="git_verification" if ready else "path_compatibility",
+                               message="Files and home paths verified. Checking installed Git repositories without changing them." if ready else "Files were installed and verified, but old home paths are not ready. Check the Home-path compatibility panel before opening old work." if valid_receipt else "Installation evidence could not be validated. Keep the backup and current files intact and contact support.",
                                warning=None if ready else report["message"] if valid_receipt else "A home-path check does not prove installation succeeded.", error=None)
             self.state.update(**changes)
+        if check_git:
+            self._run_git_check()
+
+    def start_git_check(self) -> None:
+        with self._lock:
+            if not self.requires_home_compatibility or not installation_verified(self.config, self.state.read().get("receipt")):
+                raise MigrationError("Git checks require a verified full installation receipt")
+            # Recheck the current path mapping on every retry, never copy or install.
+            self.start_path_check()
+
+    def _run_git_check(self) -> None:
+        with self._lock:
+            if self._git_cancelled:
+                return
+            self.state.update(status="needs_attention", phase="git_verification",
+                              git_verification={"status": "checking", "message": "Checking installed Git repositories. This can take time; safe to stop. No files are being changed."})
+        try:
+            report = check_installed(self.config, self.state.read(), self.transport, lambda: self._git_cancelled)
+        except MigrationError as error:
+            report = {"status": "unavailable", "message": str(error)}
+        except Exception:
+            report = {"status": "unavailable", "message": "Git check could not finish. Keep the backup and try Check Git again; no files were changed."}
+        with self._lock:
+            if self._git_cancelled:
+                return
+            report["checked_at"] = datetime.now(timezone.utc).isoformat()
+            verified = report["status"] == "verified"
+            self.state.update(git_verification=report, status="complete" if verified else "needs_attention",
+                              phase="verified" if verified else "git_verification", current_item=None,
+                              message=self.completion_message() if verified else "Files were installed and verified. Git needs a separate check or review; see Git verification below. Do not repeat the transfer.",
+                              warning=None, error=None)
+
+    def stop_git_check(self) -> None:
+        with self._lock:
+            current = self.state.read()
+            paths_checking = (installation_verified(self.config, current.get("receipt"))
+                              and current.get("path_compatibility", {}).get("status") == "checking")
+            if current.get("git_verification", {}).get("status") != "checking" and not paths_checking:
+                raise MigrationError("No Git check is running")
+            self._git_cancelled = True
+            if paths_checking:
+                self._path_cancelled = True
+                self.state.update(path_compatibility={"status": "unverified", "message": "Home-path check stopped. Check again before opening old work."})
+            self.transport.cancel_all()
+            self.state.update(status="needs_attention", phase="git_verification", error=None,
+                              message="Git check stopped. Choose Check Git when ready; installed files will not be recopied.",
+                              git_verification={"status": "cancelled", "message": "Git check stopped. No files were changed; check again when ready."})
 
     def completion_message(self) -> str:
-        return "Files installed and verified; home paths checked. Open representative Codex chats and repositories to confirm they work before retiring the old Mac."
+        return "Files installed and verified; home paths and the discovered Git scope checked. Open representative Codex chats and repositories to confirm they work before retiring the old Mac."
 
     def completion_warning(self) -> Optional[str]:
         if self.config.source_home != self.config.target_home:
@@ -887,12 +962,30 @@ class MigrationEngine:
             self.state.update(status="running", phase="verifying_sources",
                               message="Reading retained Codex state. Safe to stop; a stopped check restarts on Finalize.",
                               current_item="Source Codex state verification")
-        return {"workspaces": prepared,
-                "codex_state": freeze_tree(self.config.source_codex, self._inspection_checkpoint, codex=True)}
+        result = {"workspaces": prepared,
+                  "codex_state": freeze_tree(self.config.source_codex, self._inspection_checkpoint, codex=True)}
+        self.state.update(message="Saving a source Git baseline. Safe to stop; no source files are changed.",
+                          current_item="Source Git verification")
+        baseline = freeze_baseline(self.config, self.state.read().get("migration_id"), result, self._inspection_checkpoint)
+        self._inspection_checkpoint()
+        self.state.update(git_baseline=baseline, git_verification={})
+        self.state.sync_recovery_checkpoint()
+        result["git_baseline_id"] = fingerprint(baseline)
+        return result
 
     def _install_and_verify(self, prepared_workspaces=None) -> Dict[str, object]:
         if prepared_workspaces is None:
             prepared_workspaces = self._prepare_install()
+        baseline_id = prepared_workspaces.get("git_baseline_id")
+        if baseline_id is None:
+            raise MigrationError("Prepared installation is missing its source Git baseline")
+        else:
+            baseline = self.state.read().get("git_baseline")
+            content = {key: prepared_workspaces[key] for key in ("workspaces", "codex_state")}
+            if (not isinstance(baseline, dict) or fingerprint(baseline) != baseline_id
+                    or baseline.get("content") != fingerprint(content)
+                    or baseline.get("migration_id") != self.state.read().get("migration_id")):
+                raise MigrationError("Source Git baseline no longer matches the prepared installation")
         codex_state_digest = prepared_workspaces["codex_state"]
         prepared_workspaces = prepared_workspaces["workspaces"]
         self.state.update(phase="installing")
@@ -1185,6 +1278,8 @@ printf 'INSTALLED=1\\nACTIVE=%s\\nARCHIVED=%s\\nAUTH_PRESERVED=1\\nINSTALLATION_
         if archived != expected_archived:
             raise MigrationError("Archived conversation count mismatch after install")
         return {
+            "migration_id": migration_id,
+            "git_baseline_id": baseline_id,
             "completed_at": datetime.now(timezone.utc).isoformat(),
             "active_sessions": active,
             "archived_sessions": archived,
