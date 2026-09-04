@@ -26,13 +26,35 @@ handoff is complete while the engineering acceptance gates remain open.
 | Reproducible identifiable packaged app | Clean-source unsigned arm64 bundle, checksum and eight passing actual engine checks (one filesystem skip); signing/notarization pipeline has mocked tests | Confirm intended Apple membership/team, install signing credentials securely, then notarize/staple and test the exact quarantined download on a clean Mac. Josh's account access is required. |
 | Paid purchase, delivery, support and refunds | Best-effort support/legal pages; actual sandbox payment and full manual refund recorded, test link deactivated | Josh selects merchant/tax arrangement. Codex then implements and tests server-verified, replay-safe fulfillment and recoverable delivery of the exact signed artifact before checkout opens. |
 
-Current access limits: the Mac remains locked for native/browser account work,
-and the source test user `codexmigratesource` is absent. The destination test
-account is not yet confirmed. These block real-account acceptance, not all
-engineering work. Do not create another Apple purchase or enable live checkout
-as a workaround.
+Current access limits: the source Mac is unlocked and the standard disposable
+source account `codexmigratesource` now exists with a synthetic acceptance
+fixture. The destination test account is not yet confirmed, and the new Mac's
+Wi-Fi SSH hostname remains untrusted until its locally reported host fingerprint
+is compared with the source-side scan. These block the transfer portion of
+real-account acceptance, not all engineering work. Do not create another Apple
+purchase, weaken SSH host-key checking, or enable live checkout as a workaround.
 
 ## Candidate checks completed on the development Mac
+
+- A dedicated standard macOS source account now contains a synthetic two-Mac
+  fixture created without reading Josh's real Codex or repository data. It has
+  one active and one archived transcript, retained configuration/rules/history,
+  a valid SQLite database, a personal skill, a workspace skill, three local
+  branches, one stash, two linked Git worktrees, uncommitted and untracked files,
+  a relative file link, and empty directories. Source authentication and
+  installation-identity files are absent. Inventory executed as the fixture
+  owner found the two transcript groups, one personal skill, two Git locations,
+  zero Git issues, zero Git warnings and zero unreadable paths. The checked-in
+  generator is pinned to the exact disposable account/home and refuses linked,
+  non-directory or non-empty roots; four focused safety tests pass. The full
+  local suite passed 534 of 541 tests with seven explicit filesystem skips.
+  Clean source `a375d63682fd39763442737a15ac2b8558695a65` produced an unsigned
+  arm64 app; eight of nine actual packaged-engine checks passed with the one
+  case-sensitive-filename skip. ZIP SHA-256:
+  `4799b66d93474b2140bfc2fb1da8c5a3b72cf076a20a5243fecfc0a83bf267b1`.
+  This is source-side preparation and packaged startup evidence, not a completed
+  SSH transfer, destination backup/restore proof, chat-opening proof, signed
+  release, or clean-Mac certification.
 
 - Custom agent configuration references now stop full migration for explicit
   scope review. A disposable source fixture reproduced inventory succeeding
