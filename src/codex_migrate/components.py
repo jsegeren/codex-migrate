@@ -12,6 +12,7 @@ from typing import Dict, List, Sequence
 
 from codex_migrate.config import MigrationConfig
 from codex_migrate.destination_lock import locked_destination_script
+from codex_migrate.transaction import transaction_commands, rollback_checks, recovery_preflight_script
 from codex_migrate.cancellation import Cancellation
 from codex_migrate.backup import (
     BACKUP_FUNCTIONS, MIN_RESERVE_BYTES, size_command, verification_receipt,
@@ -73,7 +74,8 @@ class ComponentExporter:
         home = Path(self.config.target_home)
         checks = ["test -d %s" % shlex.quote(str(home))]
         checks.extend("test ! -L %s" % shlex.quote(str(path)) for path in (home, *home.parents))
-        self.transport.run_remote("set -eu\n" + "\n".join(checks) + "\n")
+        self.transport.run_remote("set -eu\n" + "\n".join(checks) + "\n"
+                                  + recovery_preflight_script(self.config.target_home))
 
     def run(self) -> Dict[str, object]:
         exports = self.discover()
@@ -242,6 +244,8 @@ class ComponentExporter:
             stage_verifications.append("%s() {\n%s\n}\n%s %s%s" % (
                 function, checks, function, shlex.quote(staged_item), failure))
             verifications.append("%s %s%s" % (function, shlex.quote(destination), failure))
+        begin_transaction, installed_transaction, restored_transaction, clear_transaction = transaction_commands(
+            self.config.target_home, backup, mappings)
         script = """set -eu
 setopt NULL_GLOB
 umask 077
@@ -266,25 +270,45 @@ mkdir -p {backup}/items {backup}/existed
 backup_space {home} {reserve}
 {backup_receipt}
 {codex_process_guard}
+{begin_transaction}
+{codex_process_guard}
 rollback_needed=1
 rollback() {{
   rollback_exit_code=$?
   if test "$rollback_needed" = 1; then
     set +e
     {rollbacks}
-    echo 'Component installation failed; destination rollback was attempted.' >&2
+    {rollback_verification}
+    if test "$rollback_verified" = 1; then
+      {restored_transaction} || rollback_verified=0
+    fi
+    if test "$rollback_verified" = 1; then
+      {clear_transaction} || rollback_verified=0
+    fi
+    if test "$rollback_verified" = 1; then
+      echo 'Component installation failed; destination rollback was verified.' >&2
+    else
+      echo 'Component installation failed and rollback is unconfirmed. Keep Codex closed, staging and backups intact, and contact support.' >&2
+    fi
   fi
   exit "$rollback_exit_code"
 }}
 trap rollback EXIT
 {installs}
 {verifications}
+{installed_transaction}
 rollback_needed=0
 trap - EXIT
 rm -rf {staging}
+{clear_transaction}
 printf 'INSTALLED=1\\nITEMS=%s\\nBACKUP_VERIFIED=1\\nBACKUP=%s\\n' {item_count} {backup}
 """.format(
             backup_functions=BACKUP_FUNCTIONS,
+            begin_transaction=begin_transaction,
+            installed_transaction=installed_transaction,
+            restored_transaction=restored_transaction,
+            clear_transaction=clear_transaction,
+            rollback_verification=rollback_checks(mappings),
             codex_process_guard=require_codex_closed_script(self.config.target_home),
             backup_size=size_command([item.destination for item in exports]),
             backup_receipt=verification_receipt(backup, mappings),

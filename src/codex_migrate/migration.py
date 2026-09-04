@@ -20,6 +20,7 @@ from codex_migrate.exclusions import CODEX_EXCLUDES
 from codex_migrate.skills import SkillExport, discover_personal_skills, skill_verification_script
 from codex_migrate.backup import BACKUP_FUNCTIONS, size_command, verification_receipt
 from codex_migrate.destination_lock import locked_destination_script
+from codex_migrate.transaction import transaction_commands, rollback_checks, recovery_preflight_script
 from codex_migrate.inventory import Inventory, collect
 from codex_migrate.security import redact
 from codex_migrate.processes import codex_running, process_state_script, require_codex_closed_script
@@ -90,8 +91,8 @@ class MigrationEngine:
             self.state.update(
                 status="failed",
                 message=(
-                    "The previous process ended during installation. Destination rollback was "
-                    "attempted; review the pending backup, then Resume to rebuild staging."
+                    "The previous process ended during installation. The destination may still be "
+                    "working, and rollback is unconfirmed. Keep Codex closed there and review recovery evidence before retrying."
                 ),
                 error="Previous process ended during installation",
                 staging_complete=False,
@@ -117,8 +118,8 @@ class MigrationEngine:
                 self.state.update(
                     status="failed",
                     message=(
-                        "Shutdown interrupted installation. Destination rollback was attempted; "
-                        "review the pending backup, then Resume."
+                        "Shutdown interrupted installation. The destination may still be working, "
+                        "and rollback is unconfirmed. Keep Codex closed there and review recovery evidence before retrying."
                     ),
                     error="Installation interrupted by shutdown",
                     staging_complete=False,
@@ -183,6 +184,7 @@ class MigrationEngine:
             )
         target_codex = shlex.quote(self.config.target_codex)
         target_home = shlex.quote(self.config.target_home)
+        self.transport.run_remote(recovery_preflight_script(self.config.target_home))
         result = self.transport.run_remote(
             "set -eu\n"
             "test -d %s\n"
@@ -787,6 +789,8 @@ class MigrationEngine:
                 checks.append("verify_workspace_%d_%s() {\nlocal workspace_digest\n%s\n}\nverify_workspace_%d_%s 2>/dev/null || { echo 'Workspace content verification failed. Keep staging and backups; Resume to refresh the copy.' >&2; exit 74; }" % (
                     index, "staged" if root == staged else "installed", tree_check(root, digest),
                     index, "staged" if root == staged else "installed"))
+        begin_transaction, installed_transaction, restored_transaction, clear_transaction = transaction_commands(
+            self.config.target_home, backup, mappings)
         script = """set -eu
 setopt NULL_GLOB
 umask 077
@@ -840,6 +844,8 @@ backup_space {home} {reserve}
 auth_before=$(shasum -a 256 {codex}/auth.json | awk '{{print $1}}')
 installation_before=$(shasum -a 256 {codex}/installation_id | awk '{{print $1}}')
 {codex_process_guard}
+{begin_transaction}
+{codex_process_guard}
 rollback_needed=1
 rollback() {{
   rollback_exit_code=$?
@@ -848,7 +854,18 @@ rollback() {{
     rm -rf {codex}
     cp -c -R {backup}/.codex {codex}
     {workspace_rollbacks}
-    echo 'Installation failed; destination rollback was attempted.' >&2
+    {rollback_verification}
+    if test "$rollback_verified" = 1; then
+      {restored_transaction} || rollback_verified=0
+    fi
+    if test "$rollback_verified" = 1; then
+      {clear_transaction} || rollback_verified=0
+    fi
+    if test "$rollback_verified" = 1; then
+      echo 'Installation failed; destination rollback was verified.' >&2
+    else
+      echo 'Installation failed and rollback is unconfirmed. Keep Codex closed, staging and backups intact, and contact support.' >&2
+    fi
   fi
   exit "$rollback_exit_code"
 }}
@@ -878,11 +895,18 @@ for db in {codex}/*.sqlite {codex}/sqlite/*.sqlite; do
   if test -f "$db"; then test "$(sqlite3 "$db" 'PRAGMA quick_check(1);')" = ok; fi
 done
 chmod 700 {codex}
+{installed_transaction}
 rollback_needed=0
 trap - EXIT
+{clear_transaction}
 printf 'INSTALLED=1\\nACTIVE=%s\\nARCHIVED=%s\\nAUTH_PRESERVED=1\\nINSTALLATION_ID_PRESERVED=1\\nBACKUP_VERIFIED=1\\nCONVERSATION_CONTENT_VERIFIED=1\\nCODEX_STATE_CONTENT_VERIFIED=1\\nWORKSPACE_CONTENT_VERIFIED=1\\nWORKSPACE_ROOTS_VERIFIED={workspace_count}\\nPERSONAL_SKILLS_VERIFIED={skill_count}\\nBACKUP=%s\\n' "$active" "$archived" {backup}
 """.format(
             backup_functions=BACKUP_FUNCTIONS,
+            begin_transaction=begin_transaction,
+            installed_transaction=installed_transaction,
+            restored_transaction=restored_transaction,
+            clear_transaction=clear_transaction,
+            rollback_verification=rollback_checks(mappings),
             codex_process_guard=require_codex_closed_script(self.config.target_home),
             backup_size=size_command(self._backup_targets()),
             reserve=max(2 * 1024**3, int(self.state.read().get("reserve_bytes") or 0)),

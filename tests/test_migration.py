@@ -69,6 +69,8 @@ class MigrationTests(unittest.TestCase):
             current = state.read()
             self.assertEqual(current["status"], "failed")
             self.assertFalse(current["staging_complete"])
+            self.assertIn("rollback is unconfirmed", current["message"])
+            self.assertNotIn("rollback was attempted", current["message"])
             self.assertEqual(
                 current["pending_backup"],
                 "/Users/person/Codex-Migrate-Backup-test",

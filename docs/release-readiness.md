@@ -8,6 +8,25 @@ results, accessibility findings, and pre-signing work still open.
 
 ## Candidate checks completed on the development Mac
 
+- Durable destination recovery evidence now precedes replacement. Backup
+  files/directories and the atomically published pending record are fsynced,
+  followed by the macOS `F_FULLFSYNC` barrier. Full and skills installers record
+  scope and original existence; pending/malformed records block new writes.
+  Normal rollback now verifies original contents/absence and saves a synced
+  terminal receipt before clearing the pending record. Startup/shutdown copy
+  no longer claims rollback happened merely because the local process ended.
+  Fourteen disposable local transaction tests cover SIGKILL after removal,
+  failed rollback, durability and terminal-evidence failures, final cleanup,
+  private/corrupt records, missing originals, prerequisite probes, and Codex
+  reopening during the backup flush. Independent `public_release_review` caught
+  and accepted the corrected zsh helper-failure/rollback-trap regression, then
+  accepted final code and recovery wording. Full local suite: 277 Python tests
+  (276 passed, one explicit skip), 10 signup tests, and native Swift typecheck.
+  A final clear failure may leave a durable terminal receipt without a pending
+  file; it is still reported as an error. This is tested containment and normal
+  rollback, not guided post-crash recovery or actual hardware power-cut proof.
+  The guided restore/reconciliation flow remains release-blocking work.
+
 - Destination-wide exclusion now covers staging directory/marker writes, rsync
   receivers, and the entire full/skills backup-install-verify-rollback phase.
   An owner-only, no-follow persistent lock file is held by the destination

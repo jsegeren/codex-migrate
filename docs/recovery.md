@@ -61,9 +61,29 @@ disconnect. Unsafe lock paths or file permissions block writes; contact support
 instead of removing them. The lock does not coordinate older tool versions
 without this protection, other apps, or manual shell commands.
 
-This prevents concurrent writers from this version of Codex Migrate. It is not
-power-loss recovery: after a reboot the kernel lock is released, but unfinished
-replacement still requires inspection of the backup and destination evidence.
+After a reboot the kernel lock is released, but that does not prove replacement
+finished. Before the first removal, the tool now saves an owner-only
+`.codex-migrate-transaction.json` in the destination home. It records the backup,
+selected paths, and whether each original existed. Backup files/directories and
+the record are synced, including a macOS device-flush barrier, before replacement
+can begin. Sync failures block progress rather than falling back to a weaker
+write. No source files or credentials are stored in this record.
+
+A pending record blocks new staging and installation writes, even from another
+source Mac or a different migration mode. Missing, malformed, or linked recovery
+data is never treated as proof of success. Do not remove the record to force
+Resume. Keep destination Codex closed and contact support for inspection. A
+guided post-crash restore/reconciliation action is still required before the paid
+release; the current alpha contains the failure but does not automate that step.
+
+Successful installation or verified normal rollback saves a
+`transaction-receipt.json` in the backup folder before clearing the pending
+record. A final cleanup error can occur after the pending file was removed;
+the terminal receipt and installed/restored data have already been synced at
+that point. An error is still reported, and the backup must be retained for
+review. A terminal receipt does not replace checking current restored usability.
+Actual drive power-loss and clean second-Mac acceptance remain unverified;
+device-flush support is not protection against failed hardware.
 
 Retained Codex state now has the same frozen before/after protection. Changed,
 missing or extra retained configuration, organization, rules, automations or
@@ -102,7 +122,10 @@ Full-migration finalization installs under an automatic rollback trap. If a post
 fails, Codex Migrate attempts to restore the destination Codex directory and
 every selected destination workspace and personal skill to their pre-install
 versions. The local
-state records `pending_backup` before any replacement begins.
+state records `pending_backup` before any replacement begins. The rollback is
+reported as verified only after each original matches its backup (or is absent
+when it did not previously exist), and the restored data and recovery receipt
+are synced. A failed check retains the pending record and blocks new writes.
 
 Do not delete remaining staging or the timestamped backup. Keep Codex closed on
 the new Mac, inspect the reported backup and restored destination, resolve the
@@ -128,8 +151,10 @@ loss.
 
 On the next launch, a persisted `running` state is reconciled to `interrupted`
 and Resume reuses staged data. If shutdown happened during installation, the
-state becomes `failed`, retains `pending_backup`, and requires backup review
-before Resume.
+state becomes `failed`, retains `pending_backup`, and says rollback is unconfirmed.
+The destination may still be running. Preflight checks for unfinished destination
+recovery evidence before assuming its Codex directory is intact. A pending record
+requires recovery review, not a blind Resume.
 
 ## Restore the destination backup
 

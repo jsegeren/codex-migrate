@@ -4,6 +4,8 @@ from pathlib import Path
 import secrets
 import shlex
 
+from codex_migrate.transaction import PENDING_GUARD
+
 
 LOCK_NAME = ".codex-migrate-destination.lock"
 
@@ -51,12 +53,14 @@ unless (flock($lock, LOCK_EX | LOCK_NB)) {
 # Recheck the path after acquiring. Never adopt a linked or replaced inode.
 @p = lstat($name);
 @p && $s[0] == $p[0] && $s[1] == $p[1] or invalid();
+# Any pending or malformed record blocks migration writes until recovery.
+PENDING_GUARD
 # Retain the same open-file description across exec and child operations.
 # A disconnected client cannot release a still-running receiver's lock.
 defined fcntl($lock, F_SETFD, 0) or invalid();
 my @command = @ARGV ? ('/bin/zsh', '-f', '-c', $ARGV[0]) : ('/bin/zsh', '-f', '-s');
 exec(@command) or invalid();
-"""
+""".replace("PENDING_GUARD", PENDING_GUARD)
 
 
 def lock_command(home: str) -> str:

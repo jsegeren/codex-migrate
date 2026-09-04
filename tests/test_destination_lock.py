@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 from codex_migrate.config import MigrationConfig
 from codex_migrate.destination_lock import LOCK_NAME, locked_destination_script, locked_receiver_command
+from codex_migrate.transaction import TRANSACTION_NAME
 import test_backup as fixtures
 from codex_migrate.components import ComponentExporter, SkillExport
 
@@ -163,7 +164,7 @@ class DestinationLockTests(unittest.TestCase):
         fixture.assert_originals_untouched()
 
     def test_reserved_lock_namespace_cannot_be_replaced(self):
-        for name in (LOCK_NAME, LOCK_NAME.upper()):
+        for name in (LOCK_NAME, LOCK_NAME.upper(), TRANSACTION_NAME, TRANSACTION_NAME.upper()):
             for field in ("staging_name", "backup_prefix"):
                 with self.subTest(field=field, name=name), self.assertRaises(ValueError):
                     MigrationConfig(target="user@fixture.invalid", target_home=str(self.home),
