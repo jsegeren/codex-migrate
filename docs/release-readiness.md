@@ -8,6 +8,21 @@ results, accessibility findings, and pre-signing work still open.
 
 ## Candidate checks completed on the development Mac
 
+- Source availability now screens the macOS `SF_DATALESS` flag before selected
+  content reads and directory enumeration, including configuration profiles,
+  Git pointers, transcripts and materialized skill-link targets. Copy/resume
+  and source freezing rescreen. Excluded runtime data and preserved link targets
+  are not traversed by this guard, and ordinary sparse files remain supported.
+  Twelve synthetic-metadata tests passed, including no content/process/copy
+  calls after rejection and retention of the existing destination and staging.
+  Independent `public_release_review` found a mixed-case configuration filename
+  gap, verified the correction and accepted the code and scoped instructions
+  after 59 focused tests. The local full run passed 472 of 479 tests with seven
+  filesystem skips; expanded mixed-case cases passed separately after the fix.
+  Ten signup tests, Swift typecheck and diff checks also passed. This proves
+  observed-flag screening, not actual provider behavior, an eviction-proof
+  snapshot, destination backup availability or Apple certification.
+
 - Discovered Git scope now triggers an early source/destination runtime check
   before staging, using the existing sandbox probe with empty repository/read
   scopes. It validates destination identity first and never reads repositories
@@ -30,6 +45,8 @@ results, accessibility findings, and pre-signing work still open.
   `2800d961533cb20569c39286e7c1ae9beebb618f962dc9d4d0072a1c461de1b9`.
   No running user app was replaced. This is not Apple signing, notarization or
   clean second-Mac acceptance.
+  Hosted run 33880934861 on that source passed both Python 3.9 and 3.12;
+  the hosted suite ran 467 tests with seven filesystem skips.
 
 - Full finalization now durably saves an installation-bound source Git baseline
   and runs separate destination Git checks after home-path verification. The

@@ -89,6 +89,16 @@ filesystem's Unicode rules or a search for credentials under unrelated names.
 Excluded runtime subtrees are not searched, although their names still participate
 in the sibling check. Workspace directory links are preserved rather than traversed.
 
+Source inspection also rejects macOS files and folders marked as cloud-only
+(`SF_DATALESS`) before reading their contents or enumerating those folders.
+Download and keep selected data locally using its cloud provider, then inspect
+again. The same metadata screening runs before staging/resume and source
+verification, including skill file-link targets that will be materialized.
+It does not download files automatically. Ordinary sparse files are supported.
+This detects a known macOS flag, not every provider's placeholder format or
+files evicted after inspection. Cloud-provider and offline behavior still need
+real-system acceptance; keep the old Mac and its files intact.
+
 Full migrations also discover personal custom skills in `~/.agents/skills`
 and legacy `~/.codex/skills`. A current-location skill takes precedence over a
 legacy skill with the same name. Each selected skill is materialized at the new

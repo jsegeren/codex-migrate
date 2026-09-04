@@ -3,10 +3,12 @@
 import fnmatch
 import os
 from pathlib import Path
+import stat
 import unicodedata
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.exclusions import CODEX_EXCLUDES
+from codex_migrate.source_availability import require_local, check_info
 
 
 MESSAGE = ("Source filenames may collide on the new Mac or cannot be checked safely. "
@@ -44,22 +46,25 @@ def check_tree_names(root, checkpoint=lambda: None, *, codex=False):
             current = stack.pop()
             if current.is_symlink():
                 raise MigrationError(MESSAGE)
+            require_local(current)
             seen = set()
             with os.scandir(current) as entries:
                 for entry in entries:
                     checkpoint()
                     check_name(entry.name, seen)
-                    directory = entry.is_dir(follow_symlinks=False)
-                    if not directory:
-                        continue
+                    info = entry.stat(follow_symlinks=False)
+                    directory = stat.S_ISDIR(info.st_mode)
                     relative = Path(entry.path).relative_to(root).as_posix()
                     if codex and any(
                         fnmatch.fnmatchcase(relative, pattern.strip("/"))
                         for pattern in CODEX_EXCLUDES
                         if relative.count("/") == pattern.strip("/").count("/")
+                        and (not pattern.endswith("/") or directory)
                     ):
                         continue
-                    stack.append(Path(entry.path))
+                    check_info(info)
+                    if directory:
+                        stack.append(Path(entry.path))
     except InterruptedError:
         raise
     except OSError as error:

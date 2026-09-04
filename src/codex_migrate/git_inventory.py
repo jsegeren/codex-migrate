@@ -7,6 +7,7 @@ import stat
 from typing import Callable, Dict, List
 
 from codex_migrate.exclusions import codex_path_excluded
+from codex_migrate.source_availability import require_local, walk_local
 
 
 @dataclass
@@ -85,7 +86,7 @@ def inspect_git(source_home: str, workspace_roots: List[str], checkpoint: Callab
         if root in seen_link_trees or not root.is_dir():
             return
         seen_link_trees.add(root)
-        for current, directories, files in os.walk(root, followlinks=False, onerror=unreadable):
+        for current, directories, files in walk_local(root, onerror=unreadable):
             checkpoint()
             for name in directories + files:
                 checkpoint()
@@ -103,6 +104,7 @@ def inspect_git(source_home: str, workspace_roots: List[str], checkpoint: Callab
 
     def pointer(path, allow_empty=False):
         checkpoint()
+        require_local(path)
         try:
             if path.parent.resolve() != path.parent:
                 raise ValueError("Pointer has a symbolic-link parent")
@@ -177,6 +179,7 @@ def inspect_git(source_home: str, workspace_roots: List[str], checkpoint: Callab
                 report.issues.append("Unsupported Git worktree registrations: %s" % registrations)
                 return
             try:
+                require_local(registrations)
                 entries = list(registrations.iterdir())
             except OSError:
                 report.issues.append("Cannot read Git worktree registrations: %s" % registrations)
@@ -232,7 +235,7 @@ def inspect_git(source_home: str, workspace_roots: List[str], checkpoint: Callab
         if root.is_symlink():
             report.issues.append("Git discovery root is a symbolic link: %s" % root)
             continue
-        for current, directories, files in os.walk(root, followlinks=False, onerror=unreadable):
+        for current, directories, files in walk_local(root, onerror=unreadable):
             checkpoint()
             path = Path(current)
             if inside(path, codex) and codex_path_excluded(path.relative_to(codex)):

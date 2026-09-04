@@ -8,7 +8,7 @@ import time
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.exclusions import CODEX_EXCLUDES
-from codex_migrate.filename_safety import MESSAGE as FILENAME_MESSAGE, PERL_NAME_CHECK
+from codex_migrate.filename_safety import MESSAGE as FILENAME_MESSAGE, PERL_NAME_CHECK, check_tree_names
 from codex_migrate.transport import _stop_process
 from codex_migrate.tree_digest import PERL_IMPORTS, TREE_FUNCTIONS
 
@@ -85,6 +85,7 @@ def freeze_tree(root: str, checkpoint=lambda: None, *, codex=False):
     path = Path(root)
     if path.is_symlink() or not path.is_dir():
         raise MigrationError("Workspace verification requires a real source directory")
+    check_tree_names(path, checkpoint, codex=codex)
     process = subprocess.Popen(PERL_COMMAND + ["-e", TREE_PROGRAM, os.fspath(path), "codex" if codex else "workspace"],
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                text=True, start_new_session=True)

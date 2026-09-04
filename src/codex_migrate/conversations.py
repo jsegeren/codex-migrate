@@ -7,6 +7,7 @@ import shlex
 import stat
 
 from codex_migrate.errors import MigrationError
+from codex_migrate.source_availability import require_local, walk_local
 
 
 def conversation_verification_script(source_codex: str) -> str:
@@ -35,7 +36,7 @@ def conversation_verification_script(source_codex: str) -> str:
         if not source.is_dir():
             raise MigrationError("Conversation storage must be a directory")
         count = 0
-        for current, directories, files in os.walk(source, followlinks=False, onerror=unreadable):
+        for current, directories, files in walk_local(source, onerror=unreadable):
             relative = Path(current).relative_to(root)
             directory = '"$1"/' + shlex.quote(str(relative))
             checks.extend(("test -d " + directory, "test ! -L " + directory))
@@ -46,6 +47,7 @@ def conversation_verification_script(source_codex: str) -> str:
                 if not name.endswith(".jsonl"):
                     continue
                 path = Path(current) / name
+                require_local(path)
                 digest = hashlib.sha256()
                 try:
                     descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)

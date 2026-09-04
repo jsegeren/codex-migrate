@@ -14,6 +14,7 @@ from typing import Dict, Iterable, List, Sequence
 from codex_migrate.errors import MigrationError
 from codex_migrate.config import path_key
 from codex_migrate.filename_safety import check_names
+from codex_migrate.source_availability import require_local, check_info, walk_local
 
 
 SKILL_NAME = re.compile(r"^[A-Za-z0-9._-]+$")
@@ -63,7 +64,7 @@ def _validated_skill(path: Path, source_home: Path) -> Path:
         protected_inodes.add((info.st_dev, info.st_ino))
     def unreadable(error):
         raise error
-    for current, directories, files in os.walk(str(resolved), followlinks=False, onerror=unreadable):
+    for current, directories, files in walk_local(str(resolved), onerror=unreadable):
         check_names(directories + files)
         for name in directories + files:
             candidate = Path(current) / name
@@ -76,6 +77,7 @@ def _validated_skill(path: Path, source_home: Path) -> Path:
             if (any(key[:len(root)] == root for root in protected_ssh)
                     or key in protected_files or (info.st_dev, info.st_ino) in protected_inodes):
                 raise MigrationError("Skill references protected authentication material")
+            check_info(info)
             if not (target.is_dir() or stat.S_ISREG(target.stat().st_mode)):
                 raise MigrationError("Skill contains an unsupported special file: %s" % candidate)
             if not candidate.is_symlink():
@@ -104,12 +106,15 @@ def skill_verification_script(skill: SkillExport, source_home: str) -> str:
     directory_count = 0
     def unreadable(error):
         raise error
-    for current, directories, files in os.walk(str(root), onerror=unreadable):
+    for current, directories, files in walk_local(str(root), onerror=unreadable):
         directory_count += 1
         relative = Path(current).relative_to(root)
         checks.append('test -d "$1"/%s' % shlex.quote(str(relative)))
         for name in sorted(files):
             path = Path(current) / name
+            # Skill file links are deliberately materialized after confinement
+            # checks; inspect the target, unlike ordinary workspace links.
+            require_local(path.resolve(strict=True))
             digest = hashlib.sha256()
             with path.open("rb") as stream:
                 for chunk in iter(lambda: stream.read(1024 * 1024), b""):
@@ -147,6 +152,7 @@ def discover_personal_skills(source_home: str, target_home: str) -> List[SkillEx
             raise MigrationError("Skill root resolves outside the source home: %s" % root)
         if not resolved_root.is_dir():
             raise MigrationError("Skill root is not a directory: %s" % root)
+        require_local(resolved_root)
         for candidate in sorted(resolved_root.iterdir(), key=lambda item: item.name):
             if not _skill_candidate(candidate):
                 continue
@@ -178,7 +184,7 @@ def _skill_candidate(candidate: Path) -> bool:
 
 def _walk_workspace_skill_dirs(root: Path) -> Iterable[Path]:
     ignored = {".git", "node_modules", ".next", "dist", "build", "coverage"}
-    for current, directories, _files in os.walk(str(root), followlinks=False):
+    for current, directories, _files in walk_local(str(root)):
         directories[:] = [name for name in directories if name not in ignored]
         current_path = Path(current)
         if current_path.name == "skills" and current_path.parent.name == ".agents":

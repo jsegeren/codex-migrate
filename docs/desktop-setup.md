@@ -16,6 +16,10 @@ available yet. Local unsigned builds are engineering artifacts, not releases.
   The application cannot use an interactive password prompt. It never disables
   host verification or copies private SSH keys to the new Mac.
 - The destination home must use APFS. Make enough room for staging and rollback.
+- Download and keep selected cloud files locally before starting. Inspection
+  rejects macOS files/folders marked as cloud-only instead of downloading them.
+  It cannot detect every provider's placeholders or prevent later eviction;
+  real cloud-provider acceptance remains pending.
 - If repositories are discovered, Apple Command Line Tools/Xcode and the
   guarded Git runtime must pass preflight on both Macs before staging. This
   early check does not inspect repository contents or prove Git integrity.

@@ -14,6 +14,7 @@ import time
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.transport import _stop_process
+from codex_migrate.source_availability import require_local
 
 
 RUNNER = r'''
@@ -128,6 +129,20 @@ def storage_scope_script(home, check_environment=True):
 
 
 def require_source_storage(home, checkpoint=lambda: None):
+    checkpoint()
+    root = Path(home) / ".codex"
+    if root.exists():
+        require_local(root)
+        if not root.is_symlink() and root.is_dir():
+            try:
+                with os.scandir(root) as entries:
+                    for entry in entries:
+                        checkpoint()
+                        name = entry.name.lower()
+                        if name == "config.toml" or name.endswith(".config.toml"):
+                            require_local(entry.path)
+            except OSError:
+                raise MigrationError(MESSAGES[67]) from None
     # An explicit inspection of another home cannot describe that account's
     # environment using the caller's inherited variables.
     try:

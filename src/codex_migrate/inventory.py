@@ -14,6 +14,7 @@ from codex_migrate.skills import SkillExport, discover_personal_skills
 from codex_migrate.git_inventory import inspect_git
 from codex_migrate.storage_scope import require_source_storage
 from codex_migrate.filename_safety import check_name, check_tree_names
+from codex_migrate.source_availability import require_local, check_info
 
 
 def _continue() -> None:
@@ -71,6 +72,7 @@ def _tree_summary(
     while stack:
         checkpoint()
         current = stack.pop()
+        require_local(current)
         try:
             seen = set()
             with os.scandir(str(current)) as entries:
@@ -78,6 +80,7 @@ def _tree_summary(
                     checkpoint()
                     check_name(entry.name, seen)
                     try:
+                        check_info(entry.stat(follow_symlinks=False))
                         if entry.is_symlink():
                             if not counted_suffix or entry.name.endswith(counted_suffix):
                                 files += 1
