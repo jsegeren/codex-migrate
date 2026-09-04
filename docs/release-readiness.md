@@ -26,6 +26,13 @@ results, accessibility findings, and pre-signing work still open.
   file; it is still reported as an error. This is tested containment and normal
   rollback, not guided post-crash recovery or actual hardware power-cut proof.
   The guided restore/reconciliation flow remains release-blocking work.
+  Clean source `7bdce3a` produced an unsigned arm64 app and passed eight bundled
+  engine startup/configuration checks; packaging verified its ad-hoc signature.
+  ZIP SHA-256: `09a8cad7624a5defd94e8c0aa201ad5fdab114eb8cc84305d0cd8a42fa29cf7c`.
+  This does not certify an actual packaged SSH migration or clean second Mac.
+  Before guided restore, add frozen backup integrity evidence and preserve any
+  current destination data being displaced. Today's journal is a durable scope
+  and outcome record, not a standalone proof against later backup corruption.
 
 - Destination-wide exclusion now covers staging directory/marker writes, rsync
   receivers, and the entire full/skills backup-install-verify-rollback phase.
