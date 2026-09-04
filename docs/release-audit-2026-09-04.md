@@ -348,12 +348,24 @@ packaged-migration acceptance.
   this bounded change. The reviewer independently ran all 13 focused tests.
 - Full local suite: 154 Python tests passed. Prior hosted CI for documentation
   commit `be0e3ca` also passed; candidate-specific CI follows publication.
+- Hosted CI for `7838fd956e0815c134e03d817f1df18951c8aa1a` passed on Python
+  3.9 and 3.12, including Swift typechecking and signup tests:
+  [run 33855903871](https://github.com/jsegeren/codex-migrate/actions/runs/33855903871).
 
 Verification reads all transcript bytes once on the source and twice on the
 destination, so large histories add verification time. This is not an atomic
 filesystem snapshot, JSON semantic validation, a proof of every workspace byte,
 or proof that Codex can open every chat or resolve every Git worktree. Those
 remain separate release acceptance work, not waived requirements.
+
+Clean source `7838fd956e0815c134e03d817f1df18951c8aa1a` also built an unsigned
+Apple Silicon app. All six desktop checks passed against its bundled engine,
+with system-only subprocess PATH and no Python/DYLD overrides. This checks
+startup/configuration/guards on the build Mac, not a full packaged migration.
+The transcript corruption fixtures above run from source, not inside the ZIP.
+
+Artifact: `Codex-Migrate-arm64-LOCAL-UNSIGNED.zip` (engineering only).
+SHA-256: `4ad3195bc6d13e9c2abc071355aa6b7e7487ad72346c0d30d0115dfac9aa6aab`.
 
 ### Reference guidance
 

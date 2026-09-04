@@ -8,10 +8,14 @@ results, accessibility findings, and pre-signing work still open.
 
 ## Candidate checks completed on the development Mac
 
-- Source `3b5030b`: 141 Python tests passed, including simulated low-space,
+- Source `7838fd9`: 154 Python tests passed, including simulated low-space,
   failed-copy, corrupted-backup, rollback, component export, and dashboard
   boundaries. Disposable local rsync tests also exercise skills-only pause and
   safe stop after file data is staged, followed by resume with the same owner.
+- Active/archived transcript bytes and relative paths are frozen and checked
+  before replacement and after installation. Thirteen focused tests include
+  same-count corruption, missing/extra entries, named pipes, failed scans,
+  and post-install rollback. This does not prove chat reopening or Git usability.
 - Native Swift shell type-checks on Apple Silicon macOS.
 - A self-contained local app bundles the Python engine and offline recovery
   documentation; build receipts identify the source revision and build mode.
@@ -19,7 +23,7 @@ results, accessibility findings, and pre-signing work still open.
   only system tools on PATH. It checks startup on a free loopback port, token
   protection, mandatory-backup UI, read-only mutation rejection, and shutdown.
   All six desktop tests passed against the unsigned bundled engine built from
-  clean source `3b5030b`; browser skills-only configuration was exercised without
+  clean source `7838fd9`; browser skills-only configuration was exercised without
   contacting a destination. See the audit for the artifact checksum.
 - Browser setup supports full migration or selected skill categories. A
   disposable local browser skills flow completed staging, explicit finalization,
