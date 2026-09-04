@@ -8,6 +8,29 @@ results, accessibility findings, and pre-signing work still open.
 
 ## Candidate checks completed on the development Mac
 
+- Full migration now screens visible account `CODEX_HOME` and bounded user
+  config/profile files for `sqlite_home` before inventory/copy and source
+  verification. Destination and staged user configuration are screened inside
+  the guarded installation path before backup/replacement. Unsupported or
+  unverifiable scope stops without removing the setting or transferring an
+  unknown custom root. Scanner output never includes config values; known
+  credential aliases, special files, scan/read failures and oversized files
+  fail closed. Source cancellation reaps its child. Independent
+  `public_release_review` reproduced and verified fixes for a same-home case
+  alias bypass and directory-read failures being mistaken for EOF; 51 focused
+  tests passed at review. Real disposable transaction tests preserve old data
+  and staging when destination/staged overrides are detected. Official OpenAI
+  documentation informed the distinction between storage roots and ordinary
+  configuration profiles; see the [scope guide](../README.md#custom-storage-and-configuration-profiles).
+  This is lexical user-layer screening, not effective-config discovery or TOML
+  validation. Project/managed layers, other processes' environments, custom
+  roots and actual cross-Mac acceptance remain open.
+  Final local checks passed 397 Python tests (396 passed, one filesystem skip),
+  10 signup tests, Swift typecheck and diff checks. Eight source-engine desktop
+  tests also passed after adding real-process inventory rejection for a profile
+  storage override, with empty stdout, no private value in errors and unchanged
+  fixture configuration.
+
 - Folder-selection guards now compare conservative case/Unicode path identities
   without rewriting the selected I/O paths. Config rejects protected/control
   aliases, resolved protected-storage targets, ambiguous workspace roots and

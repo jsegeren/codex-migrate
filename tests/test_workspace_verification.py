@@ -180,7 +180,10 @@ class WorkspaceVerificationTests(unittest.TestCase):
         original = subprocess.Popen
         def record(*args, **kwargs):
             child = original(*args, **kwargs)
-            children.append(child)
+            # The preceding storage screen also starts a child. This test
+            # specifically waits for the deliberately stalled tree hasher.
+            if "sleep 30;" in args[0]:
+                children.append(child)
             return child
         engine = self.fixture.engine
         with patch("codex_migrate.workspaces.TREE_PROGRAM", 'sleep 30;'), \

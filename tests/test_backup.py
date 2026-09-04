@@ -242,6 +242,8 @@ class BackupTests(unittest.TestCase):
             def run_remote(inner, script, timeout=60):
                 return SimpleNamespace(stdout="10000\n" if "backup_size" in script
                                        else "TARGET_CODEX_READY=1\n")
+            def run_remote_cancellable(inner, script, timeout, cancelled):
+                return inner.run_remote(script, timeout)
             def remote_free_bytes(inner, path):
                 return MIN_RESERVE_BYTES + inventory.estimated_transfer_bytes
         engine.transport = Transport()

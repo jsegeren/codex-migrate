@@ -333,6 +333,7 @@ class MigrationTests(unittest.TestCase):
                 unreadable_paths=[],
             )
             with patch("codex_migrate.migration.conversation_verification_script", return_value="return 0"), \
+                 patch("codex_migrate.migration.require_source_storage"), \
                  patch("codex_migrate.migration.freeze_tree", return_value="a" * 64):
                 receipt = engine._install_and_verify()
             self.assertTrue(receipt["auth_preserved"])

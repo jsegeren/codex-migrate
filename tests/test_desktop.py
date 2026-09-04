@@ -55,6 +55,14 @@ class DesktopTests(unittest.TestCase):
             self.assertEqual(report["git_missing_paths"], [])
             self.assertEqual(report["git_issues"], [])
             self.assertEqual(len(report["git_details"]), 2)
+            profile = fixture.home / ".codex/work.config.toml"
+            profile.write_text('sqlite_home = "PRIVATE_STORAGE_FIXTURE"')
+            blocked = subprocess.run(command, env=env, capture_output=True, text=True, timeout=30)
+            self.assertNotEqual(blocked.returncode, 0)
+            self.assertEqual(blocked.stdout, "")
+            self.assertIn("sqlite_home setting", blocked.stderr)
+            self.assertNotIn("PRIVATE_STORAGE_FIXTURE", blocked.stderr)
+            self.assertEqual(profile.read_text(), 'sqlite_home = "PRIVATE_STORAGE_FIXTURE"')
         finally:
             fixture.doCleanups()
 

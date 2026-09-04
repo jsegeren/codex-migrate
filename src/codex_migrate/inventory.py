@@ -1,4 +1,4 @@
-"""Bounded, content-free inventory of local Codex state and workspaces."""
+"""Bounded local inventory with storage screening and content-free reports."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from typing import Callable, Dict, List, Tuple
 from codex_migrate.transport import _stop_process
 from codex_migrate.skills import SkillExport, discover_personal_skills
 from codex_migrate.git_inventory import inspect_git
+from codex_migrate.storage_scope import require_source_storage
 
 
 def _continue() -> None:
@@ -124,6 +125,7 @@ def collect(source_home: str, workspace_roots: List[str],
             checkpoint: Callable[[], None] = _continue,
             target_home: str = "") -> Inventory:
     home = Path(source_home)
+    require_source_storage(str(home), checkpoint)
     skills = discover_personal_skills(source_home, target_home or source_home)
     skill_bytes = 0
     def unreadable_skill(error):

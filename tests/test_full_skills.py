@@ -117,6 +117,27 @@ class FullSkillTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "personal skills storage"):
                     MigrationEngine(config, self.state).inventory()
 
+    def test_destination_storage_override_blocks_before_backup_or_replacement(self):
+        self.prepare()
+        config = self.target / ".codex/config.toml"
+        config.write_text('sqlite_home = "PRIVATE_FIXTURE"')
+        with self.assertRaisesRegex(RuntimeError, "sqlite_home configuration"):
+            self.engine._install_and_verify()
+        self.assertEqual((self.target / ".codex/old.txt").read_text(), "old Codex state")
+        self.assertEqual((self.destination_skill / "SKILL.md").read_text(), "destination skill")
+        self.assertEqual(list(self.target.glob("Codex-Migrate-Backup-*")), [])
+        self.assertEqual(config.read_text(), 'sqlite_home = "PRIVATE_FIXTURE"')
+
+    def test_staged_storage_override_blocks_before_replacement(self):
+        self.prepare()
+        staged = Path(self.config.target_staging) / ".codex/work.config.toml"
+        staged.write_text('sqlite_home = "PRIVATE_FIXTURE"')
+        with self.assertRaisesRegex(RuntimeError, "sqlite_home configuration"):
+            self.engine._install_and_verify()
+        self.assertTrue(staged.is_file())
+        self.assertEqual((self.target / ".codex/old.txt").read_text(), "old Codex state")
+        self.assertEqual(list(self.target.glob("Codex-Migrate-Backup-*")), [])
+
     def test_new_skill_after_inspection_requires_new_inspection(self):
         self.engine.inventory()
         extra = self.source / ".agents/skills/extra"

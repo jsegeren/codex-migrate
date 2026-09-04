@@ -307,6 +307,33 @@ nonregular transcript files block verification rather than silently pass.
 These checks prove transcript preservation, not that every historical chat opens
 in every Codex version or that all old workspace paths already resolve.
 
+## Custom storage and configuration profiles
+
+Full migration currently supports the selected home's `.codex` folder, not
+arbitrary custom storage roots. Before inventory/copying, it checks the visible
+`CODEX_HOME` override when the helper is running in that source account. It also
+screens `config.toml` and `*.config.toml` user profile files for `sqlite_home`
+settings. Destination and staged configuration are checked before replacement.
+
+An override or unreadable/unsafe configuration stops the full migration for
+review. Keep the original files and settings intact; contact support rather
+than unsetting variables or deleting a setting just to bypass the guard. Any
+explicit `sqlite_home` key requires review, even if its value looks like the
+default. Ordinary profiles without storage overrides are copied as retained
+Codex state, not treated as separate conversation stores.
+
+This is bounded lexical screening, not a TOML validator or an effective-config
+resolver. It does not inspect other processes' environments, shell startup
+scripts, project/managed config layers or undisclosed custom storage roots.
+The destination check sees the SSH environment, which may differ from Finder's.
+Skills-only repair still uses the documented skill roots; it does not migrate
+custom databases or resolve custom storage. Configuration values and credential
+contents never appear in these reports.
+
+OpenAI documents these storage/profile distinctions in
+[advanced configuration](https://developers.openai.com/codex/config-advanced/)
+and the [`sqlite_home` reference](https://learn.chatgpt.com/docs/config-file/config-reference).
+
 ## Different macOS usernames
 
 Older Codex conversation files and Git metadata can contain absolute home paths.

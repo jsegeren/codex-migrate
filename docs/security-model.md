@@ -50,6 +50,21 @@ workspaces can contain their own credentials; review them before copying.
 
 ## Safety sequence
 
+Full inventory reads bounded user configuration/profile files locally to screen
+for storage overrides; no values are emitted. The same system-Perl screen checks
+destination and staged user config before backup/replacement. Visible account
+`CODEX_HOME` must identify the default state directory, and any `sqlite_home`
+key requires review. Config links, special files, known identity-file hard
+links, unreadable/changing files, read errors and exceeded scan limits stop the
+check. The source helper uses actual home identity, not path spelling, to decide
+whether its inherited environment belongs to the selected account.
+
+This is not a full TOML/effective-configuration evaluator. Project/managed
+layers, other processes' environments and custom roots remain separate scope
+limitations. Source checks are cancellable and reap their child process; they
+are not atomic snapshots and do not prevent concurrent writers. Skills-only
+repair does not migrate Codex state and retains its existing explicit scope.
+
 ```text
 inspect → isolated staging → destination backup → install → verify
 ```
