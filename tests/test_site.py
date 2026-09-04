@@ -99,9 +99,13 @@ class SiteTests(unittest.TestCase):
 
     def test_hero_copy_gap_is_not_inflated_by_taller_icon(self):
         styles = (SITE / "styles.css").read_text()
-        heading = styles.split("\n.hero-heading {", 1)[1].split("}", 1)[0]
+        layout = styles.split("\n.hero-copy {", 1)[1].split("}", 1)[0]
         title = styles.split("\n.hero-heading h1 {", 1)[1].split("}", 1)[0]
-        self.assertIn("align-items: flex-end", heading)
+        icon = styles.split("\n.hero-inline-icon {", 1)[1].split("}", 1)[0]
+        self.assertIn("display: grid", layout)
+        self.assertIn("grid-row: 2 / 5", icon)
+        self.assertIn("align-self: start", icon)
+        self.assertNotIn("align-items: flex-end", styles)
         self.assertIn("margin-bottom: 16px", title)
 
     def test_modern_headings_and_black_text_on_light_surfaces(self):
