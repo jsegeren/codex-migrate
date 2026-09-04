@@ -47,3 +47,24 @@ Verify the receipt in the inbox; remove test entries from any manual launch list
 Deploy through the linked Vercel project, then check the custom hostname, TLS,
 signup endpoint, `robots.txt`, `sitemap.xml`, and canonical links. Search-engine
 discovery is enabled; this does not guarantee Google indexing or ranking.
+
+## Search Console
+
+The URL-prefix property `https://migrate.segeren.com/` was added and ownership
+automatically verified through the existing domain-provider setup on September
+4, 2026. No DNS records, website verification files, or unrelated properties
+were changed. Keep the existing verification DNS record in place.
+
+The canonical `/sitemap.xml` was submitted successfully. Search Console reported
+**Success**, a September 4 last-read date, and **6 discovered pages**: the
+homepage, two guides, and three legal pages. Discovery is not indexing. Use this
+exact property when inspecting URLs or submitting future sitemap changes.
+
+Homepage inspection initially reported **Discovered - currently not indexed**.
+After its live eligibility check, Google accepted the indexing request and
+reported that the homepage was added to a priority crawl queue. Do not repeatedly
+submit the same URL; this does not improve queue priority. Actual indexing and
+ranking remain unverified and are not guaranteed.
+
+All six live pages returned HTTP 200 with matching self-canonicals, one H1,
+and no HTML or response-header `noindex` directive during this check.

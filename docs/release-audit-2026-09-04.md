@@ -9,6 +9,11 @@ guarantee of migration safety, accessibility conformance, or clean-Mac support.
 This was a focused readiness audit, not an exhaustive security assessment.
 No real user migration, remote installation, payment, or signing operation ran.
 
+Latest search follow-up: ownership verification and sitemap submission are now
+complete; Google accepted the homepage indexing request. The earlier pending
+search entries below are historical. See **Search Console completion** near the
+end for the authoritative result. The paid-release outcome remains unchanged.
+
 ## Evidence
 
 - Baseline: commit `5b73b698126d709bcdafe486ce9607e12534f6f3`.
@@ -603,6 +608,37 @@ code-signing identities; this is not a determination of Apple membership status.
 
 Artifact: `Codex-Migrate-arm64-LOCAL-UNSIGNED.zip` (engineering only).
 SHA-256: `864d75aa3ff7732a91e500ee7f5cdd7982521d8948b5893a4ec694011899ee64`.
+
+### Search Console completion
+
+The maintainer's existing authenticated Chrome session was used to add only the
+URL-prefix property `https://migrate.segeren.com/`. Google reported **Ownership
+auto verified**, with **Domain name provider** as the verification method.
+No DNS changes, new verification credential, unrelated-property edits, or website
+deployment were needed.
+
+`https://migrate.segeren.com/sitemap.xml` was fetched successfully and submitted.
+Search Console reported **Sitemap submitted successfully**, then a persisted
+table row with **Success**, September 4, 2026 submitted/last-read dates, and
+**6 discovered pages**. These are the homepage, both guides, and three legal
+pages. Each live page returned HTTP 200, one H1, a matching self-canonical and
+no HTML or response-header `noindex` directive.
+
+Homepage URL inspection reported **Discovered - currently not indexed**. An
+indexing request completed Google's live eligibility check and returned
+**Indexing requested**, with the URL added to a priority crawl queue. No actual
+indexing, ranking, traffic, or Google completion date is claimed. This closes
+the registration, ownership, sitemap-submission and homepage-inspection gates,
+not the remaining app/distribution gates.
+
+The Apple Developer account was separately refreshed and still showed
+**Pending** with the enrollment purchase/process notice. No repeat purchase or
+account change was attempted. Apple activation and signed-artifact verification
+remain open. Genuine cross-Mac testing requires a disposable destination account;
+the active migrated user workspace must not be replaced as a test fixture.
+
+Hosted CI for `0658dda55c216e82a19d45c3bb61780cc7465a15` completed successfully:
+[verification evidence CI](https://github.com/jsegeren/codex-migrate/actions/runs/33860558249).
 
 ### Reference guidance
 

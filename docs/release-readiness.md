@@ -8,6 +8,12 @@ results, accessibility findings, and pre-signing work still open.
 
 ## Candidate checks completed on the development Mac
 
+- Search Console ownership is verified for `https://migrate.segeren.com/`.
+  Its sitemap was accepted with **Success** and six discovered pages, and Google
+  accepted a homepage indexing request after its live check. The six live pages
+  have matching canonicals and return HTTP 200 without a `noindex` directive.
+  This establishes submission and discovery, not indexing or ranking.
+
 - Retained Codex state now has frozen source-to-staged and source-to-installed
   content/tree checks, fixing the reproduced configuration/organization-state
   corruption acceptance defect. Twelve focused tests cover config, rules,
