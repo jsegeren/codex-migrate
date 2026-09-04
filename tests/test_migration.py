@@ -336,6 +336,7 @@ class MigrationTests(unittest.TestCase):
             )
             with patch("codex_migrate.migration.conversation_verification_script", return_value="return 0"), \
                  patch("codex_migrate.migration.require_source_storage"), \
+                 patch("codex_migrate.migration.require_project_storage"), \
                  patch("codex_migrate.git_verification.source_plan", return_value={"roots": ["/Users/source/Git"], "repositories": []}), \
                  patch("codex_migrate.migration.freeze_tree", return_value="a" * 64):
                 receipt = engine._install_and_verify()

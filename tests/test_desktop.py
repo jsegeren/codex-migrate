@@ -92,6 +92,16 @@ class DesktopTests(unittest.TestCase):
             self.assertIn("sqlite_home setting", blocked.stderr)
             self.assertNotIn("PRIVATE_STORAGE_FIXTURE", blocked.stderr)
             self.assertEqual(profile.read_text(), 'sqlite_home = "PRIVATE_STORAGE_FIXTURE"')
+            project_profile = fixture.repo / ".codex/config.toml"
+            project_profile.parent.mkdir()
+            profile.rename(project_profile)
+            blocked = subprocess.run(command + ["--workspace", str(fixture.repo)], env=env,
+                                     capture_output=True, text=True, timeout=30)
+            self.assertNotEqual(blocked.returncode, 0)
+            self.assertEqual(blocked.stdout, "")
+            self.assertIn("sqlite_home setting", blocked.stderr)
+            self.assertNotIn("PRIVATE_STORAGE_FIXTURE", blocked.stderr)
+            self.assertEqual(project_profile.read_text(), 'sqlite_home = "PRIVATE_STORAGE_FIXTURE"')
         finally:
             fixture.doCleanups()
 

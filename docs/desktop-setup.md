@@ -20,6 +20,9 @@ available yet. Local unsigned builds are engineering artifacts, not releases.
   rejects macOS files/folders marked as cloud-only instead of downloading them.
   It cannot detect every provider's placeholders or prevent later eviction;
   real cloud-provider acceptance remains pending.
+- A custom database-storage setting in user or selected project configuration
+  requires review before full migration. Keep the setting and its data intact;
+  don't remove it just to get past inspection. Skills-only repair is separate.
 - If repositories are discovered, Apple Command Line Tools/Xcode and the
   guarded Git runtime must pass preflight on both Macs before staging. This
   early check does not inspect repository contents or prove Git integrity.

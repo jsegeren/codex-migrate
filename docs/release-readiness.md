@@ -16,7 +16,7 @@ handoff is complete while the engineering acceptance gates remain open.
 | Requirement | Evidence now | Next proof / owner |
 | --- | --- | --- |
 | Supported conversations, organization, settings, skills and complete selected workspaces | Frozen content/tree checks, retained destination identity, Git dependency discovery and bound Git baseline; local installation/rollback fixtures | Codex must reopen representative restored chats, settings and projects on the separate Mac. Codex leads; Josh provides disposable accounts. |
-| Scope is explicit, not “everything on the Mac” | Selected roots and dependency issues are reported; unsupported visible storage overrides, filenames and cloud-only flags stop early | Real configuration/version/provider matrix; effective project/managed overrides and unflagged cloud storage remain unverified. Codex owns testing and any resulting fixes. |
+| Scope is explicit, not “everything on the Mac” | Selected roots and dependency issues are reported; unsupported visible storage overrides, source project configuration, filenames and cloud-only flags stop early | Real configuration/version/provider matrix; destination project/ancestor and system/managed overrides, arbitrary role references and unflagged cloud storage remain unverified. Codex owns testing and any resulting fixes. |
 | Full and selective migration, pause/resume and recovery | Full/skills-only staging, persisted setup, mandatory verified backups, guarded replacement, guided reconciliation and preserved displaced work have local fixture coverage | Packaged full and skills-only runs across the two Macs, including disconnect, restart, low space and recovery. Never use Josh's active migrated workspace. |
 | Git and old-home paths remain usable | Local linked-worktree/alternate-storage checks with source home offline; read-only path/Git rechecks preserve installed work | Different-user cross-Mac acceptance and representative development commands. Matching fingerprints alone do not prove every future command works. |
 | Browser-first local-data experience and clear status/help | Loopback helper, SSH transfer, saved setup, collapsed optional Help, bounded private-free diagnostic events and operation-specific controls | Native permission/VoiceOver checks and real route interruption acceptance. Automatic route selection and updating are not implemented. |
@@ -33,6 +33,23 @@ engineering work. Do not create another Apple purchase or enable live checkout
 as a workaround.
 
 ## Candidate checks completed on the development Mac
+
+- Source project configuration now receives conservative storage-override
+  screening in selected descendants, managed worktrees and in-home ancestor
+  layers before inventory, copy/resume and source freezing. A disposable
+  regression first proved an unsupported project `sqlite_home` could pass
+  inventory; it now stops before copying or replacing destination data.
+  Readers protect the actual source account's identity-file inodes, retain
+  cancellation and bound configuration layers. Explicit root links remain
+  rejected; ordinary parent aliases are resolved before containment checks.
+  Independent `public_release_review` accepted the correction and passed 58
+  focused tests. The full local suite passed 484 of 491 tests with seven
+  filesystem skips; the final actual-engine project-override assertion passed
+  separately. Ten signup tests, Swift typecheck and diff checks passed.
+  This is source-side lexical screening, not effective-config certification:
+  destination project/ancestor layers, system/managed settings, arbitrary role
+  references and other processes' overrides remain open scope gates. The suite's
+  signing/notarization outputs are mocked fixtures, not Apple certification.
 
 - Source availability now screens the macOS `SF_DATALESS` flag before selected
   content reads and directory enumeration, including configuration profiles,

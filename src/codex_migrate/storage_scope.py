@@ -1,8 +1,9 @@
 """Bounded, read-only screening for unsupported Codex storage overrides.
 
 This is not a TOML evaluator or discovery of every running process's settings.
-It checks visible CODEX_HOME and user config/profile keys without emitting
-configuration values. The same system-Perl guard runs on either Mac.
+It checks visible CODEX_HOME and user/project config/profile keys without
+emitting configuration values. The system-Perl file guard runs on either Mac;
+project-layer discovery currently runs only on the source.
 """
 
 import os
@@ -14,7 +15,7 @@ import time
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.transport import _stop_process
-from codex_migrate.source_availability import require_local
+from codex_migrate.source_availability import require_local, walk_local
 
 
 RUNNER = r'''
@@ -26,8 +27,10 @@ sub stop {
         " Keep existing files and settings intact; contact support before full migration. No migration data was changed.\n";
     exit $code;
 }
-my ($home, $check_env) = @ARGV;
-@ARGV == 2 && defined($home) && $home =~ m{\A/[^\r\n\0]+\z} or stop(67);
+my ($home, $check_env, $identity_home) = @ARGV;
+(@ARGV == 2 || @ARGV == 3) && defined($home) && $home =~ m{\A/[^\r\n\0]+\z} or stop(67);
+$identity_home = $home unless defined($identity_home);
+$identity_home =~ m{\A/[^\r\n\0]+\z} or stop(67);
 my $root = "$home/.codex";
 if ($check_env eq '1' && exists($ENV{CODEX_HOME}) && length($ENV{CODEX_HOME})) {
     my $configured = $ENV{CODEX_HOME};
@@ -40,7 +43,7 @@ if (!@dir) { $!{ENOENT} ? exit(0) : stop(67); }
 S_ISDIR($dir[2]) or stop(67);
 my %identity;
 for my $name ('auth.json', 'installation_id') {
-    my @s = stat("$root/$name");
+    my @s = stat("$identity_home/.codex/$name");
     if (@s) { $identity{"$s[0]:$s[1]"} = 1; }
     elsif (!$!{ENOENT}) { stop(67); }
 }
@@ -117,18 +120,19 @@ closedir($dh) or stop(67);
 
 MESSAGES = {
     65: "A custom CODEX_HOME is active. This migration supports the selected home's .codex folder only. Keep the custom storage intact and contact support to review the scope; do not unset the override just to bypass this check.",
-    66: "A sqlite_home setting was found in a user configuration or profile. Its database storage needs review before full migration; do not remove the setting just to bypass this check.",
+    66: "A sqlite_home setting was found in Codex configuration. Its database storage needs review before full migration; do not remove the setting just to bypass this check.",
     67: "Codex storage configuration could not be safely checked. Keep the files intact and contact support before full migration.",
 }
 
 
-def storage_scope_script(home, check_environment=True):
+def storage_scope_script(home, check_environment=True, *, identity_home=None):
     return ("/usr/bin/env -u PERL5OPT -u PERL5LIB -u PERLLIB -u PERLIO -u PERL_UNICODE "
             "LC_ALL=C /usr/bin/perl -e " + shlex.quote(RUNNER) + " -- "
-            + shlex.quote(home) + (" 1\n" if check_environment else " 0\n"))
+            + shlex.quote(home) + (" 1" if check_environment else " 0")
+            + (" " + shlex.quote(identity_home) if identity_home is not None else "") + "\n")
 
 
-def require_source_storage(home, checkpoint=lambda: None):
+def require_source_storage(home, checkpoint=lambda: None, *, identity_home=None):
     checkpoint()
     root = Path(home) / ".codex"
     if root.exists():
@@ -153,7 +157,7 @@ def require_source_storage(home, checkpoint=lambda: None):
             raise ValueError("Home ownership mismatch")
     except (OSError, KeyError, ValueError):
         raise MigrationError(MESSAGES[67]) from None
-    script = storage_scope_script(home, own_home)
+    script = storage_scope_script(home, own_home, identity_home=identity_home)
     checkpoint()
     process = subprocess.Popen(["/bin/zsh", "-f", "-s"], stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -175,3 +179,49 @@ def require_source_storage(home, checkpoint=lambda: None):
         raise
     if process.returncode:
         raise MigrationError(MESSAGES.get(process.returncode, MESSAGES[67]))
+
+
+def require_project_storage(home, workspace_roots, checkpoint=lambda: None):
+    """Conservatively screen selected project layers; never resolve their values.
+
+    Inspect ancestor layers within the home, selected descendants and managed
+    worktrees. Trust/effective config is not inferred from copied user state.
+    Ordinary directory-link targets remain outside this discovery contract.
+    """
+    source = Path(home).resolve()
+    roots = [Path(item) for item in workspace_roots]
+    managed = source / ".codex/worktrees"
+    if managed.exists() or managed.is_symlink():
+        roots.append(managed)
+    checked = {source}
+
+    def screen(directory):
+        checkpoint()
+        if directory in checked:
+            return
+        checked.add(directory)
+        if len(checked) > 1025:
+            raise MigrationError("Too many project configuration layers to check safely. "
+                                 "Keep the selected data intact and contact support.")
+        require_source_storage(str(directory), checkpoint, identity_home=str(source))
+
+    def unreadable(_error):
+        raise MigrationError(MESSAGES[67]) from None
+
+    for root in roots:
+        checkpoint()
+        if root.is_symlink():
+            raise MigrationError(MESSAGES[67])
+        root = root.resolve()
+        if source not in root.parents:
+            raise MigrationError(MESSAGES[67])
+        for ancestor in root.parents:
+            if ancestor == source:
+                break
+            config = ancestor / ".codex"
+            if config.exists() or config.is_symlink():
+                screen(ancestor)
+        for current, directories, files in walk_local(root, onerror=unreadable):
+            checkpoint()
+            if any(name.casefold() == ".codex" for name in directories + files):
+                screen(Path(current))

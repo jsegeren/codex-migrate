@@ -12,7 +12,7 @@ from typing import Callable, Dict, List, Tuple
 from codex_migrate.transport import _stop_process
 from codex_migrate.skills import SkillExport, discover_personal_skills
 from codex_migrate.git_inventory import inspect_git
-from codex_migrate.storage_scope import require_source_storage
+from codex_migrate.storage_scope import require_source_storage, require_project_storage
 from codex_migrate.filename_safety import check_name, check_tree_names
 from codex_migrate.source_availability import require_local, check_info
 
@@ -132,6 +132,7 @@ def collect(source_home: str, workspace_roots: List[str],
             target_home: str = "") -> Inventory:
     home = Path(source_home)
     require_source_storage(str(home), checkpoint)
+    require_project_storage(str(home), workspace_roots, checkpoint)
     skills = discover_personal_skills(source_home, target_home or source_home)
     skill_bytes = 0
     def unreadable_skill(error):

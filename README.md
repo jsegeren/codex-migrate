@@ -332,7 +332,13 @@ Full migration currently supports the selected home's `.codex` folder, not
 arbitrary custom storage roots. Before inventory/copying, it checks the visible
 `CODEX_HOME` override when the helper is running in that source account. It also
 screens `config.toml` and `*.config.toml` user profile files for `sqlite_home`
-settings. Destination and staged configuration are checked before replacement.
+settings. It also screens `.codex` configuration layers in selected workspace
+descendants, managed worktrees and selected folders' ancestors within the home.
+The project pass is repeated before copying/resume and source freezing. Linked
+project configuration directories and unsafe configuration files require review;
+the pass protects the actual source account's identity files, not just files
+named `auth.json` in each project. Destination and staged user configuration are
+checked before replacement.
 
 An override or unreadable/unsafe configuration stops the full migration for
 review. Keep the original files and settings intact; contact support rather
@@ -341,15 +347,20 @@ explicit `sqlite_home` key requires review, even if its value looks like the
 default. Ordinary profiles without storage overrides are copied as retained
 Codex state, not treated as separate conversation stores.
 
-This is bounded lexical screening, not a TOML validator or an effective-config
-resolver. It does not inspect other processes' environments, shell startup
-scripts, project/managed config layers or undisclosed custom storage roots.
+This is bounded lexical screening, not a TOML validator, trust evaluator or an
+effective-config resolver. Project configuration is checked conservatively even
+if that project is not currently trusted or its profile is inactive. More than
+1,024 discovered project layers requires review, rather than silently skipping
+the rest. Ordinary directory-link targets are not traversed. The pass does not
+inspect other processes' environments, shell startup scripts, system/managed
+layers, arbitrary role-config references or undisclosed custom storage roots.
 The destination check sees the SSH environment, which may differ from Finder's.
 Skills-only repair still uses the documented skill roots; it does not migrate
 custom databases or resolve custom storage. Configuration values and credential
 contents never appear in these reports.
 
 OpenAI documents these storage/profile distinctions in
+[configuration precedence](https://learn.chatgpt.com/docs/config-file/config-basic#configuration-precedence),
 [advanced configuration](https://developers.openai.com/codex/config-advanced/)
 and the [`sqlite_home` reference](https://learn.chatgpt.com/docs/config-file/config-reference).
 

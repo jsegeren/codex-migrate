@@ -15,7 +15,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 from codex_migrate.config import MigrationConfig
 from codex_migrate.compatibility import READY as PATHS_READY, check_compatibility, compatibility_command
-from codex_migrate.storage_scope import require_source_storage, storage_scope_script
+from codex_migrate.storage_scope import require_source_storage, require_project_storage, storage_scope_script
 from codex_migrate.conversations import conversation_verification_script
 from codex_migrate.errors import MigrationError
 from codex_migrate.git_verification import (check_installed, fingerprint, freeze_baseline,
@@ -559,6 +559,7 @@ class MigrationEngine:
     def _transfers(self) -> List[Tuple[str, str, Sequence[str], str, bool]]:
         from codex_migrate.filename_safety import check_tree_names
         require_source_storage(self.config.source_home, self._inspection_checkpoint)
+        require_project_storage(self.config.source_home, self.config.workspace_roots, self._inspection_checkpoint)
         validate_codex_identity_names(self.config.source_codex)
         check_tree_names(self.config.source_codex, self._inspection_checkpoint, codex=True)
         for root in self.config.workspace_roots:
@@ -942,6 +943,7 @@ class MigrationEngine:
 
     def _prepare_install(self):
         require_source_storage(self.config.source_home, self._inspection_checkpoint)
+        require_project_storage(self.config.source_home, self.config.workspace_roots, self._inspection_checkpoint)
         roots = [(root, self.config.target_staging + "/home-relative/" + str(Path(root).relative_to(self.config.source_home)),
                   self.config.target_home + "/" + str(Path(root).relative_to(self.config.source_home)))
                  for root in self.config.workspace_roots]
