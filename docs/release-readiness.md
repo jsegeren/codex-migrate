@@ -8,6 +8,17 @@ results, accessibility findings, and pre-signing work still open.
 
 ## Candidate checks completed on the development Mac
 
+- Release packaging now names ZIPs with the app version, build number and
+  architecture, rejects packaged engine/app version mismatches, and rechecks
+  clean source before notarization. It saves Apple's submission ID before
+  waiting, requires an explicit matching `Accepted` receipt, and keeps stapling,
+  ticket validation and Gatekeeper assessment ahead of archive publication.
+  The final ZIP is exposed only after its copy, checksum and receipt succeed;
+  partial archive failures do not leave a release-named download in the output.
+  Six mocked orchestration tests cover rejection, ambiguous responses, failed
+  commands, version/source drift and downstream packaging failures. These tests
+  do not contact Apple and do not establish successful signing or notarization.
+
 - Codex process checks are now scoped to the migration account, including the
   known app and CLI/background-engine executable names. Unrelated logged-in
   accounts no longer require closing Codex. UID/home-ownership mismatches and

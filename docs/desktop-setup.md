@@ -158,8 +158,17 @@ development work after migration. Build output lives in a unique `build/desktop-
 directory; local builds are explicitly marked unsigned and must not be sold.
 Each app includes its source revision and build mode in `build-info.json`, plus
 offline setup, recovery, and security documents. The ZIP has a SHA-256 checksum
-and a matching build receipt beside it. Release builds require a clean committed
-source tree so a distributed artifact can be traced to reviewed source.
+and a matching build receipt beside it. Its filename includes the app version,
+build number and architecture, for example
+`Codex-Migrate-0.1.0-build1-arm64.zip`; engineering ZIPs additionally include
+`LOCAL-UNSIGNED`. Update the app's version/build in `desktop/Info.plist` for each
+release and keep the engine/package version in sync. The builder rejects an
+engine/app version mismatch. Release builds require a clean committed source
+tree and recheck its revision before submitting to Apple, so a distributed
+artifact can be traced to reviewed source. Do not edit source during a build.
+The final ZIP name appears in the output folder only after archiving, hashing
+and writing its completion metadata succeed. A failed packaging step must not
+be distributed as a partial download.
 
 Release requires an existing Developer ID Application identity and an existing
 notarytool Keychain profile. Never put signing credentials in Git or command output.
@@ -171,7 +180,28 @@ notarytool Keychain profile. Never put signing credentials in Git or command out
 ```
 
 The script stops if signing, notarization, stapling, or Gatekeeper assessment
-fails. There is no unsigned fallback. A successful build is **not** by itself
+fails. There is no unsigned fallback. It saves Apple's submission ID in
+`notary-submission.json` beside the app before waiting for processing. Only an
+explicit `Accepted` result for that same ID permits stapling and release ZIP
+creation. The completed outer build receipt includes that notarization result;
+the already-signed receipt inside the app records pre-notarization build facts.
+
+If processing is interrupted, do not immediately rebuild or submit another copy.
+Use the saved ID with the existing Keychain profile to inspect the original job:
+
+```sh
+xcrun notarytool info SAVED-SUBMISSION-ID --keychain-profile your-existing-keychain-profile
+xcrun notarytool wait SAVED-SUBMISSION-ID --keychain-profile your-existing-keychain-profile
+```
+
+A pending or accepted job is not a finished release archive. The builder does
+not yet resume packaging automatically: retain the existing app and submission
+receipt for maintainer review and completion of stapling, validation, Gatekeeper
+assessment and checksums. If submission failed before an ID was saved, inspect
+`notarytool history` using the same profile before retrying. Never publish the
+pre-stapling app or mistake an engineering ZIP for an approved download.
+
+A successful build is **not** by itself
 release approval. Before charging customers, record evidence for:
 
 1. Quarantined download opens under default Gatekeeper on a separate clean Mac.
