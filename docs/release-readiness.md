@@ -58,7 +58,9 @@ as a workaround.
   private-value suppression and unchanged fixture configuration in that binary.
   ZIP SHA-256:
   `92df762aa77ddcdfa4bb43b81c36608071dc49617da21357a7e7c821da6c4b19`.
-  Hosted run 33886955990 is in progress. The previous inactive engineering build
+  Hosted run 33886955990 passed on Python 3.9 and 3.12. The follow-up engine
+  regression on `d06df05b14a598d64f78e16b5f3145c9f2a3e280` also passed both
+  versions in run 33887061246. The previous inactive engineering build
   was moved recoverably to Trash after checking open files and running processes;
   user-running apps were left intact.
 
