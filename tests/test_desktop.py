@@ -17,6 +17,33 @@ from codex_migrate.cli import _port
 
 
 class DesktopTests(unittest.TestCase):
+    def test_real_engine_inventories_git_storage_dependencies(self):
+        from test_git_inventory import GitInventoryTests
+
+        fixture = GitInventoryTests()
+        fixture.setUp()
+        try:
+            root = Path(__file__).resolve().parents[1]
+            binary = os.environ.get("CODEX_MIGRATE_TEST_ENGINE")
+            command = [binary] if binary else [sys.executable, "-m", "codex_migrate"]
+            env = dict(os.environ, PYTHONPATH=str(root / "src"))
+            if binary:
+                env = {key: value for key, value in env.items() if not key.startswith(("PYTHON", "DYLD_"))}
+                env["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin"
+            command += ["inventory", "--source-home", str(fixture.home), "--json"]
+            result = subprocess.run(command, env=env, capture_output=True, text=True,
+                                    check=True, timeout=30)
+            report = json.loads(result.stdout)
+            self.assertEqual(report["git_missing_paths"], [str(fixture.repo)])
+            result = subprocess.run(command + ["--workspace", str(fixture.repo)], env=env,
+                                    capture_output=True, text=True, check=True, timeout=30)
+            report = json.loads(result.stdout)
+            self.assertEqual(report["git_missing_paths"], [])
+            self.assertEqual(report["git_issues"], [])
+            self.assertEqual(len(report["git_details"]), 2)
+        finally:
+            fixture.doCleanups()
+
     def test_real_browser_helper_starts_without_destination_and_stops(self):
         root = Path(__file__).resolve().parents[1]
         binary = os.environ.get("CODEX_MIGRATE_TEST_ENGINE")

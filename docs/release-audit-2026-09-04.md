@@ -400,10 +400,27 @@ SHA-256: `4ad3195bc6d13e9c2abc071355aa6b7e7487ad72346c0d30d0115dfac9aa6aab`.
   and 320px screenshots. No remaining blocker was found within this bounded
   change. The final full local run passed 175 Python tests and all 10 signup
   tests. Candidate-wide CI follows publication.
+- Hosted CI for `afa795b3bf6d08f0ff1a7d42694101cb0a05f636` passed on
+  Python 3.9 and 3.12, including native Swift and signup checks:
+  [run 33857442488](https://github.com/jsegeren/codex-migrate/actions/runs/33857442488).
 
 This checkpoint does not certify Git object integrity, destination refs/index
 and dirty-file equivalence, historical username/path resolution, or every Git
 project on the machine. Those remain separate acceptance requirements.
+
+Clean committed source `afa795b3bf6d08f0ff1a7d42694101cb0a05f636` produced a
+fresh unsigned Apple Silicon engineering app. Seven desktop tests passed
+against its bundled engine with system-only subprocess PATH and no Python/DYLD
+overrides. The new real-process inventory check detects a managed worktree's
+missing main repository, then reports both locations covered when that main
+repository is explicitly selected. This uses disposable Git fixtures and does
+not contact a destination. It is build-Mac packaged-engine evidence, not a
+complete packaged migration, clean-Mac acceptance, signing or notarization.
+The added real-process inventory regression brings the follow-up full local
+suite to 176 passing Python tests.
+
+Artifact: `Codex-Migrate-arm64-LOCAL-UNSIGNED.zip` (engineering only).
+SHA-256: `923649072724b82aa311acfd798acf54bc35e66a7769b424cb281ec279f2bd86`.
 
 ### Reference guidance
 

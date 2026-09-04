@@ -14,6 +14,9 @@ results, accessibility findings, and pre-signing work still open.
   Twenty-one disposable Git tests and independent desktop/mobile review cover
   this checkpoint; it does not certify destination Git integrity/usability or
   whole-machine discovery. See the audit for the reproduced and fixed defects.
+  Clean source `afa795b` also built successfully; all seven desktop tests passed
+  against its unsigned bundled engine, including a real-process Git dependency
+  inventory test. No destination transfer ran in that packaged check.
 
 - Source `7838fd9`: 154 Python tests passed, including simulated low-space,
   failed-copy, corrupted-backup, rollback, component export, and dashboard
