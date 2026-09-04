@@ -5,9 +5,10 @@ from http.server import ThreadingHTTPServer
 import tempfile
 import threading
 import unittest
+from unittest.mock import patch
 
 from codex_migrate.config import MigrationConfig
-from codex_migrate.dashboard import Dashboard
+from codex_migrate.dashboard import Dashboard, LoopbackHTTPServer
 from codex_migrate.dashboard import HTML
 from codex_migrate.migration import MigrationEngine
 from codex_migrate.state import StateStore
@@ -58,6 +59,15 @@ class DashboardTests(unittest.TestCase):
     def test_status_requires_token(self):
         status, _ = self.request()
         self.assertEqual(status, 403)
+
+    def test_loopback_startup_does_not_require_reverse_dns(self):
+        with patch("socket.getfqdn", side_effect=AssertionError("Unexpected DNS lookup")):
+            server = LoopbackHTTPServer(("127.0.0.1", 0), self.dashboard._handler())
+        try:
+            self.assertEqual(server.server_name, "127.0.0.1")
+            self.assertGreater(server.server_port, 0)
+        finally:
+            server.server_close()
 
     def test_backup_protection_is_visible_and_receipt_not_assumed(self):
         self.assertIn('id="backup-safety"', HTML)

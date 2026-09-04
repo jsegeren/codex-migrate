@@ -36,9 +36,8 @@ class DesktopTests(unittest.TestCase):
                 "--state-dir", temporary + "/state",
             ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
             try:
-                # Fresh macOS CI runners can spend tens of seconds on the first
-                # launch of a downloaded Python runtime. Keep a bounded cold-
-                # start budget without weakening any dashboard assertions.
+                # Allow a bounded cold-start budget on shared macOS runners
+                # without weakening any dashboard or safety assertions.
                 self.assertTrue(select.select([process.stdout], [], [], 60)[0],
                                 "Dashboard startup timed out after 60 seconds")
                 line = process.stdout.readline().decode()

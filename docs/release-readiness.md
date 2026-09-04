@@ -5,7 +5,7 @@ informational website does not open checkout or certify a customer download.
 
 ## Candidate checks completed on the development Mac
 
-- Full Python test suite: 72 tests, including simulated low-space, failed-copy,
+- Full Python test suite: 73 tests, including simulated low-space, failed-copy,
   corrupted-backup, rollback, component export, and dashboard boundaries.
 - Native Swift shell type-checks on Apple Silicon macOS.
 - A self-contained local app bundles the Python engine and offline recovery

@@ -6,6 +6,7 @@ import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import signal
+from socketserver import TCPServer
 import threading
 from typing import Any, Dict, Optional
 import webbrowser
@@ -119,6 +120,14 @@ for(const name of ["inspect","start","pause","resume","finalize","cancel"]){$(na
 refresh();setInterval(refresh,2500);
 </script>
 </body></html>"""
+
+
+class LoopbackHTTPServer(ThreadingHTTPServer):
+    def server_bind(self) -> None:
+        # HTTPServer normally reverse-resolves even 127.0.0.1. This dashboard
+        # only needs its bound address; DNS must not delay local startup.
+        TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
 
 
 class Dashboard:
@@ -255,7 +264,7 @@ class Dashboard:
                     previous_handlers[value] = signal.getsignal(value)
                     signal.signal(value, interrupt_for_shutdown)
         try:
-            self.server = ThreadingHTTPServer((self.host, self.port), self._handler())
+            self.server = LoopbackHTTPServer((self.host, self.port), self._handler())
             url = "http://%s:%d/#token=%s" % (self.host, self.server.server_port, self.token)
             print("Codex Migrate dashboard: %s" % url, flush=True)
             if open_browser:
