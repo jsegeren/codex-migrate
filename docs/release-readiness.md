@@ -24,8 +24,13 @@ results, accessibility findings, and pre-signing work still open.
   tests, and Swift typecheck. Real local subprocess tests cover cancellation
   before launch and during registration; no real SSH migration/user data was
   used. VoiceOver, clean second-Mac behavior, and guided restoration that
-  preserves current destination data remain open. This checkpoint has not yet
-  been rebuilt into the packaged app.
+  preserves current destination data remain open. Clean source `4c894c2` built
+  an unsigned arm64 engineering app, passed eight bundled-engine checks, and
+  rejected bundled `recovery --apply` before connecting. Packaging verified
+  its ad-hoc signature. ZIP SHA-256:
+  `7bda4456769a5a13df5e6fea0e3fb21f6123d9a326bd92767ec2a559945bc728`.
+  This is a local-test build, not an Apple-signed/notarized release or a real
+  packaged SSH migration proof.
 
 - Frozen backup integrity now uses version-2 destination recovery records. Each
   existing backup and original must match before replacement; all backups are
