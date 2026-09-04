@@ -46,6 +46,9 @@ HTML = r"""<!doctype html>
     .scope { margin-top:18px; border-top:1px solid var(--line); padding-top:16px; color:var(--muted); }
     .scope p { margin:5px 0; overflow-wrap:anywhere; }
     .scope ul { margin:7px 0 0; padding-left:22px; }
+    #backup-safety { margin-top:18px; padding:16px; border:1px solid var(--line); border-radius:12px; }
+    #backup-safety p { margin:6px 0; overflow-wrap:anywhere; }
+    #backup-safety.blocked { border:2px solid var(--red); background:#3a151a; }
     button { appearance:none; border:1px solid var(--line); background:#182134; color:var(--text); border-radius:11px; padding:11px 15px; font:700 15px/1 inherit; cursor:pointer; }
     button.primary { background:var(--action); border-color:var(--action); }
     button:disabled { opacity:.38; cursor:not-allowed; }
@@ -80,6 +83,14 @@ HTML = r"""<!doctype html>
       <p><strong>Selected workspaces:</strong> <span id="workspace-count">0</span></p>
       <ul id="workspace-list"></ul>
     </div>
+    <section id="backup-safety" aria-label="Backup protection" aria-live="polite">
+      <strong id="backup-heading">Backup required before replacement</strong>
+      <p id="backup-space">Destination space has not been checked yet.</p>
+      <p id="backup-location">No verified backup recorded for this migration.</p>
+      <p>Installation is blocked if space is insufficient or backup verification fails. There is no skip-backup option.</p>
+      <p>Close development tools writing to selected folders before finalizing. Same-disk backups protect against replacement mistakes, not disk failure. Keep the old Mac intact.</p>
+      <details><summary>How to recover</summary><p>Keep Codex and other writing apps closed. In the backup folder, read verification.json for original-to-backup paths. Move current destination files aside before restoring reviewed backup items. A pending folder without verification.json is not a verified backup. Never delete the source or backups until you have checked the restored work.</p></details>
+    </section>
     <div class="controls">
       <button id="inspect" disabled>Inspect</button>
       <button class="primary" id="start" disabled>Start transfer</button>
@@ -99,7 +110,8 @@ history.replaceState(null,"",location.pathname);
 const $=id=>document.getElementById(id);
 let latestState={};
 const fmt=n=>{if(!Number.isFinite(n))return "—";const u=["B","KB","MB","GB","TB"];let i=0;while(n>=1000&&i<u.length-1){n/=1000;i++}return `${n.toFixed(n>=100?0:n>=10?1:2)} ${u[i]}`};
-async function api(path,options={}){const response=await fetch(path,{...options,headers:{"X-Codex-Migrate-Token":token,"Content-Type":"application/json",...(options.headers||{})}});const body=await response.json();if(!response.ok)throw new Error(body.error||`Request failed (${response.status})`);return body}
+function renderBackup(s){const blocked=s.space_check==="blocked";$("backup-safety").classList.toggle("blocked",blocked);$("backup-heading").textContent=blocked?"Blocked — not enough space for a safe backup":"Backup required before replacement";$("backup-space").textContent=s.destination_bytes_required!=null?`Last space check: ${fmt(s.destination_bytes_free)} free; ${fmt(s.destination_bytes_required)} required, including ${fmt(s.backup_bytes_required)} for backups and ${fmt(s.reserve_bytes)} safety reserve. Space is checked again before replacement.`:"Destination space has not been checked yet.";const r=s.receipt||{};$("backup-location").textContent=s.pending_backup?`Pending backup on the destination: ${s.pending_backup}. Verification is not yet confirmed here; inspect verification.json before recovery.`:r.backup_verified?`Last verified backup on the destination: ${r.backup}. File contents, tree structure and link targets checked before replacement.`:"No verified backup recorded for this migration."}
+async function api(path,options={}){const response=await fetch(path,{...options,headers:{"X-Codex-Migrate-Token":token,"Content-Type":"application/json",...(options.headers||{})}});const body=await response.json();if(!response.ok)throw new Error(body.error||`Request failed (${response.status})`);renderBackup(body);return body}
 function render(s){latestState=s;const p=Math.max(0,Math.min(100,Number(s.percent)||0));$("percent").textContent=`${p.toFixed(p===100?0:1)}%`;$("bar").style.width=`${p}%`;$("bar").parentElement.setAttribute("aria-valuenow",String(p));$("phase").textContent=String(s.phase||"unknown").replaceAll("_"," ");$("status").textContent=String(s.status||"unknown").replaceAll("_"," ");$("message").textContent=s.message||"";$("route").textContent=s.route||"—";$("bytes").textContent=`${fmt(s.bytes_staged||0)} / ${fmt(s.bytes_total||0)}`;$("item").textContent=s.current_item||"—";$("warning").style.display=s.warning?"block":"none";$("warning").textContent=s.warning||"";$("error").style.display=s.error?"block":"none";$("error").textContent=s.error||"";$("compat").textContent=s.compatibility_command?`Different macOS usernames: after installation, run on the new Mac: ${s.compatibility_command}`:"";const c=s.config||{};$("codex-scope").textContent=`${c.source_home||"—"}/.codex → ${c.target_home||"—"}/.codex`;$("ssh-target").textContent=`${c.target||"—"} · ${c.target_home||"—"}`;const roots=Array.isArray(c.workspace_roots)?c.workspace_roots:[];$("workspace-count").textContent=String(roots.length);$("workspace-list").replaceChildren(...roots.map(root=>{const li=document.createElement("li");const prefix=`${c.source_home}/`;const relative=root.startsWith(prefix)?root.slice(prefix.length):root;li.textContent=`${root} → ${c.target_home}/${relative}`;return li}));const active=s.status==="running";const canStart=["idle","ready"].includes(s.status);const canFinalize=s.status==="ready_to_finalize"||(s.status==="waiting"&&["close_source_codex","close_target_codex"].includes(s.phase));$("inspect").disabled=active;$("start").disabled=!canStart||!s.apply;$("pause").disabled=!active||!["staging","final_delta"].includes(s.phase);$("resume").disabled=!s.apply||!['paused','cancelled','failed','interrupted'].includes(s.status);$("finalize").disabled=!canFinalize||!s.apply;$("cancel").disabled=!((active&&["inspecting","staging","final_delta"].includes(s.phase))||s.status==="paused");}
 async function refresh(){try{render(await api("/api/status"))}catch(error){$("error").style.display="block";$("error").textContent=error.message}}
 async function action(name){const c=latestState.config||{};if(name==="finalize"&&!confirm(`Back up, then replace ${c.target_home}/.codex and ${c.workspace_roots?.length||0} selected workspace root(s) on ${c.target}?`))return;try{render(await api("/api/action",{method:"POST",body:JSON.stringify({action:name,confirmed:name==="finalize"})}))}catch(error){$("error").style.display="block";$("error").textContent=error.message}}
@@ -242,8 +254,8 @@ class Dashboard:
                     signal.signal(value, interrupt_for_shutdown)
         try:
             self.server = ThreadingHTTPServer((self.host, self.port), self._handler())
-            url = "http://%s:%d/#token=%s" % (self.host, self.port, self.token)
-            print("Codex Migrate dashboard: %s" % url)
+            url = "http://%s:%d/#token=%s" % (self.host, self.server.server_port, self.token)
+            print("Codex Migrate dashboard: %s" % url, flush=True)
             if open_browser:
                 threading.Timer(0.3, lambda: webbrowser.open(url)).start()
             self.server.serve_forever()

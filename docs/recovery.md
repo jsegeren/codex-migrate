@@ -1,5 +1,34 @@
 # Recovery
 
+## Required backup and space checks
+
+Before staging, the full migration checks space for remaining incoming data,
+the measured size of existing destination items to back up, and a 2–20 GiB
+safety reserve. Selective skill exports use incoming file sizes plus existing
+destination items and a 2 GiB reserve. The budget is deliberately conservative:
+APFS clones normally use less space, but clone savings are not counted as free
+capacity. Immediately before backups, space is measured again; after backups,
+the safety reserve must still be available. Other apps can consume space after
+a check, so copy errors also block replacement.
+
+Every backup must pass a checksum comparison of regular file contents, tree
+structure, and symbolic-link targets before any destination replacement begins.
+No file contents, checksum values, or differing filenames are logged. A failed
+copy or verification leaves the originals in place and keeps staging available.
+There is no skip-backup switch. If space is insufficient, free space on the
+destination and retry. External backup locations are not supported yet.
+
+The owner-only backup directory contains `verification.json` only once every
+backup has passed. It records original-to-backup paths and recovery guidance.
+The dashboard shows the last space check and pending or completed backup path.
+The selective export result includes the verified backup path as well.
+
+Close all apps that write to selected files before finalizing. This is not an
+atomic filesystem snapshot, and ACLs, extended attributes, and hard-link
+topology are not independently verified. Same-disk clones protect against
+replacement mistakes, **not disk failure**. Keep the old Mac and, for
+irreplaceable work, an independent backup until you validate the new workspace.
+
 ## Interrupted staging
 
 Start the dashboard again with the same target, target home, workspace roots,

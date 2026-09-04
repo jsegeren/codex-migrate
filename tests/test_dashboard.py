@@ -58,6 +58,14 @@ class DashboardTests(unittest.TestCase):
         status, _ = self.request()
         self.assertEqual(status, 403)
 
+    def test_backup_protection_is_visible_and_receipt_not_assumed(self):
+        self.assertIn('id="backup-safety"', HTML)
+        self.assertIn('No verified backup recorded', HTML)
+        self.assertIn('r.backup_verified', HTML)
+        self.assertIn('Blocked — not enough space', HTML)
+        self.assertIn('not disk failure', HTML)
+        self.assertIn('verification.json', HTML)
+
     def test_status_accepts_exact_token(self):
         status, body = self.request(self.dashboard.token)
         self.assertEqual(status, 200)

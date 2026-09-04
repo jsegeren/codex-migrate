@@ -13,6 +13,7 @@ import threading
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from codex_migrate.config import MigrationConfig
+from codex_migrate.backup import BACKUP_FUNCTIONS, size_command, verification_receipt
 from codex_migrate.inventory import Inventory, collect
 from codex_migrate.security import redact
 from codex_migrate.state import StateStore
@@ -190,6 +191,12 @@ class MigrationEngine:
         if _value(result.stdout, "TARGET_CODEX_READY") != "1":
             raise MigrationError("Open and sign in to Codex once on the target Mac first")
         inventory = self.inventory()
+        backup_bytes = int(self.transport.run_remote(
+            "set -eu\n" + BACKUP_FUNCTIONS + size_command(self._backup_targets()) + "\n",
+            timeout=300,
+        ).stdout.strip())
+        if backup_bytes < 0:
+            raise MigrationError("Invalid destination backup size")
         available_bytes = self.transport.remote_free_bytes(self.config.target_home)
         reserve_bytes = min(
             20 * 1024**3,
@@ -203,12 +210,21 @@ class MigrationEngine:
         elif same_config:
             staged_bytes = int(previous.get("bytes_staged") or 0)
         remaining_bytes = max(0, inventory.estimated_transfer_bytes - staged_bytes)
-        required_bytes = reserve_bytes + (
+        required_bytes = backup_bytes + reserve_bytes + (
             remaining_bytes if require_full_staging_space else 0
+        )
+        self.state.update(
+            destination_bytes_free=available_bytes,
+            destination_bytes_required=required_bytes,
+            backup_bytes_required=backup_bytes,
+            reserve_bytes=reserve_bytes,
+            space_check="passed" if available_bytes >= required_bytes else "blocked",
         )
         if available_bytes < required_bytes:
             raise MigrationError(
-                "Not enough destination space: need about %d bytes free, found %d"
+                "Installation blocked: not enough destination space for staging, backup, "
+                "and safety reserve. Need %d bytes free, found %d. "
+                "Free space on the destination and retry; there is no backup bypass."
                 % (required_bytes, available_bytes)
             )
         if inventory.unreadable_paths:
@@ -561,6 +577,12 @@ class MigrationEngine:
             "then echo OPEN; else echo CLOSED; fi\n"
         ).stdout.strip()
 
+    def _backup_targets(self) -> List[str]:
+        return [self.config.target_codex] + [
+            self.config.target_home + "/" + str(Path(root).relative_to(self.config.source_home))
+            for root in self.config.workspace_roots
+        ]
+
     def _install_and_verify(self) -> Dict[str, object]:
         recorded_inventory = self.state.read().get("inventory")
         if isinstance(recorded_inventory, dict):
@@ -587,11 +609,13 @@ class MigrationEngine:
         install_workspaces = []
         backup_workspaces = []
         rollback_workspaces = []
+        mappings = [(self.config.target_codex, backup + "/.codex")]
         for root in self.config.workspace_roots:
             relative = root[len(self.config.source_home.rstrip("/")) + 1 :]
             stage_root = self.config.target_staging + "/home-relative/" + relative
             target_root = self.config.target_home + "/" + relative
             backup_root = backup + "/home-relative/" + relative
+            mappings.append((target_root, backup_root))
             safe_parent = self._safe_directory_script(
                 self.config.target_home,
                 str(Path(target_root).parent),
@@ -614,6 +638,7 @@ class MigrationEngine:
                 "  test ! -L {backup}\n"
                 "  mkdir -p {backup_parent}\n"
                 "  cp -c -R {target} {backup}\n"
+                "  verify_backup {target} {backup}\n"
                 "fi".format(
                     target=shlex.quote(target_root),
                     backup=shlex.quote(backup_root),
@@ -643,6 +668,7 @@ class MigrationEngine:
         script = """set -eu
 setopt NULL_GLOB
 umask 077
+{backup_functions}
 {target_home_chain}
 test -d {home}
 test ! -L {home}
@@ -666,10 +692,15 @@ if ps -axo comm= | awk -F/ '$NF == "ChatGPT" || $NF == "Codex" {{ found=1 }} END
   exit 70
 fi
 {workspace_preconditions}
+backup_required=$({backup_size})
+backup_space {home} "$((backup_required + {reserve}))"
 mkdir -p {backup}
 cp -c -R {codex} {backup}/.codex
+verify_backup {codex} {backup}/.codex
 mkdir -p {backup}/home-relative
 {workspace_backups}
+backup_space {home} {reserve}
+{backup_receipt}
 auth_before=$(shasum -a 256 {codex}/auth.json | awk '{{print $1}}')
 installation_before=$(shasum -a 256 {codex}/installation_id | awk '{{print $1}}')
 rollback_needed=1
@@ -708,8 +739,12 @@ done
 chmod 700 {codex}
 rollback_needed=0
 trap - EXIT
-printf 'INSTALLED=1\\nACTIVE=%s\\nARCHIVED=%s\\nAUTH_PRESERVED=1\\nINSTALLATION_ID_PRESERVED=1\\nBACKUP=%s\\n' "$active" "$archived" {backup}
+printf 'INSTALLED=1\\nACTIVE=%s\\nARCHIVED=%s\\nAUTH_PRESERVED=1\\nINSTALLATION_ID_PRESERVED=1\\nBACKUP_VERIFIED=1\\nBACKUP=%s\\n' "$active" "$archived" {backup}
 """.format(
+            backup_functions=BACKUP_FUNCTIONS,
+            backup_size=size_command(self._backup_targets()),
+            reserve=max(2 * 1024**3, int(self.state.read().get("reserve_bytes") or 0)),
+            backup_receipt=verification_receipt(backup, mappings),
             home=q_home,
             codex=q_codex,
             staging=q_staging,
@@ -727,6 +762,8 @@ printf 'INSTALLED=1\\nACTIVE=%s\\nARCHIVED=%s\\nAUTH_PRESERVED=1\\nINSTALLATION_
         output = self.transport.run_remote(script, timeout=3600).stdout
         if _value(output, "INSTALLED") != "1":
             raise MigrationError("Destination installation did not produce a valid receipt")
+        if _value(output, "BACKUP_VERIFIED") != "1":
+            raise MigrationError("Destination backup verification receipt is missing")
         active = int(_value(output, "ACTIVE") or -1)
         archived = int(_value(output, "ARCHIVED") or -1)
         if active != expected_active:
@@ -740,6 +777,7 @@ printf 'INSTALLED=1\\nACTIVE=%s\\nARCHIVED=%s\\nAUTH_PRESERVED=1\\nINSTALLATION_
             "auth_preserved": _value(output, "AUTH_PRESERVED") == "1",
             "installation_id_preserved": _value(output, "INSTALLATION_ID_PRESERVED") == "1",
             "backup": _value(output, "BACKUP"),
+            "backup_verified": True,
             "source_home": self.config.source_home,
             "target_home": self.config.target_home,
         }

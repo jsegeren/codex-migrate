@@ -12,6 +12,9 @@ import shlex
 from typing import Dict, Iterable, List, Sequence
 
 from codex_migrate.config import MigrationConfig
+from codex_migrate.backup import (
+    BACKUP_FUNCTIONS, MIN_RESERVE_BYTES, size_command, verification_receipt,
+)
 from codex_migrate.migration import MigrationEngine, MigrationError, _value
 from codex_migrate.transport import SSHTransport
 
@@ -198,6 +201,22 @@ class ComponentExporter:
         if not exports:
             raise MigrationError("No matching skill components were found")
         self._preflight()
+        incoming_bytes = 0
+        def unreadable(error):
+            raise error
+        for item in exports:
+            for current, directories, files in os.walk(item.source, onerror=unreadable):
+                incoming_bytes += 4096 * (1 + len(directories))
+                for name in files:
+                    info = (Path(current) / name).stat()
+                    incoming_bytes += max(info.st_size, info.st_blocks * 512)
+        self.transport.run_remote(
+            "set -eu\n" + BACKUP_FUNCTIONS
+            + "backup_required=$(%s)\nbackup_space %s \"$((backup_required + %d))\"\n"
+            % (size_command([item.destination for item in exports]),
+               shlex.quote(self.config.target_home), incoming_bytes + MIN_RESERVE_BYTES),
+            timeout=300,
+        )
         migration_id = secrets.token_hex(16)
         staging = str(
             Path(self.config.target_home)
@@ -245,11 +264,13 @@ class ComponentExporter:
         installs = []
         rollbacks = []
         verifications = []
+        mappings = []
         for index, item in enumerate(exports):
             destination = item.destination
             parent = str(Path(destination).parent)
             staged_item = str(Path(staging) / "items" / str(index))
             backup_item = str(Path(backup) / "items" / str(index))
+            mappings.append((destination, backup_item))
             existed = str(Path(backup) / "existed" / str(index))
             safe_parent = MigrationEngine._safe_directory_script(
                 self.config.target_home,
@@ -276,11 +297,13 @@ class ComponentExporter:
                 "if test -L {destination}; then\n"
                 "  : > {existed}\n"
                 "  cp -P {destination} {backup_item}\n"
+                "  verify_backup {destination} {backup_item}\n"
                 "elif test -e {destination}; then\n"
                 "  test -d {destination}\n"
                 "  test ! -L {destination}\n"
                 "  : > {existed}\n"
                 "  cp -c -R {destination} {backup_item}\n"
+                "  verify_backup {destination} {backup_item}\n"
                 "fi".format(
                     destination=shlex.quote(destination),
                     existed=shlex.quote(existed),
@@ -317,14 +340,19 @@ class ComponentExporter:
         script = """set -eu
 setopt NULL_GLOB
 umask 077
+{backup_functions}
 {target_home_chain}
 test -d {staging}
 test ! -L {staging}
 test "$(cat {marker})" = {migration_id}
 test ! -e {backup}
 {preconditions}
+backup_required=$({backup_size})
+backup_space {home} "$((backup_required + {reserve}))"
 mkdir -p {backup}/items {backup}/existed
 {backups}
+backup_space {home} {reserve}
+{backup_receipt}
 rollback_needed=1
 rollback() {{
   rollback_exit_code=$?
@@ -341,8 +369,13 @@ trap rollback EXIT
 rollback_needed=0
 trap - EXIT
 rm -rf {staging}
-printf 'INSTALLED=1\\nITEMS=%s\\nBACKUP=%s\\n' {item_count} {backup}
+printf 'INSTALLED=1\\nITEMS=%s\\nBACKUP_VERIFIED=1\\nBACKUP=%s\\n' {item_count} {backup}
 """.format(
+            backup_functions=BACKUP_FUNCTIONS,
+            backup_size=size_command([item.destination for item in exports]),
+            backup_receipt=verification_receipt(backup, mappings),
+            home=shlex.quote(self.config.target_home),
+            reserve=MIN_RESERVE_BYTES,
             target_home_chain=MigrationEngine._safe_directory_script(
                 "/", self.config.target_home
             ),
@@ -360,9 +393,12 @@ printf 'INSTALLED=1\\nITEMS=%s\\nBACKUP=%s\\n' {item_count} {backup}
         output = self.transport.run_remote(script, timeout=600).stdout
         if _value(output, "INSTALLED") != "1":
             raise MigrationError("Component installation did not produce a valid receipt")
+        if _value(output, "BACKUP_VERIFIED") != "1":
+            raise MigrationError("Component backup verification receipt is missing")
         if int(_value(output, "ITEMS") or -1) != len(exports):
             raise MigrationError("Component verification count mismatch")
         return {
             "backup": _value(output, "BACKUP"),
+            "backup_verified": True,
             "completed_at": datetime.now(timezone.utc).isoformat(),
         }

@@ -30,6 +30,10 @@ open. Destination `auth.json` and `installation_id` are excluded from transfer,
 hashed locally on the destination before and after installation, and compared
 without printing their hashes. Existing destination Codex state and selected
 workspace roots receive copy-on-write rollback backups before replacement.
+Existing destination data is budgeted conservatively in the free-space check,
+and backups must pass content-checksum, structure, and symlink verification
+before replacement. Verification receipts stay in the owner-only backup folder.
+See [Recovery](recovery.md) for the exact coverage and limitations.
 
 ## Known limitations
 

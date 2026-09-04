@@ -205,6 +205,7 @@ class ComponentTests(unittest.TestCase):
                         return SimpleNamespace(
                             stdout=(
                                 "INSTALLED=1\nITEMS=1\n"
+                                "BACKUP_VERIFIED=1\n"
                                 "BACKUP=/Users/new-user/Codex-Migrate-Component-Backup-test\n"
                             )
                         )

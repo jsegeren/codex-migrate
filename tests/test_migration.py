@@ -199,6 +199,7 @@ class MigrationTests(unittest.TestCase):
                         stdout=(
                             "INSTALLED=1\nACTIVE=1\nARCHIVED=1\n"
                             "AUTH_PRESERVED=1\nINSTALLATION_ID_PRESERVED=1\n"
+                            "BACKUP_VERIFIED=1\n"
                             "BACKUP=/Users/person/backup\n"
                         )
                     )
