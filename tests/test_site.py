@@ -57,6 +57,16 @@ class SiteTests(unittest.TestCase):
         self.assertIn("no subscription", text)
         self.assertIn("free cli", text)
 
+    def test_founder_cross_promotion_is_separate_from_launch_signup(self):
+        source = (SITE / "index.html").read_text()
+        note = source.split('<aside class="founder-note"', 1)[1].split('</aside>', 1)[0]
+        self.assertIn('href="https://you.one/"', note)
+        self.assertIn("I’m building You.one, with Ava at its heart", note)
+        self.assertIn("Meet Ava at You.one", note)
+        form = source.split('<form ', 1)[1].split('</form>', 1)[0]
+        self.assertNotIn("you.one", form.lower())
+        self.assertLess(source.index('</form>'), source.index('<aside class="founder-note"'))
+
     def test_codex_icon_is_a_separate_attributed_product_reference(self):
         source = (SITE / "index.html").read_text()
         self.assertIn('class="product-reference"', source)
@@ -86,6 +96,13 @@ class SiteTests(unittest.TestCase):
         self.assertIn('<h1>Keep the work.', heading_row)
         self.assertIn('class="hero-inline-icon"', heading_row)
         self.assertNotIn('class="terminal-card"', source)
+
+    def test_hero_copy_gap_is_not_inflated_by_taller_icon(self):
+        styles = (SITE / "styles.css").read_text()
+        heading = styles.split("\n.hero-heading {", 1)[1].split("}", 1)[0]
+        title = styles.split("\n.hero-heading h1 {", 1)[1].split("}", 1)[0]
+        self.assertIn("align-items: flex-end", heading)
+        self.assertIn("margin-bottom: 16px", title)
 
     def test_modern_headings_and_black_text_on_light_surfaces(self):
         styles = (SITE / "styles.css").read_text()
