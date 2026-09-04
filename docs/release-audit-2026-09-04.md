@@ -680,6 +680,14 @@ actions, readable wrapping, 15px controls and no horizontal overflow. The review
 prompted the added guard immediately before backup. Native rendering, VoiceOver,
 signed-package and cross-Mac acceptance remain open.
 
+Clean source `3bb894cd3523337cfd2e53c870074b27a4636293` produced a fresh Apple
+Silicon unsigned engineering app. All seven packaged-engine checks passed on
+this development Mac. Artifact: `Codex-Migrate-arm64-LOCAL-UNSIGNED.zip`;
+SHA-256: `302f5c903b218d6c3fe05af879bb123b2681298613575353e0df4592aff1a349`.
+These checks cover bundled startup/configuration/inventory, not a full packaged
+cross-Mac transfer or signed first launch. The read-only UI fixture was stopped
+and its browser tab closed after review.
+
 ### Reference guidance
 
 - [Lighthouse scoring excludes manual checks](https://developer.chrome.com/docs/lighthouse/accessibility/scoring).

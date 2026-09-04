@@ -15,7 +15,11 @@ results, accessibility findings, and pre-signing work still open.
   installers recheck before backup and replacement; disposable APFS tests prove
   that a process reopening during backup leaves existing files and staging
   untouched. Background cross-Mac acceptance still requires isolated accounts
-  on both Macs and has not yet been performed.
+  on both Macs and has not yet been performed. Independent code/docs and rendered
+  desktop/320px review accepted the change. Local verification ran 224 Python
+  tests (223 passed, one explicit skip), plus 10 passing signup tests. Clean
+  source `3bb894c` built a fresh unsigned app and passed all seven development-Mac
+  packaged-engine checks; this does not certify a full packaged migration.
 
 - Search Console ownership is verified for `https://migrate.segeren.com/`.
   Its sitemap was accepted with **Success** and six discovered pages, and Google
