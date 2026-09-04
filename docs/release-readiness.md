@@ -30,6 +30,12 @@ results, accessibility findings, and pre-signing work still open.
   tests also passed after adding real-process inventory rejection for a profile
   storage override, with empty stdout, no private value in errors and unchanged
   fixture configuration.
+  Clean source `f2cb823` built an unsigned arm64 engineering app and passed all
+  eight bundled-engine tests, including profile-override rejection through its
+  real inventory command. Packaging verified the ad-hoc signature. ZIP SHA-256:
+  `34122de41d79a0917aa8084dafcdc74bbe74f62f10acafc186bc7bfaaabd7e75`.
+  No real account data or SSH migration was used; no running app was replaced.
+  This does not certify Apple signing or a clean second-Mac migration.
 
 - Folder-selection guards now compare conservative case/Unicode path identities
   without rewriting the selected I/O paths. Config rejects protected/control
