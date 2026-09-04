@@ -11,6 +11,7 @@ import time
 from typing import Callable, Dict, List, Tuple
 from codex_migrate.transport import _stop_process
 from codex_migrate.skills import SkillExport, discover_personal_skills
+from codex_migrate.git_inventory import inspect_git
 
 
 def _continue() -> None:
@@ -38,6 +39,10 @@ class Inventory:
     unreadable_paths: List[str]
     personal_skills: List[SkillExport] = field(default_factory=list)
     personal_skill_bytes: int = 0
+    git_details: List[Dict[str, object]] = field(default_factory=list)
+    git_missing_paths: List[str] = field(default_factory=list)
+    git_issues: List[str] = field(default_factory=list)
+    git_warnings: List[str] = field(default_factory=list)
 
     @property
     def estimated_transfer_bytes(self) -> int:
@@ -115,31 +120,6 @@ def _disk_usage(path: Path, checkpoint: Callable[[], None] = _continue) -> int:
     return int(output.split()[0]) * 1024
 
 
-def _count_git_repositories(roots: List[Path], checkpoint: Callable[[], None] = _continue) -> int:
-    repositories = 0
-    ignored = {
-        "node_modules",
-        ".next",
-        ".cache",
-        "Library",
-        "Applications",
-        "dist",
-        "build",
-        "coverage",
-    }
-    for root in roots:
-        if not root.is_dir():
-            continue
-        for current, directories, files in os.walk(str(root), followlinks=False):
-            checkpoint()
-            directories[:] = [item for item in directories if item not in ignored]
-            if ".git" in directories or ".git" in files:
-                repositories += 1
-                if ".git" in directories:
-                    directories.remove(".git")
-    return repositories
-
-
 def collect(source_home: str, workspace_roots: List[str],
             checkpoint: Callable[[], None] = _continue,
             target_home: str = "") -> Inventory:
@@ -167,6 +147,7 @@ def collect(source_home: str, workspace_roots: List[str],
         summary = TreeSummary(summary.path, summary.files, _disk_usage(root, checkpoint), summary.readable)
         root_summaries.append(summary)
         unreadable.extend(root_unreadable)
+    git = inspect_git(source_home, workspace_roots, checkpoint)
     return Inventory(
         platform=platform.system(),
         source_home=str(home),
@@ -175,8 +156,12 @@ def collect(source_home: str, workspace_roots: List[str],
         archived_sessions=archived,
         codex_bytes=_disk_usage(codex, checkpoint),
         workspace_roots=root_summaries,
-        git_repositories=_count_git_repositories(roots, checkpoint),
+        git_repositories=len(git.repositories),
         unreadable_paths=unreadable[:100],
         personal_skills=skills,
         personal_skill_bytes=skill_bytes,
+        git_details=git.repositories,
+        git_missing_paths=git.missing_paths,
+        git_issues=git.issues,
+        git_warnings=git.warnings,
     )

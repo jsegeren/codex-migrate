@@ -15,37 +15,13 @@ from typing import Dict, List, Optional, Sequence, Tuple
 from codex_migrate.config import MigrationConfig
 from codex_migrate.conversations import conversation_verification_script
 from codex_migrate.errors import MigrationError
+from codex_migrate.exclusions import CODEX_EXCLUDES
 from codex_migrate.skills import SkillExport, discover_personal_skills, skill_verification_script
 from codex_migrate.backup import BACKUP_FUNCTIONS, size_command, verification_receipt
 from codex_migrate.inventory import Inventory, collect
 from codex_migrate.security import redact
 from codex_migrate.state import StateStore
 from codex_migrate.transport import SSHTransport, TransferProcess
-
-
-CODEX_EXCLUDES = (
-    "auth.json",
-    "installation_id",
-    "ipc/",
-    "thread-writer-locks/",
-    "process_manager/",
-    "mcp-oauth-locks/",
-    "logs/",
-    "logs_*.sqlite*",
-    "sqlite/logs_*.sqlite*",
-    ".tmp/",
-    "tmp/",
-    "cache/",
-    "caches/",
-    "packages/",
-    "standalone/",
-    "node_repl/",
-    "fsmonitor--daemon.ipc",
-    "*.sock",
-    "*.socket",
-    ".DS_Store",
-    "..codex-global-state.json.tmp-*",
-)
 
 
 def codex_running() -> bool:
@@ -186,6 +162,14 @@ class MigrationEngine:
             if not Path(root).is_dir():
                 raise MigrationError("Workspace root does not exist: %s" % root)
         inventory = self.inventory()
+        self.state.update(inventory=inventory.as_dict())
+        if inventory.git_issues:
+            raise MigrationError("Git dependency inspection needs review before transfer: "
+                                 + "; ".join(inventory.git_issues[:5]))
+        if inventory.git_missing_paths:
+            raise MigrationError("Git dependencies are outside the selected workspace folders. "
+                                 "Restart setup, add these folders to the selection, and inspect again: "
+                                 + "; ".join(inventory.git_missing_paths[:10]))
         remote = self.transport.check()
         self._inspection_checkpoint()
         expected_user = self.config.target.split("@", 1)[0]
@@ -271,6 +255,8 @@ class MigrationEngine:
             warning = "%d unreadable paths will need review" % len(inventory.unreadable_paths)
         else:
             warning = None
+        if inventory.git_warnings:
+            warning = "; ".join(filter(None, [warning] + inventory.git_warnings[:5]))
         route = self.transport.route()
         self._inspection_checkpoint()
         state = self.state.update(

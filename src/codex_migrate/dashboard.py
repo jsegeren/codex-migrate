@@ -39,7 +39,7 @@ HTML = r"""<!doctype html>
     #percent { font-size:36px; font-variant-numeric:tabular-nums; font-weight:750; }
     .track { height:13px; border-radius:999px; overflow:hidden; background:#20293a; margin:20px 0 14px; }
     #bar { height:100%; width:0; background:linear-gradient(90deg,var(--blue),#8b78ff); transition:width .35s ease; }
-    #message { min-height:24px; color:var(--muted); font-size:16px; }
+    #message { min-height:24px; color:var(--muted); font-size:16px; overflow-wrap:anywhere; }
     .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:20px 0; }
     .metric { border:1px solid var(--line); border-radius:14px; padding:14px; min-width:0; }
     .metric strong { display:block; margin-top:4px; overflow-wrap:anywhere; }
@@ -54,7 +54,7 @@ HTML = r"""<!doctype html>
     button { appearance:none; border:1px solid var(--line); background:#182134; color:var(--text); border-radius:11px; padding:11px 15px; font-family:inherit; font-size:15px; font-weight:700; line-height:1; cursor:pointer; }
     button.primary { background:var(--action); border-color:var(--action); }
     button:disabled { opacity:.38; cursor:not-allowed; }
-    #warning,#error { display:none; margin-top:16px; border-radius:12px; padding:13px 15px; }
+    #warning,#error { display:none; margin-top:16px; border-radius:12px; padding:13px 15px; overflow-wrap:anywhere; }
     #warning { background:#3a2b0f; color:#ffdc9d; border:1px solid #73551e; }
     #error { background:#3a151a; color:#ffc3c8; border:1px solid #7b2e37; }
     details { margin-top:18px; color:var(--muted); }
@@ -88,6 +88,11 @@ HTML = r"""<!doctype html>
       <p id="skill-explanation">Custom skills are included from .agents/skills and legacy .codex/skills, with the current location taking precedence. Other destination skills are kept.</p>
       <ul id="skill-list"></ul>
     </div>
+    <details id="git-scope" class="scope"><summary>Git repositories, worktrees and required folders</summary>
+      <p id="git-summary">Git scope has not been inspected with this version.</p>
+      <p>This is a source metadata check, not destination Git verification. It searches selected workspace folders and Codex’s worktrees folder, then checks linked Git storage. Workspace directory links are not searched for additional repositories. Other home folders are not searched.</p>
+      <ul id="git-list"></ul><ul id="git-required"></ul><ul id="git-issues"></ul>
+    </details>
     <section id="backup-safety" aria-label="Backup protection" aria-live="polite">
       <strong id="backup-heading">Backup required before replacement</strong>
       <p id="backup-space">Destination space has not been checked yet.</p>
@@ -122,6 +127,7 @@ function renderBackup(s){const blocked=s.space_check==="blocked";$("backup-safet
 async function api(path,options={}){const response=await fetch(path,{...options,headers:{"X-Codex-Migrate-Token":token,"Content-Type":"application/json",...(options.headers||{})}});const body=await response.json();if(!response.ok)throw new Error(body.error||`Request failed (${response.status})`);renderBackup(body);return body}
 function render(s){latestState=s;const p=Math.max(0,Math.min(100,Number(s.percent)||0));$("percent").textContent=`${p.toFixed(p===100?0:1)}%`;$("bar").style.width=`${p}%`;$("bar").parentElement.setAttribute("aria-valuenow",String(p));$("phase").textContent=String(s.phase||"unknown").replaceAll("_"," ");$("status").textContent=String(s.status||"unknown").replaceAll("_"," ");$("message").textContent=s.message||"";$("route").textContent=s.route||"—";$("bytes").textContent=`${fmt(s.bytes_staged||0)} / ${fmt(s.bytes_total||0)}`;$("item").textContent=s.current_item||"—";$("warning").style.display=s.warning?"block":"none";$("warning").textContent=s.warning||"";$("error").style.display=s.error?"block":"none";$("error").textContent=s.error||"";$("compat").textContent=s.compatibility_command?`Different macOS usernames: after installation, run on the new Mac: ${s.compatibility_command}`:"";const c=s.config||{};$("codex-scope").textContent=`${c.source_home||"—"}/.codex → ${c.target_home||"—"}/.codex`;$("ssh-target").textContent=`${c.target||"—"} · ${c.target_home||"—"}`;const roots=Array.isArray(c.workspace_roots)?c.workspace_roots:[];$("workspace-count").textContent=String(roots.length);$("workspace-list").replaceChildren(...roots.map(root=>{const li=document.createElement("li");const prefix=`${c.source_home}/`;const relative=root.startsWith(prefix)?root.slice(prefix.length):root;li.textContent=`${root} → ${c.target_home}/${relative}`;return li}));const active=s.status==="running";const canStart=["idle","ready"].includes(s.status);const canFinalize=s.status==="ready_to_finalize"||(s.status==="waiting"&&["close_source_codex","close_target_codex"].includes(s.phase));$("inspect").disabled=active;$("start").disabled=!canStart||!s.apply;$("pause").disabled=!active||!["staging","final_delta"].includes(s.phase);$("resume").disabled=!s.apply||!['paused','cancelled','failed','interrupted'].includes(s.status);$("finalize").disabled=!canFinalize||!s.apply;$("cancel").disabled=!((active&&["inspecting","staging","final_delta"].includes(s.phase))||s.status==="paused");}
 function renderSkills(s){
+  renderGit(s);
   const waiting=s.status==="ready_to_finalize"||s.status==="waiting";
   $("percent").hidden=waiting;$("bar").parentElement.hidden=waiting;
   $("size-heading").textContent=s.status==="complete"?"Migration size estimate":"Staged / estimated total";
@@ -141,6 +147,16 @@ function renderSkills(s){
     $("skill-explanation").textContent="Only skills from the chosen categories are included. Each listed destination is backed up before replacement. Other skills and files are kept.";
     $("protection-explanation").textContent="The source is never modified. Only listed skill destinations are replaced after verified backups. Codex conversations, configuration and authentication are not copied or replaced. Interrupted staging is kept so Resume can continue.";
   }
+}
+function renderGit(s){
+  $("git-scope").hidden=s.migration_mode==="skills";
+  const inventory=s.inventory||{};
+  const repos=inventory.git_details, missing=inventory.git_missing_paths||[], issues=inventory.git_issues||[], warnings=inventory.git_warnings||[];
+  $("git-summary").textContent=!Array.isArray(repos)?"Git scope has not been inspected with this version.":`${repos.length} Git locations found. ${issues.length?"Metadata needs review before transfer.":missing.length?`${missing.length} additional folder(s) required before transfer.`:repos.length?"Inspected storage dependencies are inside the selected scope.":"No repositories were found in the searched folders."}`;
+  const list=(id,items)=>$(id).replaceChildren(...items.map(text=>{const li=document.createElement("li");li.textContent=text;return li}));
+  list("git-list",(repos||[]).map(repo=>`${repo.path} — ${{checkout:"repository",linked:"linked Git directory",storage:"Git storage"}[repo.kind]||"Git location"}`));
+  list("git-required",missing.map(path=>`Required folder not selected: ${path}`));
+  list("git-issues",[...issues,...warnings]);
 }
 async function refresh(){try{const s=await api("/api/status");render(s);renderSkills(s)}catch(error){$("error").style.display="block";$("error").textContent=error.message}}
 async function action(name){const c=latestState.config||{};const confirmation=latestState.migration_mode==="skills"?`Back up, then replace ${latestState.inventory?.skill_exports?.length||0} listed skill(s) on ${c.target}? Conversations, configuration and whole repositories will not be migrated. Other skills will be kept.`:`Back up, then replace ${c.target_home}/.codex, ${c.workspace_roots?.length||0} selected workspace root(s), and ${latestState.inventory?.personal_skills?.length||0} personal skill(s) on ${c.target}? Other destination skills will be kept.`;if(name==="finalize"&&!confirm(confirmation))return;try{const s=await api("/api/action",{method:"POST",body:JSON.stringify({action:name,confirmed:name==="finalize"})});render(s);renderSkills(s)}catch(error){$("error").style.display="block";$("error").textContent=error.message}}

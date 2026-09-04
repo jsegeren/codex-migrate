@@ -367,6 +367,44 @@ The transcript corruption fixtures above run from source, not inside the ZIP.
 Artifact: `Codex-Migrate-arm64-LOCAL-UNSIGNED.zip` (engineering only).
 SHA-256: `4ad3195bc6d13e9c2abc071355aa6b7e7487ad72346c0d30d0115dfac9aa6aab`.
 
+### Git dependency inventory and workspace-copy checkpoint
+
+- Full inspection now lists repositories, linked Git directories, and bare or
+  separate Git storage in selected workspace folders and Codex-managed
+  worktrees. It checks common directories, registered worktrees, object
+  alternates, metadata links, and intermediate aliases. Missing required
+  folders and unsupported/unreadable metadata block preflight before SSH;
+  no discovered folder is silently added to transfer scope.
+- Independent review reproduced loss of external linked refs and an actual
+  managed-workspace branch named `cache/important`. Root-anchored Codex runtime
+  exclusions now preserve managed repositories' branches, reflogs, and working
+  files while retaining root authentication/installation exclusions. A further
+  review found omitted intermediate symlinks; their parent folders are now
+  included in dependency requirements. All three defects have regressions
+  demonstrated failing before their corrections.
+- Twenty-one disposable Git tests cover main/shared storage, sibling and
+  stale worktrees, separate Git directories, bare/alternate object stores,
+  nested repositories, external/chained links and aliased alternate paths,
+  unchanged refs/index/stash/dirty files, invalid metadata, and pre-SSH guards.
+  Actual system rsync tests compare source/copy refs and managed-workspace file
+  bytes and check copy/inventory exclusion agreement. No real user repository
+  or remote destination was touched.
+- The real browser fixture's Inspect action displayed the missing main
+  checkout before any SSH call. Desktop/390/320px checks caught and fixed
+  status-message long-path overflow. Fresh checks show no horizontal overflow
+  and zero axe-core 4.13 violations for selected WCAG A/AA tags. The Git summary
+  retains keyboard focus and Enter opens/closes it. This is not full WCAG or
+  VoiceOver certification.
+- Independent reviewer `public_release_review` accepted with fixes after
+  inspecting actual code, running 44 focused tests, and reviewing fresh desktop
+  and 320px screenshots. No remaining blocker was found within this bounded
+  change. The final full local run passed 175 Python tests and all 10 signup
+  tests. Candidate-wide CI follows publication.
+
+This checkpoint does not certify Git object integrity, destination refs/index
+and dirty-file equivalence, historical username/path resolution, or every Git
+project on the machine. Those remain separate acceptance requirements.
+
 ### Reference guidance
 
 - [Lighthouse scoring excludes manual checks](https://developer.chrome.com/docs/lighthouse/accessibility/scoring).

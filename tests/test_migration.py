@@ -86,8 +86,8 @@ class MigrationTests(unittest.TestCase):
             self.assertIn("Resume", state.read()["message"])
 
     def test_authentication_is_always_excluded(self):
-        self.assertIn("auth.json", CODEX_EXCLUDES)
-        self.assertIn("installation_id", CODEX_EXCLUDES)
+        self.assertIn("/auth.json", CODEX_EXCLUDES)
+        self.assertIn("/installation_id", CODEX_EXCLUDES)
 
     def test_finalize_is_rejected_before_successful_staging(self):
         with tempfile.TemporaryDirectory() as temporary:

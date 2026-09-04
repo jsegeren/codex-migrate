@@ -8,6 +8,13 @@ results, accessibility findings, and pre-signing work still open.
 
 ## Candidate checks completed on the development Mac
 
+- Git dependency inspection now blocks missing main/shared storage, worktree
+  folders and intermediate metadata aliases before SSH. Root-anchored runtime
+  exclusions preserve complete managed-workspace branches, reflogs and files.
+  Twenty-one disposable Git tests and independent desktop/mobile review cover
+  this checkpoint; it does not certify destination Git integrity/usability or
+  whole-machine discovery. See the audit for the reproduced and fixed defects.
+
 - Source `7838fd9`: 154 Python tests passed, including simulated low-space,
   failed-copy, corrupted-backup, rollback, component export, and dashboard
   boundaries. Disposable local rsync tests also exercise skills-only pause and

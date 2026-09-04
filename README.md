@@ -52,6 +52,21 @@ open project so nobody else has to reconstruct the process under pressure.
   uncommitted or untracked files contained in those roots
 - Relevant local Codex state required to resume work
 
+Full inspection lists Git locations in the selected workspace folders and
+`~/.codex/worktrees`. It checks linked worktrees, shared Git directories,
+alternate object stores, and linked Git metadata, including intermediate
+aliases. If required storage or a registered existing worktree is outside the
+selection, transfer stops before connecting to the destination. Restart setup,
+add the reported folders, and inspect again. Dependencies are never silently
+added to the copy scope. Already-missing registered worktrees are reported as
+warnings; their registrations are not removed.
+
+This is dependency discovery, not a scan of every folder on the Mac or a proof
+of Git integrity. Workspace directory links are not searched for additional
+repositories. Unsupported pointers, broken metadata links, unreadable metadata,
+and dependencies outside the source home require review. Git object integrity,
+destination refs/status, and historical path usability need separate validation.
+
 Full migrations also discover personal custom skills in `~/.agents/skills`
 and legacy `~/.codex/skills`. A current-location skill takes precedence over a
 legacy skill with the same name. Each selected skill is materialized at the new
@@ -71,13 +86,18 @@ the byte-for-byte copying of skills inside selected project workspaces.
 - `~/.codex/auth.json`
 - `~/.codex/installation_id`
 - The source Mac's `~/.ssh` directory and its private keys
-- Runtime sockets, process locks, logs, and disposable caches
+- Codex's top-level runtime sockets, process locks, logs, and disposable caches
 - Other home-directory data outside Codex state, discovered personal skills,
   and explicitly selected workspace roots
 
 Selected workspace roots are copied byte-for-byte. Audit them before transfer:
 a credential stored inside a selected repository or workspace is part of that
 workspace and will be copied.
+
+Codex runtime exclusions are root-anchored. They do not strip a repository's
+`logs`, `cache`, `packages`, or similarly named branches and files inside
+`~/.codex/worktrees`. Those managed workspaces are also complete workspace
+copies and can contain credentials; review them before migration.
 
 The new Mac must have Codex installed, opened, and signed in once before the
 migration. Its authentication and installation identity are retained and

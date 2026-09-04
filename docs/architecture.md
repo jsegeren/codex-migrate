@@ -7,6 +7,12 @@ Codex Migrate is a dependency-free Python 3.9 application around the macOS
 
 - `config.py` validates targets and confines workspace roots to the source home.
 - `inventory.py` records content-free counts, sizes, and repository totals.
+- `git_inventory.py` discovers Git locations and their required storage from
+  metadata and links, without executing Git or reading object contents. Missing
+  selected storage blocks full preflight before SSH; it never expands scope.
+- `exclusions.py` shares root-anchored Codex runtime exclusions between rsync
+  and Git dependency coverage. Managed workspace descendants are not filtered
+  by runtime folder names.
 - `transport.py` owns strict SSH arguments, route reporting, and resumable
   rsync processes.
 - `migration.py` implements the staging/finalization state machine.

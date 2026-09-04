@@ -23,6 +23,18 @@ The SSH destination is accepted only after ordinary SSH
 host-key verification succeeds. The dashboard binds only to loopback and
 requires an owner-only random token for status and controls.
 
+Full Git inspection may inspect metadata and link targets elsewhere inside the
+source home to identify required storage. It does not run Git, read object
+contents, or automatically transfer discovered folders. Required unselected
+storage blocks preflight before SSH. Dependencies outside the source home and
+unreadable or unsupported pointer metadata require review. Intermediate aliases
+are part of the required scope, not just fully resolved link targets.
+
+Codex runtime exclusions apply at the Codex root, not inside managed worktrees.
+Branches named `cache/...`, reflogs, and unfinished files in `logs` or `packages`
+must not be lost to app-cache exclusions. Complete selected and managed
+workspaces can contain their own credentials; review them before copying.
+
 ## Safety sequence
 
 ```text

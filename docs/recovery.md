@@ -31,6 +31,14 @@ irreplaceable work, an independent backup until you validate the new workspace.
 
 ## Interrupted staging
 
+If inspection reports missing Git dependencies, no destination connection or
+transfer has begun in that attempt. Expand the Git scope panel to see required
+folders. Restart the helper, add those folders to the workspace selection, and
+inspect again. Changing browser scope creates a different migration record;
+existing staging is not automatically adopted or deleted. Review the changed
+replacement scope carefully. A missing historical worktree warning means that
+folder is already absent on the source, not that it was transferred.
+
 Start the dashboard again with the same target, target home, workspace roots,
 and state directory. Choose Resume. Rsync compares the existing staging tree
 and continues instead of beginning from an empty destination.
