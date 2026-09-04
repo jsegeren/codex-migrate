@@ -75,6 +75,15 @@ class SiteTests(unittest.TestCase):
         self.assertIn("--purple: #6042a6", styles)
         self.assertNotIn("var(--green", styles)
 
+    def test_product_reference_is_prominent_in_hero_and_separate_in_header(self):
+        source = (SITE / "index.html").read_text()
+        header = source.split('<header class="site-header">', 1)[1].split('</header>', 1)[0]
+        self.assertIn('class="header-compatibility"', header)
+        self.assertIn('For Codex — independent migration tool', header)
+        self.assertIn('>For Codex</span>', header)
+        self.assertIn('width="280" height="280" alt="Codex product icon"', source)
+        self.assertNotIn('class="terminal-card"', source)
+
     def test_modern_headings_and_black_text_on_light_surfaces(self):
         styles = (SITE / "styles.css").read_text()
         self.assertNotIn("Georgia", styles)
