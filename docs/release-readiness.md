@@ -51,6 +51,12 @@ as a workaround.
   neither documented managed-preference key in this account; it printed only
   presence booleans, not values. That observation is not integrated detection
   and does not certify the destination, cloud policy or absence of management.
+  Clean source `451cdb5a85059a9cdeb6d65f11c26a4b578bc482` produced a local-only,
+  unsigned arm64 build. Eight of nine actual packaged-engine startup/CLI/browser
+  checks passed, with one case-sensitive-filename skip. ZIP SHA-256:
+  `107e1f97eb687bf1a2841fdadf44475cb2113f56cf73cd794c53bf0ab8d64d45`.
+  Hosted run 33884928778 is in progress. The superseded inactive engineering
+  build was moved recoverably to Trash; running apps were not stopped or replaced.
 
 - Destination retained ancestor configuration is now screened at inspection
   and again before backup/replacement. The bounded check covers in-home parents
