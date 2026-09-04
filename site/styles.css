@@ -119,6 +119,8 @@ h1 .accent { color: var(--purple); font-weight: 500; }
 .check-list.compact li { border-color: var(--line); }
 .check-list.compact li::before { color: var(--purple); }
 .disclosure { margin: 18px 2px 0; color: var(--muted); font-size: 15px; line-height: 1.55; }
+.launch-interest { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--line); }
+.launch-interest h3 { font-size: 20px; }
 
 .origin { padding: 30px 0 120px; text-align: center; }
 .origin blockquote { max-width: 880px; margin: 0 auto 24px; font-family: Georgia, "Times New Roman", serif; font-size: clamp(28px, 3.2vw, 44px); line-height: 1.28; letter-spacing: -.025em; }

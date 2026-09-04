@@ -75,6 +75,16 @@ class SiteTests(unittest.TestCase):
         self.assertIn("--purple: #6042a6", styles)
         self.assertNotIn("var(--green", styles)
 
+    def test_launch_interest_is_an_honest_email_handoff(self):
+        page = self.parse("index.html")
+        emails = [href for href in page.hrefs if href.startswith("mailto:joshua@segeren.com?")]
+        self.assertEqual(len(emails), 2)
+        text = " ".join(page.text)
+        self.assertIn("clicking alone does not sign you up", text)
+        self.assertIn("case by case", text)
+        self.assertIn("unnotarized test builds", text)
+        self.assertNotIn("<form", (SITE / "index.html").read_text())
+
     def test_legal_pages_cover_purchase_basics(self):
         terms = " ".join(self.parse("terms.html").text).lower()
         refunds = " ".join(self.parse("refunds.html").text).lower()

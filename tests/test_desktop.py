@@ -36,7 +36,11 @@ class DesktopTests(unittest.TestCase):
                 "--state-dir", temporary + "/state",
             ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
             try:
-                self.assertTrue(select.select([process.stdout], [], [], 20)[0], "Dashboard startup timed out")
+                # Fresh macOS CI runners can spend tens of seconds on the first
+                # launch of a downloaded Python runtime. Keep a bounded cold-
+                # start budget without weakening any dashboard assertions.
+                self.assertTrue(select.select([process.stdout], [], [], 60)[0],
+                                "Dashboard startup timed out after 60 seconds")
                 line = process.stdout.readline().decode()
                 prefix = "Codex Migrate dashboard: "
                 self.assertTrue(line.startswith(prefix), "Expected a dashboard-ready message")
