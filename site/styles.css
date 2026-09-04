@@ -135,6 +135,11 @@ h1 .accent { color: var(--purple); }
 .founder-note h2 { margin-bottom: 12px; font-size: 22px; letter-spacing: -.02em; }
 .founder-note p { font-size: 17px; line-height: 1.6; }
 .founder-note a { display: inline-block; padding: 10px 0; font-weight: 700; text-underline-offset: 4px; }
+.product-preview { padding-top: 76px; }
+.ui-screenshot { margin: 32px 0 24px; }
+.ui-screenshot > a { display: block; }
+.ui-screenshot img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 14px; }
+.ui-screenshot figcaption { margin-top: 16px; font-size: 16px; line-height: 1.6; color: var(--ink); }
 
 .faq { padding: 110px 0 130px; border-top: 1px solid var(--line); }
 .faq .section-intro { max-width: 600px; }

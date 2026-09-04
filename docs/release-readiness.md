@@ -3,6 +3,9 @@
 The downloadable paid app is **not released**. Publishing source and the
 informational website does not open checkout or certify a customer download.
 
+See the [September 4 audit](release-audit-2026-09-04.md) for current automated
+results, accessibility findings, and pre-signing work still open.
+
 ## Candidate checks completed on the development Mac
 
 - Full Python test suite: 75 tests, including simulated low-space, failed-copy,

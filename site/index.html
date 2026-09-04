@@ -12,7 +12,7 @@
     <link rel="canonical" href="https://migrate.segeren.com/">
     <title>Codex Migrate — Keep the work. Change the Mac.</title>
     <link rel="icon" href="/assets/mark.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="/styles.css?v=20260904-hero-columns">
+    <link rel="stylesheet" href="/styles.css?v=20260904-ui-screenshots">
   </head>
   <body>
     <header class="site-header">
@@ -57,6 +57,21 @@
         <div><strong>No blind overwrite</strong><span>Backup, install, verify</span></div>
       </section>
 
+      <section class="product-preview shell" aria-labelledby="preview-heading">
+        <div class="section-intro">
+          <p class="eyebrow">Inside the alpha</p>
+          <h2 id="preview-heading">See what’s moving. Stay in control.</h2>
+          <p>The local dashboard shows the connection, copied data, selected folders, and backup checks. Pause or stop safely during staging, then resume when you’re ready.</p>
+        </div>
+        <figure class="ui-screenshot">
+          <a href="/assets/dashboard-transfer.png" aria-label="Open full-size screenshot of the transfer dashboard">
+            <img src="/assets/dashboard-transfer.png" width="1120" height="1168" loading="lazy" decoding="async" alt="Codex Migrate’s local dashboard showing transfer progress, SSH connection, workspace folders, backup requirements, and pause and safe-stop controls.">
+          </a>
+          <figcaption>Actual alpha dashboard, shown with sample data—not a live customer transfer. The signed Mac app is still in development. <a href="/assets/dashboard-transfer.png">View full size</a>.</figcaption>
+        </figure>
+        <p><a href="/backup-and-recovery">See the backup protection screen and recovery guide</a>.</p>
+      </section>
+
       <section class="story shell" id="how-it-works">
         <div class="section-intro">
           <p class="eyebrow">Built after the hard version</p>
@@ -65,7 +80,7 @@
         </div>
         <ol class="steps">
           <li><span>01</span><div><h3>Inspect</h3><p>See exactly what will move, how large it is, and whether both Macs are ready. Planning mode changes nothing.</p></div></li>
-          <li><span>02</span><div><h3>Transfer</h3><p>Stage a resumable copy over SSH. Pause, disconnect, switch networks, and continue without starting over.</p></div></li>
+          <li><span>02</span><div><h3>Transfer</h3><p>Move your workspace over Wi-Fi or a compatible USB-C/Thunderbolt network connection. Both use secure SSH. Pause and resume without starting over.</p></div></li>
           <li><span>03</span><div><h3>Protect</h3><p>Verify a destination backup before replacement. Insufficient space or failed verification blocks installation. Keep an independent backup too.</p></div></li>
           <li><span>04</span><div><h3>Verify</h3><p>Compare conversation counts, check databases, and produce a readable receipt of what arrived.</p></div></li>
         </ol>
@@ -163,7 +178,9 @@
         <div class="faq-grid">
           <details><summary>Is this made by OpenAI?</summary><p>No. Codex Migrate is an independent compatibility project. It is not affiliated with, supported by, or endorsed by OpenAI.</p></details>
           <details><summary>Does it copy my Codex login?</summary><p>No. Authentication and installation identity are deliberately excluded. You sign in on the new Mac first; the migration preserves that new identity.</p></details>
+          <details><summary>Can I transfer over Wi-Fi or a cable?</summary><p>Yes. Use Wi-Fi or a compatible USB-C/Thunderbolt network connection between your Macs; Ethernet works too. The transfer uses secure SSH in each case. USB-C cables vary in capability and speed, so the cable setup must provide a working network connection—not just charging. Enable Remote Login on the new Mac, then follow the <a href="/moving-to-a-new-mac">connection guide</a>.</p></details>
           <details><summary>Can I buy the paid app today?</summary><p>Not yet. The $50 downloadable Mac edition is in development. We are not taking pre-orders. The complete open-source CLI is usable today.</p></details>
+          <details><summary>Does it work on Windows?</summary><p>Not yet. Codex Migrate currently supports Mac-to-Mac migration only, including the open-source CLI. A Windows version is feasible, but it needs its own work on file locations, permissions, backups, packaging, and recovery testing. Windows and cross-platform transfers are not supported today, and there is no announced release date.</p></details>
           <details><summary>What if the transfer is interrupted?</summary><p>Rerun it. Staging uses resumable transfer semantics, so completed data is reused. The source Mac is never deleted or modified.</p></details>
           <details><summary>Can I migrate only one thing?</summary><p>Yes. Personal and repository-scoped skills can already be exported independently; more selective components will use the same guarded workflow.</p></details>
           <details><summary>What support and refunds will be included?</summary><p>Best-effort support, with an initial response target of a few business days, not a guaranteed fix or service level. When sales open, purchases will have a 30-day refund window. See the <a href="/refunds.html">refund policy</a>.</p></details>

@@ -49,6 +49,17 @@ class SiteTests(unittest.TestCase):
                         target = target.with_suffix(".html")
                     self.assertTrue(target.exists(), f"{page.name}: missing {href}")
 
+    def test_real_dashboard_screenshots_are_labeled_as_sample_data(self):
+        for page, asset in (("index.html", "dashboard-transfer.png"),
+                            ("backup-and-recovery.html", "dashboard-backup-blocked.png")):
+            with self.subTest(page=page):
+                source = (SITE / page).read_text()
+                self.assertIn('src="/assets/' + asset + '"', source)
+                self.assertIn('loading="lazy"', source)
+                self.assertIn("sample data", source.lower())
+                self.assertIn("View full size", source)
+                self.assertTrue((SITE / "assets" / asset).is_file())
+
     def test_checkout_closed_until_downloadable_edition_ready(self):
         text = " ".join(self.parse("index.html").text).lower()
         self.assertIn("no pre-orders", text)
@@ -56,6 +67,18 @@ class SiteTests(unittest.TestCase):
         self.assertIn("$50", text)
         self.assertIn("no subscription", text)
         self.assertIn("free cli", text)
+
+    def test_transfer_copy_explains_network_choices_and_cable_limit(self):
+        text = " ".join(self.parse("index.html").text)
+        self.assertIn("Wi-Fi or a compatible USB-C/Thunderbolt network connection", text)
+        self.assertIn("Both use secure SSH", text)
+        self.assertIn("USB-C cables vary in capability and speed", text)
+
+    def test_windows_faq_does_not_imply_current_support(self):
+        text = " ".join(self.parse("index.html").text)
+        self.assertIn("Does it work on Windows?", text)
+        self.assertIn("Mac-to-Mac migration only, including the open-source CLI", text)
+        self.assertIn("Windows and cross-platform transfers are not supported today", text)
 
     def test_founder_cross_promotion_is_separate_from_launch_signup(self):
         source = (SITE / "index.html").read_text()

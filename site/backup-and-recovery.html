@@ -6,7 +6,7 @@
     <meta name="description" content="How Codex Migrate checks free space, verifies a destination backup, and stops before replacement if the safety checks fail.">
     <link rel="canonical" href="https://migrate.segeren.com/backup-and-recovery">
     <meta property="og:title" content="A backup before replacement."><meta property="og:description" content="Understand the space checks, recovery path, and limits of a local migration backup."><meta property="og:type" content="article">
-    <link rel="icon" href="/assets/mark.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css?v=20260904-launch">
+    <link rel="icon" href="/assets/mark.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css?v=20260904-ui-screenshots">
   </head>
   <body>
     <header class="site-header"><a class="brand" href="/"><span class="brand-mark" aria-hidden="true">CM</span><span>Codex Migrate</span></a><nav aria-label="Primary navigation"><a href="/moving-to-a-new-mac">Migration guide</a><a href="/#launch-email">Launch email</a></nav></header>
@@ -16,6 +16,12 @@
       <h2>Not enough space? Installation stops.</h2>
       <p>Before replacing selected destination data, Codex Migrate measures the existing data and checks available disk space. Its estimate reserves room for a full backup plus a safety margin, even when APFS cloning may use less space.</p>
       <p>If the required space is unavailable, installation is blocked. The dashboard shows the measured requirements and a prominent warning. There is no skip-backup switch: free space, inspect again, and retry. The current edition does not offer an external-backup destination picker.</p>
+      <figure class="ui-screenshot">
+        <a href="/assets/dashboard-backup-blocked.png" aria-label="Open full-size screenshot of the insufficient-space warning">
+          <img src="/assets/dashboard-backup-blocked.png" width="1120" height="1168" loading="lazy" decoding="async" alt="The local migration dashboard displaying a prominent insufficient-space warning and the free space needed before a safe backup can proceed.">
+        </a>
+        <figcaption>Actual alpha dashboard with a simulated low-space check. Sample data only; no customer files are shown. <a href="/assets/dashboard-backup-blocked.png">View full size</a>.</figcaption>
+      </figure>
       <h2>A copy is not a verified backup</h2>
       <p>The tool creates a timestamped backup on the destination Mac, then checks file contents, directory structure, and symbolic links against the data being preserved. Only a successful verification permits replacement to proceed. A failed copy, mismatch, or insufficient remaining space stops installation.</p>
       <p>This protection also applies to matching destination skills during a skills-only export. Other components are not replaced by a skills-only operation.</p>
