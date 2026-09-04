@@ -57,7 +57,13 @@ Choose Resume to refresh staging, review the listed skill scope, and confirm
 Finalize again. No newly discovered skill is silently added to a previously
 confirmed replacement scope.
 
-Normal dashboard shutdown terminates its active SSH and rsync process groups.
+The browser-first helper refuses normal shutdown while a migration is running
+or paused. Choose Stop safely during inspection or copying, wait for it to
+settle, then quit. Installation must finish before normal shutdown. The
+standalone CLI dashboard instead terminates its active SSH and rsync process
+groups during shutdown. Neither behavior prevents an unexpected crash or power
+loss.
+
 On the next launch, a persisted `running` state is reconciled to `interrupted`
 and Resume reuses staged data. If shutdown happened during installation, the
 state becomes `failed`, retains `pending_backup`, and requires backup review

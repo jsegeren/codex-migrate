@@ -15,8 +15,9 @@ same person. It does not make an untrusted destination safe.
 
 The source process may read only the selected source home, `~/.codex`, and
 workspace roots, plus validated personal skills in `~/.agents/skills` and legacy
-`~/.codex/skills`. Personal skill aliases and file links are materialized only
-inside the source home; references to the protected SSH directory or Codex
+`~/.codex/skills`. Personal skill aliases and file links are materialized on the
+destination only when their resolved source targets remain inside the source
+home; references to the protected SSH directory or Codex
 authentication/installation files are rejected, including relocated aliases.
 The SSH destination is accepted only after ordinary SSH
 host-key verification succeeds. The dashboard binds only to loopback and
