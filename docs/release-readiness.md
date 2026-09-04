@@ -50,6 +50,13 @@ as a workaround.
   Swift typecheck and diff checks passed. System/managed settings and arbitrary
   role references remain engineering gates; this is not effective-config or
   real cross-Mac certification.
+  Clean source `364303255c0daebf149476bdc222ee1b8072061c` produced a local-only,
+  unsigned arm64 app. Eight of nine actual bundled-engine checks passed with
+  one case-sensitive-filename skip; these are packaged startup/CLI/browser
+  checks, not the missing two-Mac acceptance. ZIP SHA-256:
+  `4f3dd3c7bec4219e2ea89c6c13ef670e44e1cf62b50c122a8acec3c2bec08a58`.
+  Its hosted run 33884310112 is in progress. The superseded inactive engineering
+  build was moved recoverably to Trash; running user apps were left intact.
 
 - Source project configuration now receives conservative storage-override
   screening in selected descendants, managed worktrees and in-home ancestor
