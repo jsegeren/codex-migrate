@@ -26,3 +26,8 @@ jobs:
         run: PYTHONPATH=src python -m codex_migrate --version
       - name: Check native Mac shell
         run: xcrun swiftc -typecheck -parse-as-library desktop/CodexMigrate.swift
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Test launch email endpoint
+        run: node --test tests/signup.test.js

@@ -26,7 +26,7 @@ Codex Migrate is an independent project by Joshua Segeren. It is not made by,
 affiliated with, supported by, or endorsed by OpenAI. OpenAI and Codex are
 trademarks of their respective owner.
 
-**Website:** [codex-migrate.vercel.app](https://codex-migrate.vercel.app)
+**Website:** [migrate.segeren.com](https://migrate.segeren.com)
 
 ![Codex Migrate showing a resumable workspace transfer](docs/images/dashboard.png)
 
@@ -230,7 +230,7 @@ The signed Mac app is not available for download yet and checkout is closed
 until release checks pass. The complete free CLI is available today. Paid support
 will be best-effort, aiming for an initial response within a few business days,
 without a guaranteed response time, fix, or resolution deadline. See the
-[project website](https://codex-migrate.vercel.app/#founding-edition).
+[project website](https://migrate.segeren.com/#founding-edition).
 
 ## Contributing
 

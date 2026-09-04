@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Codex migration backups and recovery — Codex Migrate</title>
+    <meta name="description" content="How Codex Migrate checks free space, verifies a destination backup, and stops before replacement if the safety checks fail.">
+    <link rel="canonical" href="https://migrate.segeren.com/backup-and-recovery">
+    <meta property="og:title" content="A backup before replacement."><meta property="og:description" content="Understand the space checks, recovery path, and limits of a local migration backup."><meta property="og:type" content="article">
+    <link rel="icon" href="/assets/mark.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css?v=20260904-launch">
+  </head>
+  <body>
+    <header class="site-header"><a class="brand" href="/"><span class="brand-mark" aria-hidden="true">CM</span><span>Codex Migrate</span></a><nav aria-label="Primary navigation"><a href="/moving-to-a-new-mac">Migration guide</a><a href="/#launch-email">Launch email</a></nav></header>
+    <main class="legal shell">
+      <p class="eyebrow">Backups &amp; recovery</p><h1>A backup before replacement.</h1>
+      <p class="lede">Your new Mac may already contain work. A migration should not quietly overwrite it and hope for the best.</p>
+      <h2>Not enough space? Installation stops.</h2>
+      <p>Before replacing selected destination data, Codex Migrate measures the existing data and checks available disk space. Its estimate reserves room for a full backup plus a safety margin, even when APFS cloning may use less space.</p>
+      <p>If the required space is unavailable, installation is blocked. The dashboard shows the measured requirements and a prominent warning. There is no skip-backup switch: free space, inspect again, and retry. The current edition does not offer an external-backup destination picker.</p>
+      <h2>A copy is not a verified backup</h2>
+      <p>The tool creates a timestamped backup on the destination Mac, then checks file contents, directory structure, and symbolic links against the data being preserved. Only a successful verification permits replacement to proceed. A failed copy, mismatch, or insufficient remaining space stops installation.</p>
+      <p>This protection also applies to matching destination skills during a skills-only export. Other components are not replaced by a skills-only operation.</p>
+      <h2>Know where to recover</h2>
+      <p>The dashboard reports the backup location and verification state. The backup records which destinations it preserves and includes recovery guidance. If installation fails, retain both the staging directory and the backup. Consult the <a href="https://github.com/jsegeren/codex-migrate/blob/main/docs/recovery.md">recovery instructions</a> before retrying or restoring anything; rollback is not automatically guaranteed.</p>
+      <h2>What this does not protect against</h2>
+      <p>A backup on the same disk does not protect against that disk failing. It is not an atomic snapshot of every process on the machine. Close Codex and other writers to selected data before finalization. Verification does not independently prove every extended attribute, ACL, or hard-link relationship.</p>
+      <p class="notice"><strong>Keep the old Mac intact and maintain an independent backup.</strong> Test important conversations, skills, and repositories on the new Mac before treating the move as complete. No migration tool can promise zero risk.</p>
+      <h2>Inspect the implementation</h2>
+      <p>The migration engine is MIT licensed and available to review. The downloadable $50 Mac edition is still in development, with best-effort maintainer support planned. Neither the app nor support comes with a guarantee that every issue can be resolved.</p>
+      <div class="actions"><a class="button button-primary" href="https://github.com/jsegeren/codex-migrate">Explore the source</a><a class="button button-secondary" href="/#launch-email">Request a launch email</a></div>
+    </main>
+    <footer><div class="shell"><p>Independent software by Joshua Segeren. Not affiliated with or endorsed by OpenAI.</p><div class="footer-bottom"><a href="/">Codex Migrate</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></div></div></footer>
+  </body>
+</html>

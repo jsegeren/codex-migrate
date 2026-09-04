@@ -1,4 +1,6 @@
 User-agent: *
 Allow: /
+Disallow: /api/
+Disallow: /success
 
-Sitemap: https://codex-migrate.vercel.app/sitemap.xml
+Sitemap: https://migrate.segeren.com/sitemap.xml

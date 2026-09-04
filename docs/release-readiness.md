@@ -5,7 +5,7 @@ informational website does not open checkout or certify a customer download.
 
 ## Candidate checks completed on the development Mac
 
-- Full Python test suite: 73 tests, including simulated low-space, failed-copy,
+- Full Python test suite: 75 tests, including simulated low-space, failed-copy,
   corrupted-backup, rollback, component export, and dashboard boundaries.
 - Native Swift shell type-checks on Apple Silicon macOS.
 - A self-contained local app bundles the Python engine and offline recovery
@@ -16,9 +16,11 @@ informational website does not open checkout or certify a customer download.
 - Website checked at 1280px and 390px widths: upright headline, purple accents,
   separate attributed Codex product reference, $50 one-time planned price,
   no preorders or live checkout, and best-effort support disclosure.
-- Launch-interest and early unsigned-build requests use clearly labelled email
-  links to the maintainer. Visitors must send the message; a click alone does
-  not subscribe anyone. There is no automated mailing-list or form backend.
+- Launch interest uses an explicit-consent form and a fixed-recipient SendGrid
+  endpoint, protected by a production Vercel Firewall rate limit. Ten Node tests
+  cover validation, consent, fixed delivery destination, configuration failure,
+  and ambiguous provider errors. Early unsigned-build requests remain email-only.
+  No automated newsletter or paid download is enabled.
 
 These are local checks, not proof of clean-Mac installation or a complete
 cross-Mac migration. Failure tests use disposable fixtures, not user data.

@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://codex-migrate.vercel.app/</loc></url>
-  <url><loc>https://codex-migrate.vercel.app/privacy</loc></url>
-  <url><loc>https://codex-migrate.vercel.app/terms</loc></url>
-  <url><loc>https://codex-migrate.vercel.app/refunds</loc></url>
+  <url><loc>https://migrate.segeren.com/</loc></url>
+  <url><loc>https://migrate.segeren.com/moving-to-a-new-mac</loc></url>
+  <url><loc>https://migrate.segeren.com/backup-and-recovery</loc></url>
+  <url><loc>https://migrate.segeren.com/privacy</loc></url>
+  <url><loc>https://migrate.segeren.com/terms</loc></url>
+  <url><loc>https://migrate.segeren.com/refunds</loc></url>
 </urlset>

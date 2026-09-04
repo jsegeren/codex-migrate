@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Move your Codex workspace to a new Mac — Codex Migrate</title>
+    <meta name="description" content="A practical guide to moving local Codex conversations, skills, Git repositories, worktrees, and unfinished files to a new Mac.">
+    <link rel="canonical" href="https://migrate.segeren.com/moving-to-a-new-mac">
+    <meta property="og:title" content="Your new Mac. Your existing Codex workspace."><meta property="og:description" content="What to select, what stays behind, and what to verify before retiring your old Mac."><meta property="og:type" content="article">
+    <link rel="icon" href="/assets/mark.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css?v=20260904-launch">
+  </head>
+  <body>
+    <header class="site-header"><a class="brand" href="/"><span class="brand-mark" aria-hidden="true">CM</span><span>Codex Migrate</span></a><nav aria-label="Primary navigation"><a href="/backup-and-recovery">Backup &amp; recovery</a><a href="/#launch-email">Launch email</a></nav></header>
+    <main class="legal shell">
+      <p class="eyebrow">Moving to a new Mac</p><h1>New hardware.<br>Same unfinished work.</h1>
+      <p class="lede">A development workspace is more than a GitHub clone. It includes the conversation you want to resume, the branch you have not pushed, and the custom skill your project depends on.</p>
+      <p>Codex Migrate is an independent, open-source tool for moving local Codex workspaces between Macs over SSH. The engine is available as an alpha CLI. A $50 one-time Mac app is in development; no preorders are being taken.</p>
+      <h2>Select the work, not just the repository</h2>
+      <p>The migration includes active and archived local conversations, configuration, project organization, skills, rules, memories, automations, and relevant Codex state. You explicitly select the workspace folders to copy.</p>
+      <p>Inside those selected roots, the copy includes Git history, local branches, tags, stashes, linked-worktree metadata, and uncommitted or untracked files. Repositories or worktree directories outside those roots are not automatically included. Inspect the plan and include every location you still need.</p>
+      <h2>Keep the new Mac’s login</h2>
+      <p>Install Codex and sign in on the new Mac first. Codex Migrate preserves that machine’s authentication and installation identity. It does not copy the old Mac’s Codex login or SSH private-key directory. Credentials embedded in selected workspace files are still part of those files—review your selections carefully.</p>
+      <h2>Transfer, pause, resume</h2>
+      <p>Enable Remote Login for the destination user, verify the SSH host fingerprint, and inspect both Macs before enabling changes. Staging is resumable: after an interruption, rerun with the same destination and scope to reuse completed data. Wi-Fi, Ethernet, and working Thunderbolt networking can all carry SSH; plugging in a USB-C cable alone does not establish a network connection.</p>
+      <h2>Verify before you retire the old Mac</h2>
+      <p>Final installation requires Codex closed on both Macs and a verified destination backup. If the usernames differ, old absolute paths may need a reviewed compatibility alias. Open important conversations, check custom skills, and inspect your repositories on the new machine. Do not erase the old Mac just because a progress bar reached 100%.</p>
+      <p class="notice">The source Mac is left intact. Backups and verification reduce risk; they do not replace an independent backup or guarantee compatibility with every Codex version.</p>
+      <div class="actions"><a class="button button-primary" href="https://github.com/jsegeren/codex-migrate#quick-start">Read the CLI setup</a><a class="button button-secondary" href="/#launch-email">Get the Mac app launch email</a></div>
+    </main>
+    <footer><div class="shell"><p>Independent software by Joshua Segeren. Not affiliated with or endorsed by OpenAI.</p><div class="footer-bottom"><a href="/">Codex Migrate</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></div></div></footer>
+  </body>
+</html>

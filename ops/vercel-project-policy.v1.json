@@ -6,6 +6,7 @@
   "gitRepository": "jsegeren/codex-migrate",
   "productionBranch": "main",
   "productionDomains": [
+    "migrate.segeren.com",
     "codex-migrate.vercel.app"
   ],
   "allowProjectCreation": false

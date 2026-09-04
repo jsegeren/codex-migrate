@@ -42,7 +42,7 @@ class SiteTests(unittest.TestCase):
                     if not href.startswith("/") or href == "/":
                         continue
                     local_path = href.split("#", 1)[0].split("?", 1)[0]
-                    if not local_path:
+                    if not local_path or local_path == "/":
                         continue
                     target = SITE / local_path.removeprefix("/")
                     if target.suffix == "":
@@ -64,7 +64,7 @@ class SiteTests(unittest.TestCase):
         self.assertIn('>For Codex</a>', source)
         self.assertIn('Not affiliated with or endorsed by OpenAI', source)
         self.assertIn('href="/assets/mark.svg"', source)
-        self.assertTrue((SITE / "assets/codex-product.png").is_file())
+        self.assertTrue((SITE / "assets/codex-product-dark.png").is_file())
         self.assertIn("not licensed under", (ROOT / "THIRD_PARTY_NOTICES.md").read_text())
 
     def test_purple_theme_and_upright_headline(self):
@@ -75,15 +75,36 @@ class SiteTests(unittest.TestCase):
         self.assertIn("--purple: #6042a6", styles)
         self.assertNotIn("var(--green", styles)
 
-    def test_launch_interest_is_an_honest_email_handoff(self):
+    def test_modern_headings_and_black_text_on_light_surfaces(self):
+        styles = (SITE / "styles.css").read_text()
+        self.assertNotIn("Georgia", styles)
+        self.assertNotIn("Times New Roman", styles)
+        self.assertIn("--ink: #000;", styles)
+        self.assertIn("--muted: #000;", styles)
+        headline = styles.split("h1 {", 1)[1].split("}", 1)[0]
+        self.assertIn("font-weight: 800", headline)
+        self.assertIn(".legal p, .legal li { color: var(--ink); }", styles)
+
+    def test_launch_interest_uses_consented_form_and_separate_early_build_email(self):
         page = self.parse("index.html")
         emails = [href for href in page.hrefs if href.startswith("mailto:joshua@segeren.com?")]
-        self.assertEqual(len(emails), 2)
+        self.assertEqual(len(emails), 1)
         text = " ".join(page.text)
-        self.assertIn("clicking alone does not sign you up", text)
+        self.assertIn("Your request goes to Josh’s inbox via SendGrid", text)
         self.assertIn("case by case", text)
         self.assertIn("unnotarized test builds", text)
-        self.assertNotIn("<form", (SITE / "index.html").read_text())
+        source = (SITE / "index.html").read_text()
+        self.assertIn('action="/api/signup" method="post"', source)
+        self.assertIn('type="checkbox" value="yes" required', source)
+        self.assertIn('type="email"', source)
+
+    def test_guides_are_discoverable_and_do_not_promise_unsafe_backup_bypass(self):
+        home = (SITE / "index.html").read_text()
+        sitemap = (SITE / "sitemap.xml").read_text()
+        for path in ("moving-to-a-new-mac", "backup-and-recovery"):
+            self.assertIn('href="/' + path + '"', home)
+            self.assertIn("https://migrate.segeren.com/" + path, sitemap)
+        self.assertIn("no skip-backup switch", (SITE / "backup-and-recovery.html").read_text())
 
     def test_legal_pages_cover_purchase_basics(self):
         terms = " ".join(self.parse("terms.html").text).lower()

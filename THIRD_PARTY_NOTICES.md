@@ -1,12 +1,16 @@
 # Third-party product reference
 
-`site/assets/codex-product.png` depicts the Codex product, not Codex Migrate.
+`site/assets/codex-product-dark.png` (current dark tile) and
+`site/assets/codex-product.png` (previous light tile) depict the Codex product,
+not Codex Migrate.
 It is OpenAI artwork and is not licensed under this repository's MIT License.
 OpenAI retains its rights in the artwork and associated trademarks.
 
-Source: `Contents/Resources/app.icns` in the official, signed macOS application
+Sources: `Contents/Resources/icon-codex-dark-color.png` and
+`Contents/Resources/app.icns` in the official, signed macOS application
 with bundle identifier `com.openai.codex` (OpenAI signing team `2DC432GLL2`).
-Converted from ICNS to PNG without changing the artwork. The website displays
+The dark PNG is copied unchanged; the light variant was converted from ICNS
+to PNG without changing the artwork. The website displays
 it at a small size beside “For Codex,” with a non-affiliation notice. It is not
 our app icon, favicon, or logo and does not represent endorsement.
 
