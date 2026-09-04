@@ -22,22 +22,28 @@ class TransportError(RuntimeError):
     pass
 
 
+def _signal_group(process: subprocess.Popen, number: int) -> None:
+    try:
+        os.killpg(process.pid, number)
+    except ProcessLookupError:
+        pass
+    except PermissionError:
+        # Darwin may report EPERM, rather than ESRCH, during exit. Only
+        # tolerate it after reaping this exact child; live failures stay loud.
+        if process.poll() is None:
+            raise
+
+
 def _stop_process(process: subprocess.Popen) -> None:
     """Reap our local child group, including suspended transfers, on abort."""
     # The group leader may already have exited while a descendant still owns
     # a pipe. Clean the whole group and bound pipe draining, not just wait().
-    try:
-        os.killpg(process.pid, signal.SIGTERM)
-        os.killpg(process.pid, signal.SIGCONT)
-    except ProcessLookupError:
-        pass
+    _signal_group(process, signal.SIGTERM)
+    _signal_group(process, signal.SIGCONT)
     try:
         process.communicate(timeout=5)
     except subprocess.TimeoutExpired:
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
+        _signal_group(process, signal.SIGKILL)
         process.communicate(timeout=5)
 
 
@@ -277,8 +283,5 @@ class TransferProcess:
         with self._lock:
             self._cancel_requested = True
             if self.process and self.process.poll() is None:
-                try:
-                    os.killpg(self.process.pid, signal.SIGTERM)
-                    os.killpg(self.process.pid, signal.SIGCONT)
-                except ProcessLookupError:
-                    pass
+                _signal_group(self.process, signal.SIGTERM)
+                _signal_group(self.process, signal.SIGCONT)

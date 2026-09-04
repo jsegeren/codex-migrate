@@ -3,10 +3,19 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from codex_migrate.config import MigrationConfig, SSHOptions
-from codex_migrate.transport import SSHTransport, TransferProcess, TransportError
+from codex_migrate.transport import SSHTransport, TransferProcess, TransportError, _signal_group
 
 
 class TransportTests(unittest.TestCase):
+    def test_darwin_exit_permission_race_requires_reaped_child(self):
+        child = Mock(pid=12345)
+        with patch("codex_migrate.transport.os.killpg", side_effect=PermissionError):
+            child.poll.return_value = 0
+            _signal_group(child, 15)
+            child.poll.return_value = None
+            with self.assertRaises(PermissionError):
+                _signal_group(child, 15)
+
     def test_cancel_tolerates_exit_between_term_and_continue(self):
         transfer = TransferProcess(["/usr/bin/true"])
         transfer.process = Mock(pid=12345)
