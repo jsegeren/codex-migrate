@@ -19,6 +19,17 @@ results, accessibility findings, and pre-signing work still open.
   violations, and keyboard Stop left Resume available. This resolves the
   reproduced workspace-corruption acceptance defect below, not the remaining
   Git operational, different-username or clean-Mac acceptance gates.
+  Clean source `abbcd7a` built a fresh unsigned engineering app; seven checks
+  passed against the bundled engine. These package checks cover startup,
+  configuration and inventory, not a complete packaged migration.
+
+- Three additional disposable full-install Git fixtures make the original home
+  unavailable before checking restored work. They prove representative branch,
+  stash, index, dirty-file and managed-worktree continuity with the documented
+  compatibility alias, plus shared object pools/absolute alternates. Strict Git
+  validation passes for those ordinary layouts. A linked-refs fixture preserves
+  a source-existing strict-fsck limitation without claiming clean integrity.
+  These checks do not replace separate clean-Mac or cross-Mac acceptance.
 
 - Git dependency inspection now blocks missing main/shared storage, worktree
   folders and intermediate metadata aliases before SSH. Root-anchored runtime

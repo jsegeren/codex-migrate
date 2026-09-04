@@ -483,6 +483,50 @@ verification, backup and install remain a protected phase. No atomic snapshot,
 ACL/xattr/ownership/timestamp/hard-link proof, Git semantic usability, clean-Mac
 acceptance or whole-release certification is inferred from these checks.
 
+Clean source `abbcd7a12a58aefc9929e92ff01a9404b27b3040` produced a fresh
+unsigned Apple Silicon engineering app. All seven desktop checks passed against
+the actual bundled engine with system-only subprocess PATH and no Python/DYLD
+overrides. The build receipt records a clean source tree. These are startup,
+configuration and inventory checks on the build Mac; the full workspace
+verification transactions above run from source, not inside this ZIP.
+
+Artifact: `Codex-Migrate-arm64-LOCAL-UNSIGNED.zip` (engineering only).
+SHA-256: `a8345a2c3f71affbfbe8c074f886a9682a2dc4c442cd0edce920fc70d920e2c9`.
+
+Hosted CI for `abbcd7a12a58aefc9929e92ff01a9404b27b3040` passed on
+Python 3.9 and 3.12, including native Swift and signup checks:
+[run 33859299517](https://github.com/jsegeren/codex-migrate/actions/runs/33859299517).
+
+### Disposable Git operational/path acceptance
+
+Three local full-install fixtures now test Git after relocating the disposable
+source home so original files cannot mask broken destination references. An
+actual managed linked worktree cannot run Git status until the documented
+old-home compatibility alias is created. With that alias, source and restored
+refs, HEAD, stash object IDs, index entries, staged/unstaged diffs and untracked
+status match. Strict full fsck passes for the main/linked-worktree fixture and
+the separate shared-object-pool/absolute-alternates fixture. Workspace file
+hashes remain unchanged after the read-only Git acceptance commands.
+
+A third fixture covers linked refs. Normal commands remain equivalent after
+restoration, but this Mac's strict fsck rejects that symlink layout on the source
+as well. The test compares the existing result rather than misreporting it as a
+clean integrity check or migration-created corruption. All fixtures disable
+inherited Git configuration, hooks, fsmonitor and optional index locks; no user
+repository or remote Mac is used.
+
+Independent reviewer `public_release_review` ran and accepted all three tests
+as local path-compatibility evidence. The linked-refs test compares source and
+destination fsck results without requiring every installed Git version to
+reject that source layout.
+The full local suite passed 199 Python tests with the same explicit
+filename-support skip. The final portability adjustment also passed all three
+Git restore tests; candidate-specific hosted CI follows publication.
+
+This demonstrates representative local path compatibility with a reviewed
+alias, not automatic remapping, every Git feature/version, clean-Mac installation,
+real cross-Mac acceptance, or restored Codex chat reopening.
+
 ### Reference guidance
 
 - [Lighthouse scoring excludes manual checks](https://developer.chrome.com/docs/lighthouse/accessibility/scoring).
