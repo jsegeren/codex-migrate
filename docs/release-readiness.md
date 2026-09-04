@@ -24,6 +24,12 @@ results, accessibility findings, and pre-signing work still open.
   independent pass of that final retry regression. The bundled setup guide now
   distinguishes pre-install retries from post-install Check Git and recovery.
   No new rendered layout or real second-Mac acceptance is claimed for this slice.
+  Clean source `62bbb6d` produced a local-only unsigned arm64 engineering app;
+  eight of nine actual bundled-engine tests passed, with the case-sensitive-name
+  fixture skipped on this volume. ZIP SHA-256:
+  `2800d961533cb20569c39286e7c1ae9beebb618f962dc9d4d0072a1c461de1b9`.
+  No running user app was replaced. This is not Apple signing, notarization or
+  clean second-Mac acceptance.
 
 - Full finalization now durably saves an installation-bound source Git baseline
   and runs separate destination Git checks after home-path verification. The
