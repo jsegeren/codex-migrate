@@ -82,6 +82,9 @@ class SiteTests(unittest.TestCase):
         self.assertIn('For Codex — independent migration tool', header)
         self.assertIn('>For Codex</span>', header)
         self.assertIn('width="280" height="280" alt="Codex product icon"', source)
+        heading_row = source.split('<div class="hero-heading">', 1)[1].split('</div>', 1)[0]
+        self.assertIn('<h1>Keep the work.', heading_row)
+        self.assertIn('class="hero-inline-icon"', heading_row)
         self.assertNotIn('class="terminal-card"', source)
 
     def test_modern_headings_and_black_text_on_light_surfaces(self):
