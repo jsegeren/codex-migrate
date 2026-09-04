@@ -205,6 +205,19 @@ browser flow does not import them or adopt their staging. Native folder-picker
 permissions, VoiceOver, and clean-Mac/cross-Mac behavior remain unverified.
 The overall project remains **not release-ready**.
 
+### Packaged browser-helper check
+
+An unsigned Apple Silicon engineering build from clean source
+`e6ba09f3309b212e861fd5e8fa5085ee52460e43` passed six desktop checks against
+its actual bundled engine. Both `launch` and `serve` started private local
+servers and shut down normally under disposable test homes. Engine subprocesses
+used only the system PATH with Python/DYLD overrides removed. No destination SSH
+or migration ran. This verifies packaging inclusion and startup on the build
+Mac, not clean-Mac, minimum-macOS, native-picker, signing, or Gatekeeper support.
+
+Artifact: `Codex-Migrate-arm64-LOCAL-UNSIGNED.zip` (engineering only).
+SHA-256: `341e5e74585ecc1e03aca955bd5cc0a52cfeb89a8c56ac99a7afb549e1950d8f`.
+
 ### Reference guidance
 
 - [Lighthouse scoring excludes manual checks](https://developer.chrome.com/docs/lighthouse/accessibility/scoring).
