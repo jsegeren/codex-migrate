@@ -68,3 +68,54 @@ ranking remain unverified and are not guaranteed.
 
 All six live pages returned HTTP 200 with matching self-canonicals, one H1,
 and no HTML or response-header `noindex` directive during this check.
+
+## Paid checkout: sandbox evidence, not a live release
+
+On September 4, 2026, the existing **Segeren Studio sandbox** in Stripe was
+used to create **Codex Migrate — Founding Edition (TEST ONLY)** at **$50 USD,
+one time**, fixed quantity one. The existing live account, its products, and
+unrelated sandbox products were not changed. No keys were copied or created.
+
+The actual hosted test checkout—not just its dashboard preview—accepted
+Stripe's documented fictional test card. A reserved example.com test address
+and fictional tester name were used, saved-payment signup was disabled, and
+agent operation was disclosed. Stripe recorded the payment as **Succeeded**.
+A full sandbox refund then changed that same payment to **Refunded**, with a
+note identifying the acceptance test. No real money moved and no receipt email
+was sent. The confirmation explicitly said no app was delivered or released.
+
+The sandbox Payment Link was subsequently **Deactivated** and can be reactivated
+for further acceptance testing. Locate it by the exact test-product name in the
+sandbox's Payment Links list; do not create duplicate links or use **Copy to
+livemode** as a release shortcut. No checkout link was added to the public site.
+
+This proves the basic hosted sandbox card-payment and manual-refund path only.
+It does **not** prove app delivery, receipt email delivery, purchase recovery,
+declines, delayed payment methods, tax compliance, or live payment readiness.
+The test used the existing default payment-method configuration and no automatic
+tax. Those choices must not be copied to live sales without review.
+
+### Remaining commerce work
+
+- Confirm the merchant/tax arrangement before live sales. Ordinary Stripe
+  Checkout does not by itself outsource all tax obligations. Managed Payments
+  was offered by the dashboard but was **not enabled**; its additional fee,
+  supported countries, Link branding, refund authority and support requirements
+  require a Founder decision. Do not silently enroll or change shared settings.
+- Implement server-verified purchase fulfillment, not a success-page redirect
+  treated as proof of payment. Scope events to this exact product/price and
+  environment; verify webhook signatures and paid status; handle retries and
+  duplicate events without granting unrelated access or losing delivery.
+- Deliver the exact reviewed, signed/notarized, checksummed release artifact,
+  with a way to recover the download after closing the browser. Never substitute
+  an unsigned build or a mutable unverified ZIP.
+- Test paid and unpaid events, replay/duplicate handling, download and email
+  failures, browser closure, support requests and refunds. Transaction emails
+  must not enroll purchasers in launch or You.one marketing lists.
+- Review seller/support details, privacy/terms/refund links, allowed payment
+  methods and tax behavior before enabling a live $50 checkout. Customer payment
+  data and private webhook/signing credentials never belong in Git.
+
+References: [Stripe sandbox testing](https://docs.stripe.com/testing),
+[payment fulfillment](https://docs.stripe.com/checkout/fulfillment), and
+[Managed Payments responsibilities](https://docs.stripe.com/payments/managed-payments/how-it-works).

@@ -8,6 +8,14 @@ results, accessibility findings, and pre-signing work still open.
 
 ## Candidate checks completed on the development Mac
 
+- The existing Stripe sandbox now has a clearly labelled $50 one-time test
+  product. Its real hosted checkout completed a fictional card payment; the
+  transaction was independently visible as Succeeded, then Refunded after a full
+  test refund. The test link was deactivated afterward. No live product, real
+  charge, app delivery, receipt email or public checkout was enabled. This is
+  basic sandbox payment/refund evidence, not purchase-and-delivery acceptance.
+  See [website operations](website-operations.md) for the remaining commerce gates.
+
 - Release packaging now names ZIPs with the app version, build number and
   architecture, rejects packaged engine/app version mismatches, and rechecks
   clean source before notarization. It saves Apple's submission ID before

@@ -31,7 +31,7 @@ until a signed, notarized build, clean-Mac validation, and delivery are verified
 The signed Mac app is in development and is not available for download today.
 The full open-source CLI is available today. The intended paid refund window
 is 30 days from purchase. Current release status and policies are published at
-<https://codex-migrate.vercel.app>.
+<https://migrate.segeren.com>.
 
 ## Support promise
 
