@@ -97,6 +97,14 @@ class SiteTests(unittest.TestCase):
         self.assertIn("font-weight: 800", headline)
         self.assertIn(".legal p, .legal li { color: var(--ink); }", styles)
 
+    def test_body_and_hero_copy_have_readable_weight(self):
+        styles = (SITE / "styles.css").read_text()
+        body = styles.split("\nbody {", 1)[1].split("}", 1)[0]
+        lede = styles.split("\n.lede {", 1)[1].split("}", 1)[0]
+        self.assertIn("font-size: 17px", body)
+        self.assertIn("font-weight: 500", body)
+        self.assertIn("font-weight: 600", lede)
+
     def test_launch_interest_uses_consented_form_and_separate_early_build_email(self):
         page = self.parse("index.html")
         emails = [href for href in page.hrefs if href.startswith("mailto:joshua@segeren.com?")]
