@@ -79,9 +79,15 @@ destination refs/status, and historical path usability need separate validation.
 Folder selection rejects case/Unicode aliases of protected Codex, SSH, personal
 skills and migration-control paths, including relocated protected directories.
 Ambiguous spellings of selected workspace roots are rejected rather than
-silently combined. These checks also apply when the source is case-sensitive,
-because the destination may not be. They are not a complete scan for filename
-collisions inside repositories or for credentials stored under unrelated names.
+silently combined. Inspection and each copy attempt also screen nested names in
+selected workspaces, retained Codex state, managed worktrees and personal skills.
+Source tree verification repeats the check before replacement. Case-folding or
+Unicode-normalization collisions and invalid UTF-8 names require review; no
+automatic renaming is performed. These conservative checks also apply when both
+Macs use case-sensitive storage. They are not an exact emulation of every
+filesystem's Unicode rules or a search for credentials under unrelated names.
+Excluded runtime subtrees are not searched, although their names still participate
+in the sibling check. Workspace directory links are preserved rather than traversed.
 
 Full migrations also discover personal custom skills in `~/.agents/skills`
 and legacy `~/.codex/skills`. A current-location skill takes precedence over a
@@ -125,7 +131,8 @@ verified after installation.
 - Python 3.9 or newer on the source Mac
 - Remote Login enabled on the destination Mac
 - `ssh` and `rsync` available on both Macs
-- System Perl with `Digest::SHA`, `Time::HiRes`, and no-follow file support on
+- System Perl with `Digest::SHA`, `Time::HiRes`, `Encode`, `Unicode::Normalize`,
+  and no-follow file support on
   both Macs (checked during full-migration inspection)
 - An APFS destination home volume (required for space-efficient rollback)
 - An SSH connection whose host key has already been verified

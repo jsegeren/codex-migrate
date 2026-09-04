@@ -246,7 +246,8 @@ class TreeDigestTests(unittest.TestCase):
             if error.errno == errno.EILSEQ:
                 self.skipTest("This filesystem rejects non-UTF8 filename bytes")
             raise
-        self.assertEqual(len(freeze_tree(str(self.root))), 64)
+        with self.assertRaisesRegex(MigrationError, "filenames may collide"):
+            freeze_tree(str(self.root))
 
     def test_file_and_directory_links_do_not_read_the_target(self):
         target = self.root / "external"

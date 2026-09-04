@@ -13,6 +13,7 @@ from typing import Dict, Iterable, List, Sequence
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.config import path_key
+from codex_migrate.filename_safety import check_names
 
 
 SKILL_NAME = re.compile(r"^[A-Za-z0-9._-]+$")
@@ -63,6 +64,7 @@ def _validated_skill(path: Path, source_home: Path) -> Path:
     def unreadable(error):
         raise error
     for current, directories, files in os.walk(str(resolved), followlinks=False, onerror=unreadable):
+        check_names(directories + files)
         for name in directories + files:
             candidate = Path(current) / name
             try:

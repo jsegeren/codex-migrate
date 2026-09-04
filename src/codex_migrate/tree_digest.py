@@ -4,7 +4,8 @@ PERL_IMPORTS = "use strict; use warnings; use Digest::SHA; use Time::HiRes (); u
 
 # Names and link text are filesystem bytes. Absolute roots, owners, timestamps,
 # ACLs, xattrs and hard-link topology are deliberately not part of the digest.
-# Callers define $codex_mode and excluded(). Recovery always disables filtering.
+# Callers define $codex_mode, excluded() and validate_names(). Recovery keeps
+# exact existing trees and therefore disables migration filename restrictions.
 TREE_FUNCTIONS = r'''
 {
 use bytes;
@@ -41,6 +42,7 @@ sub tree {
         my @names = sort grep { $_ ne '.' && $_ ne '..' } readdir($directory);
         die if $!;
         closedir($directory) or die;
+        validate_names(@names);
         for my $name (@names) {
             my $child = $relative eq '' ? $name : $relative . '/' . $name;
             next if excluded($child, $path . '/' . $name);

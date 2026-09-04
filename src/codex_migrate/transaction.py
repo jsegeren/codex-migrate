@@ -37,6 +37,7 @@ use Errno qw(ENOENT);
 use Encode ();
 my $codex_mode = 0;
 sub excluded { return 0; }
+sub validate_names { return; }
 ''' + TREE_FUNCTIONS + r'''
 sub fail {
     print STDERR "Destination recovery evidence could not be safely saved or verified. Keep Codex closed, staging and backups intact, and contact support.\n";

@@ -532,8 +532,12 @@ class MigrationEngine:
         self.transport.run_remote(locked_destination_script(self.config.target_home, script))
 
     def _transfers(self) -> List[Tuple[str, str, Sequence[str], str, bool]]:
+        from codex_migrate.filename_safety import check_tree_names
         require_source_storage(self.config.source_home, self._inspection_checkpoint)
         validate_codex_identity_names(self.config.source_codex)
+        check_tree_names(self.config.source_codex, self._inspection_checkpoint, codex=True)
+        for root in self.config.workspace_roots:
+            check_tree_names(root, self._inspection_checkpoint)
         staging = self.config.target_staging
         transfers: List[Tuple[str, str, Sequence[str], str, bool]] = [
             (self.config.source_codex, staging + "/.codex", CODEX_EXCLUDES, "Codex state", False)

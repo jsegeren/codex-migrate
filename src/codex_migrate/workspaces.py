@@ -8,13 +8,14 @@ import time
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.exclusions import CODEX_EXCLUDES
+from codex_migrate.filename_safety import MESSAGE as FILENAME_MESSAGE, PERL_NAME_CHECK
 from codex_migrate.transport import _stop_process
 from codex_migrate.tree_digest import PERL_IMPORTS, TREE_FUNCTIONS
 
 
 PERL_COMMAND = ["/usr/bin/env", "-u", "PERL5OPT", "-u", "PERL5LIB", "-u", "PERLLIB",
                 "-u", "PERLIO", "-u", "PERL_UNICODE", "LC_ALL=C", "/usr/bin/perl"]
-PERL_PROBE = PERL_IMPORTS + "my $flags = O_NOFOLLOW | O_NONBLOCK; die unless length(Digest::SHA::sha256_hex('')) == 64;"
+PERL_PROBE = PERL_IMPORTS + PERL_NAME_CHECK + "validate_names('fixture'); my $flags = O_NOFOLLOW | O_NONBLOCK; die unless length(Digest::SHA::sha256_hex('')) == 64;"
 WORKSPACE_TIMEOUT = 24 * 60 * 60
 
 
@@ -34,10 +35,10 @@ def _codex_filter():
         lines.append("return 1 if " + condition + ";")
     return "\n".join(lines) + "\nreturn 0; }\n"
 
-# Names/link text are filesystem bytes, never decoded as Unicode. Each tree
-# node is domain-separated and length-framed; child names are sorted as bytes.
+# Digest names/link text remain filesystem bytes; only the collision check
+# decodes names. Nodes are domain-separated and length-framed, sorted as bytes.
 # Hashes do not include absolute roots, owners, timestamps, ACLs or xattrs.
-TREE_PROGRAM = PERL_IMPORTS + r'''
+TREE_PROGRAM = PERL_IMPORTS + PERL_NAME_CHECK + r'''
 my $codex_mode = @ARGV == 2 && $ARGV[1] eq 'codex';
 ''' + _codex_filter() + TREE_FUNCTIONS + r'''
 my $digest;
@@ -47,7 +48,10 @@ my $ok = eval {
     $digest = unpack('H*', tree($ARGV[0], ''));
     1;
 };
-if (!$ok) { print STDERR "Workspace tree could not be verified. Close writing apps and review unreadable or special files.\n"; exit 74; }
+if (!$ok) {
+    if ($@ eq "CM_FILENAME_SAFETY\n") { print STDERR "Source filenames need review before migration.\n"; exit 75; }
+    print STDERR "Workspace tree could not be verified. Close writing apps and review unreadable or special files.\n"; exit 74;
+}
 print $digest, "\n" or exit 74;
 '''
 
@@ -56,7 +60,7 @@ def check_local_tools():
     try:
         subprocess.run(PERL_COMMAND + ["-e", PERL_PROBE], check=True, capture_output=True, timeout=10)
     except (OSError, subprocess.SubprocessError) as error:
-        raise MigrationError("Workspace verification requires system Perl with Digest::SHA, Time::HiRes and no-follow file support") from error
+        raise MigrationError("Workspace verification requires system Perl with Digest::SHA, Time::HiRes, Encode, Unicode::Normalize and no-follow file support") from error
 
 
 def remote_tool_check():
@@ -96,6 +100,8 @@ def freeze_tree(root: str, checkpoint=lambda: None, *, codex=False):
             except subprocess.TimeoutExpired:
                 continue
         checkpoint()
+        if process.returncode == 75:
+            raise MigrationError(FILENAME_MESSAGE)
         if process.returncode or not re.fullmatch(r"[0-9a-f]{64}\n", output):
             raise MigrationError("Source workspace verification failed. Close writing apps and review unreadable or special files; staging was kept.")
         return output.strip()

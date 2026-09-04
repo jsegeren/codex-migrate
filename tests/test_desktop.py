@@ -17,6 +17,35 @@ from codex_migrate.cli import _port
 
 
 class DesktopTests(unittest.TestCase):
+    def test_real_engine_rejects_nested_filename_collision(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            (home / ".codex/sessions").mkdir(parents=True)
+            (home / ".codex/sessions/chat.jsonl").write_text("{}\n")
+            nested = home / "Git/repo/nested"
+            nested.mkdir(parents=True)
+            (nested / "README").write_bytes(b"first fixture")
+            try:
+                with (nested / "readme").open("xb") as stream:
+                    stream.write(b"second fixture")
+            except FileExistsError:
+                self.skipTest("A case-sensitive filesystem is required for this engine fixture")
+            binary = os.environ.get("CODEX_MIGRATE_TEST_ENGINE")
+            command = [binary] if binary else [sys.executable, "-m", "codex_migrate"]
+            env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1] / "src"))
+            if binary:
+                env = {key: value for key, value in env.items() if not key.startswith(("PYTHON", "DYLD_"))}
+                env["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin"
+            result = subprocess.run(command + ["inventory", "--source-home", str(home),
+                                    "--workspace", str(home / "Git"), "--json"], env=env,
+                                    capture_output=True, text=True, timeout=30)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(result.stdout, "")
+            self.assertIn("filenames may collide", result.stderr)
+            self.assertNotIn("README", result.stderr)
+            self.assertEqual((nested / "README").read_bytes(), b"first fixture")
+            self.assertEqual((nested / "readme").read_bytes(), b"second fixture")
+
     def test_real_engine_internal_bridge_rejects_invalid_payload(self):
         binary = os.environ.get("CODEX_MIGRATE_TEST_ENGINE")
         root = Path(__file__).resolve().parents[1]

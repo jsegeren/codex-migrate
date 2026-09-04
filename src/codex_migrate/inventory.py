@@ -13,6 +13,7 @@ from codex_migrate.transport import _stop_process
 from codex_migrate.skills import SkillExport, discover_personal_skills
 from codex_migrate.git_inventory import inspect_git
 from codex_migrate.storage_scope import require_source_storage
+from codex_migrate.filename_safety import check_name, check_tree_names
 
 
 def _continue() -> None:
@@ -71,9 +72,11 @@ def _tree_summary(
         checkpoint()
         current = stack.pop()
         try:
+            seen = set()
             with os.scandir(str(current)) as entries:
                 for entry in entries:
                     checkpoint()
+                    check_name(entry.name, seen)
                     try:
                         if entry.is_symlink():
                             if not counted_suffix or entry.name.endswith(counted_suffix):
@@ -139,6 +142,8 @@ def collect(source_home: str, workspace_roots: List[str],
                 info = (Path(current) / name).stat()
                 skill_bytes += max(info.st_size, info.st_blocks * 512)
     codex = home / ".codex"
+    if codex.exists():
+        check_tree_names(codex, checkpoint, codex=True)
     active, active_unreadable = _tree_summary(codex / "sessions", ".jsonl", checkpoint)
     archived, archived_unreadable = _tree_summary(codex / "archived_sessions", ".jsonl", checkpoint)
     roots = [Path(item) for item in workspace_roots]

@@ -8,6 +8,28 @@ results, accessibility findings, and pre-signing work still open.
 
 ## Candidate checks completed on the development Mac
 
+- Nested filename screening now rejects conservative case-fold/decomposition
+  collisions and invalid UTF-8 names before copying and during the source tree
+  freeze before replacement. Full inventory/copy includes managed worktrees;
+  skill discovery and selective repair screen their nested names too. No source
+  files are renamed or changed. Errors do not echo filenames or file contents.
+  Existing destination recovery keeps its original byte-based digest contract
+  and can still verify case-sensitive backups containing such names.
+  Thirteen filename tests and nine actual-engine desktop tests passed with no
+  skips on a disposable 128 MiB case-sensitive APFS image, including real
+  distinct source filenames, unchanged rejected data, inventory rejection,
+  stopping before an installation RPC and rescreening before resume copies.
+  Synthetic cases also cover canonical Unicode equivalents, case-fold
+  expansions, invalid UTF-8 and a nested conflicting directory listing.
+  Independent `public_release_review` accepted the bounded diff, verified
+  unchanged digest bytes, and passed 14 filename/CLI tests on the case-sensitive
+  image without skips. The full local suite passed 404 of 411 tests, with seven
+  filesystem-dependent skips; the case-sensitive run covers six of those skips.
+  Ten signup tests, Swift typecheck and diff checks also passed. Notarization
+  output produced by the release unit tests is mocked, not Apple certification.
+  This remains conservative screening, not an exact filesystem Unicode model,
+  an atomic source snapshot or a real cross-Mac acceptance test.
+
 - Full migration now screens visible account `CODEX_HOME` and bounded user
   config/profile files for `sqlite_home` before inventory/copy and source
   verification. Destination and staged user configuration are screened inside
