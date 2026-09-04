@@ -16,7 +16,7 @@ handoff is complete while the engineering acceptance gates remain open.
 | Requirement | Evidence now | Next proof / owner |
 | --- | --- | --- |
 | Supported conversations, organization, settings, skills and complete selected workspaces | Frozen content/tree checks, retained destination identity, Git dependency discovery and bound Git baseline; local installation/rollback fixtures | Codex must reopen representative restored chats, settings and projects on the separate Mac. Codex leads; Josh provides disposable accounts. |
-| Scope is explicit, not “everything on the Mac” | Selected roots and dependency issues are reported; unsupported visible storage overrides, source project configuration, retained destination ancestor configuration, fixed system config/default files, filenames and cloud-only flags stop early | Real configuration/version/provider matrix; MDM preferences, cloud-managed policy, arbitrary role references and unflagged cloud storage remain unverified. Codex owns testing and any resulting fixes. |
+| Scope is explicit, not “everything on the Mac” | Selected roots and dependency issues are reported; unsupported visible storage overrides, source project configuration, retained destination ancestor configuration, fixed system defaults, visible managed-preference keys, filenames and cloud-only flags stop early | Real configuration/version/provider matrix; managed preference visibility across launch contexts, cloud-managed policy, arbitrary role references and unflagged cloud storage remain unverified. Codex owns testing and any resulting fixes. |
 | Full and selective migration, pause/resume and recovery | Full/skills-only staging, persisted setup, mandatory verified backups, guarded replacement, guided reconciliation and preserved displaced work have local fixture coverage | Packaged full and skills-only runs across the two Macs, including disconnect, restart, low space and recovery. Never use Josh's active migrated workspace. |
 | Git and old-home paths remain usable | Local linked-worktree/alternate-storage checks with source home offline; read-only path/Git rechecks preserve installed work | Different-user cross-Mac acceptance and representative development commands. Matching fingerprints alone do not prove every future command works. |
 | Browser-first local-data experience and clear status/help | Loopback helper, SSH transfer, saved setup, collapsed optional Help, bounded private-free diagnostic events and operation-specific controls | Native permission/VoiceOver checks and real route interruption acceptance. Automatic route selection and updating are not implemented. |
@@ -33,6 +33,22 @@ engineering work. Do not create another Apple purchase or enable live checkout
 as a workaround.
 
 ## Candidate checks completed on the development Mac
+
+- Full migration now checks presence of the two documented macOS managed
+  preference keys for the executing source account and destination SSH account.
+  No policy payload is converted, decoded, printed or changed. Present keys
+  (including false/empty values), probe errors and timeouts block for review;
+  checks repeat before source copying/freezing and destination replacement.
+  Independent `public_release_review` accepted the code and scoped instructions,
+  passed the initial 12 focused tests and then the cancellation/UNKNOWN additions.
+  All 13 focused tests pass locally. The full suite before the final test addition
+  passed 521 of 528 tests with seven filesystem skips; ten signup tests, Swift
+  typecheck and diff checks passed. In-process fixture preferences are not
+  persisted. Late rejection keeps staging and original destination data without
+  starting a backup. The cancellation regression verifies the launched process
+  is reaped, not every descendant PID independently. This is not MDM enrollment,
+  effective-policy, restricted-launch visibility or real managed-account/SSH
+  certification. Those acceptance gates remain open.
 
 - Fixed macOS system defaults are now screened for storage overrides on both
   Macs: `/etc/codex/config.toml` and `/etc/codex/managed_config.toml`. The reader
@@ -55,7 +71,7 @@ as a workaround.
   unsigned arm64 build. Eight of nine actual packaged-engine startup/CLI/browser
   checks passed, with one case-sensitive-filename skip. ZIP SHA-256:
   `107e1f97eb687bf1a2841fdadf44475cb2113f56cf73cd794c53bf0ab8d64d45`.
-  Hosted run 33884928778 is in progress. The superseded inactive engineering
+  Hosted run 33884928778 passed on Python 3.9 and 3.12. The superseded inactive engineering
   build was moved recoverably to Trash; running apps were not stopped or replaced.
 
 - Destination retained ancestor configuration is now screened at inspection

@@ -27,6 +27,9 @@ available yet. Local unsigned builds are engineering artifacts, not releases.
   Known system config/default files are screened, not copied. For a managed
   work Mac, ask your administrator to confirm policy and tools on the new Mac;
   this tool does not migrate or certify device-management policy.
+  Visible Codex managed-preference keys stop full migration for administrator
+  and support review. A failed or timed-out check also stops. There is no
+  override; do not remove policy to bypass it.
 - If repositories are discovered, Apple Command Line Tools/Xcode and the
   guarded Git runtime must pass preflight on both Macs before staging. This
   early check does not inspect repository contents or prove Git integrity.

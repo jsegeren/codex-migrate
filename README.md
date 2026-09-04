@@ -351,6 +351,15 @@ the standard macOS `/etc` directory alias, rejects linked configuration paths
 and unsafe files, and never copies or changes system settings. It runs before
 source inventory/copy/freezing and destination inspection/replacement.
 
+For the executing source account and the destination SSH account, full migration
+also checks whether either documented macOS managed-preference key is visible
+in `com.openai.codex`. It inspects presence only: values are not converted,
+decoded, printed or changed. A present key, including an empty or false value,
+stops full migration for administrator/support review; there is no bypass
+switch. Failure or timeout stops with an unverified result, not an absence claim.
+The check repeats before copying/source freezing and destination replacement.
+Inspecting another home does not attribute the caller's preferences to its owner.
+
 An override or unreadable/unsafe configuration stops the full migration for
 review. Keep the original files and settings intact; contact support rather
 than unsetting variables or deleting a setting just to bypass the guard. Any
@@ -363,9 +372,12 @@ effective-config resolver. Project configuration is checked conservatively even
 if that project is not currently trusted or its profile is inactive. More than
 1,024 discovered project layers requires review, rather than silently skipping
 the rest. Ordinary directory-link targets are not traversed. The pass does not
-inspect other processes' environments, shell startup scripts, macOS managed
-preferences (MDM), cloud-managed requirements, arbitrary role-config references
-or undisclosed custom storage roots. `requirements.toml` is policy, not a
+inspect other processes' environments, shell startup scripts, cloud-managed
+requirements, arbitrary role-config references or undisclosed custom storage
+roots. Managed-preference presence is not a decoded policy comparison, MDM
+enrollment check or proof that no management exists. Preference visibility can
+differ in sandboxed or restricted launch contexts; real managed-Mac acceptance
+remains open. `requirements.toml` is policy, not a
 storage-default file, and is not parsed or transferred by this check. Managed
 machines still need their administrator to confirm approved policy and required
 tools on the new Mac; do not disable management to bypass an inspection failure.

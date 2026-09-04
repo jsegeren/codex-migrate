@@ -14,6 +14,7 @@ import subprocess
 import time
 
 from codex_migrate.errors import MigrationError
+from codex_migrate.managed_preferences import managed_preferences_script, PRESENT_MESSAGE, UNKNOWN_MESSAGE
 from codex_migrate.transport import _stop_process
 from codex_migrate.source_availability import require_local, walk_local
 
@@ -149,6 +150,8 @@ MESSAGES = {
     65: "A custom CODEX_HOME is active. This migration supports the selected home's .codex folder only. Keep the custom storage intact and contact support to review the scope; do not unset the override just to bypass this check.",
     66: "A sqlite_home setting was found in Codex configuration. Its database storage needs review before full migration; do not remove the setting just to bypass this check.",
     67: "Codex storage configuration could not be safely checked. Keep the files intact and contact support before full migration.",
+    68: PRESENT_MESSAGE,
+    69: UNKNOWN_MESSAGE,
 }
 
 
@@ -227,6 +230,8 @@ def require_source_storage(home, checkpoint=lambda: None, *, identity_home=None)
         # Only the source-account pass checks machine defaults. Project readers
         # share the account's identity protection without repeating this check.
         script = system_storage_script(home).rstrip() + " || exit $?\n" + script
+        if own_home:
+            script = managed_preferences_script() + script
     checkpoint()
     process = subprocess.Popen(["/bin/zsh", "-f", "-s"], stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
