@@ -201,6 +201,7 @@ class MigrationTests(unittest.TestCase):
                             "AUTH_PRESERVED=1\nINSTALLATION_ID_PRESERVED=1\n"
                             "BACKUP_VERIFIED=1\n"
                             "CONVERSATION_CONTENT_VERIFIED=1\n"
+                            "WORKSPACE_CONTENT_VERIFIED=1\nWORKSPACE_ROOTS_VERIFIED=1\n"
                             "BACKUP=/Users/person/backup\n"
                         )
                     )
@@ -217,7 +218,8 @@ class MigrationTests(unittest.TestCase):
                 git_repositories=1,
                 unreadable_paths=[],
             )
-            with patch("codex_migrate.migration.conversation_verification_script", return_value="return 0"):
+            with patch("codex_migrate.migration.conversation_verification_script", return_value="return 0"), \
+                 patch("codex_migrate.migration.freeze_tree", return_value="a" * 64):
                 receipt = engine._install_and_verify()
             self.assertTrue(receipt["auth_preserved"])
             self.assertIn("cp -c -R /Users/person/Git", scripts[0])

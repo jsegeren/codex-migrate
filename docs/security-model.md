@@ -71,13 +71,22 @@ them. The one-pass CLI export remains separate from resumable browser staging.
 
 ## Known limitations
 
+Selected workspaces and Codex-managed worktrees receive streaming SHA-256 tree
+checks against the same frozen source expectations before replacement and
+after installation. They include Git object/ref bytes, working files, names,
+regular-file/directory permission bits, empty directories, and symlink text.
+Links are not followed. Unreadable, changing, or special files fail closed.
+Hashes are privately compared, never displayed or saved in progress state.
+This does not independently verify ownership, timestamps, ACLs, extended
+attributes, or hard-link topology, nor prove Git commands work on the new Mac.
+
 - Codex's local storage format is not a documented public migration API and can
   change between releases.
 - Version 0.1 reports but does not automatically fix every stale historical
   worktree path.
 - Different macOS usernames require a reviewed compatibility alias.
-- Transcript checksums do not provide a cryptographic proof of every other
-  Codex configuration or workspace byte in version 0.1. Git usability and old
+- Transcript/workspace checksums do not prove every other Codex configuration
+  byte in version 0.1. Git usability and old
   workspace-path continuity still require separate validation.
 - Staging and rollback backups contain private user data and must remain
   owner-only.

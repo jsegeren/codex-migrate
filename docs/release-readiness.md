@@ -8,6 +8,18 @@ results, accessibility findings, and pre-signing work still open.
 
 ## Candidate checks completed on the development Mac
 
+- Full selected-workspace and managed-worktree content verification now rejects
+  corrupted staged Git refs/objects and files before replacement and rolls back
+  installed mismatches against the same frozen source snapshots. Twenty focused
+  tests cover content/tree changes, receipts, special files and source Stop
+  cleanup/races. The complete local suite passes 196 Python tests (one explicit
+  filesystem filename-support skip) and 10 signup tests. Independent code,
+  documentation and desktop/320px review accepted this bounded checkpoint.
+  Local browser checks at 1280/390/320px found no overflow or selected axe A/AA
+  violations, and keyboard Stop left Resume available. This resolves the
+  reproduced workspace-corruption acceptance defect below, not the remaining
+  Git operational, different-username or clean-Mac acceptance gates.
+
 - Git dependency inspection now blocks missing main/shared storage, worktree
   folders and intermediate metadata aliases before SSH. Root-anchored runtime
   exclusions preserve complete managed-workspace branches, reflogs and files.
@@ -55,13 +67,12 @@ cross-Mac migration. Failure tests use disposable fixtures, not user data.
 
 ## Remaining paid-release gates
 
-- Add source-to-staging and post-install workspace/Git verification. A
-  disposable full-install probe against `04e3ffa` replaced a staged branch ref
-  with forty zeroes; installation returned a completion receipt and retained
-  the corrupted ref. Transcript and backup verification do not cover this.
-  The next verification work must reject altered staged refs/files before
-  replacement and trigger rollback for post-install mismatches. This is a
-  known release blocker, not a waived limitation of dependency inventory.
+- Validate destination Git operational usability and historical path continuity,
+  including linked worktrees, refs, status and different usernames. Workspace
+  content verification fixes the corruption-acceptance defect reproduced against
+  `04e3ffa`, but matching bytes alone do not establish usable destination paths.
+- Verify preservation of supported Codex configuration/state outside transcript,
+  personal-skill and workspace content checks; open representative restored chats.
 - Confirm Apple Developer membership activation and the intended account.
 - Create Developer ID signing credentials and notarization access securely.
 - Produce, notarize, staple, and verify the exact committed release artifact.

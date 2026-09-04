@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 import platform
+import os
 import re
 import secrets
 import shlex
@@ -22,6 +23,8 @@ from codex_migrate.inventory import Inventory, collect
 from codex_migrate.security import redact
 from codex_migrate.state import StateStore
 from codex_migrate.transport import SSHTransport, TransferProcess
+from codex_migrate.workspaces import (WORKSPACE_TIMEOUT, check_local_tools, freeze_tree,
+                                      remote_tool_check, remote_tree_function, tree_check)
 
 
 def codex_running() -> bool:
@@ -170,7 +173,9 @@ class MigrationEngine:
             raise MigrationError("Git dependencies are outside the selected workspace folders. "
                                  "Restart setup, add these folders to the selection, and inspect again: "
                                  + "; ".join(inventory.git_missing_paths[:10]))
+        check_local_tools()
         remote = self.transport.check()
+        self.transport.run_remote(remote_tool_check())
         self._inspection_checkpoint()
         expected_user = self.config.target.split("@", 1)[0]
         actual_user = _value(remote, "USER")
@@ -316,6 +321,9 @@ class MigrationEngine:
                 [self.config.ssh.identity_file or "", self.config.ssh.known_hosts_file or ""],
             )
             if self._pause_requested or self._cancel_requested:
+                current = self.state.read()
+                if current.get("status") == "running" and current.get("phase") == "verifying_sources":
+                    self._restore_requested_stop()
                 return
             current = self.state.read()
             changes = {"status": "failed", "message": message, "error": message}
@@ -497,7 +505,7 @@ class MigrationEngine:
         with self._lock:
             current = self.state.read()
             stoppable = current.get("status") == "running" and current.get("phase") in (
-                "inspecting", "staging", "final_delta"
+                "inspecting", "staging", "final_delta", "verifying_sources"
             )
             already_paused = (
                 current.get("status") == "paused" and current.get("phase") == "staging"
@@ -572,6 +580,9 @@ class MigrationEngine:
         self._copy_all()
         if self._restore_requested_stop():
             return
+        prepared_workspaces = self._prepare_install()
+        if self._restore_requested_stop():
+            return
         if codex_running():
             self.state.update(
                 status="waiting",
@@ -588,13 +599,16 @@ class MigrationEngine:
                 staging_complete=True,
             )
             return
-        self.state.update(
-            status="running",
-            phase="installing",
-            message="Backing up the destination, installing, and verifying.",
-            current_item="Destination installation",
-        )
-        receipt = self._install_and_verify()
+        with self._lock:
+            if self._restore_requested_stop():
+                return
+            self.state.update(
+                status="running",
+                phase="installing",
+                message="Verifying destination contents, backing up, installing and checking again. This protected phase can take time; keep both Macs connected.",
+                current_item="Destination verification and installation",
+            )
+        receipt = self._install_and_verify(prepared_workspaces)
         self.state.update(
             status="complete",
             phase="verified",
@@ -635,7 +649,34 @@ class MigrationEngine:
             for root in self.config.workspace_roots
         ] + [skill.destination for skill in self._skill_plan()]
 
-    def _install_and_verify(self) -> Dict[str, object]:
+    def _prepare_install(self):
+        roots = [(root, self.config.target_staging + "/home-relative/" + str(Path(root).relative_to(self.config.source_home)),
+                  self.config.target_home + "/" + str(Path(root).relative_to(self.config.source_home)))
+                 for root in self.config.workspace_roots]
+        managed = Path(self.config.source_codex) / "worktrees"
+        roots.append((str(managed), self.config.target_staging + "/.codex/worktrees",
+                      self.config.target_codex + "/worktrees"))
+        prepared = []
+        for index, (source, staged, installed) in enumerate(roots, 1):
+            with self._lock:
+                self._inspection_checkpoint()
+                self.state.update(status="running", phase="verifying_sources",
+                                  message="Reading source workspace contents (%d of %d). Safe to stop; a stopped check restarts on Finalize." % (index, len(roots)),
+                                  current_item="Source workspace verification")
+            absent_managed = False
+            if source == str(managed):
+                try:
+                    os.lstat(managed)
+                except FileNotFoundError:
+                    absent_managed = True
+            digest = None if absent_managed else freeze_tree(source, self._inspection_checkpoint)
+            prepared.append((staged, installed, digest))
+        return prepared
+
+    def _install_and_verify(self, prepared_workspaces=None) -> Dict[str, object]:
+        if prepared_workspaces is None:
+            prepared_workspaces = self._prepare_install()
+        self.state.update(phase="installing")
         recorded_inventory = self.state.read().get("inventory")
         if isinstance(recorded_inventory, dict):
             try:
@@ -739,8 +780,15 @@ class MigrationEngine:
                 )
             )
         self.state.update(pending_backup=backup,
-                          message="Checking conversation contents, then backing up, installing and verifying. Keep both Macs connected.")
+                          message="Checking all selected workspace and conversation contents, backing up, installing, then checking again. This protected phase can take time; keep both Macs connected.")
         conversation_checks = conversation_verification_script(self.config.source_codex)
+        workspace_stage_checks = []
+        workspace_installed_checks = []
+        for index, (staged, installed, digest) in enumerate(prepared_workspaces):
+            for root, checks in ((staged, workspace_stage_checks), (installed, workspace_installed_checks)):
+                checks.append("verify_workspace_%d_%s() {\nlocal workspace_digest\n%s\n}\nverify_workspace_%d_%s 2>/dev/null || { echo 'Workspace content verification failed. Keep staging and backups; Resume to refresh the copy.' >&2; exit 74; }" % (
+                    index, "staged" if root == staged else "installed", tree_check(root, digest),
+                    index, "staged" if root == staged else "installed"))
         script = """set -eu
 setopt NULL_GLOB
 umask 077
@@ -769,6 +817,8 @@ if ps -axo comm= | awk -F/ '$NF == "ChatGPT" || $NF == "Codex" {{ found=1 }} END
   exit 70
 fi
 {workspace_preconditions}
+{workspace_functions}
+{workspace_stage_checks}
 {skill_stage_checks}
 verify_conversations() {{
 {conversation_checks}
@@ -803,6 +853,7 @@ mv {staging}/.codex {codex}
 cp -p {backup}/.codex/auth.json {codex}/auth.json
 cp -p {backup}/.codex/installation_id {codex}/installation_id
 {workspace_installs}
+{workspace_installed_checks}
 {skill_installed_checks}
 verify_conversations {codex} 2>/dev/null || {{ echo 'Conversation content verification failed after installation; rollback will be attempted.' >&2; exit 74; }}
 auth_after=$(shasum -a 256 {codex}/auth.json | awk '{{print $1}}')
@@ -823,7 +874,7 @@ done
 chmod 700 {codex}
 rollback_needed=0
 trap - EXIT
-printf 'INSTALLED=1\\nACTIVE=%s\\nARCHIVED=%s\\nAUTH_PRESERVED=1\\nINSTALLATION_ID_PRESERVED=1\\nBACKUP_VERIFIED=1\\nCONVERSATION_CONTENT_VERIFIED=1\\nPERSONAL_SKILLS_VERIFIED={skill_count}\\nBACKUP=%s\\n' "$active" "$archived" {backup}
+printf 'INSTALLED=1\\nACTIVE=%s\\nARCHIVED=%s\\nAUTH_PRESERVED=1\\nINSTALLATION_ID_PRESERVED=1\\nBACKUP_VERIFIED=1\\nCONVERSATION_CONTENT_VERIFIED=1\\nWORKSPACE_CONTENT_VERIFIED=1\\nWORKSPACE_ROOTS_VERIFIED={workspace_count}\\nPERSONAL_SKILLS_VERIFIED={skill_count}\\nBACKUP=%s\\n' "$active" "$archived" {backup}
 """.format(
             backup_functions=BACKUP_FUNCTIONS,
             backup_size=size_command(self._backup_targets()),
@@ -846,14 +897,22 @@ printf 'INSTALLED=1\\nACTIVE=%s\\nARCHIVED=%s\\nAUTH_PRESERVED=1\\nINSTALLATION_
             skill_installed_checks="\n".join(skill_installed_checks),
             skill_count=len(skills),
             conversation_checks=conversation_checks,
+            workspace_functions=remote_tree_function(),
+            workspace_stage_checks="\n".join(workspace_stage_checks),
+            workspace_installed_checks="\n".join(workspace_installed_checks),
+            workspace_count=sum(digest is not None for _, _, digest in prepared_workspaces),
         )
-        output = self.transport.run_remote(script, timeout=3600).stdout
+        output = self.transport.run_remote(script, timeout=WORKSPACE_TIMEOUT).stdout
         if _value(output, "INSTALLED") != "1":
             raise MigrationError("Destination installation did not produce a valid receipt")
         if _value(output, "BACKUP_VERIFIED") != "1":
             raise MigrationError("Destination backup verification receipt is missing")
         if _value(output, "CONVERSATION_CONTENT_VERIFIED") != "1":
             raise MigrationError("Conversation content verification receipt is missing")
+        workspace_count = sum(digest is not None for _, _, digest in prepared_workspaces)
+        if (_value(output, "WORKSPACE_CONTENT_VERIFIED") != "1"
+                or _value(output, "WORKSPACE_ROOTS_VERIFIED") != str(workspace_count)):
+            raise MigrationError("Workspace content verification receipt is missing or mismatched")
         if skills and _value(output, "PERSONAL_SKILLS_VERIFIED") != str(len(skills)):
             raise MigrationError("Personal skill verification receipt is missing")
         active = int(_value(output, "ACTIVE") or -1)
@@ -871,6 +930,8 @@ printf 'INSTALLED=1\\nACTIVE=%s\\nARCHIVED=%s\\nAUTH_PRESERVED=1\\nINSTALLATION_
             "backup": _value(output, "BACKUP"),
             "backup_verified": True,
             "conversation_content_verified": True,
+            "workspace_content_verified": True,
+            "workspace_roots_verified": workspace_count,
             "personal_skills": [skill.as_dict() for skill in skills],
             "personal_skills_verified": len(skills),
             "source_home": self.config.source_home,

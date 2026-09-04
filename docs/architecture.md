@@ -1,7 +1,7 @@
 # Architecture
 
 Codex Migrate is a dependency-free Python 3.9 application around the macOS
-`ssh`, `rsync`, `sqlite3`, and APFS-aware file-copy tools.
+`ssh`, `rsync`, `sqlite3`, system Perl, and APFS-aware file-copy tools.
 
 ## Components
 
@@ -20,6 +20,13 @@ Codex Migrate is a dependency-free Python 3.9 application around the macOS
   into a private verification script, reused against staging and installed data
   under the existing rollback transaction. It never parses or logs chat text.
 - `state.py` writes atomic owner-only progress and control state.
+- `workspaces.py` computes streaming SHA-256 tree snapshots with one system-Perl
+  process per root, without a destination Python dependency or per-file shell
+  processes. Versioned, length-framed nodes include byte-sorted names, file
+  contents, regular-file/directory modes, empty directories, and link text.
+  The same private source snapshots check staged and installed workspace roots,
+  including Codex-managed worktrees. Absent managed storage is checked as absent,
+  not as an empty directory. Digests are not saved in dashboard state or logs.
 - `dashboard.py` exposes a token-protected loopback interface.
 - `setup.py` adds browser-first configuration and a fixed-script native folder
   picker. It attaches the existing dashboard and engine without a second
@@ -62,12 +69,19 @@ idle
   ↔ paused
   → ready_to_finalize
   → running/final_delta
+  → running/verifying_sources
   → running/installing
   → complete/verified
 ```
 
 Any running transfer can enter `cancelled` while retaining staging. Rerunning
 the transfer reuses staged files through rsync's normal delta behavior.
+Source workspace verification is also stoppable; cancellation reaps its active
+hash process and leaves staging available. A new Finalize recomputes snapshots.
+The subsequent protected transaction verifies staging before backups, installs,
+and checks the installed copy against those same snapshots under the rollback
+trap. A completion receipt requires the workspace verification marker and exact
+root count. This is content preservation, not Git operational acceptance.
 
 ## Publication boundary
 

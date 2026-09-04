@@ -90,7 +90,8 @@ HTML = r"""<!doctype html>
     </div>
     <details id="git-scope" class="scope"><summary>Git repositories, worktrees and required folders</summary>
       <p id="git-summary">Git scope has not been inspected with this version.</p>
-      <p>This is a source metadata check, not destination Git verification. It searches selected workspace folders and Codex’s worktrees folder, then checks linked Git storage. Workspace directory links are not searched for additional repositories. Other home folders are not searched.</p>
+      <p id="workspace-proof">Workspace content verification is pending.</p>
+      <p>Dependency inspection searches selected workspace folders and Codex’s worktrees folder, then checks linked Git storage. It does not test whether Git commands work on the destination. Workspace directory links are not searched for additional repositories. Other home folders are not searched.</p>
       <ul id="git-list"></ul><ul id="git-required"></ul><ul id="git-issues"></ul>
     </details>
     <section id="backup-safety" aria-label="Backup protection" aria-live="polite">
@@ -127,8 +128,9 @@ function renderBackup(s){const blocked=s.space_check==="blocked";$("backup-safet
 async function api(path,options={}){const response=await fetch(path,{...options,headers:{"X-Codex-Migrate-Token":token,"Content-Type":"application/json",...(options.headers||{})}});const body=await response.json();if(!response.ok)throw new Error(body.error||`Request failed (${response.status})`);renderBackup(body);return body}
 function render(s){latestState=s;const p=Math.max(0,Math.min(100,Number(s.percent)||0));$("percent").textContent=`${p.toFixed(p===100?0:1)}%`;$("bar").style.width=`${p}%`;$("bar").parentElement.setAttribute("aria-valuenow",String(p));$("phase").textContent=String(s.phase||"unknown").replaceAll("_"," ");$("status").textContent=String(s.status||"unknown").replaceAll("_"," ");$("message").textContent=s.message||"";$("route").textContent=s.route||"—";$("bytes").textContent=`${fmt(s.bytes_staged||0)} / ${fmt(s.bytes_total||0)}`;$("item").textContent=s.current_item||"—";$("warning").style.display=s.warning?"block":"none";$("warning").textContent=s.warning||"";$("error").style.display=s.error?"block":"none";$("error").textContent=s.error||"";$("compat").textContent=s.compatibility_command?`Different macOS usernames: after installation, run on the new Mac: ${s.compatibility_command}`:"";const c=s.config||{};$("codex-scope").textContent=`${c.source_home||"—"}/.codex → ${c.target_home||"—"}/.codex`;$("ssh-target").textContent=`${c.target||"—"} · ${c.target_home||"—"}`;const roots=Array.isArray(c.workspace_roots)?c.workspace_roots:[];$("workspace-count").textContent=String(roots.length);$("workspace-list").replaceChildren(...roots.map(root=>{const li=document.createElement("li");const prefix=`${c.source_home}/`;const relative=root.startsWith(prefix)?root.slice(prefix.length):root;li.textContent=`${root} → ${c.target_home}/${relative}`;return li}));const active=s.status==="running";const canStart=["idle","ready"].includes(s.status);const canFinalize=s.status==="ready_to_finalize"||(s.status==="waiting"&&["close_source_codex","close_target_codex"].includes(s.phase));$("inspect").disabled=active;$("start").disabled=!canStart||!s.apply;$("pause").disabled=!active||!["staging","final_delta"].includes(s.phase);$("resume").disabled=!s.apply||!['paused','cancelled','failed','interrupted'].includes(s.status);$("finalize").disabled=!canFinalize||!s.apply;$("cancel").disabled=!((active&&["inspecting","staging","final_delta"].includes(s.phase))||s.status==="paused");}
 function renderSkills(s){
+  if(s.status==="running"&&s.phase==="verifying_sources")$("cancel").disabled=false;
   renderGit(s);
-  const waiting=s.status==="ready_to_finalize"||s.status==="waiting";
+  const waiting=s.status==="ready_to_finalize"||s.status==="waiting"||["verifying_sources","installing"].includes(s.phase);
   $("percent").hidden=waiting;$("bar").parentElement.hidden=waiting;
   $("size-heading").textContent=s.status==="complete"?"Migration size estimate":"Staged / estimated total";
   if(s.status==="complete")$("bytes").textContent=fmt(s.bytes_total||0);
@@ -150,6 +152,7 @@ function renderSkills(s){
 }
 function renderGit(s){
   $("git-scope").hidden=s.migration_mode==="skills";
+  $("workspace-proof").textContent=s.status==="complete"&&s.receipt?.workspace_content_verified===true?`Workspace content verification passed for ${s.receipt.workspace_roots_verified} root(s). File bytes, names, permissions and link text matched before and after installation.`:s.status==="complete"?"No workspace-content verification was recorded for this migration.":"Workspace content verification is pending.";
   const inventory=s.inventory||{};
   const repos=inventory.git_details, missing=inventory.git_missing_paths||[], issues=inventory.git_issues||[], warnings=inventory.git_warnings||[];
   $("git-summary").textContent=!Array.isArray(repos)?"Git scope has not been inspected with this version.":`${repos.length} Git locations found. ${issues.length?"Metadata needs review before transfer.":missing.length?`${missing.length} additional folder(s) required before transfer.`:repos.length?"Inspected storage dependencies are inside the selected scope.":"No repositories were found in the searched folders."}`;

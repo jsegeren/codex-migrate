@@ -115,7 +115,11 @@ class ComponentMigrationEngine(MigrationEngine):
     def _backup_targets(self):
         return [item.destination for item in self._skill_plan()]
 
-    def _install_and_verify(self):
+    def _prepare_install(self):
+        # Selective repairs verify their skills, not whole workspaces.
+        return None
+
+    def _install_and_verify(self, prepared_workspaces=None):
         items = self._skill_plan()
         migration_id = self.state.read().get("migration_id")
         if not isinstance(migration_id, str) or not re.fullmatch(r"[0-9a-f]{32}", migration_id):

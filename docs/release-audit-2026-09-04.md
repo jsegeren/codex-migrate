@@ -422,7 +422,7 @@ suite to 176 passing Python tests.
 Artifact: `Codex-Migrate-arm64-LOCAL-UNSIGNED.zip` (engineering only).
 SHA-256: `923649072724b82aa311acfd798acf54bc35e66a7769b424cb281ec279f2bd86`.
 
-### Open workspace-verification defect
+### Reproduced workspace-verification defect
 
 After the Git dependency checkpoint, a disposable full-migration probe against
 `04e3ffa` initialized a committed source repository, selected its workspace,
@@ -437,6 +437,51 @@ workspace-content mismatches before replacement, compare installed data with
 the same frozen source expectations, exercise post-install rollback, and test
 destination Git usability independently. Do not represent this alpha as a
 verified paid release while this blocker remains.
+
+### Workspace-content verification correction
+
+The corruption-acceptance defect above is corrected by frozen source-to-staged
+and source-to-installed workspace tree checks. Git operational acceptance
+remains open; the historical probe is retained as evidence of why the checks
+were necessary.
+
+- `workspaces.py` streams SHA-256 with one system-Perl process per tree. The
+  versioned, length-framed representation includes file bytes, byte-sorted
+  names, regular-file/directory permission bits, empty directories and link
+  text. It does not follow links or log file contents/checksums. Required Perl
+  modules and no-follow flags are probed on both Macs during full inspection.
+- Selected roots and Codex-managed worktrees use the same frozen snapshots
+  before backup/replacement and after installation under rollback protection.
+  Absent managed worktrees must remain absent, not merely empty. Completion
+  requires a workspace verification marker and matching root count.
+- Twenty focused tests use disposable Git repositories, system rsync and real
+  local APFS installation: corrupted staged refs/object bytes, installed
+  refs/files and rollback, names/permissions/links/empty directories, managed
+  scope, frozen expectations, missing/mismatched receipts, source Stop process
+  cleanup, Unicode/newline names, special files and changing source files.
+  The raw non-UTF8 filename test explicitly skips when APFS rejects that name
+  with EILSEQ; it is not recorded as a passing capability.
+- Independent reviewer `public_release_review` reproduced a source-verification
+  cancellation race: a phase update could overwrite cancellation and leave no
+  worker but a running UI. Locked phase publication plus stopped-state recovery
+  fixed it; a deterministic regression and real hash-child cancellation test
+  cover the correction. Final independent review accepted with fixes after 54
+  focused tests (one filename-support skip) and actual desktop/320px review.
+- Playwright checked the source-verification and actual local fixture-completion
+  screens at 1280/390/320px. All six checks found no horizontal overflow or
+  axe-core 4.13 violations for selected WCAG A/AA tags. Keyboard Tab/Enter on
+  Stop safely ended the held source check and enabled Resume. The source check
+  was deliberately held for interaction testing; screenshots use disposable
+  data, not a remote migration. Fixture preflight metrics were not populated.
+- Full local verification: 196 Python tests, one explicit filename-support
+  skip; all 10 Node signup tests passed. `git diff --check` passed.
+
+Hashing reads workspace files once on the source and twice on the destination;
+large workspaces may take substantial time. Source verification is safely
+stoppable and restarts on the next Finalize; staged data is retained. Destination
+verification, backup and install remain a protected phase. No atomic snapshot,
+ACL/xattr/ownership/timestamp/hard-link proof, Git semantic usability, clean-Mac
+acceptance or whole-release certification is inferred from these checks.
 
 ### Reference guidance
 

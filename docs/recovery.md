@@ -45,6 +45,16 @@ and continues instead of beginning from an empty destination.
 
 ## Finalization fails
 
+Full migration also freezes checks for every selected workspace and
+`~/.codex/worktrees` after its final copy. Staged file, Git object/ref, name,
+permission, or link-text mismatches block replacement. Installed mismatches
+trigger rollback using the same frozen expectations, not a refreshed source
+snapshot. Source verification can be stopped safely; Resume retains staging,
+but the next Finalize restarts verification. Unreadable or changing files and
+special files such as sockets/pipes must be resolved, not silently excluded.
+The destination checks and installation are a protected phase and may take
+substantial time; keep both Macs connected until it finishes.
+
 Full migration freezes active/archived transcript content checks after its final
 copy. Corrupted or missing staged transcripts block destination replacement.
 Post-install transcript verification uses that same snapshot; failure triggers
@@ -81,7 +91,8 @@ Finalize again. No newly discovered skill is silently added to a previously
 confirmed replacement scope.
 
 The browser-first helper refuses normal shutdown while a migration is running
-or paused. Choose Stop safely during inspection or copying, wait for it to
+or paused. Choose Stop safely during inspection, copying, or source workspace
+verification, wait for it to
 settle, then quit. Installation must finish before normal shutdown. The
 standalone CLI dashboard instead terminates its active SSH and rsync process
 groups during shutdown. Neither behavior prevents an unexpected crash or power

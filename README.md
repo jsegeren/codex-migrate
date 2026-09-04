@@ -109,6 +109,8 @@ verified after installation.
 - Python 3.9 or newer on the source Mac
 - Remote Login enabled on the destination Mac
 - `ssh` and `rsync` available on both Macs
+- System Perl with `Digest::SHA`, `Time::HiRes`, and no-follow file support on
+  both Macs (checked during full-migration inspection)
 - An APFS destination home volume (required for space-efficient rollback)
 - An SSH connection whose host key has already been verified
 - Enough free destination space for staging, a safety backup, and the final
@@ -232,7 +234,8 @@ components will follow the same stage → backup → install → verify contract
 3. **Pause or stop safely** — suspend the active transfer or terminate it while
    retaining staged data. Resume reruns the same copy and reuses completed data.
 4. **Finalize** — require Codex to be closed on both Macs, refresh the final
-   delta, clone a destination backup, and move the staged data into place on
+   delta, freeze source workspace checks, verify staging, clone a destination
+   backup, and move the staged data into place on
    the same volume without creating a second full-size copy.
 5. **Verify** — compare conversation counts, run SQLite integrity checks, and
    prove destination authentication and installation identity did not change.
@@ -241,6 +244,24 @@ components will follow the same stage → backup → install → verify contract
    blocks replacement or triggers rollback; counts alone cannot prove success.
    Personal skills also receive exact file-content and directory-tree checks
    before and after installation.
+   Selected workspaces and `~/.codex/worktrees` must match the same frozen
+   SHA-256 tree checks before and after installation, including file bytes,
+   names, regular-file/directory permissions, empty directories, and link text.
+
+Workspace verification reads every regular file once on the source and twice
+on the destination. Large workspaces can take substantial time; verification
+does not reuse the transfer percentage as an estimate. **Stop safely** is
+available while reading source workspaces. Resume keeps staged data, but a new
+Finalize restarts those checks. Destination verification, backup, installation,
+and rechecking form a protected phase: keep both Macs connected and let it finish.
+Unreadable or changing files, sockets, pipes, and other special files block
+verification; they are not silently excluded. Directory links are preserved as
+links, not followed. Contents and checksum values are not logged.
+
+These checks are not an atomic snapshot and do not independently verify ACLs,
+extended attributes, ownership, timestamps, or hard-link relationships. Matching
+workspace bytes does not prove Git commands work or historical paths resolve on
+the destination. Keep writing apps closed and validate the restored workspace.
 
 Conversation verification reads every selected transcript on the source once
 and on the destination before and after installation. Large conversation
