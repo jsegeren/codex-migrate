@@ -761,6 +761,19 @@ machine identity, cross-source destination locking, hard-crash reconciliation,
 and conflicting compatibility aliases remain open. No real migration, support
 email, live checkout, or signing operation was performed for this checkpoint.
 
+Clean source `3bde8a62a38b0c60ae5361fdc743d5b31fc64cf3` produced the unsigned
+Apple Silicon test ZIP, SHA-256
+`99048e63d53ed367baf45d7e4f975ce9370faeff8710b0055bfdba052622802f`.
+The archive checksum, extracted app's ad-hoc signature, and seven tests against
+the extracted packaged engine passed. These include the real support-report
+endpoint and validated bundled revision; no destination was contacted. This
+does not establish Developer ID trust or native/VoiceOver acceptance.
+
+The independent reviewer also downloaded the synthetic diagnostic JSON and
+verified its 1,718 bytes exactly matched the preview and parsed successfully.
+No email client was opened and no email was sent. The synthetic downloaded copy
+was moved to Trash after inspection. Review-only local servers were stopped.
+
 ### Reference guidance
 
 - [Lighthouse scoring excludes manual checks](https://developer.chrome.com/docs/lighthouse/accessibility/scoring).
