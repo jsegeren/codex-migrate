@@ -49,6 +49,13 @@ as a workaround.
   observed in the reviewed Help states. Fixtures contain sample data and cannot
   migrate, SSH or send email. This is bounded keyboard evidence, not VoiceOver
   or WCAG-conformance certification.
+  Clean source `8eb25b78cc12aefcefc50cbd5149d6cf0d558c78` produced a local-only
+  unsigned arm64 app; eight of nine actual packaged-engine startup/CLI/browser
+  checks passed, with one case-sensitive-filename skip. ZIP SHA-256:
+  `4043e42b0ef12a8bc6fd3dece86ac447f1cf6f14faee797b11026d37b4f96a43`.
+  Hosted run 33886223766 is in progress. The separate browser and sample server
+  were closed; the superseded inactive engineering build was moved recoverably
+  to Trash after checking processes/open files. User-running apps stayed intact.
 
 - Full migration now checks presence of the two documented macOS managed
   preference keys for the executing source account and destination SSH account.
@@ -69,7 +76,7 @@ as a workaround.
   unsigned arm64 app. Eight of nine actual packaged-engine startup/CLI/browser
   checks passed, with one case-sensitive-filename skip. ZIP SHA-256:
   `7e7037cffc6d4d8fe86eecaaca540750df5c552cfdb2266078f2210cce5511f9`.
-  Hosted run 33885738099 is in progress. The previous inactive engineering build
+  Hosted run 33885738099 passed on Python 3.9 and 3.12. The previous inactive engineering build
   was moved recoverably to Trash after checking open files/processes; running
   apps were not stopped or replaced. Native access was rechecked: the Mac is
   still locked and cannot be automatically unlocked. This does not certify the
