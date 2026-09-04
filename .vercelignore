@@ -1,0 +1,16 @@
+# Only the static site and its deployment config are needed by this project.
+.env*
+.venv/
+.git/
+.github/
+.playwright-cli/
+.codex-migrate/
+build/
+dist/
+output/
+desktop/
+docs/
+tests/
+src/
+__pycache__/
+*.egg-info/
