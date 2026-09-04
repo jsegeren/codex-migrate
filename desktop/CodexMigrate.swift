@@ -2,6 +2,16 @@ import SwiftUI
 import AppKit
 import CryptoKit
 
+private let supportEmail = "joshua@segeren.com"
+private let supportURL: URL = {
+    var url = URLComponents()
+    url.scheme = "mailto"
+    url.path = supportEmail
+    url.queryItems = [URLQueryItem(name: "subject", value: "Codex Migrate support"),
+                     URLQueryItem(name: "body", value: "What happened, and what were you trying to do?\r\n\r\nPlease attach the diagnostic report from Help in the browser dashboard after reviewing it. Do not send passwords, keys, conversations, or workspace contents.\r\n")]
+    return url.url!
+}()
+
 // The desktop shell owns setup and its child process. The existing engine owns
 // all migration safety decisions; user input is never interpolated into a shell.
 @MainActor final class MigrationModel: ObservableObject {
@@ -261,9 +271,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     Text("Keep the work. Change the Mac.").font(.largeTitle.bold())
+                    Link("Help / Email support", destination: supportURL)
                     Text("Run this app on the old Mac. Data moves directly over SSH; we do not receive your workspace.")
                     Button("Open browser setup") { model.launch("launch") }.disabled(model.running)
-                    Text("Use guided local browser setup for a full migration. The native controls below remain available for advanced setup and skills-only repairs.")
+                    Text("Guided setup, progress, and recovery run locally in your browser.")
+                    DisclosureGroup("Advanced setup and skills-only repairs") {
                     GroupBox("1 · Prepare the new Mac") {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Install Codex, open it, and sign in once. Enable Remote Login in System Settings → General → Sharing. Allow access to your user account.")
@@ -312,6 +324,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                             }
                         }.padding(8)
                     }.disabled(model.running)
+                    }
                     if let url = model.dashboardURL {
                         HStack {
                             Button("Show dashboard") { NSWorkspace.shared.open(url) }
@@ -326,9 +339,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                     Text(model.output).font(.system(size: 14, design: .monospaced)).textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading).padding().background(.quaternary).cornerRadius(10)
-                    Text("Support is best-effort. We aim to respond within a few business days, depending on availability and complexity. No fix or resolution deadline is guaranteed. Keep an independent backup.").foregroundStyle(.secondary)
+                    GroupBox("Need a hand?") {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Link("Email Josh at \(supportEmail)", destination: supportURL)
+                            Button("Copy support email address") {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(supportEmail, forType: .string)
+                            }
+                            Text("Keep your source data, staging, and backups. Browser Help can prepare a diagnostic report to attach.")
+                            DisclosureGroup("Sharing a report and getting help") {
+                                Text("Review and save the diagnostic event log in browser Help, then attach it to your email. Nothing is uploaded automatically. If the helper will not open, email us without a report. If installation fails, keep Codex closed on the new Mac and ask for help before replacing anything. Never email passwords, keys, conversations, or workspace contents.")
+                                Text("Support is best-effort. We aim to respond within a few business days, depending on availability and complexity. No fix or resolution deadline is guaranteed. Keep an independent backup.")
+                            }
+                        }.padding(8).frame(maxWidth: .infinity, alignment: .leading)
+                    }
                     Link("Support and recovery guide", destination: URL(string: "https://github.com/jsegeren/codex-migrate/blob/main/docs/desktop-setup.md")!)
                     HStack {
+                        Button("Read support guide offline") { model.openGuide("support.md") }
                         Button("Read recovery guide offline") { model.openGuide("recovery.md") }
                         Button("Read security guide offline") { model.openGuide("security-model.md") }
                     }
@@ -337,6 +364,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }.frame(minWidth: 710, minHeight: 680)
             .alert("Please review", isPresented: Binding(get: { model.failure != nil }, set: { if !$0 { model.failure = nil } })) {
                 Button("OK") { model.failure = nil }
+                Button("Email support") { NSWorkspace.shared.open(supportURL) }
             } message: { Text(model.failure ?? "") }
         }
     }

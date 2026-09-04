@@ -103,7 +103,7 @@ class ReleaseBuildTests(unittest.TestCase):
                 (root / "docs").mkdir()
                 (root / "desktop/Info.plist").write_bytes(plistlib.dumps(
                     dict(CFBundleShortVersionString="0.1.0", CFBundleVersion="1")))
-                for name in ("LICENSE", "docs/desktop-setup.md", "docs/recovery.md", "docs/security-model.md"):
+                for name in ("LICENSE", "docs/desktop-setup.md", "docs/recovery.md", "docs/security-model.md", "docs/support.md"):
                     (root / name).write_text("fixture")
                 calls = []
 

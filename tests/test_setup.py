@@ -44,6 +44,14 @@ class SetupTests(unittest.TestCase):
         return dict(target="user@fixture.local", target_home="/Users/user",
                     workspace_roots=[str(self.home / "Git")], **extra)
 
+    def test_support_report_works_before_setup_and_requires_local_token(self):
+        code, report = self.request("/api/support-report")
+        self.assertEqual(code, 200)
+        self.assertEqual(report["current"]["status"], "idle")
+        self.assertNotIn(str(self.home), json.dumps(report))
+        self.assertEqual(self.request("/api/support-report", authorized=False)[0], 403)
+        self.assertEqual(self.request("/api/support-report", extra_headers={"Origin": "https://example.com"})[0], 403)
+
     def test_setup_shell_exposes_no_local_paths_or_token(self):
         code, body = self.request("/", authorized=False)
         self.assertEqual(code, 200)

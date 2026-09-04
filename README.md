@@ -353,6 +353,14 @@ will be best-effort, aiming for an initial response within a few business days,
 without a guaranteed response time, fix, or resolution deadline. See the
 [project website](https://migrate.segeren.com/#founding-edition).
 
+## Need help?
+
+Use **Help / Email support** in the app or browser dashboard to reach
+**joshua@segeren.com**. Browser Help can prepare a local diagnostic event log
+for you to review, save, and attach to your email. Nothing is uploaded or sent
+automatically. Keep source data, staging, and backups if something fails.
+See [support and diagnostic privacy](docs/support.md).
+
 ## Contributing
 
 Start with [CONTRIBUTING.md](CONTRIBUTING.md). Migration code has an unusually

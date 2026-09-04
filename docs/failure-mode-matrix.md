@@ -1,0 +1,30 @@
+# Failure-mode and configuration acceptance matrix
+
+This is an engineering acceptance checklist, not a claim that every row is
+supported. Passing a copy test does not establish that a restored workspace is
+usable. The paid release must either support a setup with evidence or detect
+it early and give a safe, actionable explanation.
+
+| Scenario | Current evidence / limitation | Required next acceptance |
+| --- | --- | --- |
+| Missing or corrupt local migration state | Reads now fail instead of returning fresh/idle state; existing token/lock evidence blocks silent reinitialization when the state file is missing. Focused tests cover malformed JSON, wrong object types, links, and disappearance. | Do not present this as complete power-loss recovery. Test destination reconciliation separately. |
+| Wrong destination or source selected as destination | SSH host key, username, and home checks exist; no explicit machine-identity rejection yet. | Reject same-machine migration before writes, including alternate hostnames/IPs. Recheck identity at mutation boundaries. |
+| Two migrations installing to one destination | Local per-state locks and staging ownership checks exist, not a cross-source destination transaction lock. | Serialize full and skills-only destination replacement, including separate source Macs and disconnected-but-still-running SSH processes. |
+| Power lost during replacement or rollback | Verified backups, rollback traps, and pending-backup state exist. Shell traps cannot prove recovery after power loss. | Fault-test replacement boundaries; inspect durable destination evidence before retry. Never infer successful rollback from local process exit. |
+| Destination already has new conversations or code | Full installation replaces selected roots after backup; it does not merge independent work. | Make replacement versus merge unmistakable in setup and final confirmation; test preservation in backup and recovery. |
+| Different usernames with an existing old-home path | Compatibility command is generated, but conflicts and actual alias resolution are not certified. | Reject conflicting directories/links; verify intended path mapping and restored chat/Git usability. |
+| Custom Codex storage/profiles | Source logic currently assumes `.codex` under the selected home. | Detect unsupported configuration rather than silently claiming all profiles transferred. |
+| External disks, shares, or repositories outside the home | Workspace selection is confined beneath source home; external Git dependencies block. | Clear supported-scope explanation. Do not advertise exhaustive whole-machine migration. |
+| Cloud placeholders, unavailable files, and background writers | Unreadable/changing/special files block content verification. Cloud hydration and provider-specific behavior are not certified. | Test representative unavailable/offline files; explain what must be downloaded or closed first. |
+| Case sensitivity, filename normalization, unusual names | Tree verification checks copied names/content. Some filename cases are platform-dependent. | Collision tests across supported source/destination filesystems, before replacement. |
+| Codex version/storage changes | Transcript/state byte checks and SQLite checks exist; no broad version-compatibility guarantee. | Exercise representative versions and restored conversations; block unsupported layouts clearly. |
+| Intel/Apple Silicon and native project dependencies | Artifacts identify architecture; development evidence is Apple Silicon. | Clean-machine packaging tests for each advertised architecture; explain when dependencies need rebuilding. |
+| Permissions, managed accounts, denied access | Process-owner checks and failed read/copy checks fail closed. | Real permission-denial UX checks; no silent omission or excessive privilege requests. |
+| Disconnect, sleep, changed route, helper restart | Staging reuse and simulated cancellation/restart tests exist. | Real cross-Mac disconnect/reconnect and route-change tests with disposable accounts. |
+| Disk fills during backup/install/rollback | Conservative budgeting, rechecks, verified backups, and failure fixtures exist. | Broader real-machine failure/recovery evidence; keep source and independent backup. |
+| Connector credentials and external dependencies | Destination Codex identity is retained; source SSH keys are excluded. Other configuration can reference uncopied dependencies. | Explicit reauthentication/reinstallation guidance. Do not equate copied configuration with working integrations. |
+| User gets stuck and needs support | Visible Help, email draft, reviewed local diagnostic report, and bounded event history are implemented. | Check keyboard/mobile UI and privacy tests; never require private content just to request help. |
+
+No known safety gap is waived because the product costs $50. Unimplemented
+guards above remain engineering work, separate from Apple approval, commerce,
+and clean cross-Mac acceptance gates in [release readiness](release-readiness.md).

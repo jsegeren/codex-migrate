@@ -725,6 +725,42 @@ submission or payment occurred. Disposable test extraction and the superseded
 unused engineering build were moved to Trash after checking for open handles;
 the current build and pre-existing running apps were retained.
 
+## Support diagnostics and contextual Help follow-up
+
+Added a bounded structured event log and explicit Help → preview → save → email
+attachment flow. Reports are built from an allowlist, not by exporting or
+redacting entire raw logs. They include up to 60 timestamped state transitions,
+failure categories, sizes, verification flags, app/macOS versions, architecture,
+and validated packaged build identity when available. They exclude arbitrary
+configuration, paths, hostnames, credentials, conversation text and raw errors.
+No automatic upload or mail sending was introduced. Native setup offers the
+email link, copied support address, and bundled offline guide; reporting itself
+is in browser Help. Startup failures can be reported without a diagnostic file.
+
+State reads now reject invalid/missing JSON, invalid root objects and links,
+instead of presenting fresh/idle state. Reinitialization is blocked when the
+state file is missing but a prior token/process-lock remains. This is not a
+complete power-loss journal or a replacement for destination-side reconciliation.
+
+The Founder requested less explanatory text by default. Optional folder/skill
+lists, verification explanations, event history, recovery instructions and
+advanced key setup now use native disclosures. Safety status and the explicit
+replacement-not-merge warning stay visible. Native advanced setup is collapsed.
+
+Independent reviewer `public_release_review` accepted code/privacy/docs and
+rendered setup/dashboard at 1280px and 320px. All 16 disclosures passed keyboard
+Enter/Space checks; no horizontal overflow was found. Review found mailto
+space/newline encoding and report-preview scroll issues; both were corrected.
+The final source suite ran 243 tests (242 passed, one explicit filesystem skip),
+plus 10 passing signup tests and a passing Swift typecheck. Native rendering,
+VoiceOver, and real email delivery were not established by this review.
+
+The [failure-mode matrix](failure-mode-matrix.md) now explicitly tracks
+engineering gaps beyond external Apple/test-account gates. Source/destination
+machine identity, cross-source destination locking, hard-crash reconciliation,
+and conflicting compatibility aliases remain open. No real migration, support
+email, live checkout, or signing operation was performed for this checkpoint.
+
 ### Reference guidance
 
 - [Lighthouse scoring excludes manual checks](https://developer.chrome.com/docs/lighthouse/accessibility/scoring).

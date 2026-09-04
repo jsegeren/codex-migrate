@@ -8,6 +8,18 @@ results, accessibility findings, and pre-signing work still open.
 
 ## Candidate checks completed on the development Mac
 
+- In-app Help now offers a support email draft and an opt-in diagnostic report
+  with preview/manual attachment. A bounded, persistent 60-event stream records
+  phase/status/failure-category changes without raw console output or private
+  paths. Missing/corrupt state no longer silently resets to idle. Longer UI
+  explanations use collapsed, keyboard-operable disclosures while status,
+  errors, backup state, and replacement warnings remain visible. Independent
+  review checked setup/dashboard at 1280px and 320px, all 16 disclosures with
+  Enter/Space, and report preview focus/scroll. Local suite: 243 Python tests
+  (242 passed, one explicit skip), 10 signup tests, and native Swift typecheck.
+  These checks do not certify native rendering, VoiceOver, email-client delivery,
+  or the remaining migration-safety scenarios.
+
 - The existing Stripe sandbox now has a clearly labelled $50 one-time test
   product. Its real hosted checkout completed a fictional card payment; the
   transaction was independently visible as Succeeded, then Refunded after a full
@@ -135,6 +147,11 @@ These are local checks, not proof of clean-Mac installation or a complete
 cross-Mac migration. Failure tests use disposable fixtures, not user data.
 
 ## Remaining paid-release gates
+
+- Complete the safety/configuration checks in the [failure-mode matrix](failure-mode-matrix.md),
+  particularly wrong-machine rejection, cross-source destination locking,
+  power-loss reconciliation, and compatibility-alias conflicts. These are
+  engineering gaps, not merely Apple/account dependencies.
 
 - Validate destination Git operational usability and historical path continuity,
   including linked worktrees, refs, status and different usernames. Workspace

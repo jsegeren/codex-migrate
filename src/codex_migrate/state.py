@@ -7,9 +7,12 @@ import json
 import os
 from pathlib import Path
 import secrets
+import stat
 import tempfile
 import threading
+from datetime import datetime, timezone
 from typing import Any, Dict
+from codex_migrate.support import event_fields, HISTORY_LIMIT
 
 
 INITIAL_STATE = {
@@ -43,15 +46,29 @@ class StateStore:
             raise PermissionError("state directory must not be a symbolic link")
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         os.chmod(self.root, 0o700)
+        if self.path.is_symlink():
+            raise RuntimeError("Migration state must not be a symbolic link; contact support before restarting.")
         if not self.path.exists():
+            if any((self.root / name).exists() for name in ("control-token", "process.lock")):
+                raise RuntimeError("Existing migration state is missing. Keep staging and backups; "
+                                   "contact joshua@segeren.com before restarting.")
             self.write(dict(INITIAL_STATE))
 
     def read(self) -> Dict[str, Any]:
         with self._lock:
             try:
-                return json.loads(self.path.read_text(encoding="utf-8"))
-            except (FileNotFoundError, json.JSONDecodeError):
-                return dict(INITIAL_STATE)
+                descriptor = os.open(self.path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+                with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
+                    info = os.fstat(handle.fileno())
+                    if not stat.S_ISREG(info.st_mode):
+                        raise ValueError("state is not a regular file")
+                    result = json.load(handle)
+                if not isinstance(result, dict) or not isinstance(result.get("status"), str):
+                    raise ValueError("invalid state object")
+                return result
+            except (OSError, ValueError) as error:
+                raise RuntimeError("Migration state is missing or unreadable. Keep staging and "
+                                   "backups; contact joshua@segeren.com before restarting.") from error
 
     def write(self, state: Dict[str, Any]) -> Dict[str, Any]:
         with self._lock:
@@ -78,7 +95,16 @@ class StateStore:
     def update(self, **changes: Any) -> Dict[str, Any]:
         with self._lock:
             state = self.read()
+            before = event_fields(state)
             state.update(changes)
+            after = event_fields(state)
+            if after != before:
+                history = state.get("support_history")
+                history = history if isinstance(history, list) else []
+                state["support_history"] = (history + [{
+                    "at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    **after,
+                }])[-HISTORY_LIMIT:]
             return self.write(state)
 
     def token(self) -> str:

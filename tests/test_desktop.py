@@ -85,6 +85,14 @@ class DesktopTests(unittest.TestCase):
                 self.assertEqual(configured["components"], ["personal-skills"])
                 self.assertEqual(configured["status"], "idle")
                 self.assertFalse(configured["apply"])
+                with urlopen(Request(base + "/api/support-report", headers=headers), timeout=3) as response:
+                    report = json.load(response)
+                self.assertEqual(report["report_format"], 1)
+                self.assertEqual(report["migration_mode"], "skills")
+                self.assertNotIn("fixture.invalid", json.dumps(report))
+                if binary:
+                    self.assertRegex(report["build"]["source_revision"], r"^[0-9a-f]{40,64}$")
+                    self.assertIn(report["build"]["mode"], ("local-test", "release"))
                 with self.assertRaises(HTTPError) as denied:
                     urlopen(Request(base + "/api/action", data=b'{"action":"start"}',
                                     headers=headers), timeout=3)

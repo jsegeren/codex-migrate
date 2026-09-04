@@ -14,6 +14,7 @@ import webbrowser
 from codex_migrate.migration import MigrationEngine, MigrationError
 from codex_migrate.security import redact
 from codex_migrate.state import StateStore
+from codex_migrate.support import diagnostic_report, with_support
 
 
 HTML = r"""<!doctype html>
@@ -67,7 +68,7 @@ HTML = r"""<!doctype html>
 <main>
   <header>
     <div><h1>Codex Migrate</h1><p class="lede">Move local Codex conversations, configuration, repositories, worktrees, and unfinished work to another Mac—with resumable staging and verification.</p></div>
-    <span class="tag">Unofficial · local only</span>
+    <a class="support-link" href="#migration-help">Help / Email support</a>
   </header>
   <section class="panel">
     <div class="status-row"><div><div class="eyebrow" id="phase">Not started</div><div id="status">Ready</div></div><div id="percent">0%</div></div>
@@ -81,13 +82,11 @@ HTML = r"""<!doctype html>
     <div class="scope">
       <div class="eyebrow">Configured migration scope</div>
       <p><strong>Codex:</strong> <code id="codex-scope">—</code></p>
-      <p id="codex-state-proof">Retained Codex state verification is pending.</p>
       <p><strong>SSH destination:</strong> <code id="ssh-target">—</code></p>
       <p><strong id="workspace-heading">Selected workspaces:</strong> <span id="workspace-count">0</span></p>
-      <ul id="workspace-list"></ul>
+      <details><summary>Selected folders</summary><ul id="workspace-list"></ul></details>
       <p><strong id="skill-heading">Personal skills:</strong> <span id="skill-count">Not inspected yet</span></p>
-      <p id="skill-explanation">Custom skills are included from .agents/skills and legacy .codex/skills, with the current location taking precedence. Other destination skills are kept.</p>
-      <ul id="skill-list"></ul>
+      <details><summary>Skills included</summary><p id="skill-explanation">Custom skills are included from .agents/skills and legacy .codex/skills, with the current location taking precedence. Other destination skills are kept.</p><ul id="skill-list"></ul></details>
     </div>
     <details id="git-scope" class="scope"><summary>Git repositories, worktrees and required folders</summary>
       <p id="git-summary">Git scope has not been inspected with this version.</p>
@@ -99,8 +98,8 @@ HTML = r"""<!doctype html>
       <strong id="backup-heading">Backup required before replacement</strong>
       <p id="backup-space">Destination space has not been checked yet.</p>
       <p id="backup-location">No verified backup recorded for this migration.</p>
-      <p>Installation is blocked if space is insufficient or backup verification fails. There is no skip-backup option.</p>
-      <p>Close development tools writing to selected folders before finalizing. Same-disk backups protect against replacement mistakes, not disk failure. Keep the old Mac intact.</p>
+      <p>Keep the old Mac intact. Close apps writing to selected folders before finalizing.</p>
+      <details><summary>Backup and verification details</summary><p>Installation is blocked if space is insufficient or backup verification fails. There is no skip-backup option. Same-disk backups protect against replacement mistakes, not disk failure.</p><p id="codex-state-proof">Retained Codex state verification is pending.</p></details>
       <details><summary>How to recover</summary><p>Keep Codex and other writing apps closed. In the backup folder, read verification.json for original-to-backup paths. Move current destination files aside before restoring reviewed backup items. A pending folder without verification.json is not a verified backup. Never delete the source or backups until you have checked the restored work.</p></details>
     </section>
     <div class="controls">
@@ -114,6 +113,7 @@ HTML = r"""<!doctype html>
     <div id="warning"></div><div id="error" role="alert"></div>
     <details><summary>What is protected?</summary><p id="protection-explanation">The source is never modified. Destination Codex account authentication and installation identity are excluded from transfer and checked after installation. The destination receives a timestamped backup before replacement. Interrupted rsync staging is kept so Resume can continue.</p><p id="compat"></p></details>
   </section>
+  <details class="scope"><summary>Recent migration events</summary><p>Up to 60 phase, status, and failure-category changes. Times are UTC. This is not raw command output.</p><ol id="migration-events"><li>No events recorded yet.</li></ol></details>
   <footer>Codex Migrate is an independent open-source project. It is not made by, affiliated with, or endorsed by OpenAI.</footer>
 </main>
 <script>
@@ -164,12 +164,14 @@ function renderGit(s){
   list("git-required",missing.map(path=>`Required folder not selected: ${path}`));
   list("git-issues",[...issues,...warnings]);
 }
-async function refresh(){try{const s=await api("/api/status");render(s);renderSkills(s)}catch(error){$("error").style.display="block";$("error").textContent=error.message}}
+function renderEvents(events){const rows=(events||[]).map(event=>{const li=document.createElement('li');li.textContent=`${event.at||'Time unavailable'} · ${event.phase.replaceAll('_',' ')} · ${event.status}${event.failure_category==='none'?'':` · ${event.failure_category.replaceAll('_',' ')}`}`;return li});if(!rows.length){const li=document.createElement('li');li.textContent='No events recorded yet.';rows.push(li)}$('migration-events').replaceChildren(...rows)}
+async function refresh(){try{const s=await api("/api/status");render(s);renderSkills(s);renderEvents(s.support_events)}catch(error){$("error").style.display="block";$("error").textContent=error.message}}
 async function action(name){const c=latestState.config||{};const confirmation=latestState.migration_mode==="skills"?`Back up, then replace ${latestState.inventory?.skill_exports?.length||0} listed skill(s) on ${c.target}? Conversations, configuration and whole repositories will not be migrated. Other skills will be kept.`:`Back up, then replace ${c.target_home}/.codex, ${c.workspace_roots?.length||0} selected workspace root(s), and ${latestState.inventory?.personal_skills?.length||0} personal skill(s) on ${c.target}? Other destination skills will be kept.`;if(name==="finalize"&&!confirm(confirmation))return;try{const s=await api("/api/action",{method:"POST",body:JSON.stringify({action:name,confirmed:name==="finalize"})});render(s);renderSkills(s)}catch(error){$("error").style.display="block";$("error").textContent=error.message}}
 for(const name of ["inspect","start","pause","resume","finalize","cancel"]){$(name).addEventListener("click",()=>action(name))}
 refresh();setInterval(refresh,2500);
 </script>
 </body></html>"""
+HTML = with_support(HTML)
 
 
 class LoopbackHTTPServer(ThreadingHTTPServer):
@@ -244,11 +246,25 @@ class Dashboard:
                 if self.path == "/" or self.path.startswith("/?"):
                     self._html(HTML)
                     return
+                if self.path == "/api/support-report":
+                    if not self._authorized():
+                        self._json(403, {"error": "Missing or invalid local control token"})
+                        return
+                    try:
+                        self._json(200, diagnostic_report(dashboard.state.read()))
+                    except Exception:
+                        self._json(409, {"error": "Migration state could not be read. Email support; keep staging and backups."})
+                    return
                 if self.path == "/api/status":
                     if not self._authorized():
                         self._json(403, {"error": "Missing or invalid local control token"})
                         return
-                    body = dashboard.state.read()
+                    try:
+                        body = dashboard.state.read()
+                    except Exception:
+                        self._json(409, {"error": "Migration state could not be read. Email support; keep staging and backups."})
+                        return
+                    body["support_events"] = diagnostic_report(body)["recent_events"]
                     body["apply"] = dashboard.engine.config.apply
                     body["config"] = dashboard.engine.config.to_public_dict()
                     body["compatibility_command"] = dashboard.engine.compatibility_command()

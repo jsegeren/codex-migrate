@@ -132,7 +132,7 @@ def main():
         shutil.copy2(ROOT / "desktop/Info.plist", contents / "Info.plist")
         shutil.copy2(ROOT / "LICENSE", resources / "LICENSE.txt")
         shutil.copy2(ROOT / "docs/desktop-setup.md", resources / "Read me.md")
-        for document in ("recovery.md", "security-model.md"):
+        for document in ("recovery.md", "security-model.md", "support.md"):
             shutil.copy2(ROOT / "docs" / document, resources / document)
         (resources / "build-info.json").write_text(json.dumps(receipt, indent=2) + "\n")
         run("xcrun", "swiftc", "-parse-as-library", "-O", "-target", arch + "-apple-macos13.0",

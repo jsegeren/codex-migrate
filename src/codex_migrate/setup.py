@@ -17,6 +17,7 @@ from codex_migrate.dashboard import Dashboard
 from codex_migrate.migration import MigrationEngine, MigrationError
 from codex_migrate.component_migration import ComponentMigrationEngine
 from codex_migrate.state import StateStore
+from codex_migrate.support import with_support
 
 
 SETUP_HTML = r'''<!doctype html>
@@ -27,28 +28,30 @@ SETUP_HTML = r'''<!doctype html>
 main{width:min(800px,calc(100% - 32px));margin:40px auto}h1{font-size:clamp(32px,6vw,48px);line-height:1.1}h2{font-size:24px}p{color:#cbd2df}section,fieldset{background:#111722;border:1px solid #465268;border-radius:16px;padding:24px;margin:24px 0;min-width:0}
 label{display:block;margin:16px 0 6px}input,textarea,button,select{font:inherit}input:not([type=checkbox]),textarea,select{display:block;width:100%;padding:12px;border:1px solid #8996ad;border-radius:8px;color:#f7f8fa;background:#080b10}textarea{min-height:120px}button,a.button{display:inline-block;padding:12px 18px;border:1px solid #a08bd3;border-radius:9px;background:#6042a6;color:white;font-weight:700;cursor:pointer;text-decoration:none;max-width:100%;white-space:normal}button:disabled{opacity:.6;cursor:wait}.controls{display:flex;gap:12px;flex-wrap:wrap}.check{display:flex;gap:12px;align-items:flex-start}.check input{width:22px;height:22px;flex:none;margin-top:4px}a{color:#d9cdff}:focus-visible{outline:3px solid #d9cdff;outline-offset:4px}#error{color:#ffc3c8}#message{color:#cbd2df}footer{font-size:15px;color:#cbd2df}legend{font-weight:700;font-size:24px}[hidden]{display:none!important}@media(max-width:480px){section,fieldset{padding:16px}main{margin:24px auto}}
 </style></head><body><main>
+<a class="support-link" href="#migration-help">Help / Email support</a>
 <h1>Keep the work. Change the Mac.</h1><p>Set up your Mac-to-Mac migration here. This page is served by the helper on your old Mac. Your workspace travels directly between your Macs over SSH—not through our website.</p>
 <div id="error" role="alert"></div><p id="message" role="status" aria-live="polite">Connecting to your local helper…</p>
 <section id="attached" hidden><h2>Your migration is configured</h2><p>Continue to its status, backup checks, pause/resume controls and recovery guidance. Keep the same destination and scope when resuming. Changing scope while staged data exists requires reviewing that migration’s recovery instructions; restarting alone does not adopt it.</p><a class="button" id="continue" href="/migration">Open migration dashboard</a></section>
 <form id="setup"><fieldset id="fields" disabled><legend>1 · Prepare the new Mac</legend>
 <p>Install Codex, open it, and sign in once on the new Mac. Enable Remote Login in System Settings → General → Sharing for your account. Keep an independent backup and leave your old Mac intact.</p>
-<p>Wi-Fi or a compatible USB-C/Thunderbolt network connection can carry the transfer. A charging-only cable cannot. Both Macs must remain awake and connected.</p>
-<details><summary>SSH connection and permissions</summary><p>Set up SSH key login from the old Mac and verify the new Mac’s host fingerprint through a trusted channel. Connect once in Terminal using <code>ssh new-user@new-mac.local</code>. We never disable host verification. The helper cannot answer an interactive password prompt.</p></details>
+<p>Keep both Macs awake and connected over Wi-Fi or compatible wired networking.</p>
+<details><summary>Connection and permissions help</summary><p>A supported USB-C/Thunderbolt network connection can carry the transfer; a charging-only cable cannot. Set up SSH key login from the old Mac and verify the new Mac’s host fingerprint through a trusted channel. Connect once in Terminal using <code>ssh new-user@new-mac.local</code>. We never disable host verification. The helper cannot answer an interactive password prompt.</p></details>
 <h2>2 · Destination and scope</h2>
 <label for="mode">What do you want to move?</label><select id="mode"><option value="full">Full Codex migration and selected workspaces</option><option value="skills">Custom skills only</option></select>
 <fieldset id="skill-components" hidden><legend>Skills to include</legend><label class="check"><input type="checkbox" id="personal-skills" checked><span>Personal custom skills (.agents/skills and legacy .codex/skills)</span></label><label class="check"><input type="checkbox" id="workspace-skills"><span>Workspace skills inside the project folders selected below</span></label><p>Skills only: conversations, configuration and whole repositories are not copied. Other destination skills are kept. Inspect the list, stage it, then confirm Finalize separately.</p></fieldset>
 <label for="target">New Mac’s SSH address</label><input id="target" autocomplete="off" placeholder="new-user@new-mac.local" required>
 <label for="target-home">New Mac’s home folder</label><input id="target-home" autocomplete="off" placeholder="/Users/new-user" required>
-<p>Use the new Mac’s exact username and home folder; they can differ from the old Mac. Check with <code>whoami</code> and <code>echo "$HOME"</code> in its Terminal.</p>
+<details><summary>Where do I find these?</summary><p>Use the new Mac’s exact username and home folder; they can differ from the old Mac. Check with <code>whoami</code> and <code>echo "$HOME"</code> in its Terminal.</p></details>
 <label for="workspaces" id="workspace-label">Workspace folders on this Mac, one per line</label><textarea id="workspaces" spellcheck="false" aria-describedby="scope-help"></textarea>
-<p id="scope-help">Selected folders include complete Git metadata and unfinished work, including secrets stored inside them. Leave this empty to migrate Codex state and discovered personal custom skills without project folders. Personal skills from .agents/skills and legacy .codex/skills are included automatically; inspection lists them before transfer. Other home folders are not automatically included.</p>
+<p id="scope-help">Selected folders include unfinished work and any secrets stored inside them. Full migration includes Codex state and personal skills; other folders are not automatically included.</p>
 <div class="controls"><button type="button" id="folders">Choose folders on this Mac…</button><button type="button" id="suggest">Suggest common folders</button></div>
-<label for="identity">Existing SSH key path (optional)</label><input id="identity" autocomplete="off" spellcheck="false" aria-describedby="key-help"><p id="key-help">Leave empty to use your SSH configuration. Selecting a key does not add it to the migration, and this selection is not saved. A key stored inside a selected workspace is copied with that workspace.</p>
-<h2>3 · Review before enabling changes</h2><p>Your last configured destination and selected roots are saved privately on this Mac for reopening. Changes reset to disabled on each launch. A verified destination backup is mandatory before replacement; insufficient space blocks installation.</p>
+<details><summary>Advanced: choose an SSH key</summary><label for="identity">Existing SSH key path (optional)</label><input id="identity" autocomplete="off" spellcheck="false" aria-describedby="key-help"><p id="key-help">Leave empty to use your SSH configuration. Selecting a key does not add it to the migration, and this selection is not saved. A key stored inside a selected workspace is copied with that workspace.</p></details>
+<h2>3 · Review before enabling changes</h2><p>Full migration replaces selected destination data after a verified backup; it does not merge existing work. Insufficient space blocks installation.</p>
+<details><summary>What gets saved between runs?</summary><p>Your destination and folder selection are saved privately on this Mac. Changes reset to disabled on each launch; SSH key selections are not saved.</p></details>
 <label class="check"><input id="apply" type="checkbox"><span>Enable destination changes for this session. Opening the dashboard does not start a transfer; I will inspect and start it explicitly.</span></label>
 <button type="submit" id="open">Open migration dashboard</button>
 </fieldset></form>
-<section><h2>Recovery and selective exports</h2><p>For migrations started in this browser setup, reopen the helper after interruption, review the restored setup, enable changes if appropriate, and use Resume in the dashboard. Staged data and backup receipts remain on your Macs. Never delete them just because a progress bar reaches 100%.</p><p>Already started with the CLI or native setup? Resume using that same entry point and configuration. This browser setup does not import those older migration records, and it will not adopt or overwrite their staging.</p><p>Choose Custom skills only above for a smaller repair. It has its own saved staging, pause/resume controls and verified destination backups; a full migration’s staging is left alone.</p></section>
+<details><summary>Resuming a migration or only restoring skills?</summary><p>For migrations started in this browser setup, reopen the helper after interruption, review the restored setup, enable changes if appropriate, and use Resume in the dashboard. Staged data and backup receipts remain on your Macs. Never delete them just because a progress bar reaches 100%.</p><p>Already started with the CLI or native setup? Resume using that same entry point and configuration. This browser setup does not import those older migration records, and it will not adopt or overwrite their staging.</p><p>Choose Custom skills only above for a smaller repair. It has its own saved staging, pause/resume controls and verified destination backups; a full migration’s staging is left alone.</p></details>
 <footer>Codex Migrate is independent software. Not affiliated with or endorsed by OpenAI. Mac-to-Mac only.</footer>
 </main><script>
 const $=id=>document.getElementById(id);
@@ -70,6 +73,7 @@ $("folders").onclick=()=>folders("/api/folders");$("suggest").onclick=()=>folder
 $("setup").onsubmit=async e=>{e.preventDefault();$("open").disabled=true;$("error").textContent="";try{await api("/api/setup",{target:$("target").value.trim(),target_home:$("target-home").value.trim(),workspace_roots:roots(),identity_file:$("identity").value.trim(),apply:$("apply").checked,mode:$("mode").value,components:$("mode").value==="skills"?["personal-skills","workspace-skills"].filter(id=>$(id).checked):[]});location.href="/migration#token="+encodeURIComponent(token)}catch(e){$("error").textContent=e.message;$("open").disabled=false}};
 load();
 </script></body></html>'''
+SETUP_HTML = with_support(SETUP_HTML)
 
 
 class SetupDashboard(Dashboard):
@@ -211,6 +215,9 @@ JSON.stringify(app.chooseFolder({withPrompt: "Choose workspace folders for Codex
                     return
                 if self.path == "/":
                     self._html(SETUP_HTML)
+                    return
+                if self.path == "/api/support-report":
+                    super().do_GET()
                     return
                 if self.path == "/migration" and setup.engine is not None:
                     self.path = "/"

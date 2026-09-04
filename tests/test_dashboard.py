@@ -45,6 +45,27 @@ class DashboardTests(unittest.TestCase):
         connection.close()
         return response.status, body
 
+    def test_support_report_requires_token_and_keeps_private_state_out(self):
+        self.dashboard.state.update(status="failed", phase="staging", error="PRIVATE_SENTINEL")
+        for token, expected in ((None, 403), (self.dashboard.token, 200)):
+            connection = HTTPConnection("127.0.0.1", self.server.server_port, timeout=3)
+            connection.request("GET", "/api/support-report", headers={"X-Codex-Migrate-Token": token} if token else {})
+            response = connection.getresponse()
+            report = response.read().decode()
+            self.assertEqual(response.status, expected)
+            self.assertNotIn("PRIVATE_SENTINEL", report)
+            self.assertEqual(response.getheader("Cache-Control"), "no-store")
+            connection.close()
+
+    def test_corrupt_state_produces_safe_http_error_not_empty_success(self):
+        self.dashboard.state.path.write_text("PRIVATE_SENTINEL invalid JSON")
+        code, result = self.request(self.dashboard.token)
+        self.assertEqual(code, 409)
+        self.assertNotIn("PRIVATE_SENTINEL", str(result))
+        self.assertIn("Email support", result["error"])
+        # tearDown needs valid state for ordinary dashboard shutdown.
+        self.dashboard.state.write({"status": "idle"})
+
     def post(self, payload, token=None):
         connection = HTTPConnection("127.0.0.1", self.server.server_port, timeout=3)
         headers = {"Content-Type": "application/json"}
