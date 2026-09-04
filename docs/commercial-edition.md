@@ -4,7 +4,12 @@ The open-source migration engine is the trust foundation. The paid Mac app
 charges a one-time price for convenience and support, not for access to a
 user's own data or recovery from an artificial lock.
 
-## Paid value
+## Paid direction (not all implemented)
+
+The current desktop shell provides folder selection, setup guidance, the local
+dashboard, and skills-only export. Automatic discovery, route benchmarking, and
+update checks below are planned, not shipped. Release readiness is tracked in
+[the desktop guide](desktop-setup.md).
 
 - Signed and notarized native macOS application
 - Automatic Mac and Codex discovery
@@ -19,16 +24,24 @@ user's own data or recovery from an artificial lock.
 
 ## Founding Edition
 
-The Founding Edition is a **$49 one-time pre-order** for one individual v1 Mac
-app license, founding beta access, and maintainer support. It is not a
-subscription.
+The downloadable Mac edition will cost **$50 one time**, including best-effort
+maintainer support. No subscription and no pre-orders. Checkout stays closed
+until a signed, notarized build, clean-Mac validation, and delivery are verified.
 
 The signed Mac app is in development and is not available for download today.
-The full open-source CLI is available today. Pre-orders are refundable at any
-time before the first beta is delivered and for 30 days after delivery. If the
-paid app is cancelled before a first beta ships, remaining pre-orders will be
-refunded. The current offer, checkout, privacy policy, terms, and refund policy
-are published at <https://codex-migrate.vercel.app>.
+The full open-source CLI is available today. The intended paid refund window
+is 30 days from purchase. Current release status and policies are published at
+<https://codex-migrate.vercel.app>.
+
+## Support promise
+
+We make a best-effort attempt to investigate and resolve reported issues. We
+aim to respond within a few business days, depending on availability, issue
+complexity, and the information provided. Requests are handled case by case.
+This is a response target, not a guaranteed service level or a promise to fix an
+issue within that time. We cannot guarantee a solution to every issue, recovery
+of every workspace, or compatibility with every configuration. Statutory rights
+and the refund policy remain unaffected.
 
 ## Non-negotiables
 

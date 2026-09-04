@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
 import tempfile
@@ -90,6 +91,7 @@ class DashboardTests(unittest.TestCase):
         self.assertIn('$("resume").disabled=!s.apply||', HTML)
 
     def test_finalize_requires_explicit_server_side_confirmation(self):
+        self.dashboard.engine.config = replace(self.dashboard.engine.config, apply=True)
         self.dashboard.state.update(
             status="ready_to_finalize",
             phase="ready_to_finalize",
@@ -101,6 +103,15 @@ class DashboardTests(unittest.TestCase):
         )
         self.assertEqual(status, 400)
         self.assertIn("explicit confirmation", body["error"])
+
+    def test_read_only_rejects_mutation_before_starting_worker(self):
+        for action in ("start", "resume", "finalize"):
+            with self.subTest(action=action):
+                status, body = self.post({"action": action, "confirmed": True}, self.dashboard.token)
+                self.assertEqual(status, 400)
+                self.assertIn("Changes are disabled", body["error"])
+                self.assertIsNone(self.dashboard.engine._thread)
+                self.assertEqual(self.dashboard.state.read()["status"], "idle")
 
 
 if __name__ == "__main__":

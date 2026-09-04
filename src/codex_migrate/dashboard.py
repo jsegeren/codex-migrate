@@ -208,6 +208,8 @@ class Dashboard:
                     length = declared_length
                     payload = json.loads(self.rfile.read(length) or b"{}")
                     action = payload.get("action")
+                    if action in ("start", "resume", "finalize") and not dashboard.engine.config.apply:
+                        raise MigrationError("Changes are disabled; restart with --apply to enable migration")
                     if action == "inspect":
                         if dashboard.state.read().get("status") == "running":
                             raise MigrationError("Wait for the current migration action to finish")

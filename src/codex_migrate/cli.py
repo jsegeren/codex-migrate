@@ -20,8 +20,8 @@ from codex_migrate.state import StateStore
 
 def _port(value: str) -> int:
     port = int(value)
-    if port < 1 or port > 65535:
-        raise argparse.ArgumentTypeError("port must be between 1 and 65535")
+    if port < 0 or port > 65535:
+        raise argparse.ArgumentTypeError("port must be between 0 and 65535 (0 selects a free port)")
     return port
 
 

@@ -49,21 +49,41 @@ class SiteTests(unittest.TestCase):
                         target = target.with_suffix(".html")
                     self.assertTrue(target.exists(), f"{page.name}: missing {href}")
 
-    def test_paid_offer_is_unambiguously_a_preorder(self):
+    def test_checkout_closed_until_downloadable_edition_ready(self):
         text = " ".join(self.parse("index.html").text).lower()
-        self.assertIn("this is a pre-order", text)
-        self.assertIn("not available today", text)
-        self.assertIn("$49", text)
+        self.assertIn("no pre-orders", text)
+        self.assertIn("not on sale yet", text)
+        self.assertIn("$50", text)
         self.assertIn("no subscription", text)
         self.assertIn("free cli", text)
+
+    def test_codex_icon_is_a_separate_attributed_product_reference(self):
+        source = (SITE / "index.html").read_text()
+        self.assertIn('class="product-reference"', source)
+        self.assertIn('alt="Codex product icon"', source)
+        self.assertIn('>For Codex</a>', source)
+        self.assertIn('Not affiliated with or endorsed by OpenAI', source)
+        self.assertIn('href="/assets/mark.svg"', source)
+        self.assertTrue((SITE / "assets/codex-product.png").is_file())
+        self.assertIn("not licensed under", (ROOT / "THIRD_PARTY_NOTICES.md").read_text())
+
+    def test_purple_theme_and_upright_headline(self):
+        source = (SITE / "index.html").read_text()
+        styles = (SITE / "styles.css").read_text()
+        self.assertNotIn("<em>", source)
+        self.assertNotIn("font-style: italic", styles)
+        self.assertIn("--purple: #6042a6", styles)
+        self.assertNotIn("var(--green", styles)
 
     def test_legal_pages_cover_purchase_basics(self):
         terms = " ".join(self.parse("terms.html").text).lower()
         refunds = " ".join(self.parse("refunds.html").text).lower()
         privacy = " ".join(self.parse("privacy.html").text).lower()
-        self.assertIn("pre-order", terms)
+        self.assertIn("no pre-orders", terms)
         self.assertIn("no specific release date", terms)
-        self.assertIn("30 days", refunds)
+        self.assertIn("best-effort", terms)
+        self.assertIn("no response time, fix, resolution deadline", terms)
+        self.assertIn("30-day refund", refunds)
         self.assertIn("stripe", privacy)
         self.assertIn("do not sell personal data", privacy)
 

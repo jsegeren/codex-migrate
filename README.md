@@ -11,6 +11,11 @@ It stages a resumable copy over SSH, preserves the new Mac's authentication,
 creates a rollback backup, installs only after both Codex apps are closed, and
 verifies the result before declaring completion.
 
+Destination replacement is blocked unless the mandatory backup passes content
+and structure verification and sufficient free space is available. There is no
+skip-backup option. Same-disk backups do not protect against disk failure;
+keep the old Mac intact. See [backup and recovery details](docs/recovery.md).
+
 > **Alpha:** This project was extracted from a successful real-world migration
 > spanning hundreds of gigabytes. The core safety model is implemented and
 > tested, but the public CLI
@@ -217,13 +222,14 @@ irreplaceable workspace. Please report vulnerabilities privately according to
 The migration engine is MIT-licensed and will remain inspectable and usable from
 the command line. A signed, notarized Mac app is in development for people who
 want automatic discovery, guided permissions, route testing, one-click controls,
-updates, and support. A **$49 one-time Founding Edition pre-order** reserves an
-individual v1 license and beta access. It is not a subscription. See
+updates, and support. The planned price is **$50 one time** for the downloadable
+Mac edition. It is not a subscription or a pre-order. See
 [the commercial-edition principles](docs/commercial-edition.md).
 
-The signed Mac app is not available for download today. The complete free CLI
-is. Pre-orders are refundable at any time before the first beta and for 30 days
-after delivery. The checkout and full terms are available on the
+The signed Mac app is not available for download yet and checkout is closed
+until release checks pass. The complete free CLI is available today. Paid support
+will be best-effort, aiming for an initial response within a few business days,
+without a guaranteed response time, fix, or resolution deadline. See the
 [project website](https://codex-migrate.vercel.app/#founding-edition).
 
 ## Contributing
@@ -234,3 +240,6 @@ high trust burden: safety changes require tests and should fail closed.
 ## License
 
 [MIT](LICENSE)
+
+The separately attributed Codex product-reference image is OpenAI artwork,
+not MIT-licensed project artwork. See [third-party notices](THIRD_PARTY_NOTICES.md).

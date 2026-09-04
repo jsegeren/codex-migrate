@@ -17,6 +17,9 @@ and recoverability take priority over speed or convenience.
 - Keep the core dependency-free and compatible with Python 3.9 or newer.
 - Add tests for every state transition or safety boundary changed.
 
-Do not add OpenAI logos or language implying affiliation, endorsement, or
-official support. “Codex” is referenced only to describe compatibility with
-the Codex product.
+Do not use OpenAI logos as this project's branding or imply affiliation,
+endorsement, or official support. The Founder-approved exception is a small,
+unmodified Codex product icon as a separate compatibility reference labelled
+“For Codex,” subordinate to our branding with a nearby non-affiliation notice.
+Never use it as our app icon, favicon, or combined logo. Record its provenance
+and third-party rights. “Codex” describes compatibility with the Codex product.
