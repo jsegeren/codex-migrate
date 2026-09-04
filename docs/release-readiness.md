@@ -83,7 +83,10 @@ cross-Mac migration. Failure tests use disposable fixtures, not user data.
   content verification fixes the corruption-acceptance defect reproduced against
   `04e3ffa`, but matching bytes alone do not establish usable destination paths.
 - Verify preservation of supported Codex configuration/state outside transcript,
-  personal-skill and workspace content checks; open representative restored chats.
+  personal-skill and workspace content checks. A disposable probe against
+  `ddd598d` installed altered staged `config.toml` and organization-state JSON
+  while returning completion. This is a reproduced blocker, not merely missing
+  test evidence. Also open representative restored chats on the separate Mac.
 - Confirm Apple Developer membership activation and the intended account.
 - Create Developer ID signing credentials and notarization access securely.
 - Produce, notarize, staple, and verify the exact committed release artifact.

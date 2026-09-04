@@ -527,6 +527,22 @@ This demonstrates representative local path compatibility with a reviewed
 alias, not automatic remapping, every Git feature/version, clean-Mac installation,
 real cross-Mac acceptance, or restored Codex chat reopening.
 
+### Open Codex configuration/state verification defect
+
+A disposable probe against `ddd598d` staged a full migration containing
+`config.toml` and `.codex-global-state.json`, then changed only those two staged
+files. The actual local rsync/APFS installation returned a completion receipt
+with the altered configuration/organization fixture installed; the source was
+unchanged. Existing transcript, personal-skill and workspace checks do not
+cover these files. No user Codex state or remote Mac was involved.
+
+This is the next preservation blocker: supported Codex state outside existing
+content checks needs source-frozen staged and installed verification, with
+regressions for corruption, omissions/additions and rollback. It must share the
+actual transfer exclusions, never read/copy source authentication, preserve
+destination identity, and avoid treating runtime exclusions as migration data.
+Do not declare the release candidate complete while this gap remains.
+
 ### Reference guidance
 
 - [Lighthouse scoring excludes manual checks](https://developer.chrome.com/docs/lighthouse/accessibility/scoring).
