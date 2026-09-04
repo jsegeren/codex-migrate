@@ -105,10 +105,10 @@ HTML = r"""<!doctype html>
       <details><summary>Backup and verification details</summary><p>Installation is blocked if space is insufficient or backup verification fails. There is no skip-backup option. Same-disk backups protect against replacement mistakes, not disk failure.</p><p id="codex-state-proof">Retained Codex state verification is pending.</p></details>
       <details id="recovery-help"><summary>Recover an interrupted installation</summary>
         <p>Check the destination before trying again. This reads saved recovery evidence and backup contents; it does not restore or remove files.</p>
-        <div class="controls"><button id="check_recovery" disabled>Check recovery</button><button id="stop_recovery" disabled>Stop check</button></div>
+        <div class="controls"><button id="check_recovery" disabled>Check recovery</button><button id="stop_recovery" disabled>Stop check</button><button id="restore_recovery" disabled>Restore backup</button></div>
         <p id="recovery-message" role="status" aria-live="polite" tabindex="-1">No recovery check has run.</p>
         <details id="recovery-details" hidden><summary>Last check details</summary><p id="recovery-time"></p><p id="recovery-backup"></p><p id="recovery-terminal"></p><ul id="recovery-items"></ul></details>
-        <p>Keep the old Mac, staging, and backups intact. Guided restore is not available yet; contact support before manually replacing files.</p>
+        <p>Restore keeps displaced current files separately. It returns the previous destination, not a completed migration. Keep the old Mac, staging, and backups intact.</p>
       </details>
     </section>
     <div class="controls">
@@ -139,7 +139,6 @@ function renderBackup(s){const blocked=s.space_check==="blocked";$("backup-safet
 async function api(path,options={}){const response=await fetch(path,{...options,headers:{"X-Codex-Migrate-Token":token,"Content-Type":"application/json",...(options.headers||{})}});const body=await response.json();if(!response.ok)throw new Error(body.error||`Request failed (${response.status})`);renderBackup(body);return body}
 function render(s){latestState=s;const p=Math.max(0,Math.min(100,Number(s.percent)||0));$("percent").textContent=`${p.toFixed(p===100?0:1)}%`;$("bar").style.width=`${p}%`;$("bar").parentElement.setAttribute("aria-valuenow",String(p));$("phase").textContent=String(s.phase||"unknown").replaceAll("_"," ");$("status").textContent=String(s.status||"unknown").replaceAll("_"," ");$("message").textContent=s.message||"";$("route").textContent=s.route||"—";$("bytes").textContent=`${fmt(s.bytes_staged||0)} / ${fmt(s.bytes_total||0)}`;$("item").textContent=s.current_item||"—";$("warning").style.display=s.warning?"block":"none";$("warning").textContent=s.warning||"";$("error").style.display=s.error?"block":"none";$("error").textContent=s.error||"";$("compat").textContent=s.compatibility_command?`Different macOS usernames: after installation, run on the new Mac: ${s.compatibility_command}`:"";const c=s.config||{};$("codex-scope").textContent=`${c.source_home||"—"}/.codex → ${c.target_home||"—"}/.codex`;$("ssh-target").textContent=`${c.target||"—"} · ${c.target_home||"—"}`;const roots=Array.isArray(c.workspace_roots)?c.workspace_roots:[];$("workspace-count").textContent=String(roots.length);$("workspace-list").replaceChildren(...roots.map(root=>{const li=document.createElement("li");const prefix=`${c.source_home}/`;const relative=root.startsWith(prefix)?root.slice(prefix.length):root;li.textContent=`${root} → ${c.target_home}/${relative}`;return li}));const active=s.status==="running";const canStart=["idle","ready"].includes(s.status);const canFinalize=s.status==="ready_to_finalize"||(s.status==="waiting"&&["close_source_codex","close_target_codex"].includes(s.phase));$("inspect").disabled=active;$("start").disabled=!canStart||!s.apply;$("pause").disabled=!active||!["staging","final_delta"].includes(s.phase);$("resume").disabled=!s.apply||!['paused','cancelled','failed','interrupted'].includes(s.status);$("finalize").disabled=!canFinalize||!s.apply;$("cancel").disabled=!((active&&["inspecting","staging","final_delta"].includes(s.phase))||s.status==="paused");}
 function renderSkills(s){
-  renderRecovery(s);
   $("codex-state-proof").hidden=s.migration_mode==="skills";
   $("codex-state-proof").textContent=s.status==="complete"&&s.receipt?.codex_state_content_verified===true?"Retained Codex state matched the source before and after installation, before database checks. Authentication and runtime exclusions apply.":s.status==="complete"?"No retained Codex state verification was recorded for this migration.":"Retained Codex state verification is pending.";
   if(s.status==="running"&&s.phase==="verifying_sources")$("cancel").disabled=false;
@@ -163,6 +162,7 @@ function renderSkills(s){
     $("skill-explanation").textContent="Only skills from the chosen categories are included. Each listed destination is backed up before replacement. Other skills and files are kept.";
     $("protection-explanation").textContent="The source is never modified. Only listed skill destinations are replaced after verified backups. Codex conversations, configuration and authentication are not copied or replaced. Interrupted staging is kept so Resume can continue.";
   }
+  renderRecovery(s);
 }
 function renderGit(s){
   $("git-scope").hidden=s.migration_mode==="skills";
@@ -177,24 +177,43 @@ function renderGit(s){
 }
 function renderEvents(events){const rows=(events||[]).map(event=>{const li=document.createElement('li');const recovery=event.recovery_status&&event.recovery_status!=='not_checked'?` · recovery check: ${event.recovery_status.replaceAll('_',' ')}`:'';li.textContent=`${event.at||'Time unavailable'} · ${event.phase.replaceAll('_',' ')} · ${event.status}${event.failure_category==='none'?'':` · ${event.failure_category.replaceAll('_',' ')}`}${recovery}`;return li});if(!rows.length){const li=document.createElement('li');li.textContent='No events recorded yet.';rows.push(li)}$('migration-events').replaceChildren(...rows)}
 function renderRecovery(s){
-  const r=s.recovery||{}, checking=r.status==='checking';
+  const r=s.recovery||{}, checking=r.status==='checking', restoring=r.status==='restoring', attempt=s.recovery_attempt||{};
+  const unresolved=['restoring','recovery_required'].includes(s.phase)||(s.recovery_attempt&&attempt.resolved!==true);
   const focused=document.activeElement?.id;
-  $('check_recovery').disabled=s.status==='running'||checking;
+  $('check_recovery').disabled=s.status==='running'||checking||restoring;
   $('stop_recovery').disabled=!checking;
-  if(checking)for(const name of ['inspect','start','pause','resume','finalize','cancel'])$(name).disabled=true;
+  const resumable=['restore_incomplete','restore_pending_cleanup'].includes(r.status)&&attempt.reference;
+  $('restore_recovery').disabled=!s.apply||s.status==='running'||checking||restoring||!(r.status==='backup_verified'||resumable);
+  $('restore_recovery').textContent=resumable?'Resume restoration':'Restore backup';
+  if(checking||restoring||unresolved)for(const name of ['inspect','start','pause','resume','finalize','cancel'])$(name).disabled=true;
+  const recoveryPhase=['restoring','restored','recovery_required'].includes(s.phase);
+  if(recoveryPhase)$('bar').parentElement.hidden=true;
+  if(recoveryPhase)$('percent').textContent='—';
   $('recovery-message').textContent=r.message||'No recovery check has run.';
   $('recovery-details').hidden=!r.checked_at;
   $('recovery-time').textContent=r.checked_at?`Checked at ${r.checked_at}. This is a point-in-time result, not a live guarantee.`:'';
-  $('recovery-backup').textContent=r.backup?`Destination backup: ${r.backup}`:'';
+  const backup=r.backup||attempt.reference?.backup;
+  if(recoveryPhase&&backup){$('backup-heading').textContent='Recovery backup';$('backup-location').textContent=`Recorded recovery backup: ${backup}. See Last check details for its verification status; keep this backup and preserved files intact.`;}
+  $('recovery-backup').textContent=backup?`Destination backup: ${backup}`:'';
   $('recovery-terminal').textContent=r.terminal_phase?`An earlier receipt records ${r.terminal_phase}. Current destination contents and usability have not been verified by this check.`:'';
-  $('recovery-items').replaceChildren(...(r.items||[]).map(item=>{const li=document.createElement('li');li.textContent=`${item.original} — ${item.existed?'backup verified':'originally absent'}; ${item.current_present?'current destination entry present':'current destination entry absent'}`;return li}));
-  if(checking&&focused==='check_recovery')$('recovery-message').focus();
-  else if(!checking&&recoveryWasChecking&&['recovery-message','stop_recovery'].includes(focused))$('check_recovery').focus();
-  recoveryWasChecking=checking;
+  const items=r.items||attempt.inspection?.items||[];
+  $('recovery-items').replaceChildren(...items.map(item=>{const li=document.createElement('li');li.textContent=!r.items?`${item.original} — confirmed restoration scope; current presence is not verified by this result.`:'restored_matches' in item?`${item.original} — restored entry ${item.restored_present?'present':'absent'}, ${item.restored_matches?'matches':'does not match'} recovery evidence. Preserved entry: ${item.preserved} — ${item.preserved_present?'present':'absent'}, ${item.preserved_matches?'matches':'does not match'} recovery evidence.`:`${item.original} — ${item.existed?'backup verified':'originally absent'}; ${item.current_present?'current destination entry present':'current destination entry absent'}`;return li}));
+  if((checking&&focused==='check_recovery')||(restoring&&focused==='restore_recovery'))$('recovery-message').focus();
+  else if(!checking&&!restoring&&recoveryWasChecking&&['recovery-message','stop_recovery'].includes(focused))$('check_recovery').focus();
+  recoveryWasChecking=checking||restoring;
 }
 async function refresh(){try{const s=await api("/api/status");render(s);renderSkills(s);renderEvents(s.support_events)}catch(error){$("error").style.display="block";$("error").textContent=error.message}}
 async function action(name){const c=latestState.config||{};const confirmation=latestState.migration_mode==="skills"?`Back up, then replace ${latestState.inventory?.skill_exports?.length||0} listed skill(s) on ${c.target}? Conversations, configuration and whole repositories will not be migrated. Other skills will be kept.`:`Back up, then replace ${c.target_home}/.codex, ${c.workspace_roots?.length||0} selected workspace root(s), and ${latestState.inventory?.personal_skills?.length||0} personal skill(s) on ${c.target}? Other destination skills will be kept.`;if(name==="finalize"&&!confirm(confirmation))return;try{const s=await api("/api/action",{method:"POST",body:JSON.stringify({action:name,confirmed:name==="finalize"})});render(s);renderSkills(s)}catch(error){$("error").style.display="block";$("error").textContent=error.message}}
 for(const name of ["inspect","start","pause","resume","finalize","cancel","check_recovery","stop_recovery"]){$(name).addEventListener("click",()=>action(name))}
+$('restore_recovery').addEventListener('click',async()=>{
+  const r=latestState.recovery||{}, attempt=latestState.recovery_attempt||{}, c=latestState.config||{};
+  const id=r.status==='backup_verified'?r.transaction_id:attempt.reference?.transaction_id;
+  const items=r.status==='backup_verified'?r.items:attempt.inspection?.items;
+  if(!id||!Array.isArray(items))return;
+  const paths=items.slice(0,5).map(item=>item.original).join('\n');
+  if(!confirm(`Restore the previous destination on ${c.target}, replacing all ${items.length} listed path(s)?\n\n${paths}${items.length>5?'\n…see Last check details for all paths.':''}\n\nCurrent entries will be kept separately, not merged. Close destination Codex and all apps writing these files. This protected step may take time; keep both Macs connected.`))return;
+  try{const s=await api('/api/action',{method:'POST',body:JSON.stringify({action:'restore_recovery',confirmed:true,transaction_id:id})});render(s);renderSkills(s)}catch(error){$('error').style.display='block';$('error').textContent=error.message}
+});
 refresh();setInterval(refresh,2500);
 </script>
 </body></html>"""
@@ -313,12 +332,16 @@ class Dashboard:
                     length = declared_length
                     payload = json.loads(self.rfile.read(length) or b"{}")
                     action = payload.get("action")
-                    if action in ("start", "resume", "finalize") and not dashboard.engine.config.apply:
+                    if action in ("start", "resume", "finalize", "restore_recovery") and not dashboard.engine.config.apply:
                         raise MigrationError("Changes are disabled; restart with --apply to enable migration")
                     if action == "check_recovery":
                         dashboard.engine.start_recovery_check()
                     elif action == "stop_recovery":
                         dashboard.engine.stop_recovery_check()
+                    elif action == "restore_recovery":
+                        if payload.get("confirmed") is not True:
+                            raise MigrationError("Restoration requires explicit confirmation")
+                        dashboard.engine.start_restore_recovery(payload.get("transaction_id"))
                     elif action == "inspect":
                         if dashboard.state.read().get("status") == "running":
                             raise MigrationError("Wait for the current migration action to finish")
@@ -386,4 +409,5 @@ class Dashboard:
         self.state.release_process_lock()
 
     def can_shutdown(self) -> bool:
-        return True
+        current = self.state.read()
+        return not (current.get("status") == "running" and current.get("phase") == "restoring")

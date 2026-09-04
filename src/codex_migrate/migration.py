@@ -74,6 +74,7 @@ class MigrationEngine:
 
     def start_inspection(self) -> None:
         with self._lock:
+            self._require_recovery_resolved()
             if self._thread and self._thread.is_alive():
                 raise MigrationError("A migration action is already running")
             self.state.update(status="running", phase="inspecting",
@@ -95,15 +96,107 @@ class MigrationEngine:
 
     def _run_recovery_check(self) -> None:
         from codex_migrate.recovery import inspect_recovery
+        from codex_migrate.reconciliation import reconcile_recovery
+        current = self.state.read()
+        attempt = current.get("recovery_attempt")
+        reconciling = (current.get("phase") in ("restoring", "restored", "recovery_required")
+                       or attempt is not None and (not isinstance(attempt, dict) or attempt.get("resolved") is not True))
         try:
-            report = inspect_recovery(self.config, self.transport, lambda: self._recovery_cancelled)
+            if reconciling:
+                report = reconcile_recovery(self.config, self.transport, attempt["reference"], lambda: self._recovery_cancelled)
+            else:
+                report = inspect_recovery(self.config, self.transport, lambda: self._recovery_cancelled)
         except Exception:
             report = {"status": "failed", "message":
                 "Recovery could not be verified. Keep destination Codex closed, staging and backups intact, and contact support. No recovery changes were made."}
         with self._lock:
             if not self._recovery_cancelled:
-                report["checked_at"] = datetime.now(timezone.utc).isoformat()
-                self.state.update(recovery=report)
+                self._publish_recovery(report, reconciling)
+
+    def _require_recovery_resolved(self) -> None:
+        from codex_migrate.recovery import recovery_reference
+        from codex_migrate.reconciliation import _validate_result
+        current = self.state.read()
+        attempt = current.get("recovery_attempt")
+        protected = current.get("phase") in ("restoring", "restored", "recovery_required")
+        if attempt is None and not protected:
+            return
+        try:
+            if not isinstance(attempt, dict) or attempt.get("resolved") is not True or attempt.get("outcome") != "restore_verified":
+                raise ValueError("Restoration unresolved")
+            reference = recovery_reference(self.config.target_home, attempt["inspection"])
+            if reference != attempt["reference"]:
+                raise ValueError("Mismatched recovery reference")
+            proof = attempt["proof"]
+            _validate_result(proof, reference)
+            if proof["status"] != "restore_verified" or current.get("phase") in ("restoring", "recovery_required"):
+                raise ValueError("Unverified recovery state")
+        except (KeyError, TypeError, ValueError) as error:
+            raise MigrationError("Check recovery and resolve the previous restoration before starting another migration action") from error
+
+    def _publish_recovery(self, report, reconciling=False) -> None:
+        report["checked_at"] = datetime.now(timezone.utc).isoformat()
+        changes = {"recovery": report}
+        if reconciling:
+            saved = self.state.read().get("recovery_attempt")
+            attempt = dict(saved) if isinstance(saved, dict) else {}
+            resolved = report["status"] == "restore_verified"
+            attempt.update(resolved=resolved, outcome=report["status"],
+                           proof={key: value for key, value in report.items() if key not in ("message", "checked_at")} if resolved else None)
+            changes.update(recovery_attempt=attempt, staging_complete=False, receipt=None,
+                           status="interrupted" if resolved else "failed",
+                           phase="restored" if resolved else "recovery_required",
+                           current_item=None, message=report["message"], error=None if resolved else "Restoration needs review")
+            if resolved:
+                changes["pending_backup"] = None
+        self.state.update(**changes)
+
+    def start_restore_recovery(self, transaction_id) -> None:
+        from codex_migrate.recovery import recovery_reference
+        with self._lock:
+            current = self.state.read()
+            if not self.config.apply:
+                raise MigrationError("Changes are disabled; enable them before restoring")
+            if (self._thread and self._thread.is_alive()) or current.get("status") == "running":
+                raise MigrationError("Wait for the current action to finish")
+            report = current.get("recovery", {})
+            attempt = current.get("recovery_attempt")
+            if report.get("status") == "backup_verified":
+                inspection = report
+            elif report.get("status") in ("restore_incomplete", "restore_pending_cleanup") and isinstance(attempt, dict):
+                inspection = attempt["inspection"]
+            else:
+                raise MigrationError("Check recovery and review the backup before confirming restoration")
+            reference = recovery_reference(self.config.target_home, inspection)
+            if not isinstance(transaction_id, str) or transaction_id != reference["transaction_id"]:
+                raise MigrationError("Recovery selection changed; check and confirm it again")
+            attempt = {"reference": reference, "inspection": inspection, "resolved": False, "outcome": "restoring"}
+            self.state.update(recovery_attempt=attempt, status="running", phase="restoring", error=None,
+                              current_item="Destination backup restoration",
+                              staging_complete=False, recovery={"status": "restoring", "message":
+                                  "Preserving current destination files and restoring the backup. This protected step can take time; keep both Macs connected and destination Codex closed."},
+                              message="Restoring the previous destination. Protected step; keep both Macs connected.")
+            try:
+                self.state.sync_recovery_checkpoint()
+            except Exception as error:
+                self.state.update(status="failed", phase="recovery_required", recovery={"status": "restore_unconfirmed",
+                                  "message": "The recovery checkpoint could not be saved safely. No restore request was sent. Check recovery before retrying."},
+                                  message="Recovery checkpoint could not be saved. No restore request was sent.")
+                raise MigrationError("Could not safely save the recovery checkpoint; restoration was not started") from error
+            self._start(self._run_restore_recovery)
+
+    def _run_restore_recovery(self) -> None:
+        from codex_migrate.restore import restore_recovery
+        from codex_migrate.reconciliation import reconcile_recovery
+        attempt = self.state.read()["recovery_attempt"]
+        try:
+            restore_recovery(self.config, self.transport, attempt["inspection"])
+            report = reconcile_recovery(self.config, self.transport, attempt["reference"])
+        except Exception:
+            report = {"status": "restore_unconfirmed", "message":
+                      "Restoration is not confirmed. The destination may still be working. Keep Codex closed there and choose Check recovery; do not start another migration."}
+        with self._lock:
+            self._publish_recovery(report, True)
 
     def stop_recovery_check(self) -> None:
         with self._lock:
@@ -116,6 +209,12 @@ class MigrationEngine:
 
     def reconcile_startup(self) -> None:
         current = self.state.read()
+        if current.get("recovery", {}).get("status") == "restoring" or current.get("phase") == "restoring":
+            self.state.update(status="failed", phase="recovery_required", staging_complete=False,
+                              message="Restoration outcome is unconfirmed. Keep destination Codex closed and choose Check recovery.",
+                              recovery={"status": "restore_unconfirmed", "message":
+                                  "The previous restore request ended without a confirmed result. The destination may still be working. Keep Codex closed there and choose Check recovery."})
+            return
         if current.get("recovery", {}).get("status") == "checking":
             self.state.update(recovery={"status": "stopped", "message":
                 "The previous recovery check ended without a result. No recovery changes were made. Check again when ready."})
@@ -140,6 +239,8 @@ class MigrationEngine:
 
     def shutdown(self) -> None:
         with self._lock:
+            if self.state.read().get("phase") == "restoring" and self.state.read().get("status") == "running":
+                raise MigrationError("Restoration is a protected step; wait for its result before quitting")
             recovery_checking = self.state.read().get("recovery", {}).get("status") == "checking"
             if recovery_checking:
                 self.stop_recovery_check()
@@ -179,6 +280,7 @@ class MigrationEngine:
 
     def preflight(self, require_full_staging_space: bool = True) -> Dict[str, object]:
         with self._lock:
+            self._require_recovery_resolved()
             if (
                 self._thread
                 and self._thread.is_alive()
@@ -315,6 +417,7 @@ class MigrationEngine:
         return state
 
     def start_preseed(self) -> None:
+        self._require_recovery_resolved()
         current = self.state.read()
         if current.get("status") not in (
             "idle",
@@ -328,6 +431,7 @@ class MigrationEngine:
         self._start(self._run_preseed)
 
     def start_finalize(self) -> None:
+        self._require_recovery_resolved()
         current = self.state.read()
         allowed = current.get("status") == "ready_to_finalize" or (
             current.get("status") == "waiting"

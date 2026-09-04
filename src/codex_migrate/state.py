@@ -107,6 +107,36 @@ class StateStore:
                 }])[-HISTORY_LIMIT:]
             return self.write(state)
 
+    def sync_recovery_checkpoint(self) -> None:
+        """Persist the local restore reference before any remote restore write."""
+        with self._lock:
+            descriptor = os.open(self.path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            try:
+                info = os.fstat(descriptor)
+                if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                        or info.st_uid != os.getuid() or info.st_mode & 0o7777 != 0o600):
+                    raise PermissionError("Unsafe recovery checkpoint")
+                os.fsync(descriptor)
+                # Include newly created state-directory ancestors, not just
+                # the file whose rename might still exist only in memory.
+                canonical_root = self.root.resolve(strict=True)
+                for directory in (canonical_root, *canonical_root.parents):
+                    parent_fd = os.open(directory, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+                    try:
+                        if not stat.S_ISDIR(os.fstat(parent_fd).st_mode):
+                            raise PermissionError("Unsafe checkpoint directory")
+                        os.fsync(parent_fd)
+                    finally:
+                        os.close(parent_fd)
+                if os.uname().sysname != "Darwin":
+                    raise OSError("Durable restoration requires macOS")
+                fcntl.fcntl(descriptor, 51, 0)  # Darwin F_FULLFSYNC, no weaker fallback.
+                current = os.stat(self.path, follow_symlinks=False)
+                if (current.st_dev, current.st_ino) != (info.st_dev, info.st_ino):
+                    raise OSError("Recovery checkpoint changed during sync")
+            finally:
+                os.close(descriptor)
+
     def token(self) -> str:
         with self._lock:
             if self.token_path.exists():

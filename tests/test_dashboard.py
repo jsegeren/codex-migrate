@@ -91,6 +91,23 @@ class DashboardTests(unittest.TestCase):
             self.assertEqual(self.post({"action": "stop_recovery"}, self.dashboard.token)[0], 202)
             stop.assert_called_once()
 
+    def test_restore_requires_token_apply_and_explicit_confirmation(self):
+        payload = {"action": "restore_recovery", "confirmed": True, "transaction_id": "a" * 32}
+        with patch.object(self.dashboard.engine, "start_restore_recovery") as restore:
+            self.assertEqual(self.post(payload)[0], 403)
+            self.assertEqual(self.post(payload, self.dashboard.token)[0], 400)
+            self.dashboard.engine.config = replace(self.dashboard.engine.config, apply=True)
+            self.assertEqual(self.post(dict(payload, confirmed=False), self.dashboard.token)[0], 400)
+            restore.assert_not_called()
+            self.assertEqual(self.post(payload, self.dashboard.token)[0], 202)
+            restore.assert_called_once_with("a" * 32)
+
+    def test_shutdown_refuses_active_restoration(self):
+        self.dashboard.state.update(status="running", phase="restoring")
+        self.assertFalse(self.dashboard.can_shutdown())
+        self.dashboard.state.update(status="failed", phase="recovery_required")
+        self.assertTrue(self.dashboard.can_shutdown())
+
     def test_loopback_startup_does_not_require_reverse_dns(self):
         with patch("socket.getfqdn", side_effect=AssertionError("Unexpected DNS lookup")):
             server = LoopbackHTTPServer(("127.0.0.1", 0), self.dashboard._handler())

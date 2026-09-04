@@ -8,9 +8,33 @@ results, accessibility findings, and pre-signing work still open.
 
 ## Candidate checks completed on the development Mac
 
-- An internal post-crash restoration engine now restores frozen destination
+- Guided recovery is implemented in source: the collapsed browser panel now
+  requires a checked backup, enabled changes, and explicit scope confirmation.
+  Restoration keeps displaced destination files separately, then verifies both
+  restored and preserved entries. A durable source checkpoint binds the exact
+  transaction before any request; reconnect checks never automatically retry
+  mutation or infer success from an absent pending record. Missing/malformed
+  saved proof blocks ordinary migration actions. Restore completion is labelled
+  as restoration of the previous destination, not a completed migration.
+  The independent reviewer identified and verified fixes for misleading actual
+  presence reports and unexpected preserved/prepared entries. Guided UI review
+  also found a missing-proof bypass and stale progress/item displays; all were
+  fixed and the reviewer accepted this bounded checkpoint. Independent review
+  passed 67 focused tests and inspected actual fixture restoration at desktop
+  and 320px, including confirmation, protected controls, focus, current item,
+  hidden percentage, preserved-entry mapping, and the recovery-backup label.
+  Main verification passed 355 Python tests (354 passed, one filesystem skip),
+  10 signup tests, Swift typecheck and diff checks; 45 final focused tests also
+  passed after the final display and packaged-regression assertions. Playwright
+  verified confirmation dismissal, actual restore, keyboard focus, and 320px
+  wrapping with no browser console errors. All data was disposable; no actual
+  account data or real SSH migration was used. Review fixtures were cleaned up.
+  See [the restoration contract](restore-engine.md). This is not Apple release
+  certification, VoiceOver conformance, or real packaged cross-Mac acceptance.
+
+- The preceding internal post-crash restoration checkpoint restored frozen destination
   backups while retaining displaced current entries in a separate, indexed
-  recovery directory. It is **not exposed by the CLI or browser yet**. Explicit
+  recovery directory. It was not exposed by the CLI or browser at that checkpoint. Explicit
   apply authority and the inspected transaction ID/backup/scope are required.
   Immutable plan/ready/completion evidence and per-entry checks allow tested
   interrupted restores to resume. Destination identity is preserved, including
@@ -26,15 +50,15 @@ results, accessibility findings, and pre-signing work still open.
   tests (324 passed, one existing filesystem skip), including 22 restoration
   tests; 10 signup tests; Swift typecheck and diff checks passed. Independent
   review accepted the final code and engineering documentation. These are
-  source-engine checks, not a packaged guided-restore proof. Guided confirmation, progress,
-  recovery-state reconciliation, lost-reply handling, real cross-Mac/drive
-  power-loss acceptance and Intel coverage remain gates. This is not a claim
+  source-engine checks, not a packaged guided-restore proof. The new source slice
+  above addresses guided confirmation, progress and reconnect handling; real
+  cross-Mac/drive power-loss acceptance and Intel coverage remain gates. This is not a claim
   that the downloadable app can perform guided restoration yet.
   Clean source `ad49883` also built a local unsigned arm64 engineering app;
   all eight bundled-engine regression tests passed and packaging verified the
   ad-hoc signature. ZIP SHA-256:
   `eb908bff5026b443b53bcf2e4818eeb47ef5c1793180a3abb7b12f9f87f5dee4`.
-  The internal restore entry point is not included in the customer flow; these
+  That older build did not include restore in the customer flow; those
   checks cover the existing bundled controls, not packaged guided restoration.
   No running app or actual workspace was changed. The prior inactive engineering
   build was moved to Trash, not permanently deleted.
@@ -54,8 +78,8 @@ results, accessibility findings, and pre-signing work still open.
   full suite: 303 tests (302 passed, one existing filesystem skip), 10 signup
   tests, and Swift typecheck. Real local subprocess tests cover cancellation
   before launch and during registration; no real SSH migration/user data was
-  used. VoiceOver, clean second-Mac behavior, and guided restoration that
-  preserves current destination data remain open. Clean source `4c894c2` built
+  used. VoiceOver and clean second-Mac behavior remain open; the newer slice
+  above adds guided restoration. Clean source `4c894c2` built
   an unsigned arm64 engineering app, passed eight bundled-engine checks, and
   rejected bundled `recovery --apply` before connecting. Packaging verified
   its ad-hoc signature. ZIP SHA-256:
@@ -107,14 +131,15 @@ results, accessibility findings, and pre-signing work still open.
   A final clear failure may leave a durable terminal receipt without a pending
   file; it is still reported as an error. This is tested containment and normal
   rollback, not guided post-crash recovery or actual hardware power-cut proof.
-  The guided restore/reconciliation flow remains release-blocking work.
+  The guided restore/reconciliation flow now has local fixture coverage above;
+  real packaged cross-Mac acceptance remains release-blocking work.
   Clean source `7bdce3a` produced an unsigned arm64 app and passed eight bundled
   engine startup/configuration checks; packaging verified its ad-hoc signature.
   ZIP SHA-256: `09a8cad7624a5defd94e8c0aa201ad5fdab114eb8cc84305d0cd8a42fa29cf7c`.
   This does not certify an actual packaged SSH migration or clean second Mac.
   This earlier format-1 checkpoint recorded durable scope and outcome but no
-  frozen backup integrity. Format 2 above adds that evidence; guided restore
-  must still preserve any current destination data being displaced.
+  frozen backup integrity. Format 2 adds that evidence; the guided checkpoint
+  above now preserves current destination data separately.
 
 - Destination-wide exclusion now covers staging directory/marker writes, rsync
   receivers, and the entire full/skills backup-install-verify-rollback phase.

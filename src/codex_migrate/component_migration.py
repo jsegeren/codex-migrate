@@ -55,6 +55,7 @@ class ComponentMigrationEngine(MigrationEngine):
         return current
 
     def preflight(self, require_full_staging_space=True):
+        self._require_recovery_resolved()
         if platform.system() != "Darwin":
             raise MigrationError("Codex Migrate currently supports macOS sources only")
         exports = self._discover()

@@ -1,9 +1,9 @@
-# Internal restoration engine acceptance boundary
+# Restoration engine acceptance boundary
 
 This is engineering documentation, not a customer restore command. The engine
-in `src/codex_migrate/restore.py` is not exposed through the CLI, native app, or
-dashboard. The public `recovery` command remains read-only. Do not recommend
-calling this internal API against an active workspace.
+in `src/codex_migrate/restore.py` powers the browser's explicitly confirmed
+Restore backup action. The public `recovery` CLI command remains read-only.
+Follow the [recovery guide](recovery.md), not direct internal API calls.
 
 ## Transaction contract
 
@@ -71,10 +71,31 @@ credentials or perform a migration over SSH. They do not prove drive power-loss
 behavior, clean second-Mac operation, Intel support, restored Codex usability,
 or preservation of metadata beyond the existing tree-digest contract.
 
-The next customer-facing slice must provide reviewed scope confirmation,
-protected-phase status, support-safe error reporting, and restart reconciliation.
-In particular, a dropped response after journal cleanup must not trigger another
-restore or report “finished” solely because the pending journal is absent.
-The preserved-current mapping and completion receipt need a read-only verified
-reconciliation path before exposing the action. Restoring a previous destination
-is not completion of the desired source-to-destination migration.
+## Guided action and reconnect reconciliation
+
+The browser requires a checked backup, enabled changes, and confirmation bound
+to the transaction ID and listed paths. Before sending the restore request,
+the source persists and flushes that exact reference and inspection. Checkpoint
+failure sends no restore request. Recovery progress does not display a transfer
+percentage, and ordinary migration actions and normal shutdown are unavailable
+during the protected restore operation.
+
+A successful remote reply is followed by read-only reconciliation. A dropped
+reply or source restart instead requires Check recovery; it never automatically
+retries restoration. Reconciliation takes the existing shared destination lock,
+opens only the selected transaction's evidence, rechecks frozen backups, validates
+plan/ready/completion bindings, and compares both active restored entries and
+separately preserved current entries. It reports actual presence separately from
+expected presence. Unexpected preserved/prepared slots fail closed.
+
+Missing, malformed, incomplete, changed, busy, or different-transaction evidence
+does not mean success. Only complete matching evidence with no pending cleanup
+resolves recovery. A matching incomplete transaction can offer a separately
+confirmed Resume restoration. Ordinary migration entry points require a bound,
+validated saved reconciliation proof; a missing attempt or a bare resolved flag
+cannot bypass recovery. Changed files require review, not automatic replacement.
+
+Restoring a previous destination is not completion of the desired migration.
+The migration remains interrupted, its completion receipt is cleared, and the
+next migration must stage and verify again. These local fixture checks do not
+replace packaged cross-Mac acceptance or the remaining hardware/usability gates.

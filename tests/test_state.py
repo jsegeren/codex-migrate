@@ -1,11 +1,24 @@
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from codex_migrate.state import StateStore
 
 
 class StateTests(unittest.TestCase):
+    def test_recovery_checkpoint_requires_durable_file_and_directory_sync(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            store = StateStore(temporary)
+            store.update(recovery_attempt={"reference": "synthetic", "resolved": False})
+            store.sync_recovery_checkpoint()
+            self.assertEqual(StateStore(temporary).read()["recovery_attempt"]["reference"], "synthetic")
+            with patch("codex_migrate.state.os.fsync", side_effect=OSError("synthetic sync failure")):
+                with self.assertRaises(OSError):
+                    store.sync_recovery_checkpoint()
+            with patch("codex_migrate.state.fcntl.fcntl", side_effect=OSError("synthetic device failure")):
+                with self.assertRaises(OSError):
+                    store.sync_recovery_checkpoint()
     def test_state_and_token_are_owner_only_and_persistent(self):
         with tempfile.TemporaryDirectory() as temporary:
             store = StateStore(temporary)

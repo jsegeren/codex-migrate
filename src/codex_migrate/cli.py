@@ -144,7 +144,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             from codex_migrate.recovery import inspect_recovery
             from codex_migrate.transport import SSHTransport
             if config.apply:
-                raise ValueError("Recovery inspection is read-only; omit --apply. Guided restore is not available yet.")
+                raise ValueError("Recovery inspection is read-only; omit --apply. Use the browser recovery panel for confirmed restoration.")
             result = inspect_recovery(config, SSHTransport(config))
             if args.json:
                 print(json.dumps(result, indent=2, sort_keys=True))

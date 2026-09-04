@@ -173,6 +173,8 @@ class DesktopTests(unittest.TestCase):
                 with urlopen(base + "/", timeout=3) as response:
                     html = response.read().decode()
                     self.assertIn("Backup required before replacement", html)
+                    self.assertIn('id="restore_recovery"', html)
+                    self.assertIn("Current entries will be kept separately, not merged", html)
                     self.assertIn("There is no skip-backup option", html)
                     self.assertIn("frame-ancestors 'none'", response.headers["Content-Security-Policy"])
                 with self.assertRaises(HTTPError) as denied:
@@ -186,6 +188,22 @@ class DesktopTests(unittest.TestCase):
                     urlopen(forbidden, timeout=3)
                 self.assertEqual(read_only.exception.code, 400)
                 read_only.exception.close()
+                # A corrupt/incomplete saved recovery proof must not fall
+                # through into ordinary inspection. This also exercises the
+                # packaged reconciliation imports without making any SSH call.
+                from codex_migrate.state import StateStore
+                StateStore(temporary + "/state").update(
+                    status="failed", phase="recovery_required",
+                    recovery={"status": "restore_unconfirmed"},
+                    recovery_attempt={"resolved": True})
+                blocked = Request(base + "/api/action", data=b'{"action":"inspect"}',
+                                  headers={"X-Codex-Migrate-Token": token,
+                                           "Content-Type": "application/json"})
+                with self.assertRaises(HTTPError) as recovery_block:
+                    urlopen(blocked, timeout=3)
+                self.assertEqual(recovery_block.exception.code, 400)
+                self.assertIn("resolve the previous restoration", recovery_block.exception.read().decode())
+                recovery_block.exception.close()
                 process.terminate()
                 process.wait(timeout=15)
             finally:

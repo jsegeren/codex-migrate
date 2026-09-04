@@ -365,8 +365,13 @@ After an interrupted installation, open **Recover an interrupted installation**
 and choose **Check recovery**. It checks saved backup evidence without restoring
 or deleting files; **Stop check** is available while it runs. CLI users can run
 `./codex-migrate recovery --target new-user@new-mac.local --target-home /Users/new-user`.
-An intact backup is not proof the workspace is restored. See the
-[recovery guide](docs/recovery.md); guided restoration remains a release gate.
+An intact backup is not proof the workspace is restored. With changes enabled,
+the browser offers a separately confirmed **Restore backup** action for supported
+interrupted installations. It preserves displaced current files separately.
+After a disconnect, **Check recovery** verifies the saved transaction before
+offering a resume; an absent pending record alone never means success.
+See the [recovery guide](docs/recovery.md). Real cross-Mac packaged recovery
+acceptance remains a release gate.
 
 ## Contributing
 

@@ -101,6 +101,17 @@ class SupportTests(unittest.TestCase):
             self.assertNotIn("__SUPPORT", document)
         self.assertIn('id="migration-events"', HTML)
 
+    def test_restoration_events_never_export_bound_private_evidence(self):
+        with tempfile.TemporaryDirectory() as root:
+            state = StateStore(root)
+            for phase, status in (("restoring", "restoring"), ("recovery_required", "restore_unconfirmed"), ("restored", "restore_verified")):
+                state.update(phase=phase, recovery={"status": status, "backup": "PRIVATE"},
+                             recovery_attempt={"reference": "PRIVATE", "inspection": "PRIVATE", "proof": "PRIVATE"})
+            report = diagnostic_report(state.read())
+            self.assertEqual(report["current"]["recovery_status"], "restore_verified")
+            self.assertEqual([e["phase"] for e in report["recent_events"]], ["restoring", "recovery_required", "restored"])
+            self.assertNotIn("PRIVATE", json.dumps(report))
+
     def test_optional_details_are_collapsed_but_safety_status_stays_visible(self):
         class Visibility(HTMLParser):
             def __init__(self):

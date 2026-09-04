@@ -59,7 +59,9 @@ details** for the timestamp, backup location, and original/current presence of
 each scoped destination item. Presence is not a check of current file contents.
 A terminal receipt describes an earlier outcome, not current usability. No
 pending record does not prove the migration finished. These are point-in-time
-findings; inspecting recovery does not change the migration's completion status.
+findings. Ordinary backup inspection does not change migration completion.
+Checking a previously requested restoration reconciles that separate outcome;
+it never marks the source-to-destination migration complete.
 
 The same read-only check is available without the old local migration state:
 
@@ -121,9 +123,9 @@ upgrade their backups.
 A pending record blocks new staging and installation writes, even from another
 source Mac or a different migration mode. Missing, malformed, or linked recovery
 data is never treated as proof of success. Do not remove the record to force
-Resume. Keep destination Codex closed and contact support for inspection. A
-guided post-crash restore/reconciliation action is still required before the paid
-release; the current alpha contains the failure but does not automate that step.
+Resume. Keep destination Codex closed and use the guided recovery steps below.
+Older or unsupported evidence requires support review. Real packaged cross-Mac
+recovery acceptance is still required before the paid release.
 
 Successful installation or verified normal rollback saves a
 `transaction-receipt.json` in the backup folder before clearing the pending
@@ -194,9 +196,9 @@ The browser-first helper refuses normal shutdown while a migration is running
 or paused. Choose Stop safely during inspection, copying, or source workspace
 verification, wait for it to
 settle, then quit. Installation must finish before normal shutdown. The
-standalone CLI dashboard instead terminates its active SSH and rsync process
-groups during shutdown. Neither behavior prevents an unexpected crash or power
-loss.
+standalone CLI dashboard instead terminates active SSH and rsync process groups
+during ordinary migration shutdown. Both dashboards refuse normal shutdown during
+protected restoration. Neither behavior prevents an unexpected crash or power loss.
 
 On the next launch, a persisted `running` state is reconciled to `interrupted`
 and Resume reuses staged data. If shutdown happened during installation, the
@@ -207,25 +209,39 @@ requires recovery review, not a blind Resume.
 
 ## Restore the destination backup
 
-The completion receipt records the backup directory. Quit Codex on the new Mac
-before restoring. Move the current `~/.codex` aside rather than deleting it,
-then copy the backup's `.codex` directory back into place. Preserve evidence
-until the restored application opens correctly.
+For a supported interrupted installation, reopen the same local migration setup
+and enable destination changes. Close Codex and other apps writing to the
+selected destination files. Open **Recover an interrupted installation**, choose
+**Check recovery**, and review **Last check details**. If the frozen backup is
+verified, **Restore backup** asks you to confirm the destination and exact scope.
+Keep both Macs connected during this protected step; Pause and Stop are not
+available while files are being restored.
 
-Exact restore commands are intentionally not generated automatically in the
-alpha: the backup path and current state should be inspected before any
-replacement.
+Restoration returns the previous destination, not the incoming source workspace.
+It preserves displaced current entries in numbered slots under the backup's
+`recovery-<transaction-id>/current` directory. The result maps each original path
+to its preserved slot. Nothing is merged or discarded. Current destination
+authentication and installation identity are retained; unsupported identity
+states stop for review. Source data and the original backup remain untouched.
 
-Selected workspace roots that already existed on the destination are backed up
-under the receipt's `home-relative` directory. Restore them with the same care:
-quit development tools, move the current workspace aside, and move or copy the
-reviewed backup back to its original path. A workspace that did not exist on
-the destination has no prior version to back up.
+After a lost connection or app restart, choose **Check recovery** first. This
+read-only check verifies the saved transaction, restored entries, and preserved
+entries; it never repeats restoration automatically. Busy means the destination
+still holds the lock. A verified incomplete attempt may offer **Resume
+restoration**, with another confirmation. Missing or changed evidence, unexpected
+new work, or a different pending transaction stops for support; do not remove
+records or manually force Resume.
 
-Full-migration personal-skill backups are under `personal-skills/<name>` inside
-the recorded backup folder. Existing skill aliases are backed up as links,
-without copying or modifying their targets. Unrelated destination skills are
-not replaced. Use `verification.json` to identify the exact recovery mapping.
+**Restoration verified** means the checked previous destination and preserved
+entries match their recovery evidence at that moment. It does not mean migration
+is complete, every chat opens, or Git and historical paths work. Validate the
+restored workspace before starting another migration. Keep the source, staging,
+backup, and preserved entries until you have confirmed usability.
+
+The guided action does not restore arbitrary completed-migration backups or
+legacy records. Contact support to review those cases before replacement.
+These controls are tested with disposable local APFS fixtures; clean second-Mac
+and packaged recovery acceptance remain open.
 
 ## Different usernames
 

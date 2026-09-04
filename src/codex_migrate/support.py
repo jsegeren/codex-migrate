@@ -23,12 +23,14 @@ STATUSES = frozenset(("idle", "ready", "running", "paused", "cancelled", "failed
                       "interrupted", "waiting", "ready_to_finalize", "complete"))
 PHASES = frozenset(("not_started", "inspecting", "preflight_complete", "staging",
                     "staged", "close_source_codex", "close_target_codex", "final_delta",
-                    "verifying_sources", "installing", "verified"))
+                    "verifying_sources", "installing", "verified", "restoring", "restored", "recovery_required"))
 FAILURES = frozenset(("none", "unknown", "disk_space", "connection", "permissions",
                       "verification", "process_guard", "interrupted", "git_scope", "machine_identity", "destination_lock", "recovery_pending"))
 HISTORY_LIMIT = 60
 RECOVERY_STATUSES = frozenset(("not_checked", "checking", "stopped", "failed", "busy",
-                               "no_pending_record", "legacy_record", "backup_verified"))
+                               "no_pending_record", "legacy_record", "backup_verified", "restoring",
+                               "different_transaction", "restore_incomplete", "restore_unconfirmed",
+                               "restore_verified", "restore_pending_cleanup", "restore_changed"))
 
 
 def failure_category(error):

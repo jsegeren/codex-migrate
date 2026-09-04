@@ -1,4 +1,4 @@
-"""Internal post-crash restore engine. Not exposed by CLI/dashboard yet.
+"""Post-crash restore engine for the explicitly confirmed browser action.
 
 Only destination-local, explicitly confirmed recovery writes are performed.
 Prepared copies are disposable; current destination entries are never deleted.
@@ -9,7 +9,7 @@ import shlex
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.processes import require_codex_closed_script
-from codex_migrate.recovery import RECOVERY_CONTEXT, _validate_report
+from codex_migrate.recovery import RECOVERY_CONTEXT, recovery_reference
 
 
 RESTORE_RUNNER = RECOVERY_CONTEXT + r'''
@@ -20,9 +20,6 @@ exact_keys($confirmation, qw(transaction_id backup originals));
 my $id = $record->{id};
 $confirmation->{transaction_id} eq $id && $confirmation->{backup} eq $backup &&
     ref($confirmation->{originals}) eq 'ARRAY' or fail();
-sub identical {
-    return JSON::PP->new->canonical->encode($_[0]) eq JSON::PP->new->canonical->encode($_[1]);
-}
 my @expected = map { $_->{original} } @{$record->{scope}};
 identical(\@expected, $confirmation->{originals}) or fail();
 for my $item (@{$record->{scope}}) {
@@ -47,9 +44,7 @@ sub owned_directory {
         mkdir(filesystem_path($path), 0700) or fail();
         flush_parent($path);
     }
-    directory($path);
-    my $s = present($path);
-    $s->[0] == $device && $s->[4] == $< && ($s->[2] & 07777) == 0700 or fail();
+    checked_recovery_directory($path, $device);
 }
 sub names {
     my ($path) = @_;
@@ -67,15 +62,6 @@ sub snapshot {
     if ($s) { $s->[0] == $device or fail(); }
     return {existed => $s ? JSON::PP::true : JSON::PP::false,
             backup_digest => $s ? digest($path) : undef};
-}
-sub valid_snapshot {
-    my ($s) = @_;
-    exact_keys($s, qw(existed backup_digest));
-    JSON::PP::is_bool($s->{existed}) or fail();
-    if ($s->{existed}) {
-        defined($s->{backup_digest}) && !ref($s->{backup_digest}) &&
-            $s->{backup_digest} =~ /\A[0-9a-f]{64}\z/ or fail();
-    } else { !defined($s->{backup_digest}) or fail(); }
 }
 sub barrier {
     my ($evidence) = @_;
@@ -181,10 +167,7 @@ my $plan;
 if (present($root)) { owned_directory($root, 0); }
 if (present($plan_path)) {
     $plan = read_record($plan_path);
-    exact_keys($plan, qw(format transaction current));
-    $plan->{format} eq '1' && identical($plan->{transaction}, $record) &&
-        ref($plan->{current}) eq 'ARRAY' && @{$plan->{current}} == @expected or fail();
-    for my $s (@{$plan->{current}}) { valid_snapshot($s); }
+    validate_restore_plan($plan, $record);
 } else {
     # No original can move without a durable plan AND ready record. Unknown
     # files in an uninitialized recovery directory are not silently adopted.
@@ -210,13 +193,7 @@ owned_directory($root . '/current', 1);
 my $ready;
 if (present($ready_path)) {
     $ready = read_record($ready_path);
-    exact_keys($ready, qw(format plan desired));
-    $ready->{format} eq '1' && identical($ready->{plan}, $plan) &&
-        ref($ready->{desired}) eq 'ARRAY' && @{$ready->{desired}} == @expected or fail();
-    for my $i (0..$#expected) {
-        valid_snapshot($ready->{desired}[$i]);
-        $ready->{desired}[$i]{existed} == $record->{scope}[$i]{existed} or fail();
-    }
+    validate_restore_ready($ready, $plan);
 } else {
     space(1);
     !(names($root . '/current')) or fail();
@@ -321,12 +298,7 @@ emit({status => 'restored', transaction_id => $id, restored_items => scalar(@exp
 
 def restore_script(home, inspection):
     """Bind mutation to a previously inspected transaction and exact scope."""
-    report = {k: v for k, v in inspection.items() if k != "message"}
-    _validate_report(report, home)
-    if report["status"] != "backup_verified":
-        raise MigrationError("A verified pending backup is required before restoration")
-    confirmation = {"transaction_id": report["transaction_id"], "backup": report["backup"],
-                    "originals": [item["original"] for item in report["items"]]}
+    confirmation = recovery_reference(home, inspection)
     args = ["restore", home, json.dumps(confirmation), require_codex_closed_script(home)]
     return ("/usr/bin/env -u PERL5OPT -u PERL5LIB -u PERLLIB -u PERLIO -u PERL_UNICODE "
             "LC_ALL=C /usr/bin/perl -e " + shlex.quote(RESTORE_RUNNER) + " -- "
@@ -334,7 +306,7 @@ def restore_script(home, inspection):
 
 
 def restore_recovery(config, transport, inspection):
-    """Internal explicit-apply entry point; no default/automatic restoration."""
+    """Explicit-apply entry point; no default/automatic restoration."""
     if not config.apply:
         raise MigrationError("Restoration requires explicit --apply authority")
     try:
