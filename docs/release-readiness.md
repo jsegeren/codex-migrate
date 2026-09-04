@@ -27,6 +27,13 @@ results, accessibility findings, and pre-signing work still open.
   filesystem-dependent skips; the case-sensitive run covers six of those skips.
   Ten signup tests, Swift typecheck and diff checks also passed. Notarization
   output produced by the release unit tests is mocked, not Apple certification.
+  Clean source `4dfe27a` produced a local-only unsigned arm64 app; all nine
+  actual bundled-engine desktop tests passed on the case-sensitive image with
+  system-only PATH and no Python environment dependencies. The inventory
+  subprocess rejects real `README`/`readme` collisions without changing either
+  file. ZIP SHA-256:
+  `bede747375e77954615a642fa85c4c64495d03f80ee3fdccb457abc444d1c0dd`.
+  No real user workspace, SSH destination or running app was modified.
   This remains conservative screening, not an exact filesystem Unicode model,
   an atomic source snapshot or a real cross-Mac acceptance test.
 
