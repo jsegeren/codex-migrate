@@ -302,11 +302,30 @@ SHA-256: `341e5e74585ecc1e03aca955bd5cc0a52cfeb89a8c56ac99a7afb549e1950d8f`.
   mode and confirms Start is rejected without enabling destination changes;
   it can run against the packaged engine with a system-only subprocess PATH.
   Candidate-specific hosted CI and packaged checks are separate evidence.
+- Hosted CI for source `3b5030bb01a4a1473f262694094b0db92b9f1390` passed on
+  Python 3.9 and 3.12, including native Swift typechecking and signup tests:
+  [run 33855189632](https://github.com/jsegeren/codex-migrate/actions/runs/33855189632).
 
 The overall release remains open: broader inventory and interruption/recovery
 acceptance, clean-Mac and real cross-Mac packaged testing, complete accessibility
 checks, Search Console submission, signing/notarization, and paid distribution
 are not closed by this checkpoint.
+
+### Packaged selective-helper check
+
+Clean committed source `3b5030bb01a4a1473f262694094b0db92b9f1390` produced
+a fresh unsigned Apple Silicon engineering build. All six desktop checks passed
+with `CODEX_MIGRATE_TEST_ENGINE` pointing at its bundled executable. The actual
+browser helper configured the skills-only adapter, remained idle/read-only, and
+rejected Start without change permission. Engine subprocesses had a system-only
+PATH and no Python/DYLD overrides. No destination SSH or migration ran in this
+packaged check; the local transaction/browser evidence above ran from source.
+
+Artifact: `Codex-Migrate-arm64-LOCAL-UNSIGNED.zip` (engineering only).
+SHA-256: `141a0e59c92d0a1150f1dcb35e2108942711ae3e7248b90f23ac7a0f2bc20bc2`.
+The build receipt records a clean source tree. This remains build-Mac startup
+and packaging evidence, not clean-Mac, signing, Gatekeeper, or complete
+packaged-migration acceptance.
 
 ### Reference guidance
 

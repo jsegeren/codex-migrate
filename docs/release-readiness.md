@@ -8,14 +8,25 @@ results, accessibility findings, and pre-signing work still open.
 
 ## Candidate checks completed on the development Mac
 
-- Full Python test suite: 75 tests, including simulated low-space, failed-copy,
-  corrupted-backup, rollback, component export, and dashboard boundaries.
+- Source `3b5030b`: 141 Python tests passed, including simulated low-space,
+  failed-copy, corrupted-backup, rollback, component export, and dashboard
+  boundaries. Disposable local rsync tests also exercise skills-only pause and
+  safe stop after file data is staged, followed by resume with the same owner.
 - Native Swift shell type-checks on Apple Silicon macOS.
 - A self-contained local app bundles the Python engine and offline recovery
   documentation; build receipts identify the source revision and build mode.
 - The engine subprocess smoke test can run against the packaged executable with
   only system tools on PATH. It checks startup on a free loopback port, token
   protection, mandatory-backup UI, read-only mutation rejection, and shutdown.
+  All six desktop tests passed against the unsigned bundled engine built from
+  clean source `3b5030b`; browser skills-only configuration was exercised without
+  contacting a destination. See the audit for the artifact checksum.
+- Browser setup supports full migration or selected skill categories. A
+  disposable local browser skills flow completed staging, explicit finalization,
+  backup and verification. Independent desktop/320px review accepted it after
+  fixing long-path wrapping and undersized button labels. Automated completion
+  checks at 1280/390/320px found no selected axe WCAG A/AA violations or overflow.
+  Native accessibility, VoiceOver, and real cross-Mac behavior remain unverified.
 - Website checked at 1280px and 390px widths: upright headline, purple accents,
   separate attributed Codex product reference, $50 one-time planned price,
   no preorders or live checkout, and best-effort support disclosure.
