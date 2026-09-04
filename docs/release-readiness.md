@@ -8,6 +8,23 @@ results, accessibility findings, and pre-signing work still open.
 
 ## Candidate checks completed on the development Mac
 
+- An internal sandboxed Git-probe primitive now checks explicit repository
+  locations, HEAD, refs, index/status and local objects without granting Git
+  writes, network or subprocess helpers. Independent `public_release_review`
+  accepted it after reproducing and verifying fixes for a protected `.SSH`
+  alias, a child deadline bypass after pipe EOF and launcher environment/cleanup
+  gaps. All 22 focused Git-probe tests passed; independent review reran 19 plus
+  the final three additional filter/config fixtures. The broader local run
+  passed 423 of 430 tests, with seven filesystem skips, before those final three
+  test-only additions; 10 signup tests and Swift typecheck also passed.
+  A disposable linked-worktree copy matches source Git fingerprints after the
+  original home is taken offline and a fixture-only compatibility alias is
+  added. Both trees remain byte-identical. This is not yet connected to migration
+  completion or shipped as a UI/CLI capability; source-baseline binding,
+  destination/restart state, accessible controls and actual packaged cross-Mac
+  acceptance remain required. See the exact
+  [Git verification integration plan](git-verification-plan.md).
+
 - Nested filename screening now rejects conservative case-fold/decomposition
   collisions and invalid UTF-8 names before copying and during the source tree
   freeze before replacement. Full inventory/copy includes managed worktrees;
