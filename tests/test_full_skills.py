@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from process_fixtures import closed_codex_script
 
 from codex_migrate.config import MigrationConfig
 from codex_migrate.migration import MigrationEngine, MigrationError
@@ -60,7 +61,7 @@ class FullSkillTests(unittest.TestCase):
         class LocalTransport:
             def run_remote(self, script, timeout=60):
                 result = subprocess.run(
-                    ["/bin/zsh", "-s"], input="ps() { return 0; }\n" + prefix + script,
+                    ["/bin/zsh", "-s"], input=prefix + closed_codex_script(script),
                     text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                     timeout=timeout,
                 )

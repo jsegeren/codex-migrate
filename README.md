@@ -11,6 +11,15 @@ It stages a resumable copy over SSH, preserves the new Mac's authentication,
 creates a rollback backup, installs only after both Codex apps are closed, and
 verifies the result before declaring completion.
 
+The close-Codex requirement applies to the **source and destination migration
+accounts**, not unrelated users logged into the same Macs. It includes known
+Codex app and CLI/background-engine executable names. The helper must run as
+the non-root owner of the selected home, with matching real and effective user
+IDs; do not run it with `sudo`. Failed or ambiguous process inspection blocks
+finalization. Changing `HOME` to a temporary folder does not isolate processes
+running under the same account. Keep all writers to selected data closed:
+process-name checks cannot detect renamed executables or prevent later launches.
+
 Destination replacement is blocked unless the mandatory backup passes content
 and structure verification and sufficient free space is available. There is no
 skip-backup option. Same-disk backups do not protect against disk failure;

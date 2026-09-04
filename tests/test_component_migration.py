@@ -2,6 +2,7 @@
 
 import os
 from pathlib import Path
+from process_fixtures import closed_codex_script
 import platform
 import shlex
 import subprocess
@@ -36,7 +37,7 @@ class ComponentMigrationTests(unittest.TestCase):
 
             def run_remote(self, script, timeout=60):
                 result = subprocess.run(
-                    ["/bin/zsh", "-s"], input="ps() { return 0; }\n" + owner.prefix + script,
+                    ["/bin/zsh", "-s"], input=owner.prefix + closed_codex_script(script),
                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=timeout,
                 )
                 if result.returncode:

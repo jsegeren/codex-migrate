@@ -21,26 +21,12 @@ from codex_migrate.skills import SkillExport, discover_personal_skills, skill_ve
 from codex_migrate.backup import BACKUP_FUNCTIONS, size_command, verification_receipt
 from codex_migrate.inventory import Inventory, collect
 from codex_migrate.security import redact
+from codex_migrate.processes import codex_running, process_state_script, require_codex_closed_script
 from codex_migrate.state import StateStore
 from codex_migrate.transport import SSHTransport, TransferProcess
 from codex_migrate.workspaces import (WORKSPACE_TIMEOUT, check_local_tools, freeze_tree,
                                       remote_tool_check, remote_tree_function, tree_check,
                                       validate_codex_identity_names)
-
-
-def codex_running() -> bool:
-    result = subprocess.run(
-        ["/bin/ps", "-axo", "comm="],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-        text=True,
-        check=False,
-    )
-    return any(
-        Path(line.strip()).name in ("ChatGPT", "Codex")
-        for line in result.stdout.splitlines()
-        if line.strip()
-    )
 
 
 class MigrationEngine:
@@ -413,7 +399,7 @@ class MigrationEngine:
         self.state.update(
             status="ready_to_finalize",
             phase="staged",
-            message="Staging is current. Quit Codex on both Macs, then choose Finalize.",
+            message="Staging is current. Close Codex app and CLI sessions in both migration accounts, then choose Finalize.",
             current_item=None,
             percent=min(99.0, self.state.read().get("percent", 0.0)),
             staging_complete=True,
@@ -558,11 +544,11 @@ class MigrationEngine:
         self.preflight(require_full_staging_space=False)
         if [skill.as_dict() for skill in self._skill_plan()] != staged_skills:
             raise MigrationError("Personal skill selection changed during inspection. Resume and review the new scope before finalizing.")
-        if codex_running():
+        if codex_running(self.config.source_home):
             self.state.update(
                 status="waiting",
                 phase="close_source_codex",
-                message="Quit Codex on this Mac, then choose Finalize again.",
+                message="Close Codex app and CLI sessions in the source account, then choose Finalize again.",
             )
             return
         remote_running = self._remote_codex_state()
@@ -570,13 +556,13 @@ class MigrationEngine:
             self.state.update(
                 status="waiting",
                 phase="close_target_codex",
-                message="Quit Codex on the target Mac, then choose Finalize again.",
+                message="Close Codex app and CLI sessions in the destination account, then choose Finalize again.",
             )
             return
         self.state.update(
             status="running",
             phase="final_delta",
-            message="Refreshing the final delta while both Codex apps are closed.",
+            message="Refreshing the final delta with Codex closed in both migration accounts.",
             error=None,
         )
         self._prepare_staging()
@@ -586,11 +572,11 @@ class MigrationEngine:
         prepared_workspaces = self._prepare_install()
         if self._restore_requested_stop():
             return
-        if codex_running():
+        if codex_running(self.config.source_home):
             self.state.update(
                 status="waiting",
                 phase="close_source_codex",
-                message="Codex reopened on this Mac. Quit it, then choose Finalize again.",
+                message="Codex reopened in the source account. Close its app and CLI sessions, then choose Finalize again.",
                 staging_complete=True,
             )
             return
@@ -598,7 +584,7 @@ class MigrationEngine:
             self.state.update(
                 status="waiting",
                 phase="close_target_codex",
-                message="Codex reopened on the target Mac. Quit it, then choose Finalize again.",
+                message="Codex reopened in the destination account. Close its app and CLI sessions, then choose Finalize again.",
                 staging_complete=True,
             )
             return
@@ -639,12 +625,10 @@ class MigrationEngine:
         return None
 
     def _remote_codex_state(self) -> str:
-        return self.transport.run_remote(
-            "if ps -axo comm= | awk -F/ "
-            "'$NF == \"ChatGPT\" || $NF == \"Codex\" { found=1 } "
-            "END { exit found ? 0 : 1 }'; "
-            "then echo OPEN; else echo CLOSED; fi\n"
-        ).stdout.strip()
+        state = self.transport.run_remote(process_state_script(self.config.target_home)).stdout.strip()
+        if state not in ("OPEN", "CLOSED"):
+            raise MigrationError("Cannot verify destination Codex process state; finalization is blocked")
+        return state
 
     def _backup_targets(self) -> List[str]:
         return [self.config.target_codex] + [
@@ -825,10 +809,7 @@ test ! -L {staging}/.codex/auth.json
 test ! -e {staging}/.codex/installation_id
 test ! -L {staging}/.codex/installation_id
 test ! -e {backup}
-if ps -axo comm= | awk -F/ '$NF == "ChatGPT" || $NF == "Codex" {{ found=1 }} END {{ exit found ? 0 : 1 }}'; then
-  echo 'Codex reopened on the destination' >&2
-  exit 70
-fi
+{codex_process_guard}
 {workspace_preconditions}
 {workspace_functions}
 {workspace_stage_checks}
@@ -843,6 +824,7 @@ verify_conversations() {{
 }}
 verify_conversations {staging}/.codex 2>/dev/null || {{ echo 'Conversation content verification failed. Keep staging and backups; Resume to refresh the copy.' >&2; exit 74; }}
 verify_codex_state {staging}/.codex 2>/dev/null || {{ echo 'Codex state content verification failed before installation; staging was kept.' >&2; exit 74; }}
+{codex_process_guard}
 backup_required=$({backup_size})
 backup_space {home} "$((backup_required + {reserve}))"
 mkdir -p {backup}
@@ -854,6 +836,7 @@ backup_space {home} {reserve}
 {backup_receipt}
 auth_before=$(shasum -a 256 {codex}/auth.json | awk '{{print $1}}')
 installation_before=$(shasum -a 256 {codex}/installation_id | awk '{{print $1}}')
+{codex_process_guard}
 rollback_needed=1
 rollback() {{
   rollback_exit_code=$?
@@ -897,6 +880,7 @@ trap - EXIT
 printf 'INSTALLED=1\\nACTIVE=%s\\nARCHIVED=%s\\nAUTH_PRESERVED=1\\nINSTALLATION_ID_PRESERVED=1\\nBACKUP_VERIFIED=1\\nCONVERSATION_CONTENT_VERIFIED=1\\nCODEX_STATE_CONTENT_VERIFIED=1\\nWORKSPACE_CONTENT_VERIFIED=1\\nWORKSPACE_ROOTS_VERIFIED={workspace_count}\\nPERSONAL_SKILLS_VERIFIED={skill_count}\\nBACKUP=%s\\n' "$active" "$archived" {backup}
 """.format(
             backup_functions=BACKUP_FUNCTIONS,
+            codex_process_guard=require_codex_closed_script(self.config.target_home),
             backup_size=size_command(self._backup_targets()),
             reserve=max(2 * 1024**3, int(self.state.read().get("reserve_bytes") or 0)),
             backup_receipt=verification_receipt(backup, mappings),

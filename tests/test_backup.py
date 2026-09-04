@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
+from process_fixtures import closed_codex_script
 
 from codex_migrate.backup import BACKUP_FUNCTIONS, MIN_RESERVE_BYTES
 from codex_migrate.components import ComponentExporter, SkillExport
@@ -53,8 +54,17 @@ class BackupTests(unittest.TestCase):
         codex = str(self.target / ".codex")
         class LocalTransport:
             def run_remote(self, script, timeout=60):
-                prefix = "ps() { return 0; }\n"
-                if fault == "space":
+                script = closed_codex_script(script)
+                prefix = ""
+                if fault in ("process_error", "process_open", "process_reopened"):
+                    script = script.replace("fixture_ps() {", "fixture_ps_base() {", 1)
+                    if fault == "process_error":
+                        prefix += "fixture_ps() { return 74; }\n"
+                    elif fault == "process_open":
+                        prefix += "fixture_ps() { printf '%s /bin/codex\\n' \"$(/usr/bin/id -u)\"; }\n"
+                    else:
+                        prefix += "fixture_ps() { if test -d %s; then n=codex; else n=zsh; fi; printf '%%s /bin/%%s\\n' \"$(/usr/bin/id -u)\" \"$n\"; }\n" % shlex.quote(state.read()["pending_backup"])
+                elif fault == "space":
                     prefix += "fake_df() { printf 'disk 100 100 0 100%% mount\\n'; }\n"
                     script = script.replace("/bin/df", "fake_df")
                 elif fault == "space_after_backup":
@@ -80,6 +90,27 @@ class BackupTests(unittest.TestCase):
         self.assertEqual((self.target / "Git/old.txt").read_text(), "original-work")
         self.assertTrue((self.stage / ".codex/sessions/chat.jsonl").exists())
         self.assertFalse((self.target / "Git/new.txt").exists())
+
+    def test_unknown_process_state_blocks_before_backup(self):
+        self.engine.transport = self.transport("process_error")
+        with self.assertRaisesRegex(RuntimeError, "Cannot verify Codex process state"):
+            self.engine._install_and_verify()
+        self.assert_originals_untouched()
+        self.assertFalse(Path(self.state.read()["pending_backup"]).exists())
+
+    def test_open_destination_cli_blocks_before_backup(self):
+        self.engine.transport = self.transport("process_open")
+        with self.assertRaisesRegex(RuntimeError, "Codex is running"):
+            self.engine._install_and_verify()
+        self.assert_originals_untouched()
+        self.assertFalse(Path(self.state.read()["pending_backup"]).exists())
+
+    def test_codex_reopening_during_backup_blocks_replacement(self):
+        self.engine.transport = self.transport("process_reopened")
+        with self.assertRaisesRegex(RuntimeError, "Codex is running"):
+            self.engine._install_and_verify()
+        self.assert_originals_untouched()
+        self.assertTrue((Path(self.state.read()["pending_backup"]) / "verification.json").exists())
 
     def test_low_space_blocks_before_backup_or_replacement(self):
         self.engine.transport = self.transport("space")
@@ -162,6 +193,27 @@ class BackupTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "Not enough destination space"):
                 exporter.run()
         self.assertFalse((self.target / "Codex-Migrate-Component-Staging").exists())
+
+    def test_component_reopened_codex_blocks_replacement_after_backup(self):
+        skill = self.source / ".agents/skills/example"
+        destination = self.target / ".agents/skills/example"
+        skill.mkdir(parents=True)
+        destination.mkdir(parents=True)
+        (skill / "SKILL.md").write_text("new")
+        (destination / "SKILL.md").write_text("old")
+        stage = self.target / "component-stage"
+        backup = self.target / "component-backup"
+        self.state.update(pending_backup=str(backup))
+        shutil.copytree(skill, stage / "items/0")
+        (stage / ".codex-migrate-owner").write_text("a" * 32)
+        exporter = ComponentExporter(self.config, ["personal-skills"])
+        exporter.transport = self.transport("process_reopened")
+        with self.assertRaisesRegex(RuntimeError, "Codex is running"):
+            exporter._install([SkillExport("example", str(skill), str(destination), "user")],
+                              str(stage), "a" * 32, backup=str(backup))
+        self.assertEqual((destination / "SKILL.md").read_text(), "old")
+        self.assertTrue((stage / "items/0/SKILL.md").exists())
+        self.assertTrue((backup / "verification.json").exists())
 
     def test_component_preserves_existing_symlink_in_verified_backup(self):
         skill = self.source / ".agents/skills/example"

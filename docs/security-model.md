@@ -42,8 +42,20 @@ inspect → isolated staging → destination backup → install → verify
 ```
 
 The source is read-only throughout. Staging is intentionally retained after an
-interruption. Finalization refuses to proceed while either Codex application is
-open. Destination `auth.json` and `installation_id` are excluded from transfer,
+interruption. Full and browser skills finalization refuse to proceed while Codex is
+open in either migration account (including the known `codex` CLI/background
+engine executable). Unrelated logged-in accounts do not block finalization.
+The inspected account's real and effective UIDs must match, be non-root and
+own the selected home. Failed commands, malformed/empty process snapshots and
+unknown state block installation rather than imply that Codex is closed.
+Only executable names and UIDs are inspected, never arguments or environments.
+Destination checks run before staged verification, immediately before backup,
+and again before replacement in both full and component installations. These
+are point-in-time checks, not an atomic lock: renamed executables and other
+writers are not detected, and new processes can start after a check. Keep all
+writers to selected data closed throughout finalization.
+
+Destination `auth.json` and `installation_id` are excluded from transfer,
 hashed locally on the destination before and after installation, and compared
 without printing their hashes. Existing destination Codex state and selected
 workspace roots receive copy-on-write rollback backups before replacement.

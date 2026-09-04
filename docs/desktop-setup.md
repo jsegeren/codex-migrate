@@ -104,7 +104,16 @@ open. Rerun with the same destination and selected roots to reuse staging.
 Do not change scope mid-migration. After a crash or reboot, staged data is retained.
 Never remove the old Mac's data just because the progress bar reached 100%.
 
-Finalization requires both Codex apps closed. It makes a destination backup,
+Finalization requires Codex app and CLI/background-engine sessions closed in
+the source and destination migration accounts. Unrelated macOS accounts can
+remain logged in and working. The helper must run without `sudo` as the owner
+of the selected home; identity or process-inspection errors block installation.
+For background acceptance tests while everyday Codex sessions remain open,
+use disposable accounts on **both** Macs. A temporary folder under the everyday
+account is not process isolation. Opening restored chats still requires access
+to the test account's graphical session; no logout of the everyday user is needed.
+
+The tool makes a destination backup,
 installs, and verifies. Do not shut down either Mac during this phase. If it fails,
 review the backup path and verification output before resuming. See
 [recovery](recovery.md) for the existing engine's recovery contract.

@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
+from process_fixtures import closed_codex_script
 
 from codex_migrate.config import MigrationConfig
 from codex_migrate.inventory import Inventory, TreeSummary
@@ -18,10 +19,22 @@ from codex_migrate.state import StateStore
 
 
 class MigrationTests(unittest.TestCase):
-    def test_process_detection_uses_executable_name_not_install_path(self):
-        result = SimpleNamespace(stdout="/Applications/Custom/Codex.app/Contents/MacOS/Codex\n")
-        with patch("codex_migrate.migration.subprocess.run", return_value=result):
+    def test_process_detection_accepts_explicit_open_result(self):
+        result = SimpleNamespace(stdout="OPEN\n", returncode=0)
+        with patch("codex_migrate.processes.subprocess.run", return_value=result):
             self.assertTrue(codex_running())
+
+    def test_remote_process_state_rejects_ambiguous_success_output(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            config = MigrationConfig(target="person@host.local", source_home="/Users/person",
+                                     target_home="/Users/person").validate()
+            engine = MigrationEngine(config, StateStore(temporary))
+            for output in ("", "UNKNOWN", "CLOSED\nOPEN", "private process path"):
+                with self.subTest(output=output), patch.object(engine.transport, "run_remote",
+                    return_value=SimpleNamespace(stdout=output)):
+                    with self.assertRaisesRegex(MigrationError, "finalization is blocked") as raised:
+                        engine._remote_codex_state()
+                    self.assertNotIn("private process path", str(raised.exception))
 
     def test_startup_reconciliation_keeps_staging_resumable(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -279,7 +292,7 @@ class MigrationTests(unittest.TestCase):
                 def run_remote(self, script, timeout=60):
                     result = subprocess.run(
                         ["/bin/zsh", "-s"],
-                        input="ps() { return 0; }\n" + script,
+                        input=closed_codex_script(script),
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
                         text=True,
@@ -349,7 +362,7 @@ class MigrationTests(unittest.TestCase):
                 def run_remote(self, script, timeout=60):
                     result = subprocess.run(
                         ["/bin/zsh", "-s"],
-                        input="ps() { return 0; }\n" + script,
+                        input=closed_codex_script(script),
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
                         text=True,

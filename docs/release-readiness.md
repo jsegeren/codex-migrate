@@ -8,6 +8,15 @@ results, accessibility findings, and pre-signing work still open.
 
 ## Candidate checks completed on the development Mac
 
+- Codex process checks are now scoped to the migration account, including the
+  known app and CLI/background-engine executable names. Unrelated logged-in
+  accounts no longer require closing Codex. UID/home-ownership mismatches and
+  failed or malformed process inspection block installation. Full and component
+  installers recheck before backup and replacement; disposable APFS tests prove
+  that a process reopening during backup leaves existing files and staging
+  untouched. Background cross-Mac acceptance still requires isolated accounts
+  on both Macs and has not yet been performed.
+
 - Search Console ownership is verified for `https://migrate.segeren.com/`.
   Its sitemap was accepted with **Success** and six discovered pages, and Google
   accepted a homepage indexing request after its live check. The six live pages

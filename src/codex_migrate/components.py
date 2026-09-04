@@ -16,6 +16,7 @@ from codex_migrate.backup import (
     BACKUP_FUNCTIONS, MIN_RESERVE_BYTES, size_command, verification_receipt,
 )
 from codex_migrate.migration import MigrationEngine, MigrationError, _value
+from codex_migrate.processes import require_codex_closed_script
 from codex_migrate.transport import SSHTransport
 from codex_migrate.skills import (
     SkillExport, discover_personal_skills, discover_workspace_skills, skill_verification_script,
@@ -243,6 +244,7 @@ setopt NULL_GLOB
 umask 077
 {backup_functions}
 {target_home_chain}
+{codex_process_guard}
 test -d {staging}
 test ! -L {staging}
 {staging_chain}
@@ -253,12 +255,14 @@ test ! -e {backup}
 test ! -L {backup}
 {preconditions}
 {stage_verifications}
+{codex_process_guard}
 backup_required=$({backup_size})
 backup_space {home} "$((backup_required + {reserve}))"
 mkdir -p {backup}/items {backup}/existed
 {backups}
 backup_space {home} {reserve}
 {backup_receipt}
+{codex_process_guard}
 rollback_needed=1
 rollback() {{
   rollback_exit_code=$?
@@ -278,6 +282,7 @@ rm -rf {staging}
 printf 'INSTALLED=1\\nITEMS=%s\\nBACKUP_VERIFIED=1\\nBACKUP=%s\\n' {item_count} {backup}
 """.format(
             backup_functions=BACKUP_FUNCTIONS,
+            codex_process_guard=require_codex_closed_script(self.config.target_home),
             backup_size=size_command([item.destination for item in exports]),
             backup_receipt=verification_receipt(backup, mappings),
             home=shlex.quote(self.config.target_home),

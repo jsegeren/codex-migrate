@@ -640,6 +640,46 @@ the active migrated user workspace must not be replaced as a test fixture.
 Hosted CI for `0658dda55c216e82a19d45c3bb61780cc7465a15` completed successfully:
 [verification evidence CI](https://github.com/jsegeren/codex-migrate/actions/runs/33860558249).
 
+### Account-scoped process safety
+
+The prior guard inspected all users, matched only `ChatGPT`/`Codex`, and could
+treat a failed process listing as closed. It now shares a fail-closed script
+between local inspection, destination inspection and installation. It matches
+the known app names plus `codex` CLI/background engines for the migration UID.
+The real/effective IDs must match, be non-root and own the selected home.
+Unrelated account processes are ignored; invalid/empty snapshots, command
+failures, home-owner mismatches and unknown response states block finalization.
+macOS's legitimate signed system UID `-2` is accepted as an unrelated account.
+Executable names and UIDs are inspected without arguments or environment data.
+
+The full and component installers check before staged verification, again after
+it and before backup, and immediately before replacement. Disposable APFS tests
+prove open/unknown state blocks before backup, and reopening during backup
+preserves destination files, staged files and the verified backup for full and
+skills-only installation. These checks do not lock out future launches or
+detect renamed executables and other writers.
+
+The browser's waiting messages now identify the source/destination account and
+include CLI sessions. A read-only local fixture reached the actual source-waiting
+state using the live account's process check (preflight mocked; disposable data).
+Primary desktop/320px inspection found readable wrapping and no narrow overflow.
+This is not a real remote migration or proof that another logged-in account's
+Codex can reopen restored conversations. Both Macs need disposable accounts for
+fully background cross-Mac acceptance; changing `HOME` alone is not isolation.
+
+Final local verification ran 224 Python tests: 223 passed and one explicit
+filesystem filename-support test was skipped. All 10 signup tests passed, and
+`git diff --check` passed. The real current-account process probe returned OPEN
+without stopping or altering any process. This is a source-level checkpoint;
+it does not certify a signed package or genuine cross-Mac acceptance.
+
+Independent reviewer `public_release_review` accepted the bounded source-level
+change after 60 focused tests and actual 1280px/320px browser inspection. No
+blocking finding remained; the waiting state had clear account-specific next
+actions, readable wrapping, 15px controls and no horizontal overflow. The review
+prompted the added guard immediately before backup. Native rendering, VoiceOver,
+signed-package and cross-Mac acceptance remain open.
+
 ### Reference guidance
 
 - [Lighthouse scoring excludes manual checks](https://developer.chrome.com/docs/lighthouse/accessibility/scoring).
