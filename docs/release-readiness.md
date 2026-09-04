@@ -35,6 +35,12 @@ results, accessibility findings, and pre-signing work still open.
   browsers and disposable servers were closed. Diagnostic events include only
   allowlisted path statuses, never the command or local-account records.
   These are not a privileged real-account repair or cross-Mac usability proof.
+  Clean source `1f1c3c8` also built an unsigned arm64 engineering app and passed
+  all eight bundled-engine regression tests. Packaging verified its ad-hoc
+  signature; no Apple signing/notarization or privileged path creation was
+  performed. ZIP SHA-256:
+  `9c469045f5eaa46faf11e83dc03f67053c9ecb0ab941d44ebf0b7c06e4aa5c6e`.
+  No running user app was replaced.
 
 - Guided recovery is implemented in source: the collapsed browser panel now
   requires a checked backup, enabled changes, and explicit scope confirmation.
@@ -356,10 +362,12 @@ cross-Mac migration. Failure tests use disposable fixtures, not user data.
 
 ## Remaining paid-release gates
 
-- Complete the safety/configuration checks in the [failure-mode matrix](failure-mode-matrix.md),
-  particularly wrong-machine rejection, cross-source destination locking,
-  power-loss reconciliation, and compatibility-alias conflicts. These are
-  engineering gaps, not merely Apple/account dependencies.
+- Complete the remaining safety/configuration acceptance in the
+  [failure-mode matrix](failure-mode-matrix.md). Wrong-machine rejection,
+  destination locking, guided recovery and home-path conflict guards now have
+  local implementation evidence, but real cross-Mac/hardware failure acceptance
+  and unsupported-configuration detection remain engineering gates, not merely
+  Apple/account dependencies.
 
 - Validate destination Git operational usability and historical path continuity,
   including linked worktrees, refs, status and different usernames. Workspace
