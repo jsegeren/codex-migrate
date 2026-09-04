@@ -50,6 +50,15 @@ as a workaround.
   destination project/ancestor layers, system/managed settings, arbitrary role
   references and other processes' overrides remain open scope gates. The suite's
   signing/notarization outputs are mocked fixtures, not Apple certification.
+  Clean source `e287402ac80ba1fa0735694740bb9e562e9d1212` produced an unsigned,
+  local-only arm64 app. Eight of nine actual bundled-engine checks passed,
+  with one case-sensitive-filename skip. The actual executable also rejects
+  the selected-project storage override without exposing its value or changing
+  fixture content. ZIP SHA-256:
+  `ea246e45ecffdfa9d98c83abb51aa02f3a32c3b14bad4f7968c4b184c2ac65e5`.
+  The previous inactive engineering build was moved recoverably to Trash;
+  the two running user apps were not stopped or replaced. Hosted run
+  33883734376 is in progress at this checkpoint.
 
 - Source availability now screens the macOS `SF_DATALESS` flag before selected
   content reads and directory enumeration, including configuration profiles,
