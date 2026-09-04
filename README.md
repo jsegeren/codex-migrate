@@ -216,8 +216,19 @@ components will follow the same stage → backup → install → verify contract
    the same volume without creating a second full-size copy.
 5. **Verify** — compare conversation counts, run SQLite integrity checks, and
    prove destination authentication and installation identity did not change.
+   Active and archived transcript bytes and relative paths must match the same
+   frozen SHA-256 snapshot before replacement and after installation. A mismatch
+   blocks replacement or triggers rollback; counts alone cannot prove success.
    Personal skills also receive exact file-content and directory-tree checks
    before and after installation.
+
+Conversation verification reads every selected transcript on the source once
+and on the destination before and after installation. Large conversation
+histories can take time to verify; keep both Macs connected. Transcript contents
+and checksum values are not logged. Linked conversation directories/files and
+nonregular transcript files block verification rather than silently pass.
+These checks prove transcript preservation, not that every historical chat opens
+in every Codex version or that all old workspace paths already resolve.
 
 ## Different macOS usernames
 

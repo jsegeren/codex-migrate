@@ -37,6 +37,13 @@ and continues instead of beginning from an empty destination.
 
 ## Finalization fails
 
+Full migration freezes active/archived transcript content checks after its final
+copy. Corrupted or missing staged transcripts block destination replacement.
+Post-install transcript verification uses that same snapshot; failure triggers
+the normal rollback attempt. Resume refreshes the copy before a new Finalize
+confirmation. These checks can take time for large conversation histories and
+do not replace opening representative chats and repositories on the new Mac.
+
 In browser **Custom skills only** mode, the same controls apply, but the
 replacement and rollback scope is only the listed skill destinations. Codex
 state and whole repositories are not copied or replaced. The saved categories

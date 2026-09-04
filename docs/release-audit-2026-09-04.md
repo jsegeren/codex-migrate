@@ -327,6 +327,34 @@ The build receipt records a clean source tree. This remains build-Mac startup
 and packaging evidence, not clean-Mac, signing, Gatekeeper, or complete
 packaged-migration acceptance.
 
+### Conversation-content verification checkpoint
+
+- Two disposable full-migration fixtures demonstrated that the preceding code
+  accepted corrupted staged and installed transcript bytes when file counts
+  remained unchanged. Counts and SQLite checks alone were insufficient.
+- Full finalization now freezes SHA-256 checks for active and archived `.jsonl`
+  transcript bytes and relative paths after the final copy. The same checks run
+  against staging before backup/replacement and against installed data under
+  the rollback trap. The success receipt explicitly records conversation-content
+  verification. No chat text or checksum values are logged.
+- Thirteen focused tests cover same-count corruption before/after installation,
+  renamed and extra transcripts, archived corruption, unusual filenames,
+  symbolic links, source and destination FIFO entries, failed directory scans,
+  missing receipts, and absence of transcript text/login paths in the script.
+  Post-install corruption and FIFO tests confirm destination rollback.
+- Independent reviewer `public_release_review` found an extra destination FIFO
+  bypass in the initial change. It was fixed with staged and post-install
+  regressions; final review accepted with fixes and no remaining blocker within
+  this bounded change. The reviewer independently ran all 13 focused tests.
+- Full local suite: 154 Python tests passed. Prior hosted CI for documentation
+  commit `be0e3ca` also passed; candidate-specific CI follows publication.
+
+Verification reads all transcript bytes once on the source and twice on the
+destination, so large histories add verification time. This is not an atomic
+filesystem snapshot, JSON semantic validation, a proof of every workspace byte,
+or proof that Codex can open every chat or resolve every Git worktree. Those
+remain separate release acceptance work, not waived requirements.
+
 ### Reference guidance
 
 - [Lighthouse scoring excludes manual checks](https://developer.chrome.com/docs/lighthouse/accessibility/scoring).

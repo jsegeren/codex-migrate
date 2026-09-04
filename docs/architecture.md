@@ -10,6 +10,9 @@ Codex Migrate is a dependency-free Python 3.9 application around the macOS
 - `transport.py` owns strict SSH arguments, route reporting, and resumable
   rsync processes.
 - `migration.py` implements the staging/finalization state machine.
+- `conversations.py` freezes active/archived transcript hashes and relative paths
+  into a private verification script, reused against staging and installed data
+  under the existing rollback transaction. It never parses or logs chat text.
 - `state.py` writes atomic owner-only progress and control state.
 - `dashboard.py` exposes a token-protected loopback interface.
 - `setup.py` adds browser-first configuration and a fixed-script native folder

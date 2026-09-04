@@ -13,6 +13,7 @@ import threading
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from codex_migrate.config import MigrationConfig
+from codex_migrate.conversations import conversation_verification_script
 from codex_migrate.errors import MigrationError
 from codex_migrate.skills import SkillExport, discover_personal_skills, skill_verification_script
 from codex_migrate.backup import BACKUP_FUNCTIONS, size_command, verification_receipt
@@ -751,7 +752,9 @@ class MigrationEngine:
                     backup=shlex.quote(backup_root),
                 )
             )
-        self.state.update(pending_backup=backup)
+        self.state.update(pending_backup=backup,
+                          message="Checking conversation contents, then backing up, installing and verifying. Keep both Macs connected.")
+        conversation_checks = conversation_verification_script(self.config.source_codex)
         script = """set -eu
 setopt NULL_GLOB
 umask 077
@@ -781,6 +784,10 @@ if ps -axo comm= | awk -F/ '$NF == "ChatGPT" || $NF == "Codex" {{ found=1 }} END
 fi
 {workspace_preconditions}
 {skill_stage_checks}
+verify_conversations() {{
+{conversation_checks}
+}}
+verify_conversations {staging}/.codex 2>/dev/null || {{ echo 'Conversation content verification failed. Keep staging and backups; Resume to refresh the copy.' >&2; exit 74; }}
 backup_required=$({backup_size})
 backup_space {home} "$((backup_required + {reserve}))"
 mkdir -p {backup}
@@ -811,13 +818,14 @@ cp -p {backup}/.codex/auth.json {codex}/auth.json
 cp -p {backup}/.codex/installation_id {codex}/installation_id
 {workspace_installs}
 {skill_installed_checks}
+verify_conversations {codex} 2>/dev/null || {{ echo 'Conversation content verification failed after installation; rollback will be attempted.' >&2; exit 74; }}
 auth_after=$(shasum -a 256 {codex}/auth.json | awk '{{print $1}}')
 installation_after=$(shasum -a 256 {codex}/installation_id | awk '{{print $1}}')
 test "$auth_before" = "$auth_after"
 test "$installation_before" = "$installation_after"
-active=$(find {codex}/sessions -type f -name '*.jsonl' | wc -l | tr -d ' ')
+active=$(find {codex}/sessions -type f -name '*.jsonl' -print0 | tr -cd '\\000' | wc -c | tr -d ' ')
 if test -d {codex}/archived_sessions; then
-  archived=$(find {codex}/archived_sessions -type f -name '*.jsonl' | wc -l | tr -d ' ')
+  archived=$(find {codex}/archived_sessions -type f -name '*.jsonl' -print0 | tr -cd '\\000' | wc -c | tr -d ' ')
 else
   archived=0
 fi
@@ -829,7 +837,7 @@ done
 chmod 700 {codex}
 rollback_needed=0
 trap - EXIT
-printf 'INSTALLED=1\\nACTIVE=%s\\nARCHIVED=%s\\nAUTH_PRESERVED=1\\nINSTALLATION_ID_PRESERVED=1\\nBACKUP_VERIFIED=1\\nPERSONAL_SKILLS_VERIFIED={skill_count}\\nBACKUP=%s\\n' "$active" "$archived" {backup}
+printf 'INSTALLED=1\\nACTIVE=%s\\nARCHIVED=%s\\nAUTH_PRESERVED=1\\nINSTALLATION_ID_PRESERVED=1\\nBACKUP_VERIFIED=1\\nCONVERSATION_CONTENT_VERIFIED=1\\nPERSONAL_SKILLS_VERIFIED={skill_count}\\nBACKUP=%s\\n' "$active" "$archived" {backup}
 """.format(
             backup_functions=BACKUP_FUNCTIONS,
             backup_size=size_command(self._backup_targets()),
@@ -851,12 +859,15 @@ printf 'INSTALLED=1\\nACTIVE=%s\\nARCHIVED=%s\\nAUTH_PRESERVED=1\\nINSTALLATION_
             skill_stage_checks="\n".join(skill_stage_checks),
             skill_installed_checks="\n".join(skill_installed_checks),
             skill_count=len(skills),
+            conversation_checks=conversation_checks,
         )
         output = self.transport.run_remote(script, timeout=3600).stdout
         if _value(output, "INSTALLED") != "1":
             raise MigrationError("Destination installation did not produce a valid receipt")
         if _value(output, "BACKUP_VERIFIED") != "1":
             raise MigrationError("Destination backup verification receipt is missing")
+        if _value(output, "CONVERSATION_CONTENT_VERIFIED") != "1":
+            raise MigrationError("Conversation content verification receipt is missing")
         if skills and _value(output, "PERSONAL_SKILLS_VERIFIED") != str(len(skills)):
             raise MigrationError("Personal skill verification receipt is missing")
         active = int(_value(output, "ACTIVE") or -1)
@@ -873,6 +884,7 @@ printf 'INSTALLED=1\\nACTIVE=%s\\nARCHIVED=%s\\nAUTH_PRESERVED=1\\nINSTALLATION_
             "installation_id_preserved": _value(output, "INSTALLATION_ID_PRESERVED") == "1",
             "backup": _value(output, "BACKUP"),
             "backup_verified": True,
+            "conversation_content_verified": True,
             "personal_skills": [skill.as_dict() for skill in skills],
             "personal_skills_verified": len(skills),
             "source_home": self.config.source_home,

@@ -40,6 +40,15 @@ and backups must pass content-checksum, structure, and symlink verification
 before replacement. Verification receipts stay in the owner-only backup folder.
 See [Recovery](recovery.md) for the exact coverage and limitations.
 
+Active and archived `.jsonl` transcripts receive a frozen source SHA-256 and
+relative-path check against staging before backup/replacement, then against the
+installed copy under the rollback trap. Extra/missing transcripts, different
+bytes, links, or special transcript files cannot receive a successful content
+receipt. A source transcript changing while it is hashed also blocks the check.
+No transcript contents or hashes are printed. This is not an atomic snapshot;
+keep writing apps closed. It does not validate JSON semantics or prove Codex
+can reopen each chat and its historical workspace.
+
 Browser skills-only migrations use the same explicit staging/finalization and
 normal-shutdown protection, but their replacement scope contains only selected
 skills. They do not copy or replace Codex state or whole repositories, and do
@@ -55,8 +64,9 @@ them. The one-pass CLI export remains separate from resumable browser staging.
 - Version 0.1 reports but does not automatically fix every stale historical
   worktree path.
 - Different macOS usernames require a reviewed compatibility alias.
-- File-count and SQLite checks do not provide a cryptographic proof of every
-  workspace byte in version 0.1.
+- Transcript checksums do not provide a cryptographic proof of every other
+  Codex configuration or workspace byte in version 0.1. Git usability and old
+  workspace-path continuity still require separate validation.
 - Staging and rollback backups contain private user data and must remain
   owner-only.
 - Other tools and connectors may store their own credentials inside copied
