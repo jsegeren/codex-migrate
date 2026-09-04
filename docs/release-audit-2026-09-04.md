@@ -205,6 +205,14 @@ browser flow does not import them or adopt their staging. Native folder-picker
 permissions, VoiceOver, and clean-Mac/cross-Mac behavior remain unverified.
 The overall project remains **not release-ready**.
 
+Full-scope blocker confirmed by `_transfers()` and `_backup_targets()`: the
+current full path selects `.codex` and explicit workspace roots, but does not
+automatically include personal skills in `.agents/skills`. The selective
+exporter supports that location separately. Integrate its validated discovery
+and backup/install coverage into the full flow before describing that flow as
+complete custom-skill migration; do not treat the separate export capability
+as proof of full-flow coverage.
+
 ### Packaged browser-helper check
 
 An unsigned Apple Silicon engineering build from clean source
