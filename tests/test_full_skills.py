@@ -113,7 +113,8 @@ class FullSkillTests(unittest.TestCase):
                     target=self.config.target, source_home=str(self.source),
                     target_home=str(self.target), workspace_roots=[str(root)],
                 )
-                with self.assertRaisesRegex(MigrationError, "included automatically"):
+                # Scope now fails at configuration, before inventory or SSH.
+                with self.assertRaisesRegex(ValueError, "personal skills storage"):
                     MigrationEngine(config, self.state).inventory()
 
     def test_new_skill_after_inspection_requires_new_inspection(self):

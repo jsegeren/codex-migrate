@@ -164,6 +164,20 @@ class SetupTests(unittest.TestCase):
             self.assertEqual(self.request("/api/setup", payload)[0], 400)
             self.assertIsNone(self.helper.engine)
 
+    def test_protected_case_aliases_fail_http_setup_without_saving_or_ssh(self):
+        before = self.helper.registry.read()
+        with patch("codex_migrate.transport.SSHTransport.run_remote",
+                   side_effect=AssertionError("Unexpected SSH")):
+            for mode in ("full", "skills"):
+                for relative in (".CODEX", ".SSH", ".AGENTS/SKILLS", "STATE"):
+                    payload = {**self.config(mode=mode), "workspace_roots": [str(self.home / relative)]}
+                    if mode == "skills":
+                        payload["components"] = ["workspace-skills"]
+                    with self.subTest(mode=mode, relative=relative):
+                        self.assertEqual(self.request("/api/setup", payload)[0], 400)
+                        self.assertIsNone(self.helper.engine)
+                        self.assertEqual(self.helper.registry.read(), before)
+
     def test_folder_picker_uses_fixed_script_and_rejects_linebreak_names(self):
         with patch("codex_migrate.setup.platform.system", return_value="Darwin"), \
              patch("codex_migrate.setup.subprocess.run") as run:

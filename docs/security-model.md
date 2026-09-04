@@ -19,9 +19,22 @@ workspace roots, plus validated personal skills in `~/.agents/skills` and legacy
 destination only when their resolved source targets remain inside the source
 home; references to the protected SSH directory or Codex
 authentication/installation files are rejected, including relocated aliases.
+Path comparisons reject capitalization and Unicode-normalization aliases of
+protected storage. Known Codex login/installation hard links in skills are
+identified by file metadata only; their contents are not opened or hashed.
+Skill names that differ only in capitalization require review instead of
+silently overwriting each other on a case-insensitive destination. This is not
+general secret detection or a guarantee against a source changing after checks.
 The SSH destination is accepted only after ordinary SSH
 host-key verification succeeds. The dashboard binds only to loopback and
 requires an owner-only random token for status and controls.
+
+Configuration validates the resolved state directory before it is created,
+including the relocated default for a selected source home. Workspace and
+control folders cannot overlap protected storage through alternate spelling or
+resolved aliases. Selected roots with ambiguous case/Unicode spellings fail
+closed; exact duplicate/nested roots still collapse to one selection. Nested
+filename collisions across different filesystem types need separate acceptance.
 
 Full Git inspection may inspect metadata and link targets elsewhere inside the
 source home to identify required storage. It does not run Git, read object

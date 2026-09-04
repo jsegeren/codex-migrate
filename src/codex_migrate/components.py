@@ -10,7 +10,7 @@ import shlex
 import sys
 from typing import Dict, List, Sequence
 
-from codex_migrate.config import MigrationConfig
+from codex_migrate.config import MigrationConfig, path_key
 from codex_migrate.destination_lock import locked_destination_script
 from codex_migrate.transaction import transaction_commands, rollback_checks, recovery_preflight_script
 from codex_migrate.cancellation import Cancellation
@@ -57,7 +57,7 @@ class ComponentExporter:
                     self.config.workspace_roots,
                 )
             )
-        destinations = [item.destination for item in exports]
+        destinations = [path_key(item.destination) for item in exports]
         if len(destinations) != len(set(destinations)):
             raise MigrationError("Selected components resolve to duplicate destinations")
         return exports

@@ -1,6 +1,7 @@
 import subprocess
 import tempfile
 import unittest
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -14,6 +15,39 @@ from codex_migrate.migration import MigrationError
 
 
 class ComponentTests(unittest.TestCase):
+    def test_protected_case_aliases_and_identity_hardlinks_are_rejected_without_reading(self):
+        for relative, link_kind in ((".CODEX/AUTH.JSON", "symlink"),
+                                    (".CODEX/INSTALLATION_ID", "symlink"),
+                                    (".SSH/key", "symlink"),
+                                    (".codex/auth.json", "hardlink"),
+                                    (".codex/installation_id", "hardlink")):
+            with self.subTest(relative=relative, kind=link_kind), tempfile.TemporaryDirectory() as temporary:
+                home = Path(temporary).resolve()
+                skill = home / ".agents/skills/example"
+                skill.mkdir(parents=True)
+                (skill / "SKILL.md").write_text("disposable fixture")
+                protected = home / relative
+                protected.parent.mkdir(parents=True, exist_ok=True)
+                protected.write_text("synthetic fixture, not authentication")
+                if link_kind == "hardlink":
+                    os.link(protected, skill / "reference")
+                else:
+                    (skill / "reference").symlink_to(protected)
+                from unittest.mock import patch
+                with patch.object(Path, "open", side_effect=AssertionError("No file contents may be opened")):
+                    with self.assertRaisesRegex(MigrationError, "protected authentication"):
+                        discover_personal_skills(str(home), "/Users/new-user")
+
+    def test_case_ambiguous_personal_skill_names_fail_instead_of_overwriting(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary).resolve()
+            for relative in (".codex/skills/Example", ".agents/skills/example"):
+                skill = home / relative
+                skill.mkdir(parents=True)
+                (skill / "SKILL.md").write_text("disposable fixture")
+            with self.assertRaisesRegex(MigrationError, "capitalization"):
+                discover_personal_skills(str(home), "/Users/new-user")
+
     def test_personal_discovery_prefers_current_user_skill_root(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary).resolve()

@@ -12,6 +12,7 @@ import stat
 from typing import Dict, Iterable, List, Sequence
 
 from codex_migrate.errors import MigrationError
+from codex_migrate.config import path_key
 
 
 SKILL_NAME = re.compile(r"^[A-Za-z0-9._-]+$")
@@ -45,10 +46,20 @@ def _validated_skill(path: Path, source_home: Path) -> Path:
         raise MigrationError("Skill path resolves outside the source home: %s" % path)
     if not resolved.is_dir() or not (resolved / "SKILL.md").is_file():
         raise MigrationError("Skill is missing a regular SKILL.md file: %s" % path)
-    protected_ssh = (source_home / ".ssh").resolve()
-    protected_files = tuple((source_home / name).resolve() for name in (
-        ".codex/auth.json", ".codex/installation_id",
-    ))
+    ssh = source_home / ".ssh"
+    protected_ssh = (path_key(str(ssh)), path_key(str(ssh.resolve())))
+    protected_files = set()
+    protected_inodes = set()
+    for name in (".codex/auth.json", ".codex/installation_id"):
+        path = source_home / name
+        protected_files.update((path_key(str(path)), path_key(str(path.resolve()))))
+        try:
+            info = path.stat()
+        except FileNotFoundError:
+            continue
+        # Metadata only: never open or hash protected credentials, including
+        # when a hard link disguises one as a skill file.
+        protected_inodes.add((info.st_dev, info.st_ino))
     def unreadable(error):
         raise error
     for current, directories, files in os.walk(str(resolved), followlinks=False, onerror=unreadable):
@@ -58,7 +69,10 @@ def _validated_skill(path: Path, source_home: Path) -> Path:
                 target = candidate.resolve(strict=True)
             except (FileNotFoundError, RuntimeError) as error:
                 raise MigrationError("Skill contains a broken symbolic link: %s" % candidate) from error
-            if _inside(target, protected_ssh) or target in protected_files:
+            key = path_key(str(target))
+            info = target.stat()
+            if (any(key[:len(root)] == root for root in protected_ssh)
+                    or key in protected_files or (info.st_dev, info.st_ino) in protected_inodes):
                 raise MigrationError("Skill references protected authentication material")
             if not (target.is_dir() or stat.S_ISREG(target.stat().st_mode)):
                 raise MigrationError("Skill contains an unsupported special file: %s" % candidate)
@@ -135,6 +149,8 @@ def discover_personal_skills(source_home: str, target_home: str) -> List[SkillEx
             if not _skill_candidate(candidate):
                 continue
             resolved = _validated_skill(candidate, source)
+            if any(name != candidate.name and name.casefold() == candidate.name.casefold() for name in selected):
+                raise MigrationError("Skill names differ only by capitalization; resolve the ambiguous selection before transfer")
             selected[candidate.name] = SkillExport(
                 name=candidate.name,
                 source=str(resolved),
@@ -145,7 +161,7 @@ def discover_personal_skills(source_home: str, target_home: str) -> List[SkillEx
 
 
 def _skill_candidate(candidate: Path) -> bool:
-    if candidate.name == ".system":
+    if candidate.name.casefold() == ".system":
         return False
     if not candidate.is_dir() and not candidate.is_symlink():
         return False

@@ -8,6 +8,23 @@ results, accessibility findings, and pre-signing work still open.
 
 ## Candidate checks completed on the development Mac
 
+- Folder-selection guards now compare conservative case/Unicode path identities
+  without rewriting the selected I/O paths. Config rejects protected/control
+  aliases, resolved protected-storage targets, ambiguous workspace roots and
+  unsafe staging/backup names. The relocated default state directory is resolved
+  before confinement/protection checks; independent review reproduced and
+  verified a `.local` alias bypass. Skill discovery rejects case-only name
+  conflicts and protected login/SSH aliases; the two known Codex identity files
+  also receive inode-only hard-link protection, never content reads. HTTP setup
+  tests prove rejection before attaching/saving a migration or making SSH calls.
+  Independent `public_release_review` accepted the code and scoped documentation
+  after 73 focused tests. Main verification passed 381 Python tests (380 passed,
+  one filesystem skip), 10 signup tests, Swift typecheck and diff checks. The
+  eight source-engine desktop tests also passed with explicit HTTP rejection
+  assertions for protected path aliases. These are selection-level and known-identity guards,
+  not general secret detection, nested filename collision certification or
+  custom `CODEX_HOME` support. Real cross-filesystem acceptance remains open.
+
 - Home-path compatibility now has a separate read-only check before transfer
   and after installation. Missing ordinary `/Users/name` paths receive an
   optional, manually invoked administrator command. The command repeats owner,

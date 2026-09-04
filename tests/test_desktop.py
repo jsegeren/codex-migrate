@@ -88,6 +88,18 @@ class DesktopTests(unittest.TestCase):
                 # configuration, without inspecting or contacting a remote Mac.
                 headers = {"X-Codex-Migrate-Token": token,
                            "Content-Type": "application/json", "Origin": base}
+                for relative in (".CODEX", ".SSH", ".AGENTS/SKILLS", "STATE"):
+                    unsafe = dict(target="person@fixture.invalid", target_home="/Users/person",
+                                  workspace_roots=[temporary + "/" + relative], mode="full")
+                    with self.assertRaises(HTTPError) as denied:
+                        urlopen(Request(base + "/api/setup", data=json.dumps(unsafe).encode(),
+                                        headers=headers), timeout=3)
+                    self.assertEqual(denied.exception.code, 400)
+                    denied.exception.close()
+                    with urlopen(request, timeout=3) as response:
+                        unchanged = json.load(response)
+                    self.assertFalse(unchanged["attached"])
+                    self.assertIsNone(unchanged["saved"])
                 setup = dict(target="person@fixture.invalid", target_home="/Users/person",
                              workspace_roots=[], mode="skills", components=["personal-skills"])
                 with urlopen(Request(base + "/api/setup", data=json.dumps(setup).encode(),

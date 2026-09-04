@@ -76,6 +76,13 @@ repositories. Unsupported pointers, broken metadata links, unreadable metadata,
 and dependencies outside the source home require review. Git object integrity,
 destination refs/status, and historical path usability need separate validation.
 
+Folder selection rejects case/Unicode aliases of protected Codex, SSH, personal
+skills and migration-control paths, including relocated protected directories.
+Ambiguous spellings of selected workspace roots are rejected rather than
+silently combined. These checks also apply when the source is case-sensitive,
+because the destination may not be. They are not a complete scan for filename
+collisions inside repositories or for credentials stored under unrelated names.
+
 Full migrations also discover personal custom skills in `~/.agents/skills`
 and legacy `~/.codex/skills`. A current-location skill takes precedence over a
 legacy skill with the same name. Each selected skill is materialized at the new
