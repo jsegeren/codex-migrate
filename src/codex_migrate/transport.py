@@ -75,7 +75,8 @@ class SSHTransport:
         # A local SSH adapter owns remote quoting. Apple openrsync splits
         # --rsync-path differently from classic rsync; neither may strip our guard.
         payload = base64.urlsafe_b64encode(json.dumps({
-            "target": self.config.target, "ssh": asdict(self.config.ssh),
+            "target": self.config.target, "target_home": self.config.target_home,
+            "ssh": asdict(self.config.ssh),
             "comparison": self.machine_comparison(),
         }).encode()).decode()
         if getattr(sys, "frozen", False):

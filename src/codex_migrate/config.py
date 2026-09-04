@@ -8,6 +8,8 @@ from pathlib import Path
 import re
 from typing import Dict, List, Optional
 
+from codex_migrate.destination_lock import LOCK_NAME
+
 
 TARGET_PATTERN = re.compile(
     r"^[A-Za-z_][A-Za-z0-9._-]*@(?:[A-Za-z0-9][A-Za-z0-9._-]*|\[[0-9A-Fa-f:]+\])$"
@@ -103,6 +105,8 @@ class MigrationConfig:
                 raise ValueError("workspace roots must not overlap migration control state")
             relative = os.path.relpath(cleaned, self.source_home)
             first_component = Path(relative).parts[0]
+            if first_component.casefold() == LOCK_NAME:
+                raise ValueError("workspace root collides with destination lock state")
             if first_component == self.staging_name:
                 raise ValueError("workspace root collides with the reserved staging namespace")
             if first_component == self.backup_prefix or first_component.startswith(
@@ -118,11 +122,11 @@ class MigrationConfig:
             ]
             roots.append(cleaned)
         object.__setattr__(self, "workspace_roots", roots)
-        if self.staging_name in (".", "..") or not re.fullmatch(
+        if self.staging_name.casefold() in (".", "..", LOCK_NAME) or not re.fullmatch(
             r"[A-Za-z0-9._-]+", self.staging_name
         ):
             raise ValueError("staging name contains unsupported characters")
-        if self.backup_prefix in (".", "..") or not re.fullmatch(
+        if self.backup_prefix.casefold() in (".", "..", LOCK_NAME) or not re.fullmatch(
             r"[A-Za-z0-9._-]+", self.backup_prefix
         ):
             raise ValueError("backup prefix contains unsupported characters")

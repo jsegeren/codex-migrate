@@ -11,6 +11,7 @@ import sys
 from typing import Dict, List, Sequence
 
 from codex_migrate.config import MigrationConfig
+from codex_migrate.destination_lock import locked_destination_script
 from codex_migrate.cancellation import Cancellation
 from codex_migrate.backup import (
     BACKUP_FUNCTIONS, MIN_RESERVE_BYTES, size_command, verification_receipt,
@@ -109,7 +110,7 @@ class ComponentExporter:
             / "Codex-Migrate-Component-Staging"
             / migration_id
         )
-        self.transport.run_remote(
+        staging_script = (
             "set -eu\numask 077\n%s\n"
             "printf '%%s\\n' %s > %s\n"
             % (
@@ -118,10 +119,12 @@ class ComponentExporter:
                 shlex.quote(str(Path(staging) / ".codex-migrate-owner")),
             )
         )
+        self.transport.run_remote(locked_destination_script(self.config.target_home, staging_script))
         for index, item in enumerate(exports):
             staged_item = str(Path(staging) / "items" / str(index))
             self.transport.run_remote(
-                MigrationEngine._safe_directory_script(staging, staged_item)
+                locked_destination_script(self.config.target_home,
+                    MigrationEngine._safe_directory_script(staging, staged_item))
             )
             process = self.transport.rsync_process(
                 item.source,
@@ -303,7 +306,9 @@ printf 'INSTALLED=1\\nITEMS=%s\\nBACKUP_VERIFIED=1\\nBACKUP=%s\\n' {item_count} 
             verifications="\n".join(verifications),
             item_count=len(exports),
         )
-        output = self.transport.run_remote(script, timeout=600).stdout
+        output = self.transport.run_remote(
+            locked_destination_script(self.config.target_home, script), timeout=600
+        ).stdout
         if _value(output, "INSTALLED") != "1":
             raise MigrationError("Component installation did not produce a valid receipt")
         if _value(output, "BACKUP_VERIFIED") != "1":

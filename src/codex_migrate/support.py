@@ -25,7 +25,7 @@ PHASES = frozenset(("not_started", "inspecting", "preflight_complete", "staging"
                     "staged", "close_source_codex", "close_target_codex", "final_delta",
                     "verifying_sources", "installing", "verified"))
 FAILURES = frozenset(("none", "unknown", "disk_space", "connection", "permissions",
-                      "verification", "process_guard", "interrupted", "git_scope", "machine_identity"))
+                      "verification", "process_guard", "interrupted", "git_scope", "machine_identity", "destination_lock"))
 HISTORY_LIMIT = 60
 
 
@@ -35,6 +35,7 @@ def failure_category(error):
     # Only the fixed category leaves this function, never matching text/paths.
     text = str(error).lower()
     for category, terms in (
+        ("destination_lock", ("another migration is using this destination", "cannot safely lock the destination")),
         ("machine_identity", ("machine identity", "machine identities", "destination is this source mac")),
         ("disk_space", ("not enough", "insufficient space", "no space left", "disk full", "space check")),
         ("connection", ("ssh", "connection", "timed out", "host key", "rsync exited")),

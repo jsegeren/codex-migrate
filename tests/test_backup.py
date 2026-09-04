@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
-from process_fixtures import closed_codex_script
+from process_fixtures import closed_codex_script, fixture_prefix
 
 from codex_migrate.backup import BACKUP_FUNCTIONS, MIN_RESERVE_BYTES
 from codex_migrate.components import ComponentExporter, SkillExport
@@ -78,7 +78,7 @@ class BackupTests(unittest.TestCase):
                     script = script.replace(check,
                         "printf 'modified' > " + shlex.quote(backup + "/.codex/old.txt")
                         + "\n" + check, 1)
-                result = subprocess.run(["/bin/zsh", "-s"], input=prefix + script,
+                result = subprocess.run(["/bin/zsh", "-s"], input=fixture_prefix(script, prefix),
                                         capture_output=True, text=True, timeout=timeout)
                 if result.returncode:
                     raise RuntimeError(result.stderr or "Fixture script failed")

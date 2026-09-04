@@ -45,6 +45,26 @@ and continues instead of beginning from an empty destination.
 
 ## Finalization fails
 
+Only one migration writer can use a destination home at a time. Full migrations
+and skills repairs share the same destination-side lock for staging writes and
+the complete backup/install/verify/rollback phase. If another operation holds
+it, the attempted write stops with a message. Resume or stop the other transfer,
+or let its finalization finish, before retrying. Read-only inspection is still
+available; this is exclusion, not an automatic waiting queue.
+
+The empty, owner-only `.codex-migrate-destination.lock` file stays in the
+destination home after an operation. Its existence does not mean a transfer is
+running: the operating system holds and releases the actual lock. Do not delete
+the file, use a timestamp to declare it stale, or assume an SSH disconnect means
+the remote operation stopped. A running child can retain the lock through a
+disconnect. Unsafe lock paths or file permissions block writes; contact support
+instead of removing them. The lock does not coordinate older tool versions
+without this protection, other apps, or manual shell commands.
+
+This prevents concurrent writers from this version of Codex Migrate. It is not
+power-loss recovery: after a reboot the kernel lock is released, but unfinished
+replacement still requires inspection of the backup and destination evidence.
+
 Retained Codex state now has the same frozen before/after protection. Changed,
 missing or extra retained configuration, organization, rules, automations or
 database files block replacement or trigger rollback. A database can pass SQLite

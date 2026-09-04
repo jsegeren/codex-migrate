@@ -1,5 +1,6 @@
 import json
 import os
+import fcntl
 import base64
 from pathlib import Path
 import plistlib
@@ -16,6 +17,7 @@ from codex_migrate.errors import MigrationError
 from codex_migrate.machines import destination_guard, local_machine_uuid
 from codex_migrate.transport import SSHTransport
 from codex_migrate.ssh_bridge import run as run_bridge
+from codex_migrate.destination_lock import LOCK_NAME
 
 
 SOURCE = "12345678-1234-1234-1234-123456789ABC"
@@ -173,12 +175,20 @@ class MachineTests(unittest.TestCase):
             actual = local_machine_uuid()
             other = SOURCE if actual != SOURCE else "87654321-1234-1234-1234-123456789ABC"
             for identity, allowed in ((actual, False), (other, True)):
-                transport = SSHTransport(MigrationConfig(target="user@alias-for-this-mac.invalid", target_home="/Users/user"))
+                transport = SSHTransport(MigrationConfig(target="user@alias-for-this-mac.invalid", target_home=str(root.resolve())))
                 with patch("codex_migrate.machines.local_machine_uuid", return_value=identity):
                     entry = shlex.split(transport.rsync_bridge_command())
                 entry[1] = str(bridge)
                 with patch.object(transport, "rsync_bridge_command", return_value=shlex.join(entry)):
                     transfer = transport.rsync_process(str(source), str(destination))
+                if allowed:
+                    with (root / LOCK_NAME).open("a") as lock:
+                        os.chmod(root / LOCK_NAME, 0o600)
+                        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        blocked = subprocess.run(transfer.command, capture_output=True, text=True, timeout=15)
+                        self.assertNotEqual(blocked.returncode, 0)
+                        self.assertIn("Another migration is using this destination", blocked.stderr)
+                        self.assertFalse((destination / "unfinished file.txt").exists())
                 result = subprocess.run(transfer.command, capture_output=True, text=True, timeout=15)
                 self.assertEqual(result.returncode == 0, allowed, result.stderr)
                 if not allowed:

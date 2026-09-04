@@ -8,6 +8,21 @@ results, accessibility findings, and pre-signing work still open.
 
 ## Candidate checks completed on the development Mac
 
+- Destination-wide exclusion now covers staging directory/marker writes, rsync
+  receivers, and the entire full/skills backup-install-verify-rollback phase.
+  An owner-only, no-follow persistent lock file is held by the destination
+  kernel, inherited through child processes, and never unlinked or reclaimed
+  by age/PID. Actual local process tests prove exclusion after parent death
+  while a child lives, release after completion, rejection of unsafe lock paths,
+  and full/skills/CLI staging boundaries. Real local rsync protocol tests prove
+  a held lock blocks copying and release allows copying; a separate 256 KiB
+  binary roundtrip checks command-mode stdin. Independent reviewer
+  `public_release_review` accepted implementation and recovery wording with no
+  blocking findings. Local suite: 263 Python tests (262 passed, one explicit
+  skip), 10 signup tests, and native Swift typecheck. This is not a real
+  cross-Mac disconnect test or power-loss recovery certification. Old versions
+  and manual filesystem writes do not participate in this lock.
+
 - Same-source-Mac rejection now runs before every migration remote-shell body
   and rsync receiver. It compares ephemeral salted platform identities, rejects
   unknown identities, and retains strict SSH host-key verification. Stable

@@ -8,6 +8,7 @@ import shlex
 from codex_migrate.config import MigrationConfig, SSHOptions, TARGET_PATTERN
 from codex_migrate.errors import MigrationError
 from codex_migrate.machines import destination_guard
+from codex_migrate.destination_lock import locked_receiver_command
 from codex_migrate.transport import SSHTransport
 
 
@@ -16,7 +17,7 @@ def run(arguments):
         if not arguments or len(arguments[0]) > 16384:
             raise ValueError("invalid adapter configuration")
         payload = json.loads(base64.b64decode(arguments[0], altchars=b"-_", validate=True))
-        if not isinstance(payload, dict) or set(payload) != {"target", "ssh", "comparison"}:
+        if not isinstance(payload, dict) or set(payload) != {"target", "target_home", "ssh", "comparison"}:
             raise ValueError("invalid adapter fields")
         target = payload["target"]
         if not isinstance(target, str) or not TARGET_PATTERN.fullmatch(target):
@@ -41,8 +42,9 @@ def run(arguments):
             raise ValueError("reverse transfer is unsupported")
         # Inputs are argument values, never executable shell fragments. In
         # particular a destination containing spaces/quotes remains one path.
-        script = guard + "exec /usr/bin/rsync " + " ".join(shlex.quote(arg) for arg in args[1:])
-        config = MigrationConfig(target=target, target_home="/unused", ssh=options)
+        receiver = "exec /usr/bin/rsync " + " ".join(shlex.quote(arg) for arg in args[1:])
+        script = guard + locked_receiver_command(payload["target_home"], receiver)
+        config = MigrationConfig(target=target, target_home=payload["target_home"], ssh=options)
         command = SSHTransport(config).ssh_base() + [target, "/bin/zsh -f -c " + shlex.quote(script)]
     except (ValueError, TypeError, KeyError, MigrationError) as error:
         raise MigrationError("Rsync destination validation failed. No SSH connection was started.") from error

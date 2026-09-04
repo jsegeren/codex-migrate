@@ -19,6 +19,7 @@ from codex_migrate.errors import MigrationError
 from codex_migrate.exclusions import CODEX_EXCLUDES
 from codex_migrate.skills import SkillExport, discover_personal_skills, skill_verification_script
 from codex_migrate.backup import BACKUP_FUNCTIONS, size_command, verification_receipt
+from codex_migrate.destination_lock import locked_destination_script
 from codex_migrate.inventory import Inventory, collect
 from codex_migrate.security import redact
 from codex_migrate.processes import codex_running, process_state_script, require_codex_closed_script
@@ -328,7 +329,7 @@ class MigrationEngine:
             migration_id = secrets.token_hex(16)
             self.state.update(migration_id=migration_id)
         marker = shlex.quote(str(Path(self.config.target_staging) / ".codex-migrate-owner"))
-        self.transport.run_remote(
+        script = (
             "set -eu\numask 077\n"
             "if test -e {staging}; then\n"
             "  test -d {staging}\n"
@@ -353,6 +354,7 @@ class MigrationEngine:
                 ).format(s=staging) if include_codex else "",
             )
         )
+        self.transport.run_remote(locked_destination_script(self.config.target_home, script))
 
     def _transfers(self) -> List[Tuple[str, str, Sequence[str], str, bool]]:
         validate_codex_identity_names(self.config.source_codex)
@@ -416,7 +418,8 @@ class MigrationEngine:
                 message="Copying %s (%d of %d). Safe to pause." % (label, index, len(transfers)),
             )
             self.transport.run_remote(
-                self._safe_directory_script(self.config.target_staging, destination)
+                locked_destination_script(self.config.target_home,
+                    self._safe_directory_script(self.config.target_staging, destination))
             )
             if copy_links:
                 self._skill_plan()  # Revalidate aliases before dereferencing them.
@@ -908,7 +911,9 @@ printf 'INSTALLED=1\\nACTIVE=%s\\nARCHIVED=%s\\nAUTH_PRESERVED=1\\nINSTALLATION_
             workspace_installed_checks="\n".join(workspace_installed_checks),
             workspace_count=sum(digest is not None for _, _, digest in prepared_workspaces),
         )
-        output = self.transport.run_remote(script, timeout=WORKSPACE_TIMEOUT).stdout
+        output = self.transport.run_remote(
+            locked_destination_script(self.config.target_home, script), timeout=WORKSPACE_TIMEOUT
+        ).stdout
         if _value(output, "INSTALLED") != "1":
             raise MigrationError("Destination installation did not produce a valid receipt")
         if _value(output, "BACKUP_VERIFIED") != "1":
