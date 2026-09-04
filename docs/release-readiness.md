@@ -21,6 +21,12 @@ results, accessibility findings, and pre-signing work still open.
   client. This does not identify an unintended *other* trusted Mac, certify
   virtual machines, or cover the unused benchmark helper. Destination-wide
   locking and power-loss reconciliation remain open in the failure-mode matrix.
+  Clean source `45829eb` also built an unsigned arm64 engineering app and passed
+  eight packaged-engine tests, including internal SSH-adapter rejection before
+  connection. Packaging verified its ad-hoc signature. ZIP SHA-256:
+  `dc3d691220b44475f03ac175f1e158386c8a033c74f3e7b0a45f136689a99a93`.
+  This is bundled-entry/startup evidence, not a full packaged cross-Mac transfer
+  or an Apple-signed release.
 
 - In-app Help now offers a support email draft and an opt-in diagnostic report
   with preview/manual attachment. A bounded, persistent 60-event stream records
