@@ -24,6 +24,13 @@ results, accessibility findings, and pre-signing work still open.
   assertions for protected path aliases. These are selection-level and known-identity guards,
   not general secret detection, nested filename collision certification or
   custom `CODEX_HOME` support. Real cross-filesystem acceptance remains open.
+  Clean source `b2c4569` built an unsigned arm64 engineering app; all eight
+  bundled-engine tests passed, including rejecting protected path aliases over
+  real loopback HTTP before saving/attaching setup. Packaging verified the
+  ad-hoc signature. ZIP SHA-256:
+  `ba35a840315e28b8977f260fe52413167d1b8431caf556b275c089f764af05bb`.
+  No running user app was replaced, no real SSH migration ran, and this is not
+  Apple notarization or clean-second-Mac acceptance.
 
 - Home-path compatibility now has a separate read-only check before transfer
   and after installation. Missing ordinary `/Users/name` paths receive an
