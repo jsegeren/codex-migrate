@@ -14,6 +14,7 @@
     <link rel="icon" href="/assets/mark.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/styles.css?v=20260904-regional">
     <script src="/analytics.js?v=20260904-regional" defer></script>
+    <script src="/checkout.js" defer></script>
   </head>
   <body>
     <header class="site-header">
@@ -35,14 +36,14 @@
     <main>
       <section class="hero shell">
         <div class="hero-copy">
-          <p class="eyebrow"><span class="status-dot"></span> Open source now · Mac app in development</p>
+          <p class="eyebrow" id="hero-availability"><span class="status-dot"></span> Open source now · Mac app in development</p>
           <div class="hero-heading">
             <div class="hero-message">
               <h1>Change the Mac.<br><span class="accent">Keep the work.</span></h1>
               <p class="lede">Move local Codex conversations, settings, skills, repositories, branches, worktrees, and unfinished files—without handing your workspace to a cloud migration service.</p>
               <div class="actions">
                 <a class="button button-primary" data-analytics-event="select_free_cli" href="https://github.com/jsegeren/codex-migrate">Get the free CLI</a>
-                <a class="button button-secondary" data-analytics-event="select_launch_email" href="#launch-email">Email me at launch</a>
+                <a class="button button-secondary" id="hero-paid-link" data-analytics-event="select_launch_email" href="#launch-email">Email me at launch</a>
               </div>
             </div>
             <picture class="hero-inline-media">
@@ -135,18 +136,24 @@
           </article>
 
           <article class="price-card featured" id="founding-edition">
-            <div class="badge">In development · not on sale yet</div>
+            <div class="badge" id="edition-state">In development · not on sale yet</div>
             <p class="plan-name">Mac app · v1 license</p>
             <p class="price"><span>$</span>50</p>
             <p class="price-note">One payment · no subscription</p>
             <ul class="check-list compact">
-              <li>Signed and notarized Mac app when released</li>
+              <li id="edition-signed">Signed and notarized Mac app when released</li>
               <li>Guided setup and permission checks</li>
               <li>Workspace folder selection and skills-only export</li>
               <li>One-click migration controls and reports</li>
               <li>Best-effort maintainer support</li>
             </ul>
-            <p class="disclosure"><strong>Not on sale yet. No pre-orders.</strong> The $50 downloadable edition is in development. Checkout opens only after signing, notarization, clean-Mac testing, and download delivery are verified. The free CLI is available today.</p>
+            <p class="disclosure" id="edition-disclosure"><strong>Not on sale yet. No pre-orders.</strong> The $50 downloadable edition is in development. Checkout opens only after signing, notarization, clean-Mac testing, and download delivery are verified. The free CLI is available today.</p>
+            <div id="checkout-panel" hidden>
+              <p id="checkout-platform" class="disclosure"></p>
+              <button id="checkout-button" class="button button-primary full" type="button" aria-describedby="checkout-platform checkout-status">Buy the Mac app — $50</button>
+              <p id="checkout-status" role="status"></p>
+              <p class="disclosure"><a href="/terms.html">Terms</a> · <a href="/refunds.html">30-day refund policy</a> · <a href="mailto:joshua@segeren.com?subject=Codex%20Migrate%20purchase%20help">Email Josh</a></p>
+            </div>
             <p class="disclosure">Support is best-effort. We aim to respond within a few business days, depending on availability and complexity. Each issue is handled case by case; no response time, fix, or resolution deadline is guaranteed.</p>
             <div class="launch-interest" id="launch-email">
               <h3>Want a launch email?</h3>
@@ -188,7 +195,7 @@
           <details><summary>Is this made by OpenAI?</summary><p>No. Codex Migrate is an independent compatibility project. It is not affiliated with, supported by, or endorsed by OpenAI.</p></details>
           <details><summary>Does it copy my Codex login?</summary><p>No. Authentication and installation identity are deliberately excluded. You sign in on the new Mac first; the migration preserves that new identity.</p></details>
           <details><summary>Can I transfer over Wi-Fi or a cable?</summary><p>Yes. Use Wi-Fi or a compatible USB-C/Thunderbolt network connection between your Macs; Ethernet works too. The transfer uses secure SSH in each case. After verifying the new Mac, Codex Migrate checks its reachable private network addresses and selects the faster verified route. USB-C cables vary in capability and speed, so the cable setup must provide a working network connection—not just charging. Enable Remote Login on the new Mac, then follow the <a href="/moving-to-a-new-mac">connection guide</a>.</p></details>
-          <details><summary>Can I buy the paid app today?</summary><p>Not yet. The $50 downloadable Mac edition is in development. We are not taking pre-orders. The complete open-source CLI is usable today.</p></details>
+          <details><summary>Can I buy the paid app today?</summary><p id="purchase-faq">Not yet. The $50 downloadable Mac edition is in development. We are not taking pre-orders. The complete open-source CLI is usable today.</p></details>
           <details><summary>Does it work on Windows?</summary><p>Not yet. Codex Migrate currently supports Mac-to-Mac migration only, including the open-source CLI. A Windows version is feasible, but it needs its own work on file locations, permissions, backups, packaging, and recovery testing. Windows and cross-platform transfers are not supported today, and there is no announced release date.</p></details>
           <details><summary>What if the transfer is interrupted?</summary><p>Rerun it. Staging uses resumable transfer semantics, so completed data is reused. The source Mac is never deleted or modified.</p></details>
           <details><summary>Can I migrate only one thing?</summary><p>Yes. Personal and repository-scoped skills can already be exported independently; more selective components will use the same guarded workflow.</p></details>

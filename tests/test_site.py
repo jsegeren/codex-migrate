@@ -228,7 +228,8 @@ class SiteTests(unittest.TestCase):
 
     def test_launch_interest_uses_consented_form_and_separate_early_build_email(self):
         page = self.parse("index.html")
-        emails = [href for href in page.hrefs if href.startswith("mailto:joshua@segeren.com?")]
+        emails = [href for href in page.hrefs if href.startswith(
+            "mailto:joshua@segeren.com?subject=Codex%20Migrate%20early%20build%20request&")]
         self.assertEqual(len(emails), 1)
         text = " ".join(page.text)
         self.assertIn("Your request goes to Josh’s inbox via SendGrid", text)

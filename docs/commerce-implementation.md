@@ -135,7 +135,17 @@ opened to bypass any of these checks.
 
 ## Evidence
 
-- 140 Node tests passed; the real-database test is skipped in the default suite.
+- 151 Node tests passed; the real-database test is skipped in the default suite.
+- The purchase CTA now reads a no-store availability endpoint that stays closed
+  for missing configuration, sandbox mode, or an unreviewed release. Only an
+  explicitly enabled live release displays hardware compatibility and the $50
+  checkout button. No checkout session starts until the buyer clicks. Retries
+  reuse a per-tab request reference; delayed readiness preserves a focused or
+  filled email-signup form. A privacy disclosure explains this local state.
+  Chromium desktop/320px checks with mocked readiness/payment responses verified
+  the hidden prelaunch fallback, visible purchase state, retry keyboard focus,
+  17px button text without underlining, and no narrow-screen horizontal overflow.
+  These are UI checks, not a completed hosted purchase or live release.
 - Full Python regression run: 586 tests completed, 579 passed and seven explicit
   filesystem skips, in 141.061 seconds. Mock notarization output in that suite
   is not an actual signed release.
