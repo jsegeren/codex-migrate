@@ -59,7 +59,7 @@ that short window. This is paid official distribution, not DRM.
 
 ## Configuration and release gates
 
-Node 24+ is required for the website's commerce functions; the Python migration
+Node 24 is pinned for the website's commerce functions; the Python migration
 engine remains dependency-free. Dependencies are pinned in `package-lock.json`.
 
 Private server-only variables:
@@ -192,3 +192,16 @@ storage and synthetic bytes, not claims of Apple acceptance. Running the
 operator against the existing `desktop-cip8tnrb` unsigned candidate correctly
 failed without uploading an app. CI for checkpoint `efc6449` passed both Python
 versions before this follow-up.
+
+## Hosted closed-state check
+
+The guarded preview for source `6a1cf4a` deployed successfully at
+`https://codex-migrate-ciqg66ao7-joshuas-projects-d3a5c48d.vercel.app`.
+POST requests to checkout, purchase and Stripe webhook all returned HTTP 503
+with `checkout_closed`, not function-loading errors. This establishes hosted
+bundling and closed configuration only; raw-body signature verification still
+requires the configured sandbox webhook test. No Production promotion occurred.
+The CLI used project-scoped deployment-protection access without printing its
+credential. Deployment inputs excluded `.env.local`, app archives, diagnostics,
+tests, operator scripts and local dependencies. The subsequent Node 24 pin
+prevents Vercel silently choosing a future major runtime.
