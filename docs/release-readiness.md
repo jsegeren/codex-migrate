@@ -36,6 +36,29 @@ purchase, weaken SSH host-key checking, or enable live checkout as a workaround.
 
 ## Candidate checks completed on the development Mac
 
+- Guided connection-card setup now replaces manual SSH-key configuration for
+  standard receiving accounts. Both helpers stay loopback-only. A dedicated
+  private source key never enters the cards; user-approved replies pin the
+  receiving host key. Approval grants restricted, seven-day SSH account access;
+  it is not a sandbox around selected folders. Existing SSH entries stay intact.
+  Explicit revoke removes the exact owned key line; starting fresh preserves
+  previous local connection files. Existing-SSH setup remains available.
+  Current verification: 579 Python tests, 572 passed and seven filesystem skips.
+  Eleven dedicated pairing tests include real ED25519 generation, malformed and
+  expired cards, incorrect replies, changed trust, permission/link guards,
+  preservation/revocation, restart, and OpenSSH's effective isolated configuration
+  without network contact. Protected HTTP tests cover token/origin checks,
+  approval requirements and rejecting connection changes after configuration.
+  A real two-browser run used disposable homes and real generated keys, with
+  account/receiving-host metadata explicitly substituted by fixtures. It completed
+  request → approval → reply → read-only migration setup, then confirmed revoke.
+  Desktop and 390px rendering, hidden raw-card text, focus transitions and no
+  horizontal overflow were checked. This does not prove actual macOS Remote Login
+  permissions, cross-device clipboard transport or a separate-Mac SSH handshake.
+  Use `PYTHONPATH=src python tests/manual_pairing_fixture.py` for repeatable local
+  UI checks; never publish its private control URLs. Real-Mac pairing, expiry,
+  resume and packaged receiving-account acceptance remain release gates.
+
 - Browser-only UX revision: the native setup form has been removed. The Mac
   launcher starts its bundled local helper and opens the browser automatically;
   its menu provides Open and guarded Quit only. Setup is three steps with

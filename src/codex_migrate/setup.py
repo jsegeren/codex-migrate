@@ -18,6 +18,7 @@ from codex_migrate.migration import MigrationEngine, MigrationError
 from codex_migrate.component_migration import ComponentMigrationEngine
 from codex_migrate.state import StateStore
 from codex_migrate.support import with_support, SUPPORT_HTML
+from codex_migrate.pairing import Pairing
 
 
 SETUP_HTML = r'''<!doctype html>
@@ -31,12 +32,28 @@ label{display:block;margin:16px 0 6px}input,textarea,button,select{font:inherit}
 </style></head><body><main>
 <a class="support-link" href="#migration-help">Help / Email support</a>
 <h1>Let’s move your Codex.</h1><p>Your conversations, skills, and unfinished work. Directly from this Mac to your new one.</p>
+<button type="button" class="secondary" id="receiver-toggle">I’m on the new Mac</button>
 <div id="error" role="alert"></div><p id="message" role="status" aria-live="polite">Connecting to your local helper…</p>
+<section id="receiver" hidden><h2 tabindex="-1">Prepare this new Mac</h2>
+<p>First, install Codex and sign in. In System Settings → General → Sharing, enable Remote Login for your account.</p>
+<div id="receiver-request-area"><label for="request-card">Paste the connection card from your old Mac</label><textarea id="request-card" spellcheck="false" autocomplete="off"></textarea>
+<p>Approve only a card you just created on your own old Mac. This grants that Mac SSH access to read and change files in this account for seven days. It does not start a migration.</p>
+<button type="button" id="approve-card">Approve this connection for seven days</button></div>
+<div id="reply-area" hidden><p>Approved. Copy the reply and paste it into Codex Migrate on your old Mac.</p><button type="button" id="copy-reply">Copy reply</button><details><summary>View reply card</summary><label for="reply-card">Reply for your old Mac</label><textarea id="reply-card" readonly spellcheck="false"></textarea></details></div>
+<details><summary>Remove connection access</summary><p>After your migration is complete, remove the access granted by this helper. Other SSH connections are kept. Do not do this during migration or recovery.</p><button type="button" class="secondary" id="revoke-pair">Remove this connection’s access</button></details>
+</section>
 <section id="attached" hidden><h2>Your migration is configured</h2><p>Continue to its status, backup checks, pause/resume controls and recovery guidance. Keep the same destination and scope when resuming. Changing scope while staged data exists requires reviewing that migration’s recovery instructions; restarting alone does not adopt it.</p><a class="button" id="continue" href="/migration">Open migration dashboard</a></section>
 <p id="step-progress" aria-live="polite">Step 1 of 3 · Your new Mac</p>
 <form id="setup" novalidate><fieldset id="fields" disabled><legend class="sr-only">Migration setup</legend>
 <div id="step-1" class="setup-step"><h2 tabindex="-1">Your new Mac</h2>
 <p>Connect both Macs to Wi-Fi, or use a compatible USB-C/Thunderbolt connection.</p>
+<div id="pair-source"><p>Open Codex Migrate on both Macs. Create a card here, then approve it in the new Mac’s browser. No Terminal commands or passwords.</p>
+<button type="button" id="create-card">Create connection card</button>
+<div id="request-area" hidden><p>On the new Mac, choose “I’m on the new Mac” and paste this card.</p><button type="button" id="copy-request">Copy card</button><details><summary>View connection card</summary><label for="source-card">Connection card for your new Mac</label><textarea id="source-card" readonly spellcheck="false"></textarea></details>
+<label for="accepted-card">Paste the reply from your new Mac</label><textarea id="accepted-card" spellcheck="false" autocomplete="off"></textarea>
+<p>Use only the reply shown on your own new Mac. It supplies that Mac’s verified local SSH identity—not an identity discovered on the network.</p><button type="button" id="accept-card">Use this new Mac</button></div></div>
+<p id="paired-status" role="status" hidden></p>
+<details id="manual-connection"><summary>Use an existing SSH connection instead</summary>
 <label for="computer">New Mac’s name or address</label><input id="computer" autocomplete="off" placeholder="e.g. Joshuas-MacBook-Pro.local" required>
 <label for="username">Your username on the new Mac</label><input id="username" autocomplete="off" placeholder="e.g. joshua" required>
 <input id="target" type="hidden">
@@ -45,6 +62,8 @@ label{display:block;margin:16px 0 6px}input,textarea,button,select{font:inherit}
 <details><summary>Advanced connection settings</summary>
 <label for="target-home">New Mac’s home folder</label><input id="target-home" autocomplete="off" placeholder="/Users/username" required>
 <label for="identity">Existing SSH key path (optional)</label><input id="identity" autocomplete="off" spellcheck="false" aria-describedby="key-help"><p id="key-help">Leave empty to use your SSH configuration. Selecting a key does not add it to the migration, and this selection is not saved. A key stored inside a selected workspace is copied with that workspace.</p></details>
+</details>
+<details><summary>Start a fresh connection</summary><p>Use this if your seven-day connection has expired. Previous local connection files are kept. On the new Mac, remove the previous connection’s access before approving the new card.</p><button type="button" class="secondary" id="restart-pair">Start a new connection</button></details>
 <div class="controls"><button type="button" id="next-1">Continue</button></div></div>
 <div id="step-2" class="setup-step" hidden><h2 tabindex="-1">What would you like to move?</h2>
 <label for="mode">What do you want to move?</label><select id="mode"><option value="full">Full Codex migration and selected workspaces</option><option value="skills">Custom skills only</option></select>
@@ -74,22 +93,38 @@ const roots=()=>$("workspaces").value.split("\n").map(x=>x.trim()).filter(Boolea
 const fullScopeHelp=$("scope-help").textContent;
 const fullKeyHelp=$("key-help").textContent;
 let step=1;
+let paired=false;
+function pairingView(){
+  $("pair-source").hidden=paired;
+  $("paired-status").hidden=!paired;
+  $("paired-status").textContent=paired?"Selected: "+$("target").value+". Connection checks run before transfer.":"";
+}
+function manualEdit(){paired=false;pairingView();syncDestination();}
 function syncDestination(){const user=$("username").value.trim();const host=$("computer").value.trim();$("target").value=user+"@"+host;if(!$("target-home").dataset.custom)$("target-home").value=user?"/Users/"+user:"";}
-$("username").oninput=syncDestination;$("computer").oninput=syncDestination;$("target-home").oninput=()=>{$("target-home").dataset.custom="true"};
+$("username").oninput=manualEdit;$("computer").oninput=manualEdit;$("target-home").oninput=()=>{$("target-home").dataset.custom="true";manualEdit()};$("identity").oninput=manualEdit;
 function folderSummary(){$("folder-summary").textContent=roots().length?roots().length+" project folder"+(roots().length===1?"":"s")+" selected.":"No project folders selected.";}
 $("workspaces").oninput=folderSummary;
 function showStep(next){step=next;for(let n=1;n<=3;n++)$("step-"+n).hidden=n!==step;$("step-progress").textContent="Step "+step+" of 3 · "+["Your new Mac","What to move","Review"][step-1];$("step-"+step).querySelector("h2").focus();}
-function connectionValid(){syncDestination();for(const id of ["computer","username","target-home"]){if(!$(id).checkValidity()){showStep(1);$(id).closest("details")?.setAttribute("open","");$(id).reportValidity();return false}}return true;}
+function connectionValid(){syncDestination();for(const id of ["computer","username","target-home"]){if(!$(id).checkValidity()){showStep(1);$("manual-connection").open=true;$(id).closest("details")?.setAttribute("open","");$(id).reportValidity();return false}}return true;}
 $("next-1").onclick=()=>{if(connectionValid())showStep(2)};$("back-2").onclick=()=>showStep(1);$("back-3").onclick=()=>showStep(2);
 $("next-2").onclick=()=>{const skills=$("mode").value==="skills";$("review").replaceChildren();for(const [label,value] of [["New Mac",$("target").value],["Moving",skills?"Selected custom skills":"Codex conversations, settings and skills"],["Project folders",String(roots().length)]]){const dt=document.createElement("dt"),dd=document.createElement("dd");dt.textContent=label;dd.textContent=value;$("review").append(dt,dd)}$("replacement-note").textContent=skills?"Matching destination skills are backed up and replaced. Other skills, conversations and projects are kept.":"This replaces selected destination data; it does not merge separate work. Keep your old Mac intact.";showStep(3)};
 function modeChanged(){const skills=$("mode").value==="skills";$("key-help").textContent=skills?"Selecting an SSH key does not add it to the migration, and the selection is not saved. Only selected skill contents are copied; review them for private files. Protected SSH and Codex login files are rejected.":fullKeyHelp;$("skill-components").hidden=!skills;$("workspace-label").textContent=skills?"Project folders to search for workspace skills, one per line":"Workspace folders on this Mac, one per line";$("scope-help").textContent=skills?"These folders are searched only when Workspace skills is checked. Only discovered .agents/skills directories are copied, not the whole project. Personal skills need no project-folder selection. Skill contents can include private files; review the discovered list before transfer.":fullScopeHelp;}
 $("mode").onchange=modeChanged;
 async function api(path,body){const r=await fetch(path,{method:body?"POST":"GET",headers:{"X-Codex-Migrate-Token":token,"Content-Type":"application/json"},...(body?{body:JSON.stringify(body)}:{})});const result=await r.json();if(!r.ok)throw Error(result.error||"The request failed");return result}
-function attached(){ $("attached").hidden=false;$("setup").hidden=true;$("step-progress").hidden=true;$("continue").href="/migration#token="+encodeURIComponent(token);$("message").textContent="The helper is ready. No transfer was started automatically."; }
-async function load(){try{const s=await api("/api/setup");if(s.attached){attached();return}const c=s.saved||{};$("target").value=c.target||"";const split=(c.target||"").lastIndexOf("@");$("username").value=split>=0?c.target.slice(0,split):"";$("computer").value=split>=0?c.target.slice(split+1):"";$("target-home").value=c.target_home||"";if(c.target_home&&c.target_home!=="/Users/"+$("username").value)$("target-home").dataset.custom="true";else delete $("target-home").dataset.custom;$("workspaces").value=(c.workspace_roots||[]).join("\n");$("mode").value=c.mode||"full";$("personal-skills").checked=!c.components||c.components.includes("personal-skills");$("workspace-skills").checked=(c.components||[]).includes("workspace-skills");modeChanged();folderSummary();$("apply").checked=false;$("fields").disabled=false;$("message").textContent=s.saved?"Restored your last setup. Review it before continuing; changes remain disabled.":""}catch(e){$("error").textContent=e.message+". Reopen the browser from the local helper if its token is missing."}}
+$("receiver-toggle").onclick=()=>{const receiving=$("receiver").hidden;$("receiver").hidden=!receiving;$("setup").hidden=receiving;$("step-progress").hidden=receiving;$("receiver-toggle").textContent=receiving?"Back to the old Mac setup":"I’m on the new Mac";if(receiving)$("receiver").querySelector("h2").focus();else showStep(step)};
+async function connectionAction(button,action,payload,done){button.disabled=true;$("error").textContent="";try{done(await api("/api/connection/"+action,payload))}catch(e){$("error").textContent=e.message}finally{button.disabled=false}}
+$("create-card").onclick=()=>connectionAction($("create-card"),"request",{},r=>{$("source-card").value=r.card;$("request-area").hidden=false;$("create-card").hidden=true;$("copy-request").focus()});
+$("approve-card").onclick=()=>connectionAction($("approve-card"),"approve",{card:$("request-card").value,apply:true},r=>{$("reply-card").value=r.card;$("reply-area").hidden=false;$("receiver-request-area").hidden=true;$("copy-reply").focus()});
+$("accept-card").onclick=()=>connectionAction($("accept-card"),"accept",{card:$("accepted-card").value,apply:true},r=>{const split=r.target.lastIndexOf("@");$("username").value=r.target.slice(0,split);$("computer").value=r.target.slice(split+1);$("target").value=r.target;$("target-home").value=r.target_home;$("target-home").dataset.custom="true";$("identity").value="";paired=true;pairingView();$("manual-connection").open=false;$("next-1").focus()});
+$("revoke-pair").onclick=()=>{if(confirm("Remove this old Mac’s SSH access? Wait until migration and recovery have finished."))connectionAction($("revoke-pair"),"revoke",{apply:true},r=>{$("message").textContent=r.message;$("reply-area").hidden=true;$("reply-card").value="";$("receiver-request-area").hidden=false})};
+$("restart-pair").onclick=()=>{if(confirm("Start a new connection? Previous local files will be kept. Remove the old access on the new Mac before approving another card."))connectionAction($("restart-pair"),"restart",{apply:true},r=>{paired=false;pairingView();$("request-area").hidden=true;$("create-card").hidden=false;$("target").value="";$("username").value="";$("computer").value="";$("target-home").value="";$("source-card").value="";$("accepted-card").value="";$("message").textContent=r.message})};
+async function copyCard(id){try{await navigator.clipboard.writeText($(id).value);$("message").textContent="Copied. Paste it into Codex Migrate on your other Mac."}catch(e){$(id).closest("details").open=true;$(id).focus();$(id).select();$("message").textContent="Card selected. Press Command-C to copy."}}
+$("copy-request").onclick=()=>copyCard("source-card");$("copy-reply").onclick=()=>copyCard("reply-card");
+function attached(){ $("receiver-toggle").hidden=true;$("receiver").hidden=true; $("attached").hidden=false;$("setup").hidden=true;$("step-progress").hidden=true;$("continue").href="/migration#token="+encodeURIComponent(token);$("message").textContent="The helper is ready. No transfer was started automatically."; }
+async function load(){try{const s=await api("/api/setup");if(s.attached){attached();return}const c=s.saved||{};$("target").value=c.target||"";const split=(c.target||"").lastIndexOf("@");$("username").value=split>=0?c.target.slice(0,split):"";$("computer").value=split>=0?c.target.slice(split+1):"";$("target-home").value=c.target_home||"";if(c.target_home&&c.target_home!=="/Users/"+$("username").value)$("target-home").dataset.custom="true";else delete $("target-home").dataset.custom;$("workspaces").value=(c.workspace_roots||[]).join("\n");$("mode").value=c.mode||"full";$("personal-skills").checked=!c.components||c.components.includes("personal-skills");$("workspace-skills").checked=(c.components||[]).includes("workspace-skills");paired=!!c.paired;pairingView();modeChanged();folderSummary();$("apply").checked=false;$("fields").disabled=false;$("message").textContent=s.saved?"Restored your last setup. Review it before continuing; changes remain disabled.":""}catch(e){$("error").textContent=e.message+". Reopen the browser from the local helper if its token is missing."}}
 async function folders(path){$("folders").disabled=true;$("suggest").disabled=true;try{const r=await api(path,{});$("workspaces").value=[...new Set([...roots(),...r.paths])].join("\n");folderSummary();$("message").textContent=r.message}catch(e){$("error").textContent=e.message}finally{$("folders").disabled=false;$("suggest").disabled=false}}
 $("folders").onclick=()=>folders("/api/folders");$("suggest").onclick=()=>folders("/api/suggestions");
-$("setup").onsubmit=async e=>{e.preventDefault();if(step<3){$(step===1?"next-1":"next-2").click();return}if(!connectionValid())return;$("open").disabled=true;$("error").textContent="";try{await api("/api/setup",{target:$("target").value.trim(),target_home:$("target-home").value.trim(),workspace_roots:roots(),identity_file:$("identity").value.trim(),apply:$("apply").checked,mode:$("mode").value,components:$("mode").value==="skills"?["personal-skills","workspace-skills"].filter(id=>$(id).checked):[]});location.href="/migration#token="+encodeURIComponent(token)}catch(e){$("error").textContent=e.message;$("open").disabled=false}};
+$("setup").onsubmit=async e=>{e.preventDefault();if(step<3){$(step===1?"next-1":"next-2").click();return}if(!connectionValid())return;$("open").disabled=true;$("error").textContent="";try{await api("/api/setup",{target:$("target").value.trim(),target_home:$("target-home").value.trim(),workspace_roots:roots(),identity_file:$("identity").value.trim(),apply:$("apply").checked,paired,mode:$("mode").value,components:$("mode").value==="skills"?["personal-skills","workspace-skills"].filter(id=>$(id).checked):[]});location.href="/migration#token="+encodeURIComponent(token)}catch(e){$("error").textContent=e.message;$("open").disabled=false}};
 load();
 </script></body></html>'''
 SETUP_HTML = with_support(SETUP_HTML)
@@ -118,16 +153,21 @@ class SetupDashboard(Dashboard):
         self._picker_lock = threading.Lock()
         self._request_lock = threading.Lock()
         self._closing = False
+        self.pairing = Pairing(self.source_home, self.registry.root)
 
     def configure(self, payload):
         with self._setup_lock:
             if self.engine is not None:
                 raise MigrationError("A migration is already configured. Restart the helper to change scope.")
-            allowed = {"target", "target_home", "workspace_roots", "identity_file", "apply", "mode", "components"}
+            allowed = {"target", "target_home", "workspace_roots", "identity_file", "apply", "mode", "components", "paired"}
             if not isinstance(payload, dict) or set(payload) - allowed:
                 raise MigrationError("Unexpected setup fields")
             if not isinstance(payload.get("apply", False), bool):
                 raise MigrationError("Enable changes must be true or false")
+            if not isinstance(payload.get("paired", False), bool):
+                raise MigrationError("Invalid paired connection choice")
+            if payload.get("paired") and payload.get("identity_file"):
+                raise MigrationError("Paired connections use their own key, not a custom key path")
             mode = payload.get("mode", "full")
             if mode not in ("full", "skills"):
                 raise MigrationError("Choose full migration or skills only")
@@ -151,8 +191,13 @@ class SetupDashboard(Dashboard):
                 apply=payload.get("apply", False),
                 ssh=SSHOptions(identity_file=payload.get("identity_file") or None),
             ).validate()
+            if payload.get("paired"):
+                from dataclasses import replace
+                config = replace(config, ssh=self.pairing.options(config.target, config.target_home)).validate()
             saved = {"target": config.target, "target_home": config.target_home,
                      "workspace_roots": sorted(config.workspace_roots)}
+            if payload.get("paired"):
+                saved["paired"] = True
             if mode == "skills":
                 saved.update(mode="skills", components=sorted(set(components)))
             key = hashlib.sha256(json.dumps(saved, sort_keys=True).encode()).hexdigest()
@@ -275,6 +320,36 @@ JSON.stringify(app.chooseFolder({withPrompt: "Choose workspace folders for Codex
                     setup._closing = True
                     self._json(200, {"closing": True})
                     threading.Thread(target=self.server.shutdown, daemon=True).start()
+                    return
+                if self.path.startswith("/api/connection/"):
+                    if setup.engine is not None:
+                        self._json(409, {"error": "Finish or stop the current migration before changing its connection."})
+                        return
+                    try:
+                        length = int(self.headers.get("Content-Length", "0"))
+                        if not 0 < length <= 16384:
+                            raise MigrationError("Invalid connection request size")
+                        payload = json.loads(self.rfile.read(length))
+                        if not isinstance(payload, dict) or set(payload) - {"card", "apply"}:
+                            raise MigrationError("Invalid connection request")
+                        action = self.path.rsplit("/", 1)[-1]
+                        if action == "request" and payload == {}:
+                            result = setup.pairing.request()
+                        elif action == "approve":
+                            result = setup.pairing.approve(payload.get("card"), payload.get("apply", False))
+                        elif action == "accept":
+                            result = setup.pairing.accept(payload.get("card"), payload.get("apply", False))
+                        elif action == "revoke":
+                            result = setup.pairing.revoke(payload.get("apply", False))
+                        elif action == "restart":
+                            result = setup.pairing.restart(payload.get("apply", False))
+                        else:
+                            raise MigrationError("Unknown connection action")
+                        self._json(200, result)
+                    except MigrationError as error:
+                        self._json(400, {"error": str(error)})
+                    except Exception:
+                        self._json(400, {"error": "Connection setup could not finish. Enable Remote Login on the new Mac, use this account's normal home, and check permissions. No password was requested. Contact support if it continues."})
                     return
                 if self.path in ("/api/setup", "/api/folders", "/api/suggestions"):
                     try:

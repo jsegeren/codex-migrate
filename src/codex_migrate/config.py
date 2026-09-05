@@ -48,8 +48,13 @@ class SSHOptions:
     known_hosts_file: Optional[str] = None
     host_key_alias: Optional[str] = None
     connect_timeout: int = 15
+    isolated: bool = False
 
     def validate(self) -> "SSHOptions":
+        if not isinstance(self.isolated, bool):
+            raise ValueError("isolated SSH must be true or false")
+        if self.isolated and not all((self.identity_file, self.known_hosts_file, self.host_key_alias)):
+            raise ValueError("isolated SSH requires explicit identity and host trust")
         if self.identity_file:
             object.__setattr__(
                 self,

@@ -69,6 +69,34 @@ class SetupTests(unittest.TestCase):
             self.assertEqual(self.request("/api/setup", self.config(), extra_headers=headers)[0], 403)
         self.assertIsNone(self.helper.engine)
 
+    def test_connection_endpoints_require_local_token_and_explicit_approval(self):
+        for action in ("request", "approve", "accept", "revoke", "restart"):
+            endpoint = "/api/connection/" + action
+            self.assertEqual(self.request(endpoint, {}, authorized=False)[0], 403)
+            self.assertEqual(self.request(endpoint, {}, extra_headers={"Origin": "https://evil.invalid"})[0], 403)
+        with patch.object(self.helper.pairing, "request", return_value={"card": "public-fixture"}) as create:
+            self.assertEqual(self.request("/api/connection/request", {})[0], 200)
+            create.assert_called_once_with()
+            self.assertEqual(self.request("/api/connection/request", {"apply": True})[0], 400)
+        for action in ("approve", "accept", "revoke", "restart"):
+            self.assertEqual(self.request("/api/connection/" + action, {})[0], 400)
+        self.assertFalse((self.home / ".ssh").exists())
+        self.helper.configure(self.config())
+        self.assertEqual(self.request("/api/connection/request", {})[0], 409)
+
+    def test_paired_configuration_uses_owned_options_and_rejects_custom_key(self):
+        from codex_migrate.config import SSHOptions
+        options = SSHOptions(identity_file=str(self.home / "state/connection/identity"),
+                             known_hosts_file=str(self.home / "state/connection/known_hosts"),
+                             host_key_alias="paired-fixture", isolated=True)
+        with patch.object(self.helper.pairing, "options", return_value=options) as paired:
+            self.assertEqual(self.request("/api/setup", self.config(paired=True, identity_file="/tmp/other"))[0], 400)
+            paired.assert_not_called()
+            self.assertEqual(self.request("/api/setup", self.config(paired=True))[0], 200)
+            paired.assert_called_once_with("user@fixture.local", "/Users/user")
+            self.assertEqual(self.helper.engine.config.ssh, options)
+            self.assertTrue(self.helper.registry.read()["saved"]["paired"])
+
     def test_configure_attaches_real_engine_without_remote_calls(self):
         with patch("codex_migrate.transport.SSHTransport.run_remote", side_effect=AssertionError("Unexpected SSH")):
             self.assertEqual(self.request("/api/setup", self.config())[0], 200)

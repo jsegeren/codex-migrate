@@ -164,6 +164,13 @@ class SSHTransport:
             "-o",
             "StrictHostKeyChecking=yes",
         ]
+        if options.isolated:
+            args.extend(["-F", "/dev/null"])
+            for option in ("IdentityAgent=none", "IdentitiesOnly=yes", "GlobalKnownHostsFile=/dev/null",
+                           "HostKeyAlgorithms=ssh-ed25519", "VerifyHostKeyDNS=no", "UpdateHostKeys=no",
+                           "PasswordAuthentication=no", "KbdInteractiveAuthentication=no",
+                           "ForwardAgent=no", "ClearAllForwardings=yes", "RequestTTY=no"):
+                args.extend(["-o", option])
         if options.identity_file:
             args.extend(["-i", options.identity_file])
         if options.known_hosts_file:

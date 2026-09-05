@@ -50,6 +50,43 @@ workspaces can contain their own credentials; review them before copying.
 
 ## Safety sequence
 
+### Guided SSH connection cards
+
+The browser helper may explicitly create a new dedicated ED25519 key in its
+private control directory, separate from selected migration data. The private
+key never enters a card, browser response, support report or receiving Mac.
+The user carries a request containing its public key and seven-day expiry to
+the receiving helper, approves SSH account access there, and carries back a
+reply containing the receiver's locally read root-owned public host key and
+account address. The reply is bound to the request ID, key and expiry. This is
+a user-mediated trust exchange, not an authenticated network-discovery protocol.
+The user must carry cards directly between trusted Macs; an attacker-supplied
+replacement card can authorize the wrong party if the user approves it.
+
+Approval adds a specifically marked, restricted and expiring authorized-key
+entry without changing other entries. It grants SSH command access to the
+account, not a filesystem sandbox. Revocation removes only the exact marked
+line this helper owns; unknown or edited lines are left intact. Existing SSH
+sessions can outlive expiry/revocation. Closing the helper does not revoke keys.
+Permission, owner, regular-file, hard-link and symbolic-link guards protect
+connection files. Atomic replacement checks for changes before publishing;
+other SSH-editing tools must not run concurrently. This is not protection
+against a malicious process already running as the same user or as root.
+
+Paired transfers use explicit identity/host files and an isolated SSH invocation:
+no user/system SSH configuration, agent, global known-host fallback, DNS host
+trust, password authentication, host-key updating or forwarding. Strict host
+checking stays enabled. Route changes retain the paired host-key alias.
+macOS Remote Login and receiving-account authorization must already be enabled.
+No network-facing HTTP service or password collection is introduced. Guided
+pairing assumes standard receiving-account and SSH paths; custom server policy
+still needs an administrator. These assumptions require real-Mac acceptance.
+
+The restriction and expiry semantics follow the
+[OpenSSH authorized-keys documentation](https://man.openbsd.org/sshd.8#AUTHORIZED_KEYS_FILE_FORMAT).
+
+### Data migration
+
 Full inventory reads bounded user configuration/profile files locally to screen
 for storage overrides; no values are emitted. The same system-Perl screen checks
 destination and staged user config before backup/replacement. Visible account

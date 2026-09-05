@@ -151,8 +151,11 @@ verified after installation.
 - Enough free destination space for staging, a safety backup, and the final
   workspace
 
-Codex Migrate never disables SSH host-key verification. Connect manually once
-before using the tool:
+Codex Migrate never disables SSH host-key verification. The browser can exchange
+connection cards between two helpers to configure a dedicated key and pinned
+host identity without Terminal commands. See [guided connection setup](docs/desktop-setup.md#connect-without-terminal-commands)
+for access scope, expiry, revocation and current limitations. For existing-SSH
+or CLI setup, connect manually once before using the tool:
 
 ```bash
 ssh new-user@new-mac.local

@@ -11,7 +11,9 @@ available yet. Local unsigned builds are engineering artifacts, not releases.
   Login for the intended user. Remote Management is not required.
 - Use the exact destination username and home directory; they need not match
   the old Mac. Run `whoami` and `echo "$HOME"` on the new Mac to check.
-- Configure SSH key authentication from the source, then connect manually
+- For guided connection cards, open this app on both Macs and use the flow
+  below. Existing-SSH setup remains available as an advanced alternative:
+  configure SSH key authentication from the source, then connect manually
   once and verify the destination's host fingerprint through a trusted channel.
   The application cannot use an interactive password prompt. It never disables
   host verification or copies private SSH keys to the new Mac.
@@ -55,12 +57,52 @@ available yet. Local unsigned builds are engineering artifacts, not releases.
 ## Browser-first setup
 
 Open Codex Migrate on the **old Mac**. Your browser opens automatically;
-there is no separate native setup window. Follow three short steps: enter the
-new Mac's name and username, choose what to move, then review your selection.
-The home folder is filled in automatically; custom paths and SSH key settings
-are under Advanced connection settings. Existing SSH configuration is used by default.
+there is no separate native setup window. Follow three steps: connect the new
+Mac, choose what to move, then review your selection. Connection cards fill in
+its address and home folder. Existing SSH connections, custom paths and keys
+remain available under the optional manual settings.
 The helper serves setup and the migration dashboard on a private loopback address.
 This is not a hosted upload: workspace data stays on the Macs.
+
+### Connect without Terminal commands
+
+1. On the old Mac, choose **Create connection card**, then **Copy card**.
+2. On the new Mac, choose **I’m on the new Mac**, paste that card, and approve
+   the connection. Remote Login must already be enabled for that account.
+3. Copy the reply back to the old Mac and choose **Use this new Mac**. Its
+   username and home folder are filled in; continue with folder selection.
+
+Carry cards directly between your own Macs. They contain public keys and
+connection details, not passwords, private keys, conversations or project files.
+The app does not send them through a server. Raw card text is behind **View
+card** controls; if browser clipboard access is unavailable, the app selects
+the text so you can press Command-C. Use an existing trusted way to carry it
+between Macs. No LAN discovery or automatic clipboard sharing is implemented.
+
+Approval grants the old Mac SSH command access to the receiving account; that
+access can read and change its files. It is not restricted to the folders later
+selected for migration. Port, agent and X11 forwarding, PTYs and SSH user rc
+files are disabled for this key. New SSH logins expire after seven days;
+existing SSH sessions are not forcibly terminated at expiry. When finished,
+use **Remove connection access** on the new Mac. Closing its helper or browser
+alone does not revoke access or disable macOS Remote Login.
+
+Cards use a dedicated local key and host-trust file. Your ordinary SSH keys and
+known-hosts file are not replaced. A reply must match the old Mac's request;
+a changed receiving host key is rejected, not silently trusted. A copied card
+is not proof of a working network connection: normal inspection still verifies
+SSH, destination identity and space before transfer. Review only cards from
+your own other Mac, not from a website, support message, or network scan.
+
+Guided pairing currently requires an ordinary `/Users/username` receiving home,
+a root-owned ED25519 host public key and standard `~/.ssh/authorized_keys`.
+Custom or managed SSH layouts need advanced setup or administrator help.
+Unsafe existing SSH permissions or links stop setup without changing them.
+Do not edit SSH access files concurrently with pairing. If a request expires,
+use **Start a fresh connection** on the old Mac, remove the previous access on
+the new Mac, and repeat. Previous local connection files are preserved privately.
+These controls have disposable local coverage; actual separate-Mac and clean
+packaged-account acceptance remain release gates.
 
 Destination changes start disabled. Enabling them only makes the dashboard's
 transfer controls available; you still inspect and start explicitly. Backup and
