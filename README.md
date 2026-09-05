@@ -471,8 +471,8 @@ benchmarking is on the near-term roadmap.
 
 ## Privacy and security
 
-- No telemetry
-- No analytics
+- No migration-app telemetry
+- No workspace analytics (the public website has separate, explicit opt-in analytics)
 - No cloud service
 - No account creation
 - No copied Codex account authentication or installation identity

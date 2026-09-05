@@ -826,6 +826,35 @@ verified its 1,718 bytes exactly matched the preview and parsed successfully.
 No email client was opened and no email was sent. The synthetic downloaded copy
 was moved to Trash after inspection. Review-only local servers were stopped.
 
+## Consent-gated acquisition analytics and hero alignment follow-up
+
+The public hero now lays out the Codex compatibility icon against the headline
+itself rather than the unused remainder of the page shell. Rendered checks at
+1201px and 390px confirmed that the icon remains beside the headline, the mobile
+composition is unchanged, and the page has no horizontal overflow.
+
+A separate Codex Migrate GA4 property and web stream were created under the
+existing Segeren Studio Analytics account. The launch-email success event is a
+key event, and the existing Search Console URL-prefix property is linked to the
+matching web stream. Google Signals and user-provided data are off, ads
+personalization is disallowed in all regions, event/user retention is two
+months, and rolling user-retention reset is off.
+
+The website tag is consent-gated and production-host allowlisted. Browser
+verification showed zero Google requests before a choice and after a persisted
+decline. Accepting stored the choice and loaded the tag; after adding the
+production-host gate, a granted localhost session also made zero Google
+requests, preventing development traffic from polluting production reports.
+The privacy page exposes a working preference control. The CLI, Mac app and
+local dashboard remain telemetry-free.
+
+The complete local regression ran 548 tests successfully with seven expected
+filesystem skips. Node signup/help tests, native Swift typechecking, JavaScript
+syntax checking and `git diff --check` passed. A fresh mobile Lighthouse run
+with the consent UI present scored 100 in Performance, Accessibility, Best
+Practices and SEO. These automated results do not replace the still-open manual
+assistive-technology and real cross-Mac acceptance gates.
+
 ### Reference guidance
 
 - [Lighthouse scoring excludes manual checks](https://developer.chrome.com/docs/lighthouse/accessibility/scoring).

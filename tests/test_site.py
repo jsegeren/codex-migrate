@@ -148,13 +148,37 @@ class SiteTests(unittest.TestCase):
     def test_hero_copy_gap_is_not_inflated_by_taller_icon(self):
         styles = (SITE / "styles.css").read_text()
         layout = styles.split("\n.hero-copy {", 1)[1].split("}", 1)[0]
+        heading = styles.split("\n.hero-heading {", 1)[1].split("}", 1)[0]
         title = styles.split("\n.hero-heading h1 {", 1)[1].split("}", 1)[0]
         icon = styles.split("\n.hero-inline-icon {", 1)[1].split("}", 1)[0]
-        self.assertIn("display: grid", layout)
-        self.assertIn("grid-row: 2 / 5", icon)
+        self.assertIn("display: block", layout)
+        self.assertIn("display: grid", heading)
+        self.assertIn("minmax(0, 560px) 280px", heading)
+        self.assertIn("grid-row: 1", icon)
         self.assertIn("align-self: start", icon)
         self.assertNotIn("align-items: flex-end", styles)
         self.assertIn("margin-bottom: 16px", title)
+
+    def test_website_analytics_is_explicitly_opt_in_and_separate_from_app(self):
+        analytics = (SITE / "analytics.js").read_text()
+        privacy = " ".join(self.parse("privacy.html").text)
+        home = " ".join(self.parse("index.html").text)
+        vercel = (ROOT / "vercel.json").read_text()
+        for page in SITE.glob("*.html"):
+            with self.subTest(page=page.name):
+                self.assertIn('src="/analytics.js?v=20260904"', page.read_text())
+        self.assertIn('const GRANTED = "granted"', analytics)
+        self.assertIn('const PUBLIC_HOSTS = new Set(["migrate.segeren.com", "codex-migrate.vercel.app"]);', analytics)
+        self.assertIn('!PUBLIC_HOSTS.has(window.location.hostname)', analytics)
+        self.assertIn('script.src = `https://www.googletagmanager.com/gtag/js?id=', analytics)
+        self.assertIn("Accept analytics", analytics)
+        self.assertIn("No thanks", analytics)
+        self.assertIn("clearAnalyticsCookies();", analytics)
+        self.assertIn("if (tagLoaded) window.location.reload();", analytics)
+        self.assertIn("No app telemetry", home)
+        self.assertIn("The Google tag is not loaded until you select “Accept analytics.”", privacy)
+        self.assertIn("It does not receive your Codex conversations", privacy)
+        self.assertIn("https://www.googletagmanager.com", vercel)
 
     def test_modern_headings_and_black_text_on_light_surfaces(self):
         styles = (SITE / "styles.css").read_text()

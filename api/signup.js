@@ -3,13 +3,14 @@
 const ORIGINS = new Set(['https://migrate.segeren.com', 'https://codex-migrate.vercel.app']);
 const EMAIL = /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
 
-function reply(res, status, heading, message) {
+function reply(res, status, heading, message, analyticsEvent = '') {
   res.statusCode = status;
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('X-Robots-Tag', 'noindex');
   // Only static messages enter this template. Never reflect submitted content.
-  res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>${heading} — Codex Migrate</title><link rel="stylesheet" href="/styles.css?v=20260904-launch"></head><body><header class="site-header"><a class="brand" href="/">Codex Migrate</a></header><main class="legal shell"><h1>${heading}</h1><p role="status">${message}</p><p><a class="button button-primary" href="/#launch-email">Back to Codex Migrate</a></p><p>Need help? <a href="mailto:joshua@segeren.com?subject=Codex%20Migrate%20launch%20request">Email Josh</a>.</p></main></body></html>`);
+  const eventAttribute = analyticsEvent ? ` data-analytics-event="${analyticsEvent}"` : '';
+  res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>${heading} — Codex Migrate</title><link rel="stylesheet" href="/styles.css?v=20260904-analytics"><script src="/analytics.js?v=20260904" defer></script></head><body${eventAttribute}><header class="site-header"><a class="brand" href="/">Codex Migrate</a></header><main class="legal shell"><h1>${heading}</h1><p role="status">${message}</p><p><a class="button button-primary" href="/#launch-email">Back to Codex Migrate</a></p><p>Need help? <a href="mailto:joshua@segeren.com?subject=Codex%20Migrate%20launch%20request">Email Josh</a>.</p></main></body></html>`);
 }
 
 async function handler(req, res) {
@@ -74,7 +75,7 @@ async function handler(req, res) {
       }),
     });
     if (response.status !== 202) throw new Error('Mail not accepted');
-    return reply(res, 200, 'Launch request sent', 'Our email provider accepted your request for delivery to Josh. He manages launch requests personally; this is not a purchase or a preorder. No confirmation email is sent automatically.');
+    return reply(res, 200, 'Launch request sent', 'Our email provider accepted your request for delivery to Josh. He manages launch requests personally; this is not a purchase or a preorder. No confirmation email is sent automatically.', 'generate_lead');
   } catch {
     // Do not retry automatically: a timed-out request may already be accepted.
     return reply(res, 503, 'We could not confirm your request', 'There was a problem sending your request. It may not have reached Josh. Please email him instead; you have not been charged.');

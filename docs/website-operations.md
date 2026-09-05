@@ -69,6 +69,49 @@ ranking remain unverified and are not guaranteed.
 All six live pages returned HTTP 200 with matching self-canonicals, one H1,
 and no HTML or response-header `noindex` directive during this check.
 
+## Website analytics
+
+Google Analytics is configured under the existing **Segeren Studio** account as
+the separate **Codex Migrate** GA4 property. Its web stream is **Codex Migrate
+website** for `https://migrate.segeren.com` (measurement ID `G-1MZ87MY2X4`).
+The measurement ID is public configuration; no Analytics API credential belongs
+in the repository.
+
+The local `site/analytics.js` consent controller is the only supported loader.
+It makes no Google request before an explicit **Accept analytics** choice and
+does not load the production tag on localhost or an unrecognized hostname.
+**No thanks** is persisted in browser local storage, and the privacy page lets a
+visitor reopen the choice. This is public-website measurement only: the CLI,
+Mac app, local dashboard, migration state, conversations and repositories do
+not send analytics.
+
+The intentionally small event model is:
+
+- automatic consented page views and GA enhanced measurement;
+- `select_free_cli` for the primary open-source calls to action;
+- `select_launch_email` for the homepage launch-email call to action;
+- `select_you_one` for the separate You.one cross-promotion; and
+- `generate_lead` only after SendGrid accepts a valid launch-email request.
+
+`generate_lead` is configured as a GA4 key event with no monetary value. The
+property's Search Console link uses the exact
+`https://migrate.segeren.com/` URL-prefix property and the Codex Migrate web
+stream. This unlocks native acquisition and organic-search reporting once data
+arrives.
+
+Privacy defaults were reviewed on September 4, 2026: Google Signals and
+user-provided data remain off; ads personalization is disallowed in all regions;
+event and user retention are both two months; user retention does not reset on
+new activity. Granular location/device reporting remains enabled for approximate
+region and device reporting disclosed in the privacy policy.
+
+Use GA's native Home, Realtime, Acquisition and Events/Key events reports as the
+initial dashboard. They cover visits, source/medium, devices/regions, CTA events
+and launch-request conversion rate without adding another credential-bearing
+application. Build a custom exploration only after enough real traffic exists
+to define useful questions; do not create a public dashboard or expose the
+Analytics Data API merely to duplicate the native reports.
+
 ## Paid checkout: sandbox evidence, not a live release
 
 On September 4, 2026, the existing **Segeren Studio sandbox** in Stripe was

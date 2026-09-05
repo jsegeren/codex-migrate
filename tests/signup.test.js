@@ -34,6 +34,8 @@ test('valid request sends consent to fixed maintainer, not visitor', async () =>
   assert.equal(res.headers['Cache-Control'], 'no-store');
   assert.equal(res.headers['X-Robots-Tag'], 'noindex');
   assert.doesNotMatch(res.body, /reader@example/);
+  assert.match(res.body, /data-analytics-event="generate_lead"/);
+  assert.match(res.body, /src="\/analytics\.js\?v=20260904"/);
 });
 test('supports urlencoded body and alias origin', async () => {
   assert.equal((await submit({ body: 'email=reader%40example.net&consent=yes&website=', headers: { origin: 'https://codex-migrate.vercel.app', 'content-type': 'application/x-www-form-urlencoded; charset=UTF-8' } })).statusCode, 200);
@@ -78,6 +80,7 @@ test('provider failure never returns signup success or exposes provider detail',
   const res = await submit();
   assert.equal(res.statusCode, 503);
   assert.doesNotMatch(res.body, /Launch request sent/);
+  assert.doesNotMatch(res.body, /data-analytics-event=/);
 });
 test('timeout does not retry or falsely confirm delivery', async () => {
   let calls = 0;

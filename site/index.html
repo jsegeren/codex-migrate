@@ -12,7 +12,8 @@
     <link rel="canonical" href="https://migrate.segeren.com/">
     <title>Codex Migrate — Keep the work. Change the Mac.</title>
     <link rel="icon" href="/assets/mark.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="/styles.css?v=20260904-responsive-media">
+    <link rel="stylesheet" href="/styles.css?v=20260904-analytics">
+    <script src="/analytics.js?v=20260904" defer></script>
   </head>
   <body>
     <header class="site-header">
@@ -47,8 +48,8 @@
           </div>
           <p class="lede">Move local Codex conversations, settings, skills, repositories, branches, worktrees, and unfinished files—without handing your workspace to a cloud migration service.</p>
           <div class="actions">
-            <a class="button button-primary" href="https://github.com/jsegeren/codex-migrate">Get the free CLI</a>
-            <a class="button button-secondary" href="#launch-email">Email me at launch</a>
+            <a class="button button-primary" data-analytics-event="select_free_cli" href="https://github.com/jsegeren/codex-migrate">Get the free CLI</a>
+            <a class="button button-secondary" data-analytics-event="select_launch_email" href="#launch-email">Email me at launch</a>
           </div>
         </div>
         <div class="product-reference">
@@ -58,7 +59,7 @@
 
       <section class="proof-strip" aria-label="Product principles">
         <div><strong>No cloud copy</strong><span>Your data stays Mac-to-Mac</span></div>
-        <div><strong>No telemetry</strong><span>Nothing to opt out of</span></div>
+        <div><strong>No app telemetry</strong><span>Website analytics is opt-in</span></div>
         <div><strong>No lock-in</strong><span>The engine is MIT licensed</span></div>
         <div><strong>No blind overwrite</strong><span>Backup, install, verify</span></div>
       </section>
@@ -128,7 +129,7 @@
               <li>Pause, resume, backup, and verification</li>
               <li>Community support on GitHub</li>
             </ul>
-            <a class="button button-secondary full" href="https://github.com/jsegeren/codex-migrate">View on GitHub</a>
+            <a class="button button-secondary full" data-analytics-event="select_free_cli" href="https://github.com/jsegeren/codex-migrate">View on GitHub</a>
           </article>
 
           <article class="price-card featured" id="founding-edition">
@@ -167,7 +168,7 @@
         <aside class="founder-note" aria-labelledby="founder-note-heading">
           <h2 id="founder-note-heading">Also from Josh: You.one</h2>
           <p>I’m building You.one, with Ava at its heart—an AI guide for life and work. For the days when there’s too much to juggle and you need a clearer next move.</p>
-          <a href="https://you.one/">Meet Ava at You.one <span aria-hidden="true">↗</span></a>
+          <a data-analytics-event="select_you_one" href="https://you.one/">Meet Ava at You.one <span aria-hidden="true">↗</span></a>
         </aside>
       </section>
 
@@ -196,7 +197,7 @@
       <section class="closing">
         <div class="shell closing-inner">
           <div><p class="eyebrow">Keep your source. Verify the move.</p><h2>Make the move deliberate.</h2></div>
-          <div class="actions"><a class="button button-primary" href="https://github.com/jsegeren/codex-migrate">Start with the free CLI</a><a class="button button-secondary light" href="#founding-edition">Mac edition details</a></div>
+          <div class="actions"><a class="button button-primary" data-analytics-event="select_free_cli" href="https://github.com/jsegeren/codex-migrate">Start with the free CLI</a><a class="button button-secondary light" href="#founding-edition">Mac edition details</a></div>
         </div>
       </section>
     </main>
