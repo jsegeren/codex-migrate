@@ -46,8 +46,9 @@ purchase, weaken SSH host-key checking, or enable live checkout as a workaround.
   focused mapping/boundary tests and the complete 547-test local suite pass,
   with seven explicit filesystem skips. An actual read-only connection through
   the updated transport produced the safe untrusted-host guidance without
-  weakening strict checking or changing `known_hosts`. Hosted verification of
-  this checkpoint remains pending.
+  weakening strict checking or changing `known_hosts`. Hosted run 33932764176
+  passed the resulting source and responsive-site checkpoint on Python 3.9 and
+  3.12 using the current Node-based action without the prior deprecation warning.
 
 - A dedicated standard macOS source account now contains a synthetic two-Mac
   fixture created without reading Josh's real Codex or repository data. It has
