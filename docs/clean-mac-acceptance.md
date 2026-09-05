@@ -93,7 +93,8 @@ After the intended Apple membership activates, build with the existing
 Verify the exact artifact's signature, notarization/staple, version, checksum,
 and quarantined download/first launch on the clean Mac. An unsigned candidate
 does not satisfy this final gate. Payment/delivery/refund acceptance is separate
-and remains closed pending the merchant decision and an approved artifact.
+and remains closed pending the selected Stripe route's account/tax setup,
+verified delivery, and an approved artifact.
 
 For each numbered check record: candidate SHA and artifact checksum, environment,
 date/tester, action, observed result, pass/fail, and any redacted evidence location.

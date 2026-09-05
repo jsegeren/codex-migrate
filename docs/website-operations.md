@@ -152,13 +152,19 @@ declines, delayed payment methods, tax compliance, or live payment readiness.
 The test used the existing default payment-method configuration and no automatic
 tax. Those choices must not be copied to live sales without review.
 
-### Merchant-of-record recommendation (September 5, 2026)
+### Payment provider decision (September 5, 2026)
 
-The current recommendation is **Lemon Squeezy**, subject to Founder approval,
-account onboarding and review of its then-current terms. No account or product
-has been created. This is an operating recommendation, not tax or legal advice,
-and merchant-of-record coverage does not transfer Codex Migrate's product-safety,
-privacy, support or general liability obligations.
+The Founder selected the **existing Stripe account** to avoid another provider
+account. This supersedes the earlier Lemon Squeezy recommendation. Reuse the
+existing Codex Migrate sandbox product and keep You.one's products, prices,
+webhooks, subscriptions, and shared billing defaults unchanged. Do not create a
+Lemon Squeezy account or duplicate the existing test checkout.
+
+Evaluate **Stripe Managed Payments** for the Codex Migrate transactions only.
+Provider choice does not establish live account approval, accept additional
+terms, or enable paid checkout. Ordinary Stripe payment processing and Stripe
+Tax must not be described as merchant-of-record coverage. Such coverage also
+does not transfer our product-safety, privacy, or maintainer-support obligations.
 
 For a $50 one-time download, the current public comparison is:
 
@@ -166,16 +172,23 @@ For a $50 one-time download, the current public comparison is:
 | --- | --- | --- | --- |
 | Lemon Squeezy | 5% + 50¢, no monthly payment-processing fee | $3.00 | Merchant of record; directly hosts digital files up to 5 GB per product, supports one-time license keys, and signs webhooks. |
 | Paddle | 5% + 50¢, no monthly fee | $3.00 | Merchant of record; supports one-time downloadable software, with fulfillment driven by a signed `transaction.completed` webhook. |
-| Stripe Managed Payments | 3.5% in addition to ordinary Payments fees | About $3.50 using Stripe's current 2.9% + 30¢ US domestic-card price | Merchant of record and downloadable software is eligible, but the product is a public preview and requires Managed Payments Checkout. |
+| Stripe Managed Payments | 3.5% in addition to ordinary Payments fees | About $3.50 using Stripe's current 2.9% + 30¢ US domestic-card price | Merchant of record; supports eligible downloadable software and requires account activation and a Managed Payments checkout. |
 
-Lemon Squeezy is the smallest defensible first-release path because it combines
-merchant-of-record tax/payment handling with hosted customer downloads and
-license keys. Paddle is a credible fallback. Ordinary Stripe Checkout remains
-the wrong default for a small global release because Codex Migrate would remain
-the merchant and retain the indirect-tax administration. Stripe Managed
-Payments is a future alternative if its account eligibility, preview maturity
-or existing-Stripe convenience becomes more valuable than the higher current
-fee.
+The earlier Lemon Squeezy recommendation favored bundled tax handling and
+hosted downloads. The Founder prefers reusing Stripe; the modest illustrative
+fee difference above is not a sufficient reason to add another account.
+Stripe still requires our own verified artifact-delivery flow. If Managed
+Payments is unavailable, report the specific account/product limitation and
+resolve the tax arrangement before live sales; do not silently switch providers
+or represent standard Checkout as equivalent.
+
+Stripe's current setup documentation enables Managed Payments per Checkout
+Session with `managed_payments[enabled]=true`, allowing unrelated payments to
+remain unchanged. Eligibility is account- and product-specific. The software
+must have an eligible downloaded-software tax category, not a SaaS category
+chosen merely to complete onboarding. Check the treatment of incidental
+best-effort support before activation: Stripe excludes separately sold
+professional/technical-support services and requires automated digital delivery.
 
 Official references: [Lemon Squeezy pricing](https://www.lemonsqueezy.com/pricing),
 [digital files and license keys](https://docs.lemonsqueezy.com/help/products/adding-products),
@@ -187,9 +200,62 @@ Official references: [Lemon Squeezy pricing](https://www.lemonsqueezy.com/pricin
 
 ### Remaining commerce work
 
-- Approve or reject the merchant-of-record recommendation before live sales.
-  Do not silently enroll, accept vendor terms, create a live product or change
-  shared Stripe settings.
+#### Sandbox operator helper (not deployed to the website)
+
+`node ops/stripe-sandbox-checkout.js` reads the configured Stripe account and
+expanded price/product and verifies the exact active, test-only $50 USD
+one-time catalog entry. It does not create or change anything by default.
+With `--create`, it creates one sandbox Checkout Session with Managed Payments
+enabled explicitly and a no-app-delivered test disclosure. It never completes a
+payment, creates a product, changes account defaults, or creates a subscription.
+
+Configure these environment variables privately in the operator's process:
+
+- `CODEX_MIGRATE_STRIPE_TEST_KEY`: sandbox restricted key, not a live key.
+- `CODEX_MIGRATE_STRIPE_TEST_ACCOUNT`: expected sandbox account ID.
+- `CODEX_MIGRATE_STRIPE_TEST_PRODUCT`: existing TEST ONLY product ID.
+- `CODEX_MIGRATE_STRIPE_TEST_PRICE`: its existing $50 one-time USD price ID.
+
+Do not put credentials in command arguments, Git, public environment variables,
+screenshots, or diagnostic reports. The helper returns only status and, after a
+verified create, the sandbox session ID. Open its hosted checkout from Stripe's
+dashboard; do not add it to the public website. Run it with Node 24 or newer.
+It requires read access to the account, product and price, and Checkout Session
+write access only for `--create`. Use scoped sandbox access, not You.one's live
+credentials. A timeout is ambiguous: inspect the dashboard before rerunning.
+Each explicit run can create a new test session; this is not a durable purchase
+fulfillment or retry queue.
+
+The local fixtures verify guards and request construction, not Stripe account
+activation or API acceptance. The existing sandbox catalog currently reports
+the test product eligible under General - Electronically Supplied Services.
+That code is allowed for this test helper; choose the correct specific
+downloaded-software category for the eventual live product after tax review.
+The signed artifact, fulfillment, recoverable customer download, and real
+Managed Payments payment/refund acceptance remain separate release gates.
+
+Account inspection on September 5 found the existing live account's legal
+business name **Joshua Segeren**, public name **Segeren Studio**, and website
+**segeren.com**. Managed Payments onboarding is offered in both the live account
+and its existing sandbox; it has not been activated. Merely seeing onboarding
+does not prove final approval. Onboarding drafts were opened and saved without
+creating live products, accepting terms, or changing the shared tax category.
+The existing sandbox product remains unchanged and its old Payment Link remains
+deactivated. A new agent-labelled restricted sandbox key form was prepared with
+Accounts/Products/Prices read access and Checkout Sessions write access; key
+creation and private local storage await explicit access confirmation. The
+form is not an issued credential. No standard key was copied.
+
+Verification: 25 new isolated helper tests passed; all 56 Node tests passed.
+No real API call from the helper or Managed Payments transaction was performed.
+The helper is operator tooling outside `api/` and is not a website endpoint.
+
+#### Activation and release
+
+- Confirm the existing Stripe account's legal seller and Managed Payments
+  eligibility/terms before live sales. Provider selection is complete; do not
+  ask the Founder to choose Stripe again. Do not silently accept vendor terms,
+  create a live product, or change shared Stripe settings.
 - Implement server-verified purchase fulfillment, not a success-page redirect
   treated as proof of payment. Scope events to this exact product/price and
   environment; verify webhook signatures and paid status; handle retries and
