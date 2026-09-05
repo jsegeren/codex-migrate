@@ -22,7 +22,7 @@
     status.textContent = 'Opening secure checkout…';
     try {
       try { sessionStorage.setItem(key, JSON.stringify(attempt)); } catch { /* In-memory retry remains usable. */ }
-      const response = await fetch('/api/checkout', { method: 'POST', credentials: 'omit', cache: 'no-store',
+      const response = await fetch('/api/checkout', { method: 'POST', credentials: 'same-origin', cache: 'no-store',
         headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requestId: attempt.id }),
         signal: AbortSignal.timeout(45000) });
       // The edge limiter can return HTML, before the JSON API is reached.
@@ -43,7 +43,7 @@
       if (hadFocus && document.activeElement === document.body) button.focus();
     }
   });
-  fetch('/api/availability', { credentials: 'omit', cache: 'no-store', signal: AbortSignal.timeout(8000) })
+  fetch('/api/availability', { credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(8000) })
     .then(async response => {
       if (!response.ok) return;
       const data = await response.json();

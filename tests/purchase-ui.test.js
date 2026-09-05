@@ -37,6 +37,7 @@ test('page strips bearer fragment and waits for explicit download; no browser cl
   const f = fixture(); assert.equal(f.location.hash, '');
   await f.finish(); assert.equal(f.get('purchase-download').hidden, false); assert.equal(f.navigations.length, 0);
   assert.equal(f.calls[0].url, '/api/purchase'); assert.equal(f.calls[0].options.method, 'POST');
+  assert.equal(f.calls[0].options.credentials, 'same-origin');
   const button = f.get('purchase-download'); button.focus(); button.events.click(); button.events.click();
   assert.equal(f.calls.length, 2); await f.finish();
   assert.deepEqual(f.navigations, [good.url]); assert.equal(f.document.activeElement, button);

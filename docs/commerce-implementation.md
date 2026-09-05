@@ -145,6 +145,21 @@ opened to bypass any of these checks.
 
 ## Evidence
 
+- Hosted Preview `dpl_Cd4uzyk2QviBTmyxMEns7H5aSLtQ` reached READY.
+  Anonymous access remained protected; availability returned false, checkout
+  without operator authorization returned 403, and an unsigned webhook returned
+  400. An authorized hosted request created the actual sandbox Checkout session
+  `cs_test_a1VEO6YspZqRxlWr3dcOfcFRd8Uty3hBnDW9japlcbAc1cTgncj9kZGKJn`.
+  Browser submission with Stripe's synthetic test card completed at $50 USD,
+  with `livemode: false` and Managed Payments enabled. No real money moved.
+  The database recorded one purchase and one provider-accepted mail attempt;
+  inbox arrival and refund/download acceptance were not yet verified here.
+- That real browser test found purchase fetches omitted the hosting-auth cookie,
+  causing protected Preview requests to fail while authenticated API checks
+  passed. Purchase, checkout and availability fetches now retain same-origin
+  credentials. Payment authority still uses explicit bearer credentials and
+  fresh Stripe verification; cookies do not authorize a purchase. Regression
+  assertions cover each request. Hosted browser retesting remains required.
 - September 5 sandbox setup: created endpoint `we_1UCK0vQwGK6ZgBcKbA8f3rXL`
   in `acct_1Rkc6nQwGK6ZgBcK` for `checkout.session.completed` and
   `checkout.session.async_payment_succeeded`. The endpoint targets this

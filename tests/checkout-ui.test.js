@@ -39,6 +39,7 @@ test('ready release displays hardware and honest $50 price without starting chec
   const f = fixture(); await tick(); assert.equal(f.get('checkout-panel').hidden, false);
   assert.match(f.get('checkout-platform').textContent, /Apple silicon Macs.*50 USD/);
   assert.equal(f.get('launch-email').hidden, true); assert.equal(f.calls.length, 1); assert.equal(f.navigations.length, 0);
+  assert.equal(f.calls[0].options.credentials, 'same-origin');
 });
 test('delayed readiness preserves a focused or filled launch form', async () => {
   const focused = fixture(); focused.get('launch-email').focus(); await tick();
@@ -51,6 +52,7 @@ test('delayed readiness preserves a focused or filled launch form', async () => 
 test('explicit click suppresses duplicates, preserves idempotency on retry and restores focus', async () => {
   const f = fixture(); await tick(); const b = f.get('checkout-button'); b.focus(); b.events.click(); b.events.click();
   assert.equal(f.calls.length, 2); await f.finish({ error: 'temporarily_unavailable' }, false);
+  assert.equal(f.calls[1].options.credentials, 'same-origin');
   assert.equal(f.document.activeElement, b); assert.match(f.get('checkout-status').textContent, /do not pay again/);
   b.events.click(); assert.equal(f.calls[1].options.body, f.calls[2].options.body);
   await f.finish({ url: 'https://checkout.stripe.com/c/pay/cs_test_fixture' });

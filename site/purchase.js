@@ -12,7 +12,9 @@
   let token = credential.startsWith('session=') ? null : credential;
   let busy = false;
   async function call(action, value) {
-    const response = await fetch('/api/purchase', { method: 'POST', credentials: 'omit', cache: 'no-store',
+    // Keep same-origin hosting authentication on protected previews. Purchase
+    // authority still comes from the explicit credential and fresh Stripe read.
+    const response = await fetch('/api/purchase', { method: 'POST', credentials: 'same-origin', cache: 'no-store',
       headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, credential: value }),
       signal: AbortSignal.timeout(15000) });
     if (response.status === 429) throw new Error('rate_limited');
