@@ -175,9 +175,14 @@ class SiteTests(unittest.TestCase):
         self.assertIn("No thanks", analytics)
         self.assertIn("clearAnalyticsCookies();", analytics)
         self.assertIn("if (tagLoaded) window.location.reload();", analytics)
+        self.assertIn('cookie_domain: "none"', analytics)
+        self.assertIn('cookie_prefix: "cm"', analytics)
+        self.assertIn('cookie_expires: 60 * 60 * 24 * 425', analytics)
+        self.assertIn('cookie_update: true', analytics)
         self.assertIn("No app telemetry", home)
         self.assertIn("The Google tag is not loaded until you select “Accept analytics.”", privacy)
-        self.assertIn("It does not receive your Codex conversations", privacy)
+        self.assertIn("It does not receive your name, email address, Codex conversations", privacy)
+        self.assertIn("Google Signals may add aggregate", privacy)
         self.assertIn("https://www.googletagmanager.com", vercel)
 
     def test_modern_headings_and_black_text_on_light_surfaces(self):

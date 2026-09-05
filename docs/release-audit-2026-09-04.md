@@ -836,9 +836,11 @@ composition is unchanged, and the page has no horizontal overflow.
 A separate Codex Migrate GA4 property and web stream were created under the
 existing Segeren Studio Analytics account. The launch-email success event is a
 key event, and the existing Search Console URL-prefix property is linked to the
-matching web stream. Google Signals and user-provided data are off, ads
-personalization is disallowed in all regions, event/user retention is two
-months, and rolling user-retention reset is off.
+matching web stream. Google Signals is on for aggregate demographics, interests
+and cross-device insight from consented visitors. User-provided data is off,
+signup email addresses and user IDs are not sent to GA, and ads personalization
+is disallowed in all regions. Event/user retention is 14 months and rolling
+user-retention reset is on.
 
 The website tag is consent-gated and production-host allowlisted. Browser
 verification showed zero Google requests before a choice and after a persisted

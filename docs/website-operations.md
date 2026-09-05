@@ -99,11 +99,15 @@ property's Search Console link uses the exact
 stream. This unlocks native acquisition and organic-search reporting once data
 arrives.
 
-Privacy defaults were reviewed on September 4, 2026: Google Signals and
-user-provided data remain off; ads personalization is disallowed in all regions;
-event and user retention are both two months; user retention does not reset on
-new activity. Granular location/device reporting remains enabled for approximate
-region and device reporting disclosed in the privacy policy.
+Privacy and reporting settings were reviewed on September 4, 2026. Google
+Signals is enabled for aggregate demographics, interests and cross-device
+insights from consented visitors; user-provided data remains off, and the site
+does not send signup emails or other user IDs to GA. Ads personalization remains
+disallowed in all regions. Event and user retention are both 14 months and user
+retention resets on new activity. The tag uses Codex Migrate-specific, host-only
+cookies with a 14-month expiry that refreshes for returning-user continuity.
+Granular location/device reporting remains enabled for the approximate
+city/region, browser and device reporting disclosed in the privacy policy.
 
 Use GA's native Home, Realtime, Acquisition and Events/Key events reports as the
 initial dashboard. They cover visits, source/medium, devices/regions, CTA events
