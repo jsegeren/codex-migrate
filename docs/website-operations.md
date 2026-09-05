@@ -206,7 +206,8 @@ Official references: [Lemon Squeezy pricing](https://www.lemonsqueezy.com/pricin
 expanded price/product and verifies the exact active, test-only $50 USD
 one-time catalog entry. It does not create or change anything by default.
 With `--create`, it creates one sandbox Checkout Session with Managed Payments
-enabled explicitly and a no-app-delivered test disclosure. It never completes a
+enabled explicitly. The existing TEST ONLY product carries the no-app-delivered
+disclosure; Managed Payments rejects Checkout's `custom_text` option. It never completes a
 payment, creates a product, changes account defaults, or creates a subscription.
 
 Configure these environment variables privately in the operator's process:
@@ -241,13 +242,22 @@ and its existing sandbox; it has not been activated. Merely seeing onboarding
 does not prove final approval. Onboarding drafts were opened and saved without
 creating live products, accepting terms, or changing the shared tax category.
 The existing sandbox product remains unchanged and its old Payment Link remains
-deactivated. A new agent-labelled restricted sandbox key form was prepared with
-Accounts/Products/Prices read access and Checkout Sessions write access; key
-creation and private local storage await explicit access confirmation. The
-form is not an issued credential. No standard key was copied.
+deactivated. After explicit Founder confirmation, an agent-labelled restricted
+sandbox key was created with Accounts/Products/Prices read access and Checkout
+Sessions write access. It was stored only in a private owner-only local file
+(mode 600, parent directory 700), not Git, Vercel, chat, or shell arguments.
+No standard key was copied and no live credential was used.
 
-Verification: 25 new isolated helper tests passed; all 56 Node tests passed.
-No real API call from the helper or Managed Payments transaction was performed.
+September 5 API verification: the restricted key successfully read the expected
+account and exact $50 test catalog entry. The first create request returned 400
+because Managed Payments disallows `custom_text`. After removing that option
+and adding a regression assertion, one subsequent request created a session
+verified as test-mode, open, one-time payment, and Managed Payments enabled.
+No ordinary-checkout fallback or automatic retry was performed. Sandbox API
+acceptance does not prove live activation, successful payment, or fulfillment;
+no payment was completed through this Managed Payments session.
+
+Verification: all 25 isolated helper tests and all 56 Node tests passed.
 The helper is operator tooling outside `api/` and is not a website endpoint.
 
 #### Activation and release

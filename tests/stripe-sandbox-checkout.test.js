@@ -45,7 +45,9 @@ test('explicit create uses only this price and per-session Managed Payments', as
   assert.equal(body.get('line_items[0][price]'), 'price_fixture');
   assert.equal(body.get('line_items[0][quantity]'), '1');
   assert.equal(body.get('mode'), 'payment');
-  assert.match(body.get('custom_text[submit][message]'), /No app/);
+  // Stripe rejects custom_text for Managed Payments; disclosure is on the
+  // explicitly TEST ONLY product instead.
+  assert.ok([...body.keys()].every(key => !key.startsWith('custom_text')));
   assert.ok(call.headers['Idempotency-Key'].startsWith('codex-migrate-sandbox-'));
   assert.equal(body.has('customer_email'), false);
   assert.equal(JSON.stringify(result).includes('https://'), false);

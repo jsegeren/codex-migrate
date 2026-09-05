@@ -73,7 +73,6 @@ async function prepare({ env = process.env, request = fetch, create = false } = 
     'metadata[purpose]': 'sandbox-acceptance-only',
     success_url: `${SITE}/success.html`,
     cancel_url: `${SITE}/#founding-edition`,
-    'custom_text[submit][message]': 'Sandbox acceptance test only. No app, license, or real purchase is delivered.',
   });
   const session = await stripe('/checkout/sessions', body);
   let url;
