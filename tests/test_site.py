@@ -184,6 +184,9 @@ class SiteTests(unittest.TestCase):
         self.assertIn("It does not receive your name, email address, Codex conversations", privacy)
         self.assertIn("Google Signals may add aggregate", privacy)
         self.assertIn("https://www.googletagmanager.com", vercel)
+        self.assertIn("https://analytics.google.com", vercel)
+        self.assertIn("https://stats.g.doubleclick.net", vercel)
+        self.assertIn("https://www.google.com", vercel)
 
     def test_modern_headings_and_black_text_on_light_surfaces(self):
         styles = (SITE / "styles.css").read_text()
