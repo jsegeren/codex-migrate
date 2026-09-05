@@ -5,9 +5,13 @@ informational website does not open checkout or certify a customer download.
 
 September 5 commerce follow-up: guarded purchase verification, persistent
 delivery claims, recovery links and the download page now have automated and
-real sandbox-database coverage. The hosted end-to-end payment/delivery test,
-actual signed app upload, expanded sandbox read access, signing and
-cross-Mac acceptance are still open. See [commerce implementation](commerce-implementation.md).
+real sandbox-database coverage. Expanded sandbox read access is verified. A
+real hosted simulated $50 Managed Payments purchase, provider-accepted email,
+private file authorization and byte verification, and full refund with denial
+of new download links have passed. The actual email landed in Spam and the
+Chrome buyer download hit a client block, so end-to-end delivery remains open.
+Actual signed app upload, signing and cross-Mac acceptance also remain open.
+See [commerce implementation](commerce-implementation.md).
 Purchase-only private delivery is selected and implemented. A real 8 MiB storage
 fixture passed authenticated byte verification, anonymous/altered-link denial,
 and expiry enforcement. This is not a paid-app release or full purchase-flow proof.
@@ -40,9 +44,11 @@ handoff is complete while the engineering acceptance gates remain open.
 
 Current access limits: the source Mac is unlocked and the standard disposable
 source account `codexmigratesource` now exists with a synthetic acceptance
-fixture. The destination test account is not yet confirmed, and the new Mac's
-Wi-Fi SSH hostname remains untrusted until its locally reported host fingerprint
-is compared with the source-side scan. These block the transfer portion of
+fixture. The new Mac's user-supplied host fingerprint has been matched and
+pinned; strict SSH to `Joshuas-MacBook-Pro-128.local` succeeds. A fresh account
+check confirms `codexmigratetarget` does not exist, and noninteractive sudo
+requires a password. Administrator authorization to create that isolated
+destination account still blocks the transfer portion of
 real-account acceptance, not all engineering work. Do not create another Apple
 purchase, weaken SSH host-key checking, or enable live checkout as a workaround.
 

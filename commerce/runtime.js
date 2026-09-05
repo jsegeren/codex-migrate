@@ -16,7 +16,9 @@ async function deliveryMail({ to, link, release, live }, env = process.env, requ
       method: 'POST', redirect: 'error', signal: AbortSignal.timeout(8000),
       headers: { Authorization: `Bearer ${env.SENDGRID_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        from: { email: from, name: 'Codex Migrate' }, personalizations: [{ to: [{ email: to }] }],
+        from: { email: from, name: 'Codex Migrate' },
+        reply_to: { email: 'joshua@segeren.com', name: 'Joshua Segeren' },
+        personalizations: [{ to: [{ email: to }] }],
         subject: live ? 'Your Codex Migrate download' : 'TEST ONLY — Codex Migrate delivery check',
         content: [{ type: 'text/plain', value: [
           live ? 'Thank you for purchasing Codex Migrate.' : 'Sandbox test only. No real purchase or app is delivered.',

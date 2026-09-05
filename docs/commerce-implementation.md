@@ -155,7 +155,12 @@ opened to bypass any of these checks.
   The database recorded one purchase and one provider-accepted mail attempt;
   the recipient mailbox subsequently showed that exact test message in Spam.
   Provider acceptance is therefore verified, but inbox deliverability still
-  needs work. Refund acceptance remains open.
+  needs work. The same sandbox payment was subsequently refunded in full;
+  fresh Stripe readback confirmed `livemode: false`, `refunded: true` and
+  `amount_refunded: 5000`. Hosted status and download requests, including a
+  previously valid recovery credential, both returned 403
+  `purchase_requires_support` without a new file URL. This tests the actual
+  hosted refund boundary, not a live refund or a signed app.
 - That real browser test found purchase fetches omitted the hosting-auth cookie,
   causing protected Preview requests to fail while authenticated API checks
   passed. Purchase, checkout and availability fetches now retain same-origin
@@ -232,6 +237,23 @@ opened to bypass any of these checks.
   again; the 320px error screen had no horizontal overflow and a 17px button.
 
 ## Published edge request limits
+
+### Transactional sender follow-up
+
+Gmail's September 5 details for the actual test message showed
+`joshua@shopcierge.ai` as sender, `em4285.shopcierge.ai` as mailed-by and
+`shopcierge.ai` as signed-by, with TLS. Gmail's stated Spam reason was similarity
+to messages identified as spam in the past; this is not evidence of failed
+domain authentication. No Spam label or mailbox filtering rule was changed.
+
+The delivery implementation now explicitly sets Reply-To to the advertised
+support mailbox, `joshua@segeren.com`, with regression assertions for sandbox
+and live messages. This fixes support replies independently of the sending
+domain. It does not prove inbox placement. A branded sender and another actual
+recipient delivery test remain required; SendGrid's settings page currently
+requires sign-in, so existing verified domains could not be inspected.
+
+### Firewall configuration
 
 The September 5 readback found the existing “Limit launch signups” rule matched
 all `/api/` requests, not just signup. Its five-per-ten-minute bucket would also

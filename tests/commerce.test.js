@@ -155,7 +155,10 @@ test('delivery mail disables tracking and limits sandbox to its approved sink', 
   assert.equal(await deliveryMail(value, mailEnv, request), 'rejected'); assert.equal(count, 0);
   assert.equal(await deliveryMail({ ...value, to: mailEnv.COMMERCE_SANDBOX_EMAIL }, mailEnv, request), 'accepted');
   assert.equal(sent.tracking_settings.click_tracking.enable, false); assert.equal(sent.tracking_settings.open_tracking.enable, false);
+  assert.deepEqual(sent.reply_to, { email: 'joshua@segeren.com', name: 'Joshua Segeren' });
   assert.match(sent.subject, /TEST ONLY/);
+  assert.equal(await deliveryMail({ ...value, live: true }, mailEnv, request), 'accepted');
+  assert.deepEqual(sent.reply_to, { email: 'joshua@segeren.com', name: 'Joshua Segeren' });
 });
 test('mail explicit rejection and uncertain network outcomes remain distinct', async () => {
   const value = { to: 'buyer@example.invalid', link: 'https://example.invalid/private', release, live: true };
