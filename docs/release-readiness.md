@@ -20,10 +20,17 @@ operator check then obtained a real five-minute URL for the committed private
 Blob fixture and stable Chrome downloaded the attachment from a trusted click;
 the exact filename, 451-byte length and catalog SHA-256 matched. The helper
 prints no URL or credential and fails closed without explicit sandbox opt-in.
-The paid-session recovery-link retest remains open, so end-to-end delivery is
-not yet accepted. Production deployment `dpl_5NnBPTGpuFJ25fbgr4BufMFJX7mL`
-now serves the same direct-click code at the canonical domain; HTTP inspection
-confirmed the legacy navigation is absent and availability remains `false`.
+The existing unrefunded Managed Payments sandbox purchase was then reopened on
+that corrected guarded deployment using its original session credential. The
+server reverified the purchase after the earlier browser flow, issued a fresh
+private link, and Chrome's trusted click opened the native Save dialog and
+reported the 451-byte download complete. The saved file's byte length and
+catalog SHA-256 matched before the disposable copy was removed. This closes the
+paid-session browser and recovery-link transport retest without real money; it
+does not establish current branded-sender purchase-email inbox placement.
+Production deployment `dpl_5NnBPTGpuFJ25fbgr4BufMFJX7mL` now serves the same
+direct-click code at the canonical domain; HTTP inspection confirmed the legacy
+navigation is absent and availability remains `false`.
 Actual signed app upload, signing and cross-Mac acceptance also remain open.
 See [commerce implementation](commerce-implementation.md).
 Purchase-only private delivery is selected and implemented. A real 8 MiB storage

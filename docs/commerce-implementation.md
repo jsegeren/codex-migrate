@@ -203,9 +203,16 @@ opened to bypass any of these checks.
   trusted click downloaded the attachment with the expected filename, 451-byte
   length and catalog SHA-256. The helper prints no URL or credential and fails
   closed without explicit sandbox opt-in. This proves the corrected browser
-  gesture against the real private storage provider, but not a recovery link
-  from a paid session. Repeat that paid-session browser acceptance before
-  release. Exact commit `793e237` is deployed on guarded Preview
+  gesture against the real private storage provider. The existing unrefunded
+  Managed Payments sandbox purchase was subsequently reopened on this corrected
+  guarded deployment using its original session credential. The server
+  reverified the purchase after the prior browser flow and issued a fresh
+  private link. Chrome's trusted click opened its native Save dialog and
+  reported the 451-byte attachment complete; the saved file's size and catalog
+  SHA-256 matched before the disposable copy was removed. This closes the
+  paid-session browser and recovery-link transport retest without real money.
+  It does not prove current branded-sender purchase-email inbox placement.
+  Exact commit `793e237` is deployed on guarded Preview
   `dpl_Ny7QyfH8W2x5vTXLB6Z5weC4cQR6`; the stable sandbox alias points to it,
   serves the new link implementation, and continues to report availability
   `false`. Production deployment `dpl_5NnBPTGpuFJ25fbgr4BufMFJX7mL` now serves
