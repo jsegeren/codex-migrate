@@ -122,10 +122,10 @@ only bounded result metadata, never credentials or signed URLs.
 Before registering any live entry, upload without overwriting, independently
 download and verify its bytes, and retain signing/notarization, clean-source,
 and actual clean-Mac acceptance evidence for that exact archive. The operator
-app-upload/receipt workflow still needs to be completed. A manifest boolean
-does not substitute for that evidence.
+upload procedure below binds the build receipt to uploaded bytes. A manifest
+boolean does not substitute for signing or clean-Mac evidence.
 
-Before activation: finish the reviewed app-upload workflow,
+Before activation: execute the app-upload workflow against an actual signed build,
 wire the sandbox Stripe endpoint, run a real Managed Payments payment/refund
 through these routes and the controlled inbox, configure durable edge rate
 limits for checkout/purchase routes, and verify the real hosted raw-body
@@ -135,7 +135,7 @@ opened to bypass any of these checks.
 
 ## Evidence
 
-- 123 Node tests passed; the real-database test is skipped in the default suite.
+- 140 Node tests passed; the real-database test is skipped in the default suite.
 - Full Python regression run: 586 tests completed, 579 passed and seven explicit
   filesystem skips, in 141.061 seconds. Mock notarization output in that suite
   is not an actual signed release.
@@ -160,3 +160,35 @@ opened to bypass any of these checks.
   browser-clock independence, and rejection of public/malformed destinations.
   Real Chromium keyboard activation of a failing download left focus on Check
   again; the 320px error screen had no horizontal overflow and a 17px button.
+
+## Upload a signed candidate (operator only)
+
+`ops/commerce-upload.js --build-dir <absolute-build-directory> --release-id <id>`
+defaults to a local plan and performs no storage calls. Run with Node 24 or newer.
+The directory must be one direct, non-linked child of this repository's `build`
+directory. The receipt and archive must be owner-held regular files without
+group/world write access. The receipt must name a clean-source release, an
+Accepted notarization submission, the canonical release archive name and its
+matching SHA-256. The source commit must still exist locally. An unsigned build
+is rejected before any upload.
+
+After reviewing the plan, add `--apply` with this product's private Blob
+authentication in the environment. It uploads only to `codex-migrate-downloads`,
+with public access and overwrite disabled, then independently streams the stored
+bytes back and verifies their size and digest. A retry verifies an existing
+object without overwriting it. A corrupt existing object stops for operator
+review. Exceptions do not print provider credentials or signed URLs.
+
+The result deliberately has `accepted: false`. This utility checks the build
+receipt and transport, not the actual Apple signature or application behavior.
+Complete the signed-download/clean-Mac checklist against those exact bytes,
+then manually review and add the accepted entry to `commerce/releases.json`.
+Neither upload nor a passing test toggles checkout. A real signed candidate is
+still unavailable: the refreshed Apple account on September 5 remains Pending.
+
+Seventeen upload tests cover receipt/byte rejection, private upload/read-back,
+existing-object retry, corruption, and acceptance staying false. They use fake
+storage and synthetic bytes, not claims of Apple acceptance. Running the
+operator against the existing `desktop-cip8tnrb` unsigned candidate correctly
+failed without uploading an app. CI for checkpoint `efc6449` passed both Python
+versions before this follow-up.

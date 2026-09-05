@@ -1,4 +1,6 @@
-# Only the static site and its deployment config are needed by this project.
+# Ship the site, APIs and commerce runtime; never operator data or app archives.
+node_modules/
+ops/
 .env*
 .venv/
 .git/

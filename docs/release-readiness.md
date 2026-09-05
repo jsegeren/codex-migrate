@@ -6,7 +6,7 @@ informational website does not open checkout or certify a customer download.
 September 5 commerce follow-up: guarded purchase verification, persistent
 delivery claims, recovery links and the download page now have automated and
 real sandbox-database coverage. The hosted end-to-end payment/delivery test,
-reviewed app-upload workflow, expanded sandbox read access, signing and
+actual signed app upload, expanded sandbox read access, signing and
 cross-Mac acceptance are still open. See [commerce implementation](commerce-implementation.md).
 Purchase-only private delivery is selected and implemented. A real 8 MiB storage
 fixture passed authenticated byte verification, anonymous/altered-link denial,
