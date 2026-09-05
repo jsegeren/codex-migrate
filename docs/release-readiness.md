@@ -15,8 +15,13 @@ trusted click starts the download; 185 website tests pass, and real Chromium
 downloaded a mocked attachment from that click at desktop and 320px without
 overflow. Exact commit `793e237` is deployed on guarded Preview
 `dpl_Ny7QyfH8W2x5vTXLB6Z5weC4cQR6`; its stable sandbox alias serves the new
-link code and still reports availability `false`. Hosted private-Blob and
-paid-session retesting remains open, so end-to-end delivery is not yet accepted.
+link code and still reports availability `false`. A separate sandbox-only
+operator check then obtained a real five-minute URL for the committed private
+Blob fixture and stable Chrome downloaded the attachment from a trusted click;
+the exact filename, 451-byte length and catalog SHA-256 matched. The helper
+prints no URL or credential and fails closed without explicit sandbox opt-in.
+The paid-session recovery-link retest remains open, so end-to-end delivery is
+not yet accepted.
 Actual signed app upload, signing and cross-Mac acceptance also remain open.
 See [commerce implementation](commerce-implementation.md).
 Purchase-only private delivery is selected and implemented. A real 8 MiB storage

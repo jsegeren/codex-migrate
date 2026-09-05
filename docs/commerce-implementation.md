@@ -197,9 +197,14 @@ opened to bypass any of these checks.
   requests the attachment. Missing links trigger regeneration instead of a
   false download claim. All 185 website tests pass. Real Chromium at 1280px and
   320px accepted a harmless mocked attachment from that link, recorded a file
-  download, retained useful focus and had no horizontal overflow. This proves
-  the user-gesture correction and rendered behavior, not the hosted private
-  Blob or paid session. Repeat the actual hosted browser acceptance before
+  download, retained useful focus and had no horizontal overflow. A separate
+  sandbox-only operator check used the real private Blob fixture and a fresh
+  five-minute signed URL entirely in process/browser memory. Stable Chrome's
+  trusted click downloaded the attachment with the expected filename, 451-byte
+  length and catalog SHA-256. The helper prints no URL or credential and fails
+  closed without explicit sandbox opt-in. This proves the corrected browser
+  gesture against the real private storage provider, but not a recovery link
+  from a paid session. Repeat that paid-session browser acceptance before
   release. Exact commit `793e237` is deployed on guarded Preview
   `dpl_Ny7QyfH8W2x5vTXLB6Z5weC4cQR6`; the stable sandbox alias points to it,
   serves the new link implementation, and continues to report availability
@@ -219,7 +224,9 @@ opened to bypass any of these checks.
   upload was independently downloaded and matched SHA-256
   `1a9d8e5775804a42e03655c7653d4d5315fca718445a2aecff144f00faf53343`.
   This proves fixture storage, not payment, inbox delivery or app acceptance.
-- 184 Node tests passed; the real-database test is skipped in the default suite.
+- 185 of 186 Node tests passed; the real-database test is the only default-suite
+  skip. The operator browser helper also passed separately against real private
+  storage and stable Chrome.
 - Sandbox checkout now rejects missing/malformed/incorrect operator tokens before
   any runtime, database or provider access. Request IDs must be strings rather
   than values coercible to UUIDs. Direct handler tests cover authorization order,
