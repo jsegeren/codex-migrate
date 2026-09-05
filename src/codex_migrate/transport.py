@@ -27,6 +27,59 @@ class TransportError(RuntimeError):
     pass
 
 
+def _ssh_failure_message(stderr: str, stdout: str) -> str:
+    """Turn common SSH failures into bounded, actionable guidance.
+
+    SSH runs in BatchMode, so host verification and key authentication happen
+    without an interactive password prompt.  Preserve an unknown diagnostic for
+    support, but do not make users infer those two common preconditions from
+    OpenSSH's raw stderr.
+    """
+    raw = (stderr.strip() or stdout.strip() or "remote command failed")[:4096]
+    lowered = raw.lower()
+    if "remote host identification has changed" in lowered:
+        return (
+            "The saved SSH identity for the new Mac has changed. No password was "
+            "attempted. Stop and compare the new Mac's ED25519 fingerprint through "
+            "a trusted channel before changing any saved host-key entry."
+        )
+    if ("host key verification failed" in lowered
+            or ("host key is known" in lowered and "strict checking" in lowered)):
+        return (
+            "SSH stopped before authentication because the new Mac's host key is "
+            "not trusted. Your password was not attempted. On this Mac, run "
+            "`ssh new-user@new-mac.local`; on the new Mac, run "
+            "`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`. Accept the host "
+            "key only when the fingerprints match exactly, then retry."
+        )
+    if ("permission denied" in lowered
+            or "no supported authentication methods available" in lowered
+            or "too many authentication failures" in lowered):
+        return (
+            "The SSH host was verified, but non-interactive key authentication "
+            "failed. The helper does not send or prompt for a password. Add this "
+            "Mac's public SSH key to the destination account, verify the same SSH "
+            "address connects without a password, then retry."
+        )
+    if "could not resolve hostname" in lowered or "nodename nor servname provided" in lowered:
+        return (
+            "The new Mac's SSH address could not be resolved. Confirm its Sharing "
+            "name or IP address and that both Macs are on the intended network."
+        )
+    if "connection refused" in lowered:
+        return (
+            "The new Mac is reachable, but Remote Login is not accepting SSH. "
+            "Enable Remote Login for the destination account and retry."
+        )
+    if ("operation timed out" in lowered or "connection timed out" in lowered
+            or "no route to host" in lowered):
+        return (
+            "The new Mac could not be reached over the current network. Keep both "
+            "Macs awake, reconnect Wi-Fi or wired networking, and retry."
+        )
+    return raw
+
+
 def _signal_group(process: subprocess.Popen, number: int) -> None:
     try:
         os.killpg(process.pid, number)
@@ -150,8 +203,7 @@ class SSHTransport:
                     self._active_remote.remove(process)
         result = subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
         if result.returncode != 0:
-            message = result.stderr.strip() or result.stdout.strip() or "remote command failed"
-            raise TransportError(message)
+            raise TransportError(_ssh_failure_message(result.stderr, result.stdout))
         return result
 
     def cancel_all(self) -> None:

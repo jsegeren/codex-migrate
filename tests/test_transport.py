@@ -5,10 +5,80 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from codex_migrate.config import MigrationConfig, SSHOptions
-from codex_migrate.transport import SSHTransport, TransferProcess, TransportError, _signal_group
+from codex_migrate.transport import (
+    SSHTransport,
+    TransferProcess,
+    TransportError,
+    _signal_group,
+    _ssh_failure_message,
+)
 
 
 class TransportTests(unittest.TestCase):
+    def test_untrusted_host_explains_that_password_was_not_attempted(self):
+        message = _ssh_failure_message(
+            "No ED25519 host key is known for private-host.local and you have "
+            "requested strict checking.\nHost key verification failed.",
+            "",
+        )
+        self.assertIn("Your password was not attempted", message)
+        self.assertIn("fingerprints match exactly", message)
+        self.assertNotIn("private-host.local", message)
+
+    def test_changed_host_identity_stops_without_replacement_instructions(self):
+        message = _ssh_failure_message(
+            "WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!\n"
+            "Host key verification failed.",
+            "",
+        )
+        self.assertIn("saved SSH identity", message)
+        self.assertIn("No password was attempted", message)
+        self.assertNotIn("ssh-keygen -R", message)
+
+    def test_key_authentication_distinguishes_interactive_password(self):
+        message = _ssh_failure_message(
+            "destination-user@private-host: Permission denied "
+            "(publickey,password,keyboard-interactive).",
+            "",
+        )
+        self.assertIn("non-interactive key authentication failed", message)
+        self.assertIn("does not send or prompt for a password", message)
+        self.assertNotIn("private-host", message)
+
+    def test_common_network_failures_have_specific_safe_actions(self):
+        self.assertIn(
+            "could not be resolved",
+            _ssh_failure_message("ssh: Could not resolve hostname private-host", ""),
+        )
+        self.assertIn(
+            "Remote Login",
+            _ssh_failure_message("ssh: connect to host private-host port 22: Connection refused", ""),
+        )
+        self.assertIn(
+            "could not be reached",
+            _ssh_failure_message("ssh: connect to host private-host port 22: Operation timed out", ""),
+        )
+
+    def test_unknown_remote_failure_remains_bounded(self):
+        self.assertEqual(_ssh_failure_message("unknown failure", "ignored"), "unknown failure")
+        self.assertEqual(len(_ssh_failure_message("x" * 5000, "")), 4096)
+
+    def test_remote_command_surfaces_classified_host_key_failure(self):
+        transport = SSHTransport(
+            MigrationConfig(target="user@host.local", target_home="/Users/user").validate()
+        )
+        child = Mock(pid=12345, returncode=255)
+        child.communicate.return_value = (
+            "",
+            "No ED25519 host key is known for private-host.local and you have "
+            "requested strict checking.\nHost key verification failed.",
+        )
+        with patch.object(transport, "machine_guard", return_value=""), \
+             patch("codex_migrate.transport.subprocess.Popen", return_value=child):
+            with self.assertRaisesRegex(TransportError, "password was not attempted"):
+                transport.run_remote("printf fixture", timeout=5)
+        self.assertEqual(transport._active_remote, [])
+
     def test_remote_cancellation_during_guard_prevents_late_launch(self):
         transport = SSHTransport(MigrationConfig(target="user@host.local", target_home="/Users/user").validate())
         entered, release, cancelled = threading.Event(), threading.Event(), threading.Event()

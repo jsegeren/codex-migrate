@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Clarified common SSH failures in the app: an untrusted or changed host key
+  now says that authentication—and therefore the user's password—was never
+  attempted; key-authentication, name-resolution, Remote Login, and network
+  failures have separate next actions.
+
 ## 0.1.0 — 2026-09-03
 
 - Added content-free local inventory.
@@ -13,4 +20,4 @@
   backups and username-independent user-skill discovery.
 - Corrected APFS detection to use macOS `diskutil` plist metadata.
 - Published the static project website, privacy policy, purchase terms, and
-  refund policy for the clearly disclosed Founding Edition pre-order.
+  refund policy for the planned Founding Edition. Checkout remained closed.

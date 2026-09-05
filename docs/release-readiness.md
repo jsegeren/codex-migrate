@@ -23,7 +23,7 @@ handoff is complete while the engineering acceptance gates remain open.
 | Public website, useful guides, screenshots, price and launch intake | Six live pages; two informative guides; sample-labelled real UI screenshots; $50 planned edition with checkout closed; prior controlled SendGrid inbox receipt and signup tests | Preserve the existing rate-limit and launch-only consent. No new email was sent in the latest read-only audit. |
 | Website accessibility and performance | Prior Lighthouse/axe results plus fresh desktop/320px rendering, six-page text-spacing and 200% text-size overflow checks | Manual assistive-technology and broader keyboard acceptance remain open; no WCAG-conformance claim. See the audit for exact scope. |
 | Domain, search discovery and cross-promotion | Live canonical domain/robots/sitemap; recorded Search Console ownership, successful sitemap submission and accepted homepage request; You.one link on the live homepage; fresh HTTP 200 check of segeren.com confirms its “Explore Codex Migrate” link to the canonical domain | Actual indexing/ranking is not guaranteed. No repeated indexing request needed. |
-| Reproducible identifiable packaged app | Clean-source unsigned arm64 bundle, checksum and eight passing actual engine checks (one filesystem skip); signing/notarization pipeline has mocked tests | Confirm intended Apple membership/team, install signing credentials securely, then notarize/staple and test the exact quarantined download on a clean Mac. Josh's account access is required. |
+| Reproducible identifiable packaged app | Clean-source unsigned arm64 bundle, checksum and eight passing actual engine checks (one filesystem skip); signing/notarization pipeline has mocked tests. The intended Apple account currently reports Joshua Segeren (Pending) and says membership purchase can take up to 48 hours to process; this Mac still has no Developer ID identity or notary profile. | After Apple activates the existing purchase, confirm its team, install signing credentials securely, then notarize/staple and test the exact quarantined download on a clean Mac. Do not purchase again. Josh's account access is required. |
 | Paid purchase, delivery, support and refunds | Best-effort support/legal pages; actual sandbox payment and full manual refund recorded, test link deactivated | Josh selects merchant/tax arrangement. Codex then implements and tests server-verified, replay-safe fulfillment and recoverable delivery of the exact signed artifact before checkout opens. |
 
 Current access limits: the source Mac is unlocked and the standard disposable
@@ -35,6 +35,19 @@ real-account acceptance, not all engineering work. Do not create another Apple
 purchase, weaken SSH host-key checking, or enable live checkout as a workaround.
 
 ## Candidate checks completed on the development Mac
+
+- Real strict-SSH probing reproduced a user entering the correct password while
+  the helper had actually stopped before authentication on an untrusted Wi-Fi
+  host key. Common SSH failures are now classified into separate, bounded
+  actions: new/untrusted identity, changed identity, non-interactive key
+  authentication, name resolution, disabled Remote Login, and unreachable
+  network. The untrusted/changed messages explicitly say that no password was
+  attempted; changed identity never suggests deleting the saved entry. Six
+  focused mapping/boundary tests and the complete 547-test local suite pass,
+  with seven explicit filesystem skips. An actual read-only connection through
+  the updated transport produced the safe untrusted-host guidance without
+  weakening strict checking or changing `known_hosts`. Hosted verification of
+  this checkpoint remains pending.
 
 - A dedicated standard macOS source account now contains a synthetic two-Mac
   fixture created without reading Josh's real Codex or repository data. It has

@@ -15,6 +15,13 @@ available yet. Local unsigned builds are engineering artifacts, not releases.
   once and verify the destination's host fingerprint through a trusted channel.
   The application cannot use an interactive password prompt. It never disables
   host verification or copies private SSH keys to the new Mac.
+  If inspection says the host key is not trusted, no password was attempted:
+  compare the fingerprint shown by `ssh new-user@new-mac.local` on the old Mac
+  with `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the new Mac, accept
+  only an exact match, and retry. If manual SSH accepts a password but the app
+  reports key-authentication failure, finish installing the old Mac's public
+  key for the destination account; the app deliberately uses non-interactive
+  key authentication.
 - The destination home must use APFS. Make enough room for staging and rollback.
 - Download and keep selected cloud files locally before starting. Inspection
   rejects macOS files/folders marked as cloud-only instead of downloading them.
