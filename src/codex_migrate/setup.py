@@ -115,10 +115,17 @@ async function api(path,body){const r=await fetch(path,{method:body?"POST":"GET"
 function receiverView(receiving){$("receiver").hidden=!receiving;$("setup").hidden=receiving;$("step-progress").hidden=receiving;$("receiver-toggle").textContent=receiving?"Back to the old Mac setup":"I’m on the new Mac";}
 $("receiver-toggle").onclick=()=>{const receiving=$("receiver").hidden;receiverView(receiving);if(receiving)$("receiver").querySelector("h2").focus();else showStep(step)};
 function selectPaired(r){const split=r.target.lastIndexOf("@");$("username").value=r.target.slice(0,split);$("computer").value=r.target.slice(split+1);$("target").value=r.target;$("target-home").value=r.target_home;$("target-home").dataset.custom="true";$("identity").value="";paired=true;connectionBlocked=false;pairingView();$("manual-connection").open=false;}
-async function connectionAction(button,action,payload,done){button.disabled=true;$("error").textContent="";try{done(await api("/api/connection/"+action,payload))}catch(e){$("error").textContent=e.message}finally{button.disabled=false}}
-$("create-card").onclick=()=>connectionAction($("create-card"),"request",{},r=>{$("source-card").value=r.card;$("request-area").hidden=false;$("create-card").hidden=true;$("copy-request").focus()});
-$("approve-card").onclick=()=>connectionAction($("approve-card"),"approve",{card:$("request-card").value,apply:true},r=>{$("reply-card").value=r.card;$("reply-area").hidden=false;$("receiver-request-area").hidden=true;$("copy-reply").focus()});
-$("accept-card").onclick=()=>connectionAction($("accept-card"),"accept",{card:$("accepted-card").value,apply:true},r=>{selectPaired(r);$("next-1").focus()});
+async function connectionAction(button,action,payload,done){
+  if(button.disabled)return;
+  const hadFocus=document.activeElement===button;let nextFocus=button;
+  button.disabled=true;$("error").textContent="";
+  try{nextFocus=done(await api("/api/connection/"+action,payload))||button}
+  catch(e){$("error").textContent=e.message}
+  finally{button.disabled=false;if(hadFocus&&(document.activeElement===document.body||document.activeElement===button)&&nextFocus.getClientRects().length)nextFocus.focus()}
+}
+$("create-card").onclick=()=>connectionAction($("create-card"),"request",{},r=>{$("source-card").value=r.card;$("request-area").hidden=false;$("create-card").hidden=true;return $("copy-request")});
+$("approve-card").onclick=()=>connectionAction($("approve-card"),"approve",{card:$("request-card").value,apply:true},r=>{$("reply-card").value=r.card;$("reply-area").hidden=false;$("receiver-request-area").hidden=true;return $("copy-reply")});
+$("accept-card").onclick=()=>connectionAction($("accept-card"),"accept",{card:$("accepted-card").value,apply:true},r=>{selectPaired(r);return $("next-1")});
 $("revoke-pair").onclick=()=>{if(confirm("Remove this old Mac’s SSH access? Wait until migration and recovery have finished."))connectionAction($("revoke-pair"),"revoke",{apply:true},r=>{$("message").textContent=r.message;$("reply-area").hidden=true;$("reply-card").value="";$("receiver-request-area").hidden=false})};
 $("restart-pair").onclick=()=>{if(confirm("Start a new connection? Previous local files will be kept. Remove the old access on the new Mac before approving another card."))connectionAction($("restart-pair"),"restart",{apply:true},r=>{paired=false;connectionBlocked=false;pairingView();$("request-area").hidden=true;$("create-card").hidden=false;$("target").value="";$("username").value="";$("computer").value="";$("target-home").value="";$("source-card").value="";$("accepted-card").value="";$("message").textContent=r.message})};
 async function copyCard(id){try{await navigator.clipboard.writeText($(id).value);$("message").textContent="Copied. Paste it into Codex Migrate on your other Mac."}catch(e){$(id).closest("details").open=true;$(id).focus();$(id).select();$("message").textContent="Card selected. Press Command-C to copy."}}

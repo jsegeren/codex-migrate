@@ -36,6 +36,21 @@ purchase, weaken SSH host-key checking, or enable live checkout as a workaround.
 
 ## Candidate checks completed on the development Mac
 
+- Connection-action keyboard review reproduced lost focus on an invalid-card
+  response (the browser focused BODY). Actions now restore the initiating button
+  on failure or the next useful control on success, without overriding focus
+  the user moved while waiting. Repeated activation while pending is ignored.
+  Five new shipped-script regressions are included in CI; all 31 Node tests and
+  28 setup HTTP tests passed. Real Chromium verified error/retry focus, keyboard
+  focus after creating/accepting cards, and preservation of focus moved to Help
+  while the real fixture approval response was deliberately held in transit.
+  Axe-core 4.13 found no selected WCAG A/AA violations on the receiving/error
+  screen at 1280, 390 and 320px. Text-spacing overrides at 320px had no overflow;
+  the rendered screenshot was inspected. This is scoped evidence, not VoiceOver
+  or full WCAG conformance. Account recheck still requires admin authorization
+  for the disposable source user; the destination hostname currently fails
+  resolution, and the open Apple account page still shows Pending.
+
 - Pairing recovery now restores checked request/reply cards and the selected
   paired Mac after reopening, before migration configuration has been saved.
   Interrupted approval requires explicit reapproval; expired or unreadable
