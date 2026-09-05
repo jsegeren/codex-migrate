@@ -16,6 +16,13 @@ Purchase-only private delivery is selected and implemented. A real 8 MiB storage
 fixture passed authenticated byte verification, anonymous/altered-link denial,
 and expiry enforcement. This is not a paid-app release or full purchase-flow proof.
 
+The Reply-To correction is now deployed on guarded Preview
+`dpl_8HXvmn6XSbqA3rjPdZq7hzB5of5y`; its stable sandbox alias points to that
+deployment, the release availability endpoint remains closed, and CI passed at
+the exact deployed source revision `83d26ae22c5c19e17227c99de65e7fb0ba2b727c`.
+This proves deployment and fail-closed configuration, not receipt of a new
+transactional message or inbox placement.
+
 See the [September 4 audit](release-audit-2026-09-04.md) for current automated
 results, accessibility findings, and pre-signing work still open.
 Use [clean-Mac acceptance](clean-mac-acceptance.md) to execute the remaining
@@ -54,7 +61,18 @@ purchase, weaken SSH host-key checking, or enable live checkout as a workaround.
 
 ## Candidate checks completed on the development Mac
 
-- Latest unsigned engineering package: clean source
+- Current unsigned engineering package: clean source
+  `83d26ae22c5c19e17227c99de65e7fb0ba2b727c`, built at
+  `2026-09-05T15:12:22Z` into
+  `build/desktop-eimaa91a/Codex-Migrate-0.1.0-build1-arm64-LOCAL-UNSIGNED.zip`.
+  SHA-256: `c6965a6bf34efca37b048922ee7fc00d275ef9ce58b6dff8bc448722c983d519`.
+  Its archive checksum and deep/strict ad-hoc signature verified. Nine tests ran
+  against the actual bundled engine: eight passed and the case-sensitive
+  filesystem fixture skipped. This is the package to use for the next
+  disposable-account acceptance run; it is not signed, notarized, sold, or a
+  clean-Mac result.
+
+- Previous unsigned engineering package: clean source
   `50e2325cdc3edcd0df882fff53ba1840c1c4a329`, including pairing recovery and
   keyboard focus fixes, built at `2026-09-05T03:40:30Z` into
   `build/desktop-cip8tnrb/Codex-Migrate-0.1.0-build1-arm64-LOCAL-UNSIGNED.zip`.

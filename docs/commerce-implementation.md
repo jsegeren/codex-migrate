@@ -170,6 +170,12 @@ opened to bypass any of these checks.
   `dpl_3q9NMXFwJyvowAwPjTEFFHXse286` passed browser retesting: the same paid
   session showed “Your purchase is verified” and enabled Download for Mac.
   The existing sandbox webhook alias now targets that Preview.
+- The explicit support Reply-To correction is deployed on guarded Preview
+  `dpl_8HXvmn6XSbqA3rjPdZq7hzB5of5y`, and the stable sandbox alias points to it.
+  The exact deployed source revision passed CI and 184 Node tests, with the one
+  real-database test intentionally skipped in the default suite. Hosted
+  availability still returns `false`. No new transactional message has yet
+  proved the deployed Reply-To header or inbox placement.
 - The real paid session's hosted status and download APIs both returned 200.
   Independent retrieval of the authorized private file returned 200, 451 bytes,
   a matching archive SHA-256 and an attachment response. The Chrome buyer-button
@@ -250,8 +256,10 @@ The delivery implementation now explicitly sets Reply-To to the advertised
 support mailbox, `joshua@segeren.com`, with regression assertions for sandbox
 and live messages. This fixes support replies independently of the sending
 domain. It does not prove inbox placement. A branded sender and another actual
-recipient delivery test remain required; SendGrid's settings page currently
-requires sign-in, so existing verified domains could not be inspected.
+recipient delivery test remain required. SendGrid's official username-recovery
+flow identified the legacy account, but the saved browser identity did not
+match its current login identifier and the password step still needs the
+account owner. Existing verified domains therefore remain uninspected.
 
 ### Firewall configuration
 
