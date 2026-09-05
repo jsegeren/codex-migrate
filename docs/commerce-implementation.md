@@ -208,7 +208,10 @@ opened to bypass any of these checks.
   release. Exact commit `793e237` is deployed on guarded Preview
   `dpl_Ny7QyfH8W2x5vTXLB6Z5weC4cQR6`; the stable sandbox alias points to it,
   serves the new link implementation, and continues to report availability
-  `false`.
+  `false`. Production deployment `dpl_5NnBPTGpuFJ25fbgr4BufMFJX7mL` now serves
+  the same direct-click implementation at the canonical domain. A post-deploy
+  HTTP check found no legacy navigation and confirmed availability is still
+  `false`; this deployment did not open checkout.
 - September 5 sandbox setup: created endpoint `we_1UCK0vQwGK6ZgBcKbA8f3rXL`
   in `acct_1Rkc6nQwGK6ZgBcK` for `checkout.session.completed` and
   `checkout.session.async_payment_succeeded`. The endpoint targets this
