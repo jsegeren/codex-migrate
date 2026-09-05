@@ -1,7 +1,7 @@
 # Purchase and delivery implementation — September 5, 2026
 
 Status: implementation and private-storage transport tested; **not a live checkout release**.
-The committed release catalog is empty and no commerce environment variables
+The committed release catalog contains only a harmless sandbox delivery fixture; no commerce environment variables
 or webhooks have been installed in Production. No app archive was published.
 
 ## Boundaries
@@ -105,7 +105,7 @@ The Drizzle migration was applied and tested only on the sandbox branch.
 The Founder selected purchase-only official Mac downloads, including best-effort
 support and an aim to reply promptly. Source and CLI remain MIT-licensed. The
 public GitHub artifact adapter has been replaced by private Vercel Blob delivery.
-The catalog still has no entries. Each reviewed entry binds `id`, `kind`,
+The catalog has no live app entries. Each reviewed entry binds `id`, `kind`,
 `source`, `sha256`, `filename`, `size` and the exact content-addressed
 `sandbox/<sha256>/<filename>` or `live/<sha256>/<filename>` pathname. Live also
 requires `accepted: true`. Archives are capped at 100 MiB in this first release;
@@ -136,7 +136,7 @@ upload procedure below binds the build receipt to uploaded bytes. A manifest
 boolean does not substitute for signing or clean-Mac evidence.
 
 Before activation: execute the app-upload workflow against an actual signed build,
-wire the sandbox Stripe endpoint, run a real Managed Payments payment/refund
+run a real sandbox Managed Payments payment/refund
 through these routes and the controlled inbox, recheck the published edge rate
 limits below, and verify the real hosted raw-body
 signature boundary. Then finish live Managed Payments eligibility/terms,
@@ -145,7 +145,22 @@ opened to bypass any of these checks.
 
 ## Evidence
 
-- 178 Node tests passed; the real-database test is skipped in the default suite.
+- September 5 sandbox setup: created endpoint `we_1UCK0vQwGK6ZgBcKbA8f3rXL`
+  in `acct_1Rkc6nQwGK6ZgBcK` for `checkout.session.completed` and
+  `checkout.session.async_payment_succeeded`. The endpoint targets this
+  project's stable sandbox alias with private Vercel deployment-protection
+  bypass authentication. Its signing secret and commerce configuration are
+  sensitive Preview-only variables. Production commerce remains unconfigured.
+- Existing `SENDGRID_API_KEY` and `LAUNCH_FROM_EMAIL` values were preserved,
+  with Preview added to their Production scope. `LAUNCH_NOTIFY_EMAIL` remains
+  Production-only. Sandbox transactional delivery is restricted to the
+  maintainer-controlled inbox; no launch-subscriber list was copied.
+- Sandbox fixture `sandbox-delivery-2026-09-05` is a valid 451-byte ZIP containing
+  only the committed `tests/fixtures/commerce-download/README.txt`. Its private
+  upload was independently downloaded and matched SHA-256
+  `1a9d8e5775804a42e03655c7653d4d5315fca718445a2aecff144f00faf53343`.
+  This proves fixture storage, not payment, inbox delivery or app acceptance.
+- 184 Node tests passed; the real-database test is skipped in the default suite.
 - Sandbox checkout now rejects missing/malformed/incorrect operator tokens before
   any runtime, database or provider access. Request IDs must be strings rather
   than values coercible to UUIDs. Direct handler tests cover authorization order,

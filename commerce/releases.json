@@ -1,1 +1,11 @@
-{}
+{
+  "sandbox-delivery-2026-09-05": {
+    "id": "sandbox-delivery-2026-09-05",
+    "kind": "sandbox-fixture",
+    "source": "119ab39d9babe703c6f391b585af37b796107cbd",
+    "sha256": "1a9d8e5775804a42e03655c7653d4d5315fca718445a2aecff144f00faf53343",
+    "filename": "Codex-Migrate-SANDBOX-DELIVERY-TEST.zip",
+    "size": 451,
+    "pathname": "sandbox/1a9d8e5775804a42e03655c7653d4d5315fca718445a2aecff144f00faf53343/Codex-Migrate-SANDBOX-DELIVERY-TEST.zip"
+  }
+}
