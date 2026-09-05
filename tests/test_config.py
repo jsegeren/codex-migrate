@@ -40,6 +40,22 @@ class ConfigTests(unittest.TestCase):
                 target_home="/Users/user",
             ).validate()
 
+    def test_accepts_scoped_ipv6_needed_for_direct_mac_networks(self):
+        config = MigrationConfig(
+            target="user@[fe80::1234%en7]",
+            target_home="/Users/user",
+        ).validate()
+        self.assertEqual(config.target, "user@[fe80::1234%en7]")
+        for target in ("user@[fe80::1%en7;bad]", "user@[fe80::1%]"):
+            with self.subTest(target=target), self.assertRaises(ValueError):
+                MigrationConfig(target=target, target_home="/Users/user").validate()
+        self.assertEqual(
+            SSHOptions(host_key_alias="fe80::1234%en7").validate().host_key_alias,
+            "fe80::1234%en7",
+        )
+        with self.assertRaises(ValueError):
+            SSHOptions(host_key_alias="host=value").validate()
+
     def test_rejects_workspace_outside_source_home(self):
         with self.assertRaises(ValueError):
             MigrationConfig(

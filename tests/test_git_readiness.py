@@ -91,6 +91,7 @@ class GitReadinessTests(unittest.TestCase):
     def test_destination_unavailable_blocks_before_backup_and_staging(self):
         self.engine.inventory = lambda: self.inventory()
         transport = self.engine.transport = Mock()
+        transport.select_route.return_value = "Disposable test route"
         transport.check.return_value = "USER=fixture\nHOME=/Users/fixture\nFILESYSTEM=apfs\n"
         with patch("codex_migrate.migration.require_runtime", side_effect=["2.50.1", MigrationError("Destination runtime unavailable")]) as check:
             with self.assertRaisesRegex(MigrationError, "Destination runtime unavailable"):

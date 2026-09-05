@@ -32,6 +32,9 @@ class ComponentMigrationTests(unittest.TestCase):
         self.copied_sources = []
 
         class LocalTransport:
+            def reset_route(self):
+                pass
+
             def check(self):
                 return "USER=newperson\nHOME=%s\nFILESYSTEM=apfs\n" % owner.fixture.target
 
@@ -63,6 +66,9 @@ class ComponentMigrationTests(unittest.TestCase):
 
             def remote_free_bytes(self, path):
                 return 1024**4
+
+            def select_route(self, cancelled=None):
+                return "Disposable local fixture — SSH disabled"
 
             def route(self):
                 return "Disposable local fixture — SSH disabled"

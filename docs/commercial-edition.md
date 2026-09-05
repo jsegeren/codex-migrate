@@ -7,9 +7,9 @@ user's own data or recovery from an artificial lock.
 ## Paid direction (not all implemented)
 
 The current desktop shell provides folder selection, setup guidance, the local
-dashboard, and skills-only export. Automatic discovery, route benchmarking, and
-update checks below are planned, not shipped. Release readiness is tracked in
-[the desktop guide](desktop-setup.md).
+dashboard, skills-only export, and trusted multi-route benchmarking. Broader
+automatic discovery and update checks below are planned, not shipped. Release
+readiness is tracked in [the desktop guide](desktop-setup.md).
 
 - Signed and notarized native macOS application
 - Automatic Mac and Codex discovery

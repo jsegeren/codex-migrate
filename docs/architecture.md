@@ -13,8 +13,10 @@ Codex Migrate is a dependency-free Python 3.9 application around the macOS
 - `exclusions.py` shares root-anchored Codex runtime exclusions between rsync
   and Git dependency coverage. Managed workspace descendants are not filtered
   by runtime folder names.
-- `transport.py` owns strict SSH arguments, route reporting, and resumable
-  rsync processes.
+- `transport.py` owns strict SSH arguments, trusted-address route benchmarking,
+  route reporting, and resumable rsync processes. A selected direct address is
+  pinned to the saved destination's existing host-key alias and destination
+  guard; the saved configuration remains the recovery fallback.
 - `migration.py` implements the staging/finalization state machine.
 - `conversations.py` freezes active/archived transcript hashes and relative paths
   into a private verification script, reused against staging and installed data

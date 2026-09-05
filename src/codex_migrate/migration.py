@@ -83,6 +83,22 @@ class MigrationEngine:
         if self._cancel_requested:
             raise MigrationError("Inspection stopped")
 
+    @staticmethod
+    def _validated_route_label(route) -> str:
+        if (not isinstance(route, str) or not route or len(route) > 512
+                or any(character in route for character in "\x00\r\n")):
+            raise MigrationError("The selected connection could not be described safely")
+        return route
+
+    def _refresh_route(self, cancelled=None) -> Optional[str]:
+        """Re-evaluate real SSH transports at each independent remote action."""
+        selector = getattr(self.transport, "select_route", None)
+        if not callable(selector):
+            return None
+        route = self._validated_route_label(selector(cancelled=cancelled))
+        self.state.update(route=route)
+        return route
+
     def start_inspection(self) -> None:
         with self._lock:
             self._require_ready_for_migration()
@@ -113,6 +129,7 @@ class MigrationEngine:
         reconciling = (current.get("phase") in ("restoring", "restored", "recovery_required")
                        or attempt is not None and (not isinstance(attempt, dict) or attempt.get("resolved") is not True))
         try:
+            self._refresh_route(lambda: self._recovery_cancelled)
             if reconciling:
                 report = reconcile_recovery(self.config, self.transport, attempt["reference"], lambda: self._recovery_cancelled)
             else:
@@ -208,6 +225,7 @@ class MigrationEngine:
         from codex_migrate.reconciliation import reconcile_recovery
         attempt = self.state.read()["recovery_attempt"]
         try:
+            self._refresh_route()
             restore_recovery(self.config, self.transport, attempt["inspection"])
             report = reconcile_recovery(self.config, self.transport, attempt["reference"])
         except Exception:
@@ -354,8 +372,9 @@ class MigrationEngine:
         git_runtime = {}
         if inventory.git_repositories:
             git_runtime["source"] = require_runtime(self.config.source_home, cancelled=lambda: self._cancel_requested)
+        self.transport.reset_route()
+        self.state.update(message="Checking the configured destination before testing available routes.")
         remote = self.transport.check()
-        self.transport.run_remote(remote_tool_check())
         self._inspection_checkpoint()
         expected_user = self.config.target.split("@", 1)[0]
         actual_user = _value(remote, "USER")
@@ -372,6 +391,13 @@ class MigrationEngine:
             raise MigrationError(
                 "The destination home must be on APFS for copy-on-write rollback backups"
             )
+        self.state.update(message="Testing available Wi-Fi and wired SSH routes.")
+        route = self._validated_route_label(
+            self.transport.select_route(cancelled=lambda: self._cancel_requested)
+        )
+        self._inspection_checkpoint()
+        self.state.update(route=route, message="Checking the destination Mac over the selected route.")
+        self.transport.run_remote(remote_tool_check())
         if inventory.git_repositories:
             git_runtime["destination"] = require_runtime(self.config.target_home, self.transport, lambda: self._cancel_requested)
         self.state.update(git_runtime=git_runtime)
@@ -452,8 +478,6 @@ class MigrationEngine:
             warning = None
         if inventory.git_warnings:
             warning = "; ".join(filter(None, [warning] + inventory.git_warnings[:5]))
-        route = self.transport.route()
-        self._inspection_checkpoint()
         state = self.state.update(
             status="ready",
             phase="preflight_complete",
@@ -853,6 +877,12 @@ class MigrationEngine:
             self._start(self._run_path_check)
 
     def _run_path_check(self) -> None:
+        try:
+            self._refresh_route(lambda: self._path_cancelled)
+        except Exception:
+            if self._path_cancelled:
+                return
+            raise
         report = check_compatibility(self.config, self.transport, lambda: self._path_cancelled)
         check_git = False
         with self._lock:

@@ -152,6 +152,7 @@ class ManagedPreferenceTests(unittest.TestCase):
         fixture.setUp()
         self.addCleanup(fixture.doCleanups)
         transport = fixture.engine.transport = Mock()
+        transport.select_route.return_value = "Disposable test route"
         transport.check.return_value = "USER=newperson\nHOME=" + str(fixture.target) + "\nFILESYSTEM=apfs\n"
         def check(script, timeout, cancelled):
             self.assertFalse(cancelled())

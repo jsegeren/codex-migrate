@@ -62,7 +62,8 @@ class ComponentExporter:
             raise MigrationError("Selected components resolve to duplicate destinations")
         return exports
 
-    def _preflight(self) -> None:
+    def _preflight(self, cancelled=None) -> None:
+        self.transport.reset_route()
         remote = self.transport.check()
         expected_user = self.config.target.split("@", 1)[0]
         if _value(remote, "USER") != expected_user:
@@ -71,6 +72,7 @@ class ComponentExporter:
             raise MigrationError("SSH home does not match the configured destination home")
         if _value(remote, "FILESYSTEM") != "apfs":
             raise MigrationError("The destination home must be on APFS for rollback backups")
+        self.transport.select_route(cancelled=cancelled)
         home = Path(self.config.target_home)
         checks = ["test -d %s" % shlex.quote(str(home))]
         checks.extend("test ! -L %s" % shlex.quote(str(path)) for path in (home, *home.parents))

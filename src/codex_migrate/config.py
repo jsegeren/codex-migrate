@@ -14,7 +14,7 @@ from codex_migrate.transaction import TRANSACTION_NAME
 
 
 TARGET_PATTERN = re.compile(
-    r"^[A-Za-z_][A-Za-z0-9._-]*@(?:[A-Za-z0-9][A-Za-z0-9._-]*|\[[0-9A-Fa-f:]+\])$"
+    r"^[A-Za-z_][A-Za-z0-9._-]*@(?:[A-Za-z0-9][A-Za-z0-9._-]*|\[[0-9A-Fa-f:]+(?:%[A-Za-z0-9._-]+)?\])$"
 )
 
 
@@ -62,7 +62,7 @@ class SSHOptions:
                 "known_hosts_file",
                 _clean_absolute(self.known_hosts_file, "known-hosts file"),
             )
-        if self.host_key_alias and not re.match(r"^[A-Za-z0-9._-]+$", self.host_key_alias):
+        if self.host_key_alias and not re.match(r"^[A-Za-z0-9._:%-]+$", self.host_key_alias):
             raise ValueError("host-key alias contains unsupported characters")
         if self.connect_timeout < 1 or self.connect_timeout > 120:
             raise ValueError("connect timeout must be between 1 and 120 seconds")

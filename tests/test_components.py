@@ -230,6 +230,12 @@ class ComponentTests(unittest.TestCase):
                     processes.append("started")
 
             class FakeTransport:
+                def reset_route(self):
+                    pass
+
+                def select_route(self, cancelled=None):
+                    return "Disposable local fixture — SSH disabled"
+
                 def check(self):
                     return "REMOTE_OK=1\nUSER=new-user\nHOME=/Users/new-user\nFILESYSTEM=apfs\n"
 

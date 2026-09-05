@@ -87,7 +87,7 @@
         </div>
         <ol class="steps">
           <li><span>01</span><div><h3>Inspect</h3><p>See exactly what will move, how large it is, and whether both Macs are ready. Planning mode changes nothing.</p></div></li>
-          <li><span>02</span><div><h3>Transfer</h3><p>Move your workspace over Wi-Fi or a compatible USB-C/Thunderbolt network connection. Both use secure SSH. Pause and resume without starting over.</p></div></li>
+          <li><span>02</span><div><h3>Transfer</h3><p>Move your workspace over Wi-Fi or a compatible USB-C/Thunderbolt network connection. Both use secure SSH. When both routes are available, Codex Migrate tests them and selects the faster verified connection. Pause and resume without starting over.</p></div></li>
           <li><span>03</span><div><h3>Protect</h3><p>Verify a destination backup before replacement. Insufficient space or failed verification blocks installation. Keep an independent backup too.</p></div></li>
           <li><span>04</span><div><h3>Verify</h3><p>Compare conversation counts, check databases, and produce a readable receipt of what arrived.</p></div></li>
         </ol>
@@ -185,7 +185,7 @@
         <div class="faq-grid">
           <details><summary>Is this made by OpenAI?</summary><p>No. Codex Migrate is an independent compatibility project. It is not affiliated with, supported by, or endorsed by OpenAI.</p></details>
           <details><summary>Does it copy my Codex login?</summary><p>No. Authentication and installation identity are deliberately excluded. You sign in on the new Mac first; the migration preserves that new identity.</p></details>
-          <details><summary>Can I transfer over Wi-Fi or a cable?</summary><p>Yes. Use Wi-Fi or a compatible USB-C/Thunderbolt network connection between your Macs; Ethernet works too. The transfer uses secure SSH in each case. USB-C cables vary in capability and speed, so the cable setup must provide a working network connection—not just charging. Enable Remote Login on the new Mac, then follow the <a href="/moving-to-a-new-mac">connection guide</a>.</p></details>
+          <details><summary>Can I transfer over Wi-Fi or a cable?</summary><p>Yes. Use Wi-Fi or a compatible USB-C/Thunderbolt network connection between your Macs; Ethernet works too. The transfer uses secure SSH in each case. After verifying the new Mac, Codex Migrate checks its reachable private network addresses and selects the faster verified route. USB-C cables vary in capability and speed, so the cable setup must provide a working network connection—not just charging. Enable Remote Login on the new Mac, then follow the <a href="/moving-to-a-new-mac">connection guide</a>.</p></details>
           <details><summary>Can I buy the paid app today?</summary><p>Not yet. The $50 downloadable Mac edition is in development. We are not taking pre-orders. The complete open-source CLI is usable today.</p></details>
           <details><summary>Does it work on Windows?</summary><p>Not yet. Codex Migrate currently supports Mac-to-Mac migration only, including the open-source CLI. A Windows version is feasible, but it needs its own work on file locations, permissions, backups, packaging, and recovery testing. Windows and cross-platform transfers are not supported today, and there is no announced release date.</p></details>
           <details><summary>What if the transfer is interrupted?</summary><p>Rerun it. Staging uses resumable transfer semantics, so completed data is reused. The source Mac is never deleted or modified.</p></details>

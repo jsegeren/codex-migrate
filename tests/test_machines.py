@@ -136,6 +136,28 @@ class MachineTests(unittest.TestCase):
                 execute.assert_not_called()
                 self.assertNotIn("PRIVATE", str(error.exception))
 
+    def test_bridge_keeps_ipv6_brackets_for_rsync_but_removes_them_for_ssh(self):
+        transport = SSHTransport(MigrationConfig(
+            target="user@[fe80::1234%en7]",
+            target_home="/Users/user",
+        ).validate())
+        with patch("codex_migrate.machines.local_machine_uuid", return_value=SOURCE):
+            payload = shlex.split(transport.rsync_bridge_command())[-1]
+        with patch("codex_migrate.ssh_bridge.os.execv") as execute:
+            run_bridge([
+                payload,
+                "-l",
+                "user",
+                "fe80::1234%en7",
+                "rsync",
+                "--server",
+                ".",
+                "/Users/user/staging",
+            ])
+        command = execute.call_args.args[1]
+        self.assertEqual(command[-2], "user@fe80::1234%en7")
+        self.assertNotIn("user@[fe80::1234%en7]", command)
+
     def test_every_remote_script_rechecks_destination(self):
         transport = SSHTransport(MigrationConfig(target="user@fixture.invalid", target_home="/Users/user"))
         child = Mock(returncode=0)

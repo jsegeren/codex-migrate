@@ -276,6 +276,7 @@ release approval. Before charging customers, record evidence for:
 8. Private support contact and refund handling are tested.
 
 Initial hardware build: Apple Silicon. Intel support requires its own build and
-validation before it is advertised. Automatic route benchmarking, broader
-component selection, and automatic update installation remain unfinished; do
-not advertise these as delivered by the current desktop shell.
+validation before it is advertised. Trusted multi-address route benchmarking is
+implemented in preflight, but still needs real Wi-Fi/direct-link acceptance.
+Broader component selection and automatic update installation remain
+unfinished; do not advertise those as delivered by the current desktop shell.

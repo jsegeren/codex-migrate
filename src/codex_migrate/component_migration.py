@@ -65,8 +65,11 @@ class ComponentMigrationEngine(MigrationEngine):
             raise MigrationError("No matching custom skills were found. Review your selected components and folders.")
         self._personal_skills = exports
         self.exporter.transport = self.transport
-        self.exporter._preflight()
+        self.state.update(message="Checking the configured destination and available SSH routes.")
+        self.exporter._preflight(lambda: self._cancel_requested)
         self._inspection_checkpoint()
+        route = self._validated_route_label(self.transport.route())
+        self.state.update(route=route, message="Checking the destination Mac over the selected route.")
         incoming = 0
         def unreadable(error):
             raise error
@@ -100,8 +103,6 @@ class ComponentMigrationEngine(MigrationEngine):
         )
         if free < required:
             raise MigrationError("Not enough destination space for skill staging and verified backups. Free space and retry; there is no backup bypass.")
-        route = self.transport.route()
-        self._inspection_checkpoint()
         return self.state.update(
             status="ready", phase="preflight_complete", route=route, error=None,
             warning=None, message="Skills inspected. Review the listed destinations, then stage the selected skills. Conversations and whole repositories are not included.",

@@ -237,6 +237,10 @@ class BackupTests(unittest.TestCase):
         engine = self.engine
         inventory = engine.inventory()
         class Transport:
+            def reset_route(inner):
+                pass
+            def select_route(inner, cancelled=None):
+                return "Disposable local fixture — SSH disabled"
             def check(inner):
                 return "USER=person\nHOME=%s\nFILESYSTEM=apfs\n" % self.target
             def run_remote(inner, script, timeout=60):

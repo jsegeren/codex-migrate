@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add automatic preflight speed testing across trusted Wi-Fi and private wired
+  addresses reported by the verified destination Mac, select the fastest route,
+  show the measured connection in the dashboard, and re-evaluate it on resume
+  and independent recovery checks.
+- Fix scoped IPv6 handling by retaining brackets for rsync destination syntax
+  while passing the unbracketed address expected by OpenSSH.
 - Add a guarded `--resume-notarization` release-builder path that continues the
   exact saved Apple submission after interruption without rebuilding,
   re-signing, or submitting twice.

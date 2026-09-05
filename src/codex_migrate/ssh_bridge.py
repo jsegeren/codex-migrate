@@ -45,7 +45,11 @@ def run(arguments):
         receiver = "exec /usr/bin/rsync " + " ".join(shlex.quote(arg) for arg in args[1:])
         script = guard + locked_receiver_command(payload["target_home"], receiver)
         config = MigrationConfig(target=target, target_home=payload["target_home"], ssh=options)
-        command = SSHTransport(config).ssh_base() + [target, "/bin/zsh -f -c " + shlex.quote(script)]
+        transport = SSHTransport(config)
+        command = transport.ssh_base() + [
+            transport._ssh_destination(target),
+            "/bin/zsh -f -c " + shlex.quote(script),
+        ]
     except (ValueError, TypeError, KeyError, MigrationError) as error:
         raise MigrationError("Rsync destination validation failed. No SSH connection was started.") from error
     # Replacing this adapter with SSH retains rsync's cancellation process group.

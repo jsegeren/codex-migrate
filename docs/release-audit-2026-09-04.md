@@ -888,6 +888,44 @@ with the consent UI present scored 100 in Performance, Accessibility, Best
 Practices and SEO. These automated results do not replace the still-open manual
 assistive-technology and real cross-Mac acceptance gates.
 
+## Trusted automatic route selection follow-up
+
+Preflight now begins on the configured SSH destination and validates the remote
+Mac, username, home and APFS requirement before considering an alternate
+address. It combines addresses resolved for the configured destination with a
+bounded set of private IPv4 interface addresses read from that already-trusted
+Mac. It does not scan the LAN. Up to four candidates receive an 8 MiB in-memory
+speed probe with SSH compression disabled so compressed zeroes cannot create a
+false throughput result.
+
+Every candidate retains `StrictHostKeyChecking=yes`, is pinned through
+`HostKeyAlias` to the configured destination's existing trusted key, and runs
+the same machine-identity guard used by normal remote operations. The selected
+endpoint and alias propagate together through ordinary SSH and the validated
+rsync bridge. The saved configuration remains unchanged. Inspection, resume,
+finalization and independent recovery/path checks reset to the configured
+destination and re-evaluate routes, so a disappeared cable is not retained as a
+permanent endpoint. A failed or unverifiable comparison falls back to the
+configured route.
+
+Speed probes are registered with the existing process-group cancellation path;
+a user stop aborts selection instead of continuing through the remaining
+addresses. Persisted route labels must be bounded single-line text. Scoped IPv6
+configuration is also corrected: rsync retains required address brackets while
+OpenSSH receives the unbracketed host form it accepts.
+
+The complete Python regression passed 563 tests with seven expected filesystem
+skips. Focused transport tests cover address filtering, destination-reported
+private addresses, hardware-port labels, fastest-route selection, strict key
+alias propagation into rsync, cancellation, fallback, and scoped IPv6. The same
+focused transport/configuration/bridge/migration tests also pass with macOS
+system Python 3.9. All 16 Node signup/Help tests, native Swift typechecking, CLI
+startup, JavaScript syntax checking and diff checks passed. The actual macOS
+interface parser was exercised locally without printing addresses. Real
+Wi-Fi/Thunderbolt route comparison, cable removal and resumed transfer on two
+Macs remain release acceptance gates; these automated checks do not claim that
+hardware proof.
+
 ### Reference guidance
 
 - [Lighthouse scoring excludes manual checks](https://developer.chrome.com/docs/lighthouse/accessibility/scoring).

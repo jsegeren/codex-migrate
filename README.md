@@ -464,10 +464,22 @@ release gate; see the [engineering evidence](docs/git-verification-plan.md).
 
 ## Transfer routes
 
-Codex Migrate reports the route selected by macOS. It works over ordinary
-Wi-Fi, Ethernet, Thunderbolt networking, or a direct link that already supports
-SSH. The current CLI accepts one destination at a time. Automatic multi-route
-benchmarking is on the near-term roadmap.
+Codex Migrate works over ordinary Wi-Fi, Ethernet, Thunderbolt networking, or a
+direct link that already supports SSH. After verifying the configured Mac,
+preflight combines addresses published for its saved name with a bounded list of
+private interface addresses reported by that same trusted Mac. It sends a small
+in-memory speed test over each reachable candidate and selects the fastest
+verified route. The dashboard shows the interface, address, measured speed, and
+selection count.
+
+Alternative addresses must present the SSH host key already trusted for the
+saved destination name and pass the same destination-machine guard as every
+other remote command. Strict host-key checking is never disabled. If only one
+address is available, or alternatives cannot be verified, the configured SSH
+destination remains in use. Each inspect or resume starts from the configured
+destination and repeats selection, so removing a cable does not permanently pin
+a migration to a disappeared link. Discovery does not scan the LAN or try
+addresses reported by an unverified machine.
 
 ## Privacy and security
 

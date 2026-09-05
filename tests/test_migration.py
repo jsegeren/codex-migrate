@@ -20,6 +20,12 @@ from codex_migrate.state import StateStore
 
 
 class MigrationTests(unittest.TestCase):
+    def test_route_label_must_be_bounded_plain_text_before_persistence(self):
+        self.assertEqual(MigrationEngine._validated_route_label("Wi-Fi (en0)"), "Wi-Fi (en0)")
+        for route in (None, "", "bad\nprivate", "x" * 513):
+            with self.subTest(route=route), self.assertRaises(MigrationError):
+                MigrationEngine._validated_route_label(route)
+
     def test_process_detection_accepts_explicit_open_result(self):
         result = SimpleNamespace(stdout="OPEN\n", returncode=0)
         with patch("codex_migrate.processes.subprocess.run", return_value=result):
