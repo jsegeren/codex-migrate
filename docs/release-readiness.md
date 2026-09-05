@@ -57,6 +57,16 @@ purchase, weaken SSH host-key checking, or enable live checkout as a workaround.
   and Chromium confirmed no underline, a 24px header gap, and no overflow at
   390px. These tests include token/origin-protected idle shutdown and refusal
   to shut down while running, paused, or with a live operation worker.
+  Clean source `43095b59b0d6b336769ee44f133bc332242ee8eb` produced local unsigned
+  arm64 build `build/desktop-npkindqp`. Eight actual bundled-engine desktop tests
+  passed, with one case-sensitive-filesystem skip, including a real protected
+  HTTP shutdown that exits successfully. Opening the Mac app launched its
+  browser setup automatically; the live browser accessibility tree confirmed
+  the first step, enabled inputs, and collapsed help. No actual migration was
+  started. ZIP SHA-256:
+  `92f28a9e50e1fd4bdb3ab8440722dcaec97d48a396451b83197e8503c5ae463b`.
+  This supersedes the earlier native-form package for new setup, not the
+  outstanding signing and separate-Mac acceptance gates.
 
 - Clean source `491e58a2f8cf19515ac301c3e16d7cdb3a33de28` now has a current
   unsigned arm64 engineering package, including the trusted-route selection,
