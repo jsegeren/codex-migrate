@@ -49,6 +49,7 @@ nav a:hover { color: var(--ink); }
 .hero-copy { display: grid; grid-template-columns: minmax(0, 1fr) 280px; column-gap: 48px; }
 .hero-copy > .eyebrow { grid-column: 1 / -1; }
 .hero-heading { display: contents; }
+.hero-inline-media { display: contents; }
 .hero-heading h1 { grid-column: 1; grid-row: 2; min-width: 0; max-width: none; margin-bottom: 16px; }
 .hero-inline-icon { grid-column: 2; grid-row: 2 / 5; align-self: start; margin-top: 22px; width: 280px; height: 280px; object-fit: contain; }
 .hero-copy > .lede, .hero-copy > .actions { grid-column: 1; }

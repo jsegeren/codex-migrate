@@ -12,7 +12,7 @@
     <link rel="canonical" href="https://migrate.segeren.com/">
     <title>Codex Migrate — Keep the work. Change the Mac.</title>
     <link rel="icon" href="/assets/mark.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="/styles.css?v=20260904-ui-screenshots">
+    <link rel="stylesheet" href="/styles.css?v=20260904-responsive-media">
   </head>
   <body>
     <header class="site-header">
@@ -21,7 +21,7 @@
         <span>Codex Migrate</span>
       </a>
       <a class="header-compatibility" href="https://openai.com/codex/" aria-label="For Codex — independent migration tool">
-        <img src="/assets/codex-product-dark.png" width="40" height="40" alt="">
+        <picture><source srcset="/assets/codex-product-dark-80.avif" type="image/avif"><img src="/assets/codex-product-dark-80.png" width="40" height="40" alt=""></picture>
         <span>For Codex</span>
       </a>
       <nav aria-label="Primary navigation">
@@ -37,7 +37,13 @@
           <p class="eyebrow"><span class="status-dot"></span> Open source now · Mac app in development</p>
           <div class="hero-heading">
             <h1>Keep the work.<br><span class="accent">Change the Mac.</span></h1>
-            <img class="hero-inline-icon" src="/assets/codex-product-dark.png" width="280" height="280" alt="Codex product icon">
+            <picture class="hero-inline-media">
+              <source srcset="/assets/codex-product-dark-288.avif 288w, /assets/codex-product-dark-560.avif 560w" sizes="(max-width: 760px) 144px, (max-width: 980px) 160px, 280px" type="image/avif">
+              <img class="hero-inline-icon" src="/assets/codex-product-dark-288.png"
+                srcset="/assets/codex-product-dark-288.png 288w, /assets/codex-product-dark-560.png 560w"
+                sizes="(max-width: 760px) 144px, (max-width: 980px) 160px, 280px"
+                width="280" height="280" fetchpriority="high" decoding="async" alt="Codex product icon">
+            </picture>
           </div>
           <p class="lede">Move local Codex conversations, settings, skills, repositories, branches, worktrees, and unfinished files—without handing your workspace to a cloud migration service.</p>
           <div class="actions">
@@ -65,7 +71,7 @@
         </div>
         <figure class="ui-screenshot">
           <a href="/assets/dashboard-transfer.png" aria-label="Open full-size screenshot of the transfer dashboard">
-            <img src="/assets/dashboard-transfer.png" width="1120" height="1168" loading="lazy" decoding="async" alt="Codex Migrate’s local dashboard showing transfer progress, SSH connection, workspace folders, backup requirements, and pause and safe-stop controls.">
+            <picture><source srcset="/assets/dashboard-transfer-720.avif 720w, /assets/dashboard-transfer-1120.avif 1120w" sizes="(max-width: 680px) calc(100vw - 30px), 1120px" type="image/avif"><img src="/assets/dashboard-transfer.png" width="1120" height="1168" loading="lazy" decoding="async" alt="Codex Migrate’s local dashboard showing transfer progress, SSH connection, workspace folders, backup requirements, and pause and safe-stop controls."></picture>
           </a>
           <figcaption>Actual alpha dashboard, shown with sample data—not a live customer transfer. The signed Mac app is still in development. <a href="/assets/dashboard-transfer.png">View full size</a>.</figcaption>
         </figure>

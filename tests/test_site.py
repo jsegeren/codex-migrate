@@ -72,6 +72,10 @@ class SiteTests(unittest.TestCase):
                 self.assertIn("sample data", source.lower())
                 self.assertIn("View full size", source)
                 self.assertTrue((SITE / "assets" / asset).is_file())
+                stem = asset.removesuffix(".png")
+                self.assertIn(f'srcset="/assets/{stem}-720.avif 720w, /assets/{stem}-1120.avif 1120w"', source)
+                self.assertTrue((SITE / "assets" / f"{stem}-720.avif").is_file())
+                self.assertTrue((SITE / "assets" / f"{stem}-1120.avif").is_file())
 
     def test_checkout_closed_until_downloadable_edition_ready(self):
         text = " ".join(self.parse("index.html").text).lower()
@@ -111,6 +115,9 @@ class SiteTests(unittest.TestCase):
         self.assertIn('Not affiliated with or endorsed by OpenAI', source)
         self.assertIn('href="/assets/mark.svg"', source)
         self.assertTrue((SITE / "assets/codex-product-dark.png").is_file())
+        for size in (80, 288, 560):
+            self.assertTrue((SITE / f"assets/codex-product-dark-{size}.png").is_file())
+            self.assertTrue((SITE / f"assets/codex-product-dark-{size}.avif").is_file())
         self.assertIn("not licensed under", (ROOT / "THIRD_PARTY_NOTICES.md").read_text())
 
     def test_purple_theme_and_upright_headline(self):
@@ -127,7 +134,12 @@ class SiteTests(unittest.TestCase):
         self.assertIn('class="header-compatibility"', header)
         self.assertIn('For Codex — independent migration tool', header)
         self.assertIn('>For Codex</span>', header)
-        self.assertIn('width="280" height="280" alt="Codex product icon"', source)
+        self.assertIn('width="280" height="280" fetchpriority="high" decoding="async" alt="Codex product icon"', source)
+        self.assertIn('srcset="/assets/codex-product-dark-288.png 288w, /assets/codex-product-dark-560.png 560w"', source)
+        self.assertIn('srcset="/assets/codex-product-dark-288.avif 288w, /assets/codex-product-dark-560.avif 560w"', source)
+        self.assertIn('sizes="(max-width: 760px) 144px, (max-width: 980px) 160px, 280px"', source)
+        self.assertIn('srcset="/assets/codex-product-dark-80.avif" type="image/avif"', header)
+        self.assertIn('src="/assets/codex-product-dark-80.png" width="40" height="40"', header)
         heading_row = source.split('<div class="hero-heading">', 1)[1].split('</div>', 1)[0]
         self.assertIn('<h1>Keep the work.', heading_row)
         self.assertIn('class="hero-inline-icon"', heading_row)

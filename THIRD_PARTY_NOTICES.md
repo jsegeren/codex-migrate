@@ -9,10 +9,13 @@ OpenAI retains its rights in the artwork and associated trademarks.
 Sources: `Contents/Resources/icon-codex-dark-color.png` and
 `Contents/Resources/app.icns` in the official, signed macOS application
 with bundle identifier `com.openai.codex` (OpenAI signing team `2DC432GLL2`).
-The dark PNG is copied unchanged; the light variant was converted from ICNS
-to PNG without changing the artwork. The website displays
-it at a small size beside “For Codex,” with a non-affiliation notice. It is not
-our app icon, favicon, or logo and does not represent endorsement.
+The original dark PNG is copied unchanged; the light variant was converted from
+ICNS to PNG without changing the artwork. The responsive files named
+`codex-product-dark-{80,288,560}.{png,avif}` are resized/re-encoded copies of
+that same dark artwork; they are not recolored, cropped or composited. The
+website displays the product reference beside “For Codex,” with a
+non-affiliation notice. It is not our app icon, favicon, or logo and does not
+represent endorsement.
 
 Product: https://openai.com/codex/
 
