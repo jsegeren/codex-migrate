@@ -8,6 +8,7 @@
   const PUBLIC_HOSTS = new Set(["migrate.segeren.com", "codex-migrate.vercel.app"]);
   let consentNotice = null;
   let analyticsMode = "consent";
+  let currentChoice = null;
 
   function readConsent() {
     try {
@@ -18,6 +19,7 @@
   }
 
   function writeConsent(value) {
+    currentChoice = value;
     try {
       window.localStorage.setItem(STORAGE_KEY, value);
     } catch {
@@ -98,12 +100,16 @@
     document.body.appendChild(consentNotice);
     consentNotice.querySelector("[data-analytics-accept]").addEventListener("click", () => {
       writeConsent(GRANTED);
-      window.gtag("consent", "update", consentValues(true));
+      if (typeof window.gtag === "function") {
+        window.gtag("consent", "update", consentValues(true));
+      }
       hideConsentNotice();
     });
     consentNotice.querySelector("[data-analytics-decline]").addEventListener("click", () => {
       writeConsent(DENIED);
-      window.gtag("consent", "update", consentValues(false));
+      if (typeof window.gtag === "function") {
+        window.gtag("consent", "update", consentValues(false));
+      }
       clearAnalyticsCookies();
       hideConsentNotice();
     });
@@ -139,7 +145,7 @@
       analyticsMode = "consent";
     }
 
-    const savedConsent = readConsent();
+    const savedConsent = currentChoice || readConsent();
     const granted = savedConsent === GRANTED || (savedConsent !== DENIED && analyticsMode === "default");
     startGoogleTag(granted);
     if (analyticsMode === "consent" && savedConsent !== GRANTED && savedConsent !== DENIED) {

@@ -963,6 +963,21 @@ Python regression passed 564 tests with seven expected filesystem skips; all 20
 Node endpoint/Help tests, native Swift typechecking, CLI startup, JavaScript
 syntax and diff checks also passed.
 
+### Analytics initialization timing repair
+
+The footer choice could be opened before the asynchronous region request
+finished. Both buttons then threw `window.gtag is not a function`; a browser
+blocking local storage could also lose the choice before initialization.
+The controller now retains the current-page choice in memory and updates Google
+only after its command queue exists. Initialization uses that choice before
+the regional default. Local preview controls also work without loading Google.
+
+Five executable client scenarios reproduced the exception before the fix.
+All six client scenarios now pass, covering early Allow/Decline with available
+and blocked storage, local preview, and post-initialization withdrawal. The
+26 Node checks and 19 site checks pass. This change does not alter the regional
+policy or add app telemetry. Separate-Mac acceptance and signing remain open.
+
 ### Reference guidance
 
 - [Lighthouse scoring excludes manual checks](https://developer.chrome.com/docs/lighthouse/accessibility/scoring).

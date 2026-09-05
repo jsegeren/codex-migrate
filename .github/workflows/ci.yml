@@ -60,4 +60,4 @@ jobs:
         with:
           node-version: "24"
       - name: Test launch email endpoint and shared Help interaction
-        run: node --test tests/analytics-region.test.js tests/signup.test.js tests/support-ui.test.js
+        run: node --test tests/analytics-client.test.js tests/analytics-region.test.js tests/signup.test.js tests/support-ui.test.js
