@@ -20,8 +20,12 @@ The Reply-To correction is now deployed on guarded Preview
 `dpl_8HXvmn6XSbqA3rjPdZq7hzB5of5y`; its stable sandbox alias points to that
 deployment, the release availability endpoint remains closed, and CI passed at
 the exact deployed source revision `83d26ae22c5c19e17227c99de65e7fb0ba2b727c`.
-This proves deployment and fail-closed configuration, not receipt of a new
-transactional message or inbox placement.
+A second hosted simulated purchase reached that deployment. Vercel recorded 200
+responses for checkout, the signed Stripe webhook, purchase status and download
+authorization; the isolated database recorded the latest purchase for the
+approved maintainer address as `sent` in one attempt. This proves provider
+acceptance of the new message, not receipt, inbox placement or the deployed
+Reply-To header: Gmail has not surfaced that message yet.
 
 See the [September 4 audit](release-audit-2026-09-04.md) for current automated
 results, accessibility findings, and pre-signing work still open.
@@ -46,7 +50,7 @@ handoff is complete while the engineering acceptance gates remain open.
 | Public website, useful guides, screenshots, price and launch intake | Six live pages; two informative guides; sample-labelled real UI screenshots; $50 planned edition with checkout closed; prior controlled SendGrid inbox receipt and signup tests | Preserve the existing rate-limit and launch-only consent. No new email was sent in the latest read-only audit. |
 | Website accessibility and performance | Prior Lighthouse/axe results plus fresh desktop/320px rendering, six-page text-spacing and 200% text-size overflow checks | Manual assistive-technology and broader keyboard acceptance remain open; no WCAG-conformance claim. See the audit for exact scope. |
 | Domain, search discovery, analytics and cross-promotion | Live canonical domain/robots/sitemap; recorded Search Console ownership, successful sitemap submission and accepted homepage request; separate GA4 property with region-aware default/full measurement, consent-mode handling for the EEA/UK/Switzerland, 14-month retention, returning-user continuity, aggregate Google Signals reporting, granular location/device reporting, ads personalization and user-provided data disabled, launch-request key event and Search Console link; live U.S. edge returned default mode with no banner and both host-only GA cookies; browser-forced consent mode showed the compact control, set no cookies before choice, produced a denied cookieless measurement, and correctly allowed or declined; You.one link on the live homepage; fresh HTTP 200 check of segeren.com confirms its “Explore Codex Migrate” link to the canonical domain | Watch native reports after real visits. A request originating from an actual EEA/UK/Swiss edge remains useful additional confirmation, but endpoint unit tests and browser-boundary simulation cover the branch. Actual demographics depend on consent, Google eligibility and reporting thresholds; indexing, ranking and traffic are not guaranteed. No repeated indexing request needed. |
-| Reproducible identifiable packaged app | Clean-source unsigned arm64 bundle, checksum and eight passing actual engine checks (one filesystem skip); signing/notarization pipeline has mocked tests. The intended Apple account currently reports Joshua Segeren (Pending) and says membership purchase can take up to 48 hours to process; this Mac still has no Developer ID identity or notary profile. | After Apple activates the existing purchase, confirm its team, install signing credentials securely, then notarize/staple and test the exact quarantined download on a clean Mac. Do not purchase again. Josh's account access is required. |
+| Reproducible identifiable packaged app | Clean-source unsigned arm64 bundle, checksum and eight passing actual engine checks (one filesystem skip); signing/notarization pipeline has mocked tests. The intended Apple account remains Pending, its enrollment email requires government-ID verification, and this Mac still has no Developer ID identity or notary profile. | Josh selects one accepted ID file in Apple's authenticated upload page; after Apple activates the existing purchase, confirm its team, install signing credentials securely, then notarize/staple and test the exact quarantined download on a clean Mac. Do not purchase again. |
 | Paid purchase, delivery, support and refunds | Best-effort support/legal pages; actual sandbox payment and full manual refund recorded, test link deactivated; Founder selected the existing Stripe account, superseding Lemon Squeezy | Codex verifies account/seller and Managed Payments eligibility, then implements and tests server-verified, replay-safe fulfillment and recoverable delivery of the exact signed artifact before checkout opens. Additional provider terms remain separate from choosing Stripe. |
 
 Current access limits: the source Mac is unlocked and the standard disposable
@@ -58,6 +62,9 @@ requires a password. Administrator authorization to create that isolated
 destination account still blocks the transfer portion of
 real-account acceptance, not all engineering work. Do not create another Apple
 purchase, weaken SSH host-key checking, or enable live checkout as a workaround.
+Apple's authenticated upload page is open and ready for one government-issued
+ID (JPG, PNG, TIFF or PDF, at most 5 MB); Codex must not select or upload identity
+documents without Josh's direct choice.
 
 ## Candidate checks completed on the development Mac
 

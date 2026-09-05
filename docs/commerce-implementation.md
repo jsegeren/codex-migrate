@@ -174,15 +174,23 @@ opened to bypass any of these checks.
   `dpl_8HXvmn6XSbqA3rjPdZq7hzB5of5y`, and the stable sandbox alias points to it.
   The exact deployed source revision passed CI and 184 Node tests, with the one
   real-database test intentionally skipped in the default suite. Hosted
-  availability still returns `false`. No new transactional message has yet
-  proved the deployed Reply-To header or inbox placement.
+  availability still returns `false`. A second hosted simulated payment reached
+  this deployment: Vercel recorded 200 for checkout, the signed Stripe webhook,
+  purchase status and download authorization, while the isolated database
+  recorded its maintainer-address delivery as `sent` after one attempt. Gmail
+  has not surfaced that message, so receipt, inbox placement and the deployed
+  Reply-To header remain unproved.
 - The real paid session's hosted status and download APIs both returned 200.
   Independent retrieval of the authorized private file returned 200, 451 bytes,
   a matching archive SHA-256 and an attachment response. The Chrome buyer-button
   path instead reached `ERR_BLOCKED_BY_CLIENT`; no browser-downloaded file was
   found. Do not count that as a successful browser download or disable browser
-  security protections to obtain a passing result. Diagnose the client block
-  and repeat the actual browser acceptance before release.
+  security protections to obtain a passing result. The second hosted purchase
+  reproduced the same client block. Pausing AdBlock on only the private blob
+  host and reloading did not change it, and AdBlock was restored immediately;
+  this rules out that extension but does not identify the blocking client.
+  Repeat the actual browser acceptance outside the controlled-browser boundary
+  before release.
 - September 5 sandbox setup: created endpoint `we_1UCK0vQwGK6ZgBcKbA8f3rXL`
   in `acct_1Rkc6nQwGK6ZgBcK` for `checkout.session.completed` and
   `checkout.session.async_payment_succeeded`. The endpoint targets this
@@ -257,9 +265,10 @@ support mailbox, `joshua@segeren.com`, with regression assertions for sandbox
 and live messages. This fixes support replies independently of the sending
 domain. It does not prove inbox placement. A branded sender and another actual
 recipient delivery test remain required. SendGrid's official username-recovery
-flow identified the legacy account, but the saved browser identity did not
-match its current login identifier and the password step still needs the
-account owner. Existing verified domains therefore remain uninspected.
+flow identified the legacy account. The browser's saved credential then
+authenticated after using that recovered login identifier; SendGrid is now
+waiting for its text-message two-factor code. Existing verified domains
+therefore remain uninspected until the account owner completes that challenge.
 
 ### Firewall configuration
 
