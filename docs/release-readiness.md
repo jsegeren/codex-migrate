@@ -24,8 +24,20 @@ A second hosted simulated purchase reached that deployment. Vercel recorded 200
 responses for checkout, the signed Stripe webhook, purchase status and download
 authorization; the isolated database recorded the latest purchase for the
 approved maintainer address as `sent` in one attempt. This proves provider
-acceptance of the new message, not receipt, inbox placement or the deployed
-Reply-To header: Gmail has not surfaced that message yet.
+acceptance of the new message. SendGrid's activity log subsequently recorded
+Google's `250 2.0.0 OK` response and `Delivered` in under one minute. Gmail has
+not surfaced that message, so inbox placement and the deployed Reply-To header
+remain unproved.
+
+`segeren.com` is now domain-authenticated in SendGrid with an exact return-path
+CNAME and both DKIM CNAMEs; authoritative Squarespace DNS and SendGrid's success
+screen agree. The existing strict DMARC record was preserved. Vercel now uses
+`joshua@segeren.com` as the sender in both Production and Preview. Production
+deployment `dpl_9tkPY8rT5Z91xN8WkWMxk9fGyiwh` is live at the canonical domain
+with checkout still closed. Guarded Preview deployment
+`dpl_DV9g1dAheijpisyxBVvr3dgps4qr` is READY and its stable sandbox alias points
+to it, also with availability closed. A new message from the branded sender is
+still required to verify the deployed configuration and inbox behavior.
 
 See the [September 4 audit](release-audit-2026-09-04.md) for current automated
 results, accessibility findings, and pre-signing work still open.

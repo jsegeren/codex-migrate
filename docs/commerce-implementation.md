@@ -177,9 +177,10 @@ opened to bypass any of these checks.
   availability still returns `false`. A second hosted simulated payment reached
   this deployment: Vercel recorded 200 for checkout, the signed Stripe webhook,
   purchase status and download authorization, while the isolated database
-  recorded its maintainer-address delivery as `sent` after one attempt. Gmail
-  has not surfaced that message, so receipt, inbox placement and the deployed
-  Reply-To header remain unproved.
+  recorded its maintainer-address delivery as `sent` after one attempt.
+  SendGrid's activity log recorded Google's `250 2.0.0 OK` response and
+  `Delivered` in under one minute. Gmail has not surfaced that message, so
+  inbox placement and the deployed Reply-To header remain unproved.
 - The real paid session's hosted status and download APIs both returned 200.
   Independent retrieval of the authorized private file returned 200, 451 bytes,
   a matching archive SHA-256 and an attachment response. The Chrome buyer-button
@@ -265,10 +266,21 @@ support mailbox, `joshua@segeren.com`, with regression assertions for sandbox
 and live messages. This fixes support replies independently of the sending
 domain. It does not prove inbox placement. A branded sender and another actual
 recipient delivery test remain required. SendGrid's official username-recovery
-flow identified the legacy account. The browser's saved credential then
-authenticated after using that recovered login identifier; SendGrid is now
-waiting for its text-message two-factor code. Existing verified domains
-therefore remain uninspected until the account owner completes that challenge.
+flow identified the legacy account, the saved credential authenticated, and the
+account owner completed the text-message challenge. The account showed the old
+Shopcierge domain authenticated but only a single-sender identity for
+`joshua@segeren.com`.
+
+The `segeren.com` sending domain is now fully authenticated. Squarespace's
+authoritative DNS returns SendGrid's exact return-path and two DKIM CNAMEs;
+SendGrid reported verification success. The existing strict DMARC record was
+preserved and link branding was not enabled because commerce mail disables
+click tracking. `LAUNCH_FROM_EMAIL` now uses `joshua@segeren.com` for Production
+and Preview. Production deployment `dpl_9tkPY8rT5Z91xN8WkWMxk9fGyiwh` and
+guarded Preview `dpl_DV9g1dAheijpisyxBVvr3dgps4qr` were deployed after the
+configuration change; both availability endpoints remain closed. A new
+transactional message is still required to prove the branded sender and
+Reply-To in received headers.
 
 ### Firewall configuration
 

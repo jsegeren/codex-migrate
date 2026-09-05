@@ -2,7 +2,9 @@
 
 The public site is deployed to the existing `codex-migrate` Vercel project.
 Its canonical hostname is `migrate.segeren.com`; Squarespace manages DNS.
-Only the `migrate` CNAME is required. Do not change the apex site, mail records,
+The `migrate` CNAME serves the site. Three additional CNAMEs authenticate
+`segeren.com` for SendGrid (return path plus two DKIM selectors); preserve them
+with the existing strict DMARC record. Do not change the apex site, MX records,
 or nameservers. Static output is `site/`; `api/signup.js` is a Node function.
 
 ## Email configuration
@@ -10,7 +12,7 @@ or nameservers. Static output is `site/`; `api/signup.js` is a Node function.
 Production-only sensitive environment variables:
 
 - `SENDGRID_API_KEY`: existing authorized SendGrid sending credential.
-- `LAUNCH_FROM_EMAIL`: existing verified sender, branded Codex Migrate.
+- `LAUNCH_FROM_EMAIL`: `joshua@segeren.com`, on the authenticated sender domain.
 - `LAUNCH_NOTIFY_EMAIL`: fixed maintainer inbox.
 
 Never put these values in Git, browser code, screenshots, or command logs.
@@ -43,6 +45,12 @@ Run `node --test tests/signup.test.js` and the Python test suite. Check desktop
 and mobile layout, keyboard labels, consent, successful delivery, and failure
 messages. Test actual sending only to the maintainer's controlled address.
 Verify the receipt in the inbox; remove test entries from any manual launch list.
+
+On September 5, 2026, Squarespace's authoritative DNS returned all three
+SendGrid CNAMEs and SendGrid confirmed `segeren.com` as authenticated. The
+existing DMARC policy was unchanged. Production and Preview sender configuration
+now use `joshua@segeren.com`; both environments require a deployment made after
+that configuration change.
 
 Deploy through the linked Vercel project, then check the custom hostname, TLS,
 signup endpoint, `robots.txt`, `sitemap.xml`, and canonical links. Search-engine
