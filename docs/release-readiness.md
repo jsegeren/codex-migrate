@@ -36,8 +36,13 @@ screen agree. The existing strict DMARC record was preserved. Vercel now uses
 deployment `dpl_9tkPY8rT5Z91xN8WkWMxk9fGyiwh` is live at the canonical domain
 with checkout still closed. Guarded Preview deployment
 `dpl_DV9g1dAheijpisyxBVvr3dgps4qr` is READY and its stable sandbox alias points
-to it, also with availability closed. A new message from the branded sender is
-still required to verify the deployed configuration and inbox behavior.
+to it, also with availability closed. A production signup submission returned
+200, SendGrid recorded delivery to Google in two seconds, and the message landed
+in the Segeren Inbox. Gmail's received-message details showed From and Reply-To
+as `joshua@segeren.com`, mailed-by `em5636.segeren.com`, signed-by
+`segeren.com`, and TLS. This closes the branded-sender, authentication,
+Reply-To, and inbox-placement proof for the launch-intake path; it does not by
+itself prove purchase-delivery inbox placement.
 
 See the [September 4 audit](release-audit-2026-09-04.md) for current automated
 results, accessibility findings, and pre-signing work still open.

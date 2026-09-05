@@ -263,11 +263,9 @@ domain authentication. No Spam label or mailbox filtering rule was changed.
 
 The delivery implementation now explicitly sets Reply-To to the advertised
 support mailbox, `joshua@segeren.com`, with regression assertions for sandbox
-and live messages. This fixes support replies independently of the sending
-domain. It does not prove inbox placement. A branded sender and another actual
-recipient delivery test remain required. SendGrid's official username-recovery
-flow identified the legacy account, the saved credential authenticated, and the
-account owner completed the text-message challenge. The account showed the old
+and live messages. SendGrid's official username-recovery flow identified the
+legacy account, the saved credential authenticated, and the account owner
+completed the text-message challenge. The account initially showed the old
 Shopcierge domain authenticated but only a single-sender identity for
 `joshua@segeren.com`.
 
@@ -279,8 +277,15 @@ click tracking. `LAUNCH_FROM_EMAIL` now uses `joshua@segeren.com` for Production
 and Preview. Production deployment `dpl_9tkPY8rT5Z91xN8WkWMxk9fGyiwh` and
 guarded Preview `dpl_DV9g1dAheijpisyxBVvr3dgps4qr` were deployed after the
 configuration change; both availability endpoints remain closed. A new
-transactional message is still required to prove the branded sender and
-Reply-To in received headers.
+production launch-intake submission returned 200. SendGrid recorded From
+`joshua@segeren.com` and Google's `250 2.0.0 OK` delivery response in two
+seconds. The message landed in the Segeren Inbox, where Gmail's expanded
+details showed From and Reply-To `joshua@segeren.com`, mailed-by
+`em5636.segeren.com`, signed-by `segeren.com`, and TLS. This is direct proof of
+the deployed branded sender, domain authentication, Reply-To, and inbox
+placement for launch intake. Purchase-delivery inbox placement remains a
+separate open acceptance item because the purchase message and delivery path
+are different.
 
 ### Firewall configuration
 
