@@ -39,6 +39,18 @@ purchase, weaken SSH host-key checking, or enable live checkout as a workaround.
 
 ## Candidate checks completed on the development Mac
 
+- Latest unsigned engineering package: clean source
+  `50e2325cdc3edcd0df882fff53ba1840c1c4a329`, including pairing recovery and
+  keyboard focus fixes, built at `2026-09-05T03:40:30Z` into
+  `build/desktop-cip8tnrb/Codex-Migrate-0.1.0-build1-arm64-LOCAL-UNSIGNED.zip`.
+  SHA-256: `a025cfa6f0b7d1eec157c0449a023d3843e30a31e6e153721dfb284bf0cd2020`.
+  Nine actual bundled-engine tests ran in 1.965 seconds: eight passed and one
+  case-sensitive-filesystem check skipped. This supersedes the prior local
+  package for new acceptance runs, not a signed release or a clean-Mac result.
+  No active helper or migration was replaced. The clean-Mac checklist now
+  explicitly separates synthetic recovery data from authentic Codex UI-created
+  test conversations; only the latter can establish conversation reopening.
+
 - Connection-action keyboard review reproduced lost focus on an invalid-card
   response (the browser focused BODY). Actions now restore the initiating button
   on failure or the next useful control on success, without overriding focus
