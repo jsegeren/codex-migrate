@@ -14,17 +14,18 @@ complete; Google accepted the homepage indexing request. The earlier pending
 search entries below are historical. See **Search Console completion** near the
 end for the authoritative result. The paid-release outcome remains unchanged.
 
-Latest image-delivery follow-up: the local website candidate now serves
+Latest image-delivery follow-up: the live production website now serves
 responsive AVIF copies of the compatibility icon and dashboard screenshots,
 with the original PNG artwork retained as fallback and the full-size screenshot
 target. The artwork was not recolored, cropped or combined with project branding.
-At 390px, a real browser selected the 6.6 KB 288px icon and 48 KB 720px dashboard
-image; 1280px and 390px review found no page overflow or console errors. A fresh
-local Lighthouse 13.4.1 mobile run scored 100 for performance, accessibility,
-best practices and SEO, reported 1.1-second LCP and 87 KiB total transfer, and
-passed its responsive-image and modern-format audits. These are single local lab
-measurements of the candidate, not field data, WCAG certification or proof of
-the live deployment until the pushed site is independently rechecked.
+At 390px and 1280px, real-browser review found no page overflow or console
+errors, and both sample screenshots remained readable with their full-size PNG
+links intact. A fresh Lighthouse 13.4.1 mobile run against the custom production
+domain selected the 2.7 KB header icon, 6.6 KB hero icon and 46 KB dashboard
+image; it scored 100 for performance, accessibility, best practices and SEO,
+reported 0.9-second LCP and 67 KiB total transfer, and passed its
+responsive-image and modern-format audits. This is a single production lab
+measurement, not field data or WCAG certification.
 
 ## Evidence
 
