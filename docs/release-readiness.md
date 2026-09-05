@@ -36,6 +36,22 @@ purchase, weaken SSH host-key checking, or enable live checkout as a workaround.
 
 ## Candidate checks completed on the development Mac
 
+- Clean source `491e58a2f8cf19515ac301c3e16d7cdb3a33de28` now has a current
+  unsigned arm64 engineering package, including the trusted-route selection,
+  rsync adapter and SSH error guidance added since the prior package. The
+  finished ZIP was independently hashed, extracted to a disposable directory,
+  and passed deep/strict ad-hoc signature verification. The same nine desktop
+  checks ran against both the original bundled engine and the extracted engine:
+  eight passed, with the case-sensitive-filename fixture explicitly skipped.
+  Packaged subprocess checks remove Python/DYLD overrides and restrict PATH to
+  system tools. ZIP SHA-256:
+  `2ab31c4f4063c142dc8b0cf06f4cd30084e3516644bce1e18a6c0d0ed1a03db3`.
+  The retained local build is `build/desktop-nbwzrppm`; this is archive and
+  development-Mac startup evidence, not Developer ID trust, clean-Mac launch,
+  successful cross-Mac transfer or restored-chat acceptance. The disposable
+  source account still requires local administrator authentication to operate;
+  destination test-account access has not been verified.
+
 - Real strict-SSH probing reproduced a user entering the correct password while
   the helper had actually stopped before authentication on an untrusted Wi-Fi
   host key. Common SSH failures are now classified into separate, bounded
