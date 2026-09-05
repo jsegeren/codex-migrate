@@ -95,13 +95,44 @@ declines, delayed payment methods, tax compliance, or live payment readiness.
 The test used the existing default payment-method configuration and no automatic
 tax. Those choices must not be copied to live sales without review.
 
+### Merchant-of-record recommendation (September 5, 2026)
+
+The current recommendation is **Lemon Squeezy**, subject to Founder approval,
+account onboarding and review of its then-current terms. No account or product
+has been created. This is an operating recommendation, not tax or legal advice,
+and merchant-of-record coverage does not transfer Codex Migrate's product-safety,
+privacy, support or general liability obligations.
+
+For a $50 one-time download, the current public comparison is:
+
+| Option | Published transaction price | Approximate fee on a $50 domestic-card sale | Relevant fit |
+| --- | --- | --- | --- |
+| Lemon Squeezy | 5% + 50¢, no monthly payment-processing fee | $3.00 | Merchant of record; directly hosts digital files up to 5 GB per product, supports one-time license keys, and signs webhooks. |
+| Paddle | 5% + 50¢, no monthly fee | $3.00 | Merchant of record; supports one-time downloadable software, with fulfillment driven by a signed `transaction.completed` webhook. |
+| Stripe Managed Payments | 3.5% in addition to ordinary Payments fees | About $3.50 using Stripe's current 2.9% + 30¢ US domestic-card price | Merchant of record and downloadable software is eligible, but the product is a public preview and requires Managed Payments Checkout. |
+
+Lemon Squeezy is the smallest defensible first-release path because it combines
+merchant-of-record tax/payment handling with hosted customer downloads and
+license keys. Paddle is a credible fallback. Ordinary Stripe Checkout remains
+the wrong default for a small global release because Codex Migrate would remain
+the merchant and retain the indirect-tax administration. Stripe Managed
+Payments is a future alternative if its account eligibility, preview maturity
+or existing-Stripe convenience becomes more valuable than the higher current
+fee.
+
+Official references: [Lemon Squeezy pricing](https://www.lemonsqueezy.com/pricing),
+[digital files and license keys](https://docs.lemonsqueezy.com/help/products/adding-products),
+[signed webhooks](https://docs.lemonsqueezy.com/help/webhooks/signing-requests),
+[Paddle pricing](https://www.paddle.com/pricing),
+[Paddle one-time digital products](https://developer.paddle.com/get-started/how-paddle-works/digital-products/),
+[Stripe pricing](https://stripe.com/pricing), and
+[Managed Payments eligibility and behavior](https://docs.stripe.com/payments/managed-payments/how-it-works).
+
 ### Remaining commerce work
 
-- Confirm the merchant/tax arrangement before live sales. Ordinary Stripe
-  Checkout does not by itself outsource all tax obligations. Managed Payments
-  was offered by the dashboard but was **not enabled**; its additional fee,
-  supported countries, Link branding, refund authority and support requirements
-  require a Founder decision. Do not silently enroll or change shared settings.
+- Approve or reject the merchant-of-record recommendation before live sales.
+  Do not silently enroll, accept vendor terms, create a live product or change
+  shared Stripe settings.
 - Implement server-verified purchase fulfillment, not a success-page redirect
   treated as proof of payment. Scope events to this exact product/price and
   environment; verify webhook signatures and paid status; handle retries and
