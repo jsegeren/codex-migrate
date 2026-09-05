@@ -99,6 +99,19 @@ documents without Josh's direct choice.
 
 ## Candidate checks completed on the development Mac
 
+- Second-Mac package smoke: the current unsigned candidate below was copied as
+  its ZIP to a separate Apple Silicon Mac under `/Users/Shared`. The receiving
+  Mac independently matched SHA-256
+  `130d8c5e47c685e06d475615efb25e87c6fa83f137fcd4950635b61162b354b3`,
+  extracted it, passed deep/strict ad-hoc signature verification, identified the
+  native shell as arm64, and ran the bundled engine as version `0.1.0` with an
+  empty environment, a disposable `HOME`, and only system paths. The source
+  repository and developer Python were not used. This proves transport integrity
+  and second-Mac bundled-engine startup; it does not prove Finder launch,
+  Gatekeeper/notarization, the browser UI, or a migration. The disposable
+  destination account is still required for those checks so the maintainer's
+  restored Codex workspace is never selected.
+
 - Current unsigned engineering package: clean source
   `ef3952d875bf3efb9651f07134cb9f23089a7e66`, built at
   `2026-09-05T15:56:47Z` into
