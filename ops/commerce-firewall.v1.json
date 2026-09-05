@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "projectId": "prj_jXmzcjmACVYfAgdNytpAwSuDSCHK",
+  "projectName": "codex-migrate",
+  "rules": [
+    { "id": "rule_limit_launch_signups_RzXI5I", "name": "Limit launch signups", "pathPrefix": "/api/signup", "requests": 5, "windowSeconds": 600 },
+    { "id": "rule_limit_checkout_creation_TVTZpP", "name": "Limit checkout creation", "pathPrefix": "/api/checkout", "requests": 10, "windowSeconds": 60 },
+    { "id": "rule_limit_purchase_recovery_0QuX0H", "name": "Limit purchase recovery", "pathPrefix": "/api/purchase", "requests": 60, "windowSeconds": 60 }
+  ],
+  "algorithm": "fixed_window",
+  "keys": ["ip"],
+  "exceededAction": "rate_limit",
+  "note": "Operator inventory of the published Vercel firewall, not automatic deployment configuration. Stripe webhooks and analytics must not match these rules."
+}

@@ -15,6 +15,7 @@
     const response = await fetch('/api/purchase', { method: 'POST', credentials: 'omit', cache: 'no-store',
       headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, credential: value }),
       signal: AbortSignal.timeout(15000) });
+    if (response.status === 429) throw new Error('rate_limited');
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'temporarily_unavailable');
     return data;
@@ -43,6 +44,7 @@
       }
     } catch (error) {
       const messages = {
+        rate_limited: 'Too many download checks. Wait a minute, then select Check again. Do not purchase again.',
         checkout_closed: 'Checkout is not open yet. If you have a payment receipt, email Josh for help.',
         release_unavailable: 'Your download is temporarily unavailable. Please email Josh; do not purchase again.',
         invalid_link: 'This download link is invalid. Reopen the link from your purchase email or email Josh.',

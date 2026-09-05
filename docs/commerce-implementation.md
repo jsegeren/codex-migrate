@@ -127,15 +127,15 @@ boolean does not substitute for signing or clean-Mac evidence.
 
 Before activation: execute the app-upload workflow against an actual signed build,
 wire the sandbox Stripe endpoint, run a real Managed Payments payment/refund
-through these routes and the controlled inbox, configure durable edge rate
-limits for checkout/purchase routes, and verify the real hosted raw-body
+through these routes and the controlled inbox, recheck the published edge rate
+limits below, and verify the real hosted raw-body
 signature boundary. Then finish live Managed Payments eligibility/terms,
 Apple signing and clean-Mac migration acceptance. No live checkout should be
 opened to bypass any of these checks.
 
 ## Evidence
 
-- 176 Node tests passed; the real-database test is skipped in the default suite.
+- 178 Node tests passed; the real-database test is skipped in the default suite.
 - Sandbox checkout now rejects missing/malformed/incorrect operator tokens before
   any runtime, database or provider access. Request IDs must be strings rather
   than values coercible to UUIDs. Direct handler tests cover authorization order,
@@ -178,6 +178,40 @@ opened to bypass any of these checks.
   browser-clock independence, and rejection of public/malformed destinations.
   Real Chromium keyboard activation of a failing download left focus on Check
   again; the 320px error screen had no horizontal overflow and a 17px button.
+
+## Published edge request limits
+
+The September 5 readback found the existing “Limit launch signups” rule matched
+all `/api/` requests, not just signup. Its five-per-ten-minute bucket would also
+throttle purchase recovery, analytics and Stripe webhook requests. With no
+preexisting draft changes, that rule was narrowed to `/api/signup`, and two
+separate per-IP fixed-window rules were added and published on the existing
+Codex Migrate project: checkout 10 requests/minute, purchase recovery 60/minute.
+Exceeded requests receive HTTP 429, not an interactive browser challenge.
+The exact rule inventory is in `ops/commerce-firewall.v1.json`. Readback confirmed
+all three enabled and no unpublished changes; other projects were not touched.
+
+A bounded unauthenticated check on the public domain observed checkout's first
+10 requests reaching the existing 404 route response and the next two returning
+429; purchase's first 60 returned 404 and the next two 429. Eight analytics
+requests still returned 200, and eight webhook requests returned the existing
+404, not 429. Those commerce routes are not yet deployed to Production; this
+proves the edge limits and separation, not functioning paid delivery or webhook
+signature handling. No valid signup, payment, or email was submitted. The
+buyer scripts handle non-JSON 429 responses with a wait/retry instruction while
+retaining checkout retry identity and download recovery access.
+After the checkout window expired, a new request again reached the ordinary
+404 route response. Real Chromium checks at 320px with explicit HTML 429
+fixtures showed the wait instructions without overflow; checkout retained
+keyboard focus, and the download page kept Check again available. Screenshots
+were inspected. This is responsive/error-state evidence, not an actual payment.
+
+Inspect with `vercel firewall rules list`, `rules inspect <id>` and `diff` before
+changing anything. Publish only the reviewed project-specific draft. If a limit
+causes legitimate shared-network failures, adjust only that rule's threshold;
+do not restore the broad `/api/` signup match or rate-limit Stripe with a buyer
+bucket. Per-IP limits can affect shared networks and do not stop distributed
+abuse or guarantee a spending cap. Normal Vercel usage charges still apply.
 
 ## Upload a signed candidate (operator only)
 

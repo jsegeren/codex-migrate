@@ -28,7 +28,9 @@ function fixture() {
     history: { replaceState() { location.hash = ''; } }, fetch: (url, options) => {
       calls.push({ url, options }); return new Promise(resolve => pending.push(resolve));
     } });
-  const finish = async (data = good, ok = true) => { pending.shift()({ ok, json: async () => data }); await tick(); };
+  const finish = async (data = good, ok = true, status = ok ? 200 : 503) => {
+    pending.shift()({ ok, status, json: async () => { if (data instanceof Error) throw data; return data; } }); await tick();
+  };
   return { document, get: document.getElementById, location, calls, finish, navigations };
 }
 test('page strips bearer fragment and waits for explicit download; no browser clock gate', async () => {
@@ -39,6 +41,14 @@ test('page strips bearer fragment and waits for explicit download; no browser cl
   assert.equal(f.calls.length, 2); await f.finish();
   assert.deepEqual(f.navigations, [good.url]); assert.equal(f.document.activeElement, button);
   assert.match(f.get('purchase-status').textContent, /Download requested/);
+});
+test('edge HTML rate-limit response leaves recovery available without another purchase', async () => {
+  const f = fixture(); await f.finish(Error('not JSON'), false, 429);
+  assert.match(f.get('purchase-status').textContent, /Wait a minute.*Do not purchase again/);
+  assert.equal(f.get('purchase-retry').hidden, false);
+  f.get('purchase-retry').focus(); f.get('purchase-retry').events.click(); await f.finish();
+  assert.equal(f.document.activeElement, f.get('purchase-download'));
+  assert.equal(f.navigations.length, 0);
 });
 for (const moved of [false, true]) test(`failed download preserves useful focus, user moved=${moved}`, async () => {
   const f = fixture(); await f.finish();

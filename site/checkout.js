@@ -25,13 +25,17 @@
       const response = await fetch('/api/checkout', { method: 'POST', credentials: 'omit', cache: 'no-store',
         headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requestId: attempt.id }),
         signal: AbortSignal.timeout(45000) });
+      // The edge limiter can return HTML, before the JSON API is reached.
+      if (response.status === 429) throw Error('rate_limited');
       const data = await response.json();
       if (!response.ok) throw Error(data.error || 'unavailable');
       const url = new URL(data.url);
       if (url.origin !== 'https://checkout.stripe.com' || url.username || url.password) throw Error('unavailable');
       location.assign(url.toString());
     } catch (error) {
-      status.textContent = error.message === 'checkout_closed'
+      status.textContent = error.message === 'rate_limited'
+        ? 'Too many checkout attempts. Wait a minute, then try again. If you already paid, use your delivery email—do not pay again.'
+        : error.message === 'checkout_closed'
         ? 'Sales are not open right now. Please email Josh for help.'
         : 'Checkout could not open. Try again or email Josh. If you already paid, use your delivery email—do not pay again.';
     } finally {

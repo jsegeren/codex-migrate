@@ -27,7 +27,9 @@ function fixture(data = { available: true, priceUSD: 50, architecture: 'arm64' }
       return new Promise(resolve => pending.push(resolve));
     } });
   return { document, get: document.getElementById, calls, navigations, stored: () => stored,
-    finish: async (value, ok = true) => { pending.shift()({ ok, json: async () => value }); await tick(); } };
+    finish: async (value, ok = true, status = ok ? 200 : 503) => {
+      pending.shift()({ ok, status, json: async () => { if (value instanceof Error) throw value; return value; } }); await tick();
+    } };
 }
 for (const data of [{ available: false }, { available: true, priceUSD: 49, architecture: 'arm64' },
   { available: true, priceUSD: 50, architecture: 'other' }]) test('non-ready response preserves launch-only UI', async () => {
@@ -64,6 +66,15 @@ test('reload retains a recent checkout request and does not steal moved focus', 
 test('untrusted checkout redirects are rejected', async () => {
   const f = fixture(); await tick(); f.get('checkout-button').events.click();
   await f.finish({ url: 'https://evil.example/checkout' }); assert.equal(f.navigations.length, 0);
+});
+test('edge HTML rate-limit response provides a wait instruction and reusable retry', async () => {
+  const f = fixture(); await tick(); const button = f.get('checkout-button'); button.focus(); button.events.click();
+  await f.finish(Error('not JSON'), false, 429);
+  assert.match(f.get('checkout-status').textContent, /Wait a minute/);
+  assert.equal(f.document.activeElement, button); assert.equal(button.disabled, false);
+  button.events.click(); assert.equal(f.calls[1].options.body, f.calls[2].options.body);
+  await f.finish({ url: 'https://checkout.stripe.com/c/pay/fixture' });
+  assert.equal(f.navigations.length, 1);
 });
 function response() { return { setHeader() {}, end(text) { this.value = JSON.parse(text); } }; }
 test('availability defaults closed without configuration or network calls', () => {
