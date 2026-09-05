@@ -5,6 +5,9 @@ informational website does not open checkout or certify a customer download.
 
 See the [September 4 audit](release-audit-2026-09-04.md) for current automated
 results, accessibility findings, and pre-signing work still open.
+Use [clean-Mac acceptance](clean-mac-acceptance.md) to execute the remaining
+device checks. Synthetic transfer fixtures do not establish that real Codex
+conversations open; those are separate acceptance runs.
 
 ## Current gate map
 
