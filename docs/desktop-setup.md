@@ -235,19 +235,33 @@ creation. The completed outer build receipt includes that notarization result;
 the already-signed receipt inside the app records pre-notarization build facts.
 
 If processing is interrupted, do not immediately rebuild or submit another copy.
-Use the saved ID with the existing Keychain profile to inspect the original job:
+Resume the existing build directory with the same Keychain profile:
+
+```sh
+.venv/bin/python desktop/build.py \
+  --resume-notarization build/desktop-EXISTING \
+  --notary-profile your-existing-keychain-profile
+```
+
+The resume path accepts only a direct `build/desktop-*` directory containing a
+clean release-mode app, its embedded build receipt, an available source commit,
+and the saved Apple submission ID. It verifies the unchanged signed app, waits
+for that exact ID, and only an explicit `Accepted` response permits stapling,
+ticket validation, Gatekeeper assessment, checksums, and final archive
+publication. It never rebuilds, re-signs, or creates another submission.
+
+You may also inspect the original job directly:
 
 ```sh
 xcrun notarytool info SAVED-SUBMISSION-ID --keychain-profile your-existing-keychain-profile
 xcrun notarytool wait SAVED-SUBMISSION-ID --keychain-profile your-existing-keychain-profile
 ```
 
-A pending or accepted job is not a finished release archive. The builder does
-not yet resume packaging automatically: retain the existing app and submission
-receipt for maintainer review and completion of stapling, validation, Gatekeeper
-assessment and checksums. If submission failed before an ID was saved, inspect
-`notarytool history` using the same profile before retrying. Never publish the
-pre-stapling app or mistake an engineering ZIP for an approved download.
+A pending or accepted job is not a finished release archive. Retain the existing
+app and submission receipt and use the guarded resume command. If submission
+failed before an ID was saved, inspect `notarytool history` using the same
+profile before retrying. Never publish the pre-stapling app or mistake an
+engineering ZIP for an approved download.
 
 A successful build is **not** by itself
 release approval. Before charging customers, record evidence for:

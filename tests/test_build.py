@@ -22,6 +22,26 @@ def response(status="Accepted", identifier=SUBMISSION, returncode=0):
 
 
 class ReleaseBuildTests(unittest.TestCase):
+    def make_partial_release(self, root, status="Submitted"):
+        output = root / ("build/desktop-resume-" + status.lower().replace(" ", "-"))
+        resources = output / "Codex Migrate.app/Contents/Resources"
+        resources.mkdir(parents=True)
+        receipt = {
+            "source_revision": "a" * 40,
+            "source_dirty": False,
+            "architecture": "arm64",
+            "build_mode": "release",
+            "built_at": "2026-09-04T00:00:00+00:00",
+            "version": "0.1.0",
+            "bundle_version": "1",
+        }
+        (resources / "build-info.json").write_text(json.dumps(receipt))
+        (output / "Codex Migrate.app/Contents/Info.plist").write_bytes(plistlib.dumps(
+            {"CFBundleShortVersionString": "0.1.0", "CFBundleVersion": "1"}))
+        (output / "notary-submission.json").write_text(json.dumps(
+            {"id": SUBMISSION, "status": status}))
+        return output
+
     def test_versioned_artifact_names_distinguish_unsigned_builds(self):
         receipt = dict(version="0.1.0", bundle_version="1", architecture="arm64",
                        build_mode="release")
@@ -93,6 +113,108 @@ class ReleaseBuildTests(unittest.TestCase):
                     build.notarize(output / "app.zip", "profile", output)
             self.assertEqual(run.call_count, 1)
             self.assertFalse((output / "notary-submission.json").exists())
+
+    def test_saved_notarization_can_resume_without_rebuild_or_resubmit(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            output = self.make_partial_release(root)
+            calls = []
+
+            def invoke(command, **kwargs):
+                calls.append(list(map(str, command)))
+                if command[0] == "git":
+                    self.assertEqual(command[-1], "a" * 40 + ":desktop/Info.plist")
+                    return subprocess.CompletedProcess(command, 0, plistlib.dumps(
+                        {"CFBundleShortVersionString": "0.1.0", "CFBundleVersion": "1"}), b"")
+                self.assertEqual(command[0:3], ["xcrun", "notarytool", "wait"])
+                self.assertEqual(command[3], SUBMISSION)
+                return response()
+
+            def run(*arguments):
+                command = list(map(str, arguments))
+                calls.append(command)
+                if command[0] == "ditto":
+                    Path(command[-1]).write_bytes(b"resumed release archive")
+
+            with patch.object(build, "ROOT", root), \
+                 patch.object(build.subprocess, "run", side_effect=invoke), \
+                 patch.object(build, "run", side_effect=run):
+                build.resume_notarization(output, "private-profile")
+
+            artifact = output / "Codex-Migrate-0.1.0-build1-arm64.zip"
+            self.assertTrue(artifact.is_file())
+            outer = json.loads((output / "build-info.json").read_text())
+            self.assertEqual(outer["notarization"], {"id": SUBMISSION, "status": "Accepted"})
+            self.assertEqual(json.loads((output / "notary-submission.json").read_text()),
+                             {"id": SUBMISSION, "status": "Accepted"})
+            self.assertIn(artifact.name, (output / "SHA256SUMS").read_text())
+            flattened = [command[:3] for command in calls]
+            self.assertNotIn(["xcrun", "notarytool", "submit"], flattened)
+            self.assertNotIn("PyInstaller", " ".join(" ".join(command) for command in calls))
+            self.assertLess(flattened.index(["xcrun", "notarytool", "wait"]),
+                            flattened.index(["xcrun", "stapler", "staple"]))
+
+    def test_resume_rejects_unsafe_rejected_and_completed_state_before_apple(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            outside = root / "outside"
+            outside.mkdir()
+            with patch.object(build, "ROOT", root):
+                with self.assertRaisesRegex(ValueError, "direct build"):
+                    build.resume_state(outside)
+
+            for status in ("Invalid", "Rejected", "Other"):
+                with self.subTest(status=status):
+                    output = self.make_partial_release(root, status=status)
+                    with patch.object(build, "ROOT", root), self.assertRaises(ValueError):
+                        build.resume_state(output)
+                    (output / "notary-submission.json").write_text(json.dumps(
+                        {"id": SUBMISSION, "status": "Submitted"}))
+                    (output / "SHA256SUMS").write_text("already complete")
+                    with patch.object(build, "ROOT", root), self.assertRaisesRegex(
+                            ValueError, "completion output"):
+                        build.resume_state(output)
+                    (output / "SHA256SUMS").unlink()
+
+            malformed = self.make_partial_release(root, status="Submitted")
+            (malformed / "Codex Migrate.app/Contents/Resources/build-info.json").write_text("[]")
+            with patch.object(build, "ROOT", root), self.assertRaisesRegex(
+                    ValueError, "unsupported shape"):
+                build.resume_state(malformed)
+
+            linked = self.make_partial_release(root, status="Accepted")
+            (linked / "build-info.json").symlink_to(root / "missing-outside-receipt")
+            with patch.object(build, "ROOT", root), self.assertRaisesRegex(
+                    ValueError, "completion output"):
+                build.resume_state(linked)
+
+    def test_resume_stops_before_apple_when_source_or_signature_is_unavailable(self):
+        for failure in ("source", "signature"):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                output = self.make_partial_release(root)
+                apple_calls = []
+
+                def invoke(command, **kwargs):
+                    if command[0] == "git":
+                        return subprocess.CompletedProcess(command, 1 if failure == "source" else 0,
+                                                           b"" if failure == "source" else plistlib.dumps(
+                                                               {"CFBundleShortVersionString": "0.1.0",
+                                                                "CFBundleVersion": "1"}), b"")
+                    apple_calls.append(command)
+                    return response()
+
+                def run(*arguments):
+                    if failure == "signature" and arguments[:2] == ("codesign", "--verify"):
+                        raise subprocess.CalledProcessError(1, arguments)
+
+                with patch.object(build, "ROOT", root), \
+                     patch.object(build.subprocess, "run", side_effect=invoke), \
+                     patch.object(build, "run", side_effect=run), \
+                     self.assertRaises((ValueError, subprocess.CalledProcessError)):
+                    build.resume_notarization(output, "private-profile")
+                self.assertEqual(apple_calls, [])
+                self.assertFalse(list(output.glob("Codex-Migrate-*.zip")))
 
     def test_packaging_release_gate_order_and_failure_stop(self):
         for failure in (None, "sign", "verify-signature", "version", "source", "notarize", "staple", "validate", "assess",

@@ -826,6 +826,26 @@ verified its 1,718 bytes exactly matched the preview and parsed successfully.
 No email client was opened and no email was sent. The synthetic downloaded copy
 was moved to Trash after inspection. Review-only local servers were stopped.
 
+### Notarization interruption recovery follow-up
+
+The release builder can now resume an interrupted Apple notarization from its
+saved direct `build/desktop-*` directory. It validates the embedded clean-source
+release receipt and matching app version, proves the source commit remains in
+the repository, verifies the existing app signature, and waits on the exact
+saved Apple submission ID. It does not invoke PyInstaller, re-sign, or submit a
+second artifact. Only an explicit matching `Accepted` result advances to
+stapling, ticket validation, Gatekeeper assessment, checksums, completion
+receipt, and final ZIP publication.
+
+Focused mocked orchestration tests cover the successful resume order and reject
+paths outside the controlled build root, rejected or unknown saved states, and
+directories that already contain completion output. The existing builder tests
+continue to cover mismatched Apple IDs and every downstream failure boundary.
+The complete local regression ran 551 tests successfully with seven expected
+filesystem skips. All 16 Node signup/Help tests, native Swift typechecking, CLI
+version startup and diff checks also passed. These tests do not contact Apple or
+establish that the pending developer account is active.
+
 ## Consent-gated acquisition analytics and hero alignment follow-up
 
 The public hero now lays out the Codex compatibility icon against the headline

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add a guarded `--resume-notarization` release-builder path that continues the
+  exact saved Apple submission after interruption without rebuilding,
+  re-signing, or submitting twice.
 - Clarified common SSH failures in the app: an untrusted or changed host key
   now says that authentication—and therefore the user's password—was never
   attempted; key-authentication, name-resolution, Remote Login, and network

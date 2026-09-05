@@ -22,7 +22,7 @@ handoff is complete while the engineering acceptance gates remain open.
 | Browser-first local-data experience and clear status/help | Loopback helper, SSH transfer, saved setup, collapsed optional Help, bounded private-free diagnostic events and operation-specific controls | Native permission/VoiceOver checks and real route interruption acceptance. Automatic route selection and updating are not implemented. |
 | Public website, useful guides, screenshots, price and launch intake | Six live pages; two informative guides; sample-labelled real UI screenshots; $50 planned edition with checkout closed; prior controlled SendGrid inbox receipt and signup tests | Preserve the existing rate-limit and launch-only consent. No new email was sent in the latest read-only audit. |
 | Website accessibility and performance | Prior Lighthouse/axe results plus fresh desktop/320px rendering, six-page text-spacing and 200% text-size overflow checks | Manual assistive-technology and broader keyboard acceptance remain open; no WCAG-conformance claim. See the audit for exact scope. |
-| Domain, search discovery, analytics and cross-promotion | Live canonical domain/robots/sitemap; recorded Search Console ownership, successful sitemap submission and accepted homepage request; separate consent-gated GA4 property with 14-month retention, returning-user continuity, aggregate Google Signals reporting, granular location/device reporting, ads personalization and user-provided data disabled, launch-request key event and Search Console link; You.one link on the live homepage; fresh HTTP 200 check of segeren.com confirms its “Explore Codex Migrate” link to the canonical domain | Verify the deployed tag and consent states on the canonical host. Actual demographics depend on consent, Google eligibility and reporting thresholds; indexing, ranking and traffic are not guaranteed. No repeated indexing request needed. |
+| Domain, search discovery, analytics and cross-promotion | Live canonical domain/robots/sitemap; recorded Search Console ownership, successful sitemap submission and accepted homepage request; separate consent-gated GA4 property with 14-month retention, returning-user continuity, aggregate Google Signals reporting, granular location/device reporting, ads personalization and user-provided data disabled, launch-request key event and Search Console link; live fresh/accepted/withdrawn consent states verified; You.one link on the live homepage; fresh HTTP 200 check of segeren.com confirms its “Explore Codex Migrate” link to the canonical domain | Watch native reports after real visits. Actual demographics depend on consent, Google eligibility and reporting thresholds; indexing, ranking and traffic are not guaranteed. No repeated indexing request needed. |
 | Reproducible identifiable packaged app | Clean-source unsigned arm64 bundle, checksum and eight passing actual engine checks (one filesystem skip); signing/notarization pipeline has mocked tests. The intended Apple account currently reports Joshua Segeren (Pending) and says membership purchase can take up to 48 hours to process; this Mac still has no Developer ID identity or notary profile. | After Apple activates the existing purchase, confirm its team, install signing credentials securely, then notarize/staple and test the exact quarantined download on a clean Mac. Do not purchase again. Josh's account access is required. |
 | Paid purchase, delivery, support and refunds | Best-effort support/legal pages; actual sandbox payment and full manual refund recorded, test link deactivated | Josh selects merchant/tax arrangement. Codex then implements and tests server-verified, replay-safe fulfillment and recoverable delivery of the exact signed artifact before checkout opens. |
 
@@ -664,6 +664,16 @@ purchase, weaken SSH host-key checking, or enable live checkout as a workaround.
   Final local suite: 230 tests run, 229 passed, one explicit skip. Clean source
   `417431f` produced a versioned unsigned ZIP; checksum/ad-hoc signature checks
   and seven packaged-engine checks passed against its extracted contents.
+
+- Interrupted Apple processing can now resume from the saved direct
+  `build/desktop-*` directory and submission ID. The resume path validates the
+  embedded clean-release receipt, app version, available source commit and
+  unchanged signature; waits for the exact existing submission rather than
+  submitting again; and still requires stapling, ticket validation, Gatekeeper
+  assessment, checksum and final receipt before exposing a release ZIP. Mocked
+  orchestration proves the successful order and rejects outside, rejected,
+  malformed and already-completed state. Actual Apple acceptance remains gated
+  on membership, credentials and the real release artifact.
 
 - Codex process checks are now scoped to the migration account, including the
   known app and CLI/background-engine executable names. Unrelated logged-in
