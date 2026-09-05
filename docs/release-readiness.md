@@ -86,13 +86,15 @@ documents without Josh's direct choice.
 ## Candidate checks completed on the development Mac
 
 - Current unsigned engineering package: clean source
-  `83d26ae22c5c19e17227c99de65e7fb0ba2b727c`, built at
-  `2026-09-05T15:12:22Z` into
-  `build/desktop-eimaa91a/Codex-Migrate-0.1.0-build1-arm64-LOCAL-UNSIGNED.zip`.
-  SHA-256: `c6965a6bf34efca37b048922ee7fc00d275ef9ce58b6dff8bc448722c983d519`.
+  `ef3952d875bf3efb9651f07134cb9f23089a7e66`, built at
+  `2026-09-05T15:56:47Z` into
+  `build/desktop-ffnag3t1/Codex-Migrate-0.1.0-build1-arm64-LOCAL-UNSIGNED.zip`.
+  SHA-256: `130d8c5e47c685e06d475615efb25e87c6fa83f137fcd4950635b61162b354b3`.
   Its archive checksum and deep/strict ad-hoc signature verified. Nine tests ran
   against the actual bundled engine: eight passed and the case-sensitive
-  filesystem fixture skipped. This is the package to use for the next
+  filesystem fixture skipped. This includes the authenticated Segeren sender
+  evidence committed immediately before the build; the desktop runtime is
+  unchanged from the prior candidate. This is the package to use for the next
   disposable-account acceptance run; it is not signed, notarized, sold, or a
   clean-Mac result.
 
