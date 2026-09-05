@@ -8,9 +8,14 @@ delivery claims, recovery links and the download page now have automated and
 real sandbox-database coverage. Expanded sandbox read access is verified. A
 real hosted simulated $50 Managed Payments purchase, provider-accepted email,
 private file authorization and byte verification, and full refund with denial
-of new download links have passed. The actual email landed in Spam and the
-Chrome buyer download hit a client block, so end-to-end delivery remains open.
-Actual signed app upload, signing and cross-Mac acceptance also remain open.
+of new download links have passed. The actual purchase email landed in Spam and
+the original asynchronous Chrome navigation hit a client download block. The
+purchase page now binds the verified private URL to a real link so the buyer's
+trusted click starts the download; 185 website tests pass, and real Chromium
+downloaded a mocked attachment from that click at desktop and 320px without
+overflow. Hosted private-Blob and paid-session retesting remains open, so
+end-to-end delivery is not yet accepted. Actual signed app upload, signing and
+cross-Mac acceptance also remain open.
 See [commerce implementation](commerce-implementation.md).
 Purchase-only private delivery is selected and implemented. A real 8 MiB storage
 fixture passed authenticated byte verification, anonymous/altered-link denial,

@@ -22,10 +22,10 @@
     if (!response.ok) throw new Error(data.error || 'temporarily_unavailable');
     return data;
   }
-  async function check(startDownload = false) {
+  async function check() {
     if (busy) return;
     const initiatingControl = document.activeElement;
-    busy = true; download.disabled = true; retry.disabled = true;
+    busy = true; download.removeAttribute('href'); download.setAttribute('aria-disabled', 'true'); retry.disabled = true;
     status.textContent = 'Checking your purchase…';
     try {
       if (!token) token = (await call('status', credential.slice('session='.length))).token;
@@ -39,11 +39,8 @@
           !Number.isSafeInteger(result.expiresAt) || result.expiresAt <= 0) throw new Error('temporarily_unavailable');
       status.textContent = 'Your purchase is verified. Keep your delivery email to return to this download.';
       checksum.textContent = `Archive SHA-256: ${result.sha256}`; integrity.hidden = false;
+      download.setAttribute('href', url.toString()); download.removeAttribute('aria-disabled');
       download.hidden = false; retry.hidden = true;
-      if (startDownload) {
-        status.textContent = 'Download requested. Check your browser’s downloads. If it stops, use Download for Mac to try again.';
-        location.assign(url.toString());
-      }
     } catch (error) {
       const messages = {
         rate_limited: 'Too many download checks. Wait a minute, then select Check again. Do not purchase again.',
@@ -54,16 +51,21 @@
         purchase_requires_support: 'This purchase needs review. Please email Josh for help.',
       };
       status.textContent = messages[error.message] || 'We couldn’t check your download right now. Try again or email Josh. Do not purchase again.';
+      download.removeAttribute('href'); download.setAttribute('aria-disabled', 'true');
       download.hidden = true; retry.hidden = false; integrity.hidden = true;
     } finally {
-      busy = false; download.disabled = false; retry.disabled = false;
+      busy = false; retry.disabled = false;
       if ((document.activeElement === initiatingControl && initiatingControl.hidden) ||
           ([download, retry].includes(initiatingControl) && document.activeElement === document.body)) {
         (download.hidden ? retry : download).focus();
       }
     }
   }
-  download.addEventListener('click', () => check(true));
+  download.addEventListener('click', event => {
+    if (busy) { event.preventDefault(); return; }
+    if (!download.getAttribute('href')) { event.preventDefault(); check(); return; }
+    status.textContent = 'Download requested. Check your browser’s downloads. If it stops, reopen your delivery email for a fresh link.';
+  });
   retry.addEventListener('click', () => check());
   // Opening another delivery link in this same tab must consume the new
   // fragment, rather than keep the previous purchase in memory.

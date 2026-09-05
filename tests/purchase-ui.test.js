@@ -12,8 +12,12 @@ function fixture() {
   const elements = new Map();
   document.getElementById = id => {
     if (!elements.has(id)) {
+      const attributes = new Map();
       const e = { hidden: id !== 'purchase-status', textContent: '', events: {},
-        addEventListener(name, fn) { this.events[name] = fn; }, focus() { document.activeElement = this; } };
+        addEventListener(name, fn) { this.events[name] = fn; }, focus() { document.activeElement = this; },
+        setAttribute(name, value) { attributes.set(name, String(value)); },
+        getAttribute(name) { return attributes.has(name) ? attributes.get(name) : null; },
+        removeAttribute(name) { attributes.delete(name); } };
       let disabled = false;
       Object.defineProperty(e, 'disabled', { get: () => disabled, set(value) {
         disabled = value; if (value && document.activeElement === e) document.activeElement = document.body;
@@ -22,8 +26,8 @@ function fixture() {
     }
     return elements.get(id);
   };
-  const calls = []; const pending = []; const navigations = [];
-  const location = { hash: '#private-fixture', pathname: '/purchase', assign: u => navigations.push(u) };
+  const calls = []; const pending = [];
+  const location = { hash: '#private-fixture', pathname: '/purchase' };
   vm.runInNewContext(source, { document, location, URL, AbortSignal, window: { addEventListener() {} },
     history: { replaceState() { location.hash = ''; } }, fetch: (url, options) => {
       calls.push({ url, options }); return new Promise(resolve => pending.push(resolve));
@@ -31,16 +35,17 @@ function fixture() {
   const finish = async (data = good, ok = true, status = ok ? 200 : 503) => {
     pending.shift()({ ok, status, json: async () => { if (data instanceof Error) throw data; return data; } }); await tick();
   };
-  return { document, get: document.getElementById, location, calls, finish, navigations };
+  return { document, get: document.getElementById, location, calls, finish };
 }
-test('page strips bearer fragment and waits for explicit download; no browser clock gate', async () => {
+test('page strips bearer fragment and gives a verified URL to the buyer click; no browser clock gate', async () => {
   const f = fixture(); assert.equal(f.location.hash, '');
-  await f.finish(); assert.equal(f.get('purchase-download').hidden, false); assert.equal(f.navigations.length, 0);
+  await f.finish(); assert.equal(f.get('purchase-download').hidden, false);
   assert.equal(f.calls[0].url, '/api/purchase'); assert.equal(f.calls[0].options.method, 'POST');
   assert.equal(f.calls[0].options.credentials, 'same-origin');
-  const button = f.get('purchase-download'); button.focus(); button.events.click(); button.events.click();
-  assert.equal(f.calls.length, 2); await f.finish();
-  assert.deepEqual(f.navigations, [good.url]); assert.equal(f.document.activeElement, button);
+  const link = f.get('purchase-download'); assert.equal(link.getAttribute('href'), good.url);
+  link.focus(); const click = { defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
+  link.events.click(click); assert.equal(click.defaultPrevented, false); assert.equal(f.calls.length, 1);
+  assert.equal(f.document.activeElement, link);
   assert.match(f.get('purchase-status').textContent, /Download requested/);
 });
 test('edge HTML rate-limit response leaves recovery available without another purchase', async () => {
@@ -49,14 +54,14 @@ test('edge HTML rate-limit response leaves recovery available without another pu
   assert.equal(f.get('purchase-retry').hidden, false);
   f.get('purchase-retry').focus(); f.get('purchase-retry').events.click(); await f.finish();
   assert.equal(f.document.activeElement, f.get('purchase-download'));
-  assert.equal(f.navigations.length, 0);
 });
 for (const moved of [false, true]) test(`failed download preserves useful focus, user moved=${moved}`, async () => {
   const f = fixture(); await f.finish();
-  const button = f.get('purchase-download'); button.focus(); button.events.click();
+  const button = f.get('purchase-download'); button.removeAttribute('href'); button.focus();
+  button.events.click({ preventDefault() {} });
   const help = f.get('help'); if (moved) help.focus();
   await f.finish({ error: 'purchase_requires_support' }, false);
-  assert.equal(f.navigations.length, 0); assert.equal(f.get('purchase-retry').hidden, false);
+  assert.equal(f.get('purchase-retry').hidden, false);
   assert.equal(f.document.activeElement, moved ? help : f.get('purchase-retry'));
   f.get('purchase-retry').focus(); f.get('purchase-retry').events.click(); await f.finish();
   assert.equal(f.document.activeElement, f.get('purchase-download'));
@@ -66,6 +71,7 @@ for (const url of ['https://github.com/jsegeren/codex-migrate/releases/download/
   good.url + '#private', 'https://evil.example/app.zip?signed=fixture']) {
   test('page rejects a non-private or malformed destination', async () => {
     const f = fixture(); await f.finish({ ...good, url });
-    assert.equal(f.get('purchase-download').hidden, true); assert.equal(f.navigations.length, 0);
+    assert.equal(f.get('purchase-download').hidden, true);
+    assert.equal(f.get('purchase-download').getAttribute('href'), null);
   });
 }

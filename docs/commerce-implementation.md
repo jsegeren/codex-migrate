@@ -190,8 +190,17 @@ opened to bypass any of these checks.
   reproduced the same client block. Pausing AdBlock on only the private blob
   host and reloading did not change it, and AdBlock was restored immediately;
   this rules out that extension but does not identify the blocking client.
-  Repeat the actual browser acceptance outside the controlled-browser boundary
-  before release.
+  The purchase page no longer starts the cross-origin attachment with an
+  asynchronous `location.assign`, which can lose the initiating user gesture.
+  After server verification it now binds the exact validated five-minute URL to
+  a real Download for Mac link; the buyer's subsequent trusted click directly
+  requests the attachment. Missing links trigger regeneration instead of a
+  false download claim. All 185 website tests pass. Real Chromium at 1280px and
+  320px accepted a harmless mocked attachment from that link, recorded a file
+  download, retained useful focus and had no horizontal overflow. This proves
+  the user-gesture correction and rendered behavior, not the hosted private
+  Blob or paid session. Repeat the actual hosted browser acceptance before
+  release.
 - September 5 sandbox setup: created endpoint `we_1UCK0vQwGK6ZgBcKbA8f3rXL`
   in `acct_1Rkc6nQwGK6ZgBcK` for `checkout.session.completed` and
   `checkout.session.async_payment_succeeded`. The endpoint targets this
