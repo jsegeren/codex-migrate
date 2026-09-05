@@ -106,7 +106,8 @@ repair does not migrate Codex state and retains its existing explicit scope.
 inspect → isolated staging → destination backup → install → verify
 ```
 
-The source is read-only throughout. Staging is intentionally retained after an
+Selected source data is read-only throughout. The helper writes its own control
+state and explicitly created connection material separately. Staging is intentionally retained after an
 interruption. Full and browser skills finalization refuse to proceed while Codex is
 open in either migration account (including the known `codex` CLI/background
 engine executable). Unrelated logged-in accounts do not block finalization.

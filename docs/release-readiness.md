@@ -58,6 +58,12 @@ purchase, weaken SSH host-key checking, or enable live checkout as a workaround.
   Use `PYTHONPATH=src python tests/manual_pairing_fixture.py` for repeatable local
   UI checks; never publish its private control URLs. Real-Mac pairing, expiry,
   resume and packaged receiving-account acceptance remain release gates.
+  Clean source `aed744b0bf789b0b5952535ed507d56d8ae600b7` produced local unsigned
+  arm64 build `build/desktop-f73zdsxq`; the actual bundled engine passed eight
+  desktop tests, with one explicit case-sensitive-filesystem skip. This includes
+  local helper startup/configuration/shutdown, not a real paired SSH handshake.
+  ZIP SHA-256:
+  `edbcd29c2acc93c662a72adcb0c5fb2c22d814c0eef54946c645e321ee142f19`.
 
 - Browser-only UX revision: the native setup form has been removed. The Mac
   launcher starts its bundled local helper and opens the browser automatically;
