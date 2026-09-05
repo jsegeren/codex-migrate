@@ -1,0 +1,6 @@
+[hidden] { display: none !important; }
+.purchase-checksum { overflow-wrap: anywhere; font-size: 1rem; }
+#purchase-status { min-height: 3em; }
+#purchase-download, #purchase-retry { font: inherit; font-weight: 700; text-decoration: none; margin-bottom: 1.5rem; }
+#purchase-integrity { margin-top: 0.5rem; font-size: 1rem; }
+#purchase-integrity summary { cursor: pointer; padding-block: 0.5rem; }

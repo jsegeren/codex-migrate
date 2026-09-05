@@ -200,6 +200,10 @@ Official references: [Lemon Squeezy pricing](https://www.lemonsqueezy.com/pricin
 
 ### Remaining commerce work
 
+See [the September 5 implementation and verification record](commerce-implementation.md)
+for the new guarded checkout/webhook/delivery code and isolated sandbox database.
+Its release catalog is intentionally empty and hosted commerce is not activated.
+
 #### Sandbox operator helper (not deployed to the website)
 
 `node ops/stripe-sandbox-checkout.js` reads the configured Stripe account and

@@ -169,6 +169,10 @@ class SiteTests(unittest.TestCase):
         vercel = (ROOT / "vercel.json").read_text()
         for page in SITE.glob("*.html"):
             with self.subTest(page=page.name):
+                if page.name == "purchase.html":
+                    self.assertNotIn("/analytics.js", page.read_text())
+                    self.assertIn('name="referrer" content="no-referrer"', page.read_text())
+                    continue
                 self.assertIn('src="/analytics.js?v=20260904-regional"', page.read_text())
         self.assertIn('const GRANTED = "granted"', analytics)
         self.assertIn('const PUBLIC_HOSTS = new Set(["migrate.segeren.com", "codex-migrate.vercel.app"]);', analytics)

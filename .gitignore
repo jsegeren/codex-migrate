@@ -15,3 +15,4 @@ output/
 .ruff_cache/
 .vercel
 .env*
+node_modules/

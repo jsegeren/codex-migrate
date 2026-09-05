@@ -3,6 +3,15 @@
 The downloadable paid app is **not released**. Publishing source and the
 informational website does not open checkout or certify a customer download.
 
+September 5 commerce follow-up: guarded purchase verification, persistent
+delivery claims, recovery links and the download page now have automated and
+real sandbox-database coverage. The hosted end-to-end payment/delivery test,
+reviewed app-upload workflow, expanded sandbox read access, signing and
+cross-Mac acceptance are still open. See [commerce implementation](commerce-implementation.md).
+Purchase-only private delivery is selected and implemented. A real 8 MiB storage
+fixture passed authenticated byte verification, anonymous/altered-link denial,
+and expiry enforcement. This is not a paid-app release or full purchase-flow proof.
+
 See the [September 4 audit](release-audit-2026-09-04.md) for current automated
 results, accessibility findings, and pre-signing work still open.
 Use [clean-Mac acceptance](clean-mac-acceptance.md) to execute the remaining
