@@ -104,6 +104,19 @@ the new Mac, and repeat. Previous local connection files are preserved privately
 These controls have disposable local coverage; actual separate-Mac and clean
 packaged-account acceptance remain release gates.
 
+Reopening the helper restores checked connection cards and the selected paired
+Mac, even if you had not finished migration setup. The receiving helper restores
+its approved reply without granting access again. An interrupted approval shows
+the original request for you to review and approve explicitly; nothing starts
+automatically. Expired or unreadable connection records require recovery, not
+an automatic fallback to another SSH identity. An explicitly saved manual SSH
+destination is not replaced by an older paired destination.
+
+If the dedicated key also appears in an edited or additional SSH entry, the
+helper cannot verify removal and leaves those files intact. It reports that
+access is unverified rather than claiming success; contact support. Revocation
+does not disconnect an already-open SSH session or certify custom SSH policy.
+
 Destination changes start disabled. Enabling them only makes the dashboard's
 transfer controls available; you still inspect and start explicitly. Backup and
 finalization guards are unchanged. Closing a browser tab does not stop the

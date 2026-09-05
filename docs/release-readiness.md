@@ -36,6 +36,22 @@ purchase, weaken SSH host-key checking, or enable live checkout as a workaround.
 
 ## Candidate checks completed on the development Mac
 
+- Pairing recovery now restores checked request/reply cards and the selected
+  paired Mac after reopening, before migration configuration has been saved.
+  Interrupted approval requires explicit reapproval; expired or unreadable
+  records do not silently become a usable connection. Approval/revocation reject
+  edited or additional entries containing the same key without changing them
+  or claiming successful access removal. Interrupted approval with no SSH file
+  can retire its record without creating access. Sixteen pairing tests and 28
+  setup HTTP tests cover these boundaries; the full suite ran 586 tests in
+  137.874 seconds (579 passed, seven filesystem skips). A two-tab disposable
+  browser check verified reload at request, approval and accepted-destination
+  steps, changes remaining disabled, keyboard Continue, expired-state blocking,
+  and preservation of an explicitly saved manual destination. Desktop 1280px and
+  narrow 390px source/receiver screenshots were inspected with no overflow.
+  These use fixture account/host metadata, not a separate Mac or VoiceOver.
+  Local screenshots: `output/playwright/pairing-recovery-{source,receiver}-{1280,390}.png`.
+
 - Guided connection-card setup now replaces manual SSH-key configuration for
   standard receiving accounts. Both helpers stay loopback-only. A dedicated
   private source key never enters the cards; user-approved replies pin the

@@ -66,12 +66,25 @@ replacement card can authorize the wrong party if the user approves it.
 Approval adds a specifically marked, restricted and expiring authorized-key
 entry without changing other entries. It grants SSH command access to the
 account, not a filesystem sandbox. Revocation removes only the exact marked
-line this helper owns; unknown or edited lines are left intact. Existing SSH
+line this helper owns; unknown or edited lines are left intact. If the same
+public key remains in an edited or additional active entry, approval and
+revocation stop with an unverified result rather than claim success. This is
+conservative byte screening of the standard file, not inspection of every
+possible SSH authorization source. Missing SSH storage after an interrupted
+approval permits retiring its local record without creating access. Existing SSH
 sessions can outlive expiry/revocation. Closing the helper does not revoke keys.
 Permission, owner, regular-file, hard-link and symbolic-link guards protect
 connection files. Atomic replacement checks for changes before publishing;
 other SSH-editing tools must not run concurrently. This is not protection
 against a malicious process already running as the same user or as root.
+
+Token-protected setup reads restore public connection cards from checked local
+records. Reads do not generate keys, authorize access, or contact a destination.
+Accepted source records must match the request, generated key and pinned host
+file. Receiving replies are offered only while the exact owned authorization
+entry is present and the card has not expired. Unreadable records do not become
+a fresh or verified connection. The check cannot certify custom SSH policy or
+prevent another account-owned process from editing files after inspection.
 
 Paired transfers use explicit identity/host files and an isolated SSH invocation:
 no user/system SSH configuration, agent, global known-host fallback, DNS host

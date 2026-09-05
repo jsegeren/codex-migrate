@@ -64,6 +64,31 @@ class SetupTests(unittest.TestCase):
                            ("/api/folders", {}), ("/api/suggestions", {})):
             self.assertEqual(self.request(path, data, authorized=False)[0], 403)
 
+    def test_saved_connection_is_private_and_reopening_never_approves_it(self):
+        state = {"source": {"status": "request_ready", "card": "public-fixture"}}
+        with patch.object(self.helper.pairing, "snapshot", return_value=state) as snapshot, \
+                patch.object(self.helper.pairing, "approve") as approve:
+            self.assertEqual(self.request("/api/setup", authorized=False)[0], 403)
+            snapshot.assert_not_called()
+            code, result = self.request("/api/setup")
+            self.assertEqual(code, 200)
+            self.assertEqual(result["connection"], state)
+            self.assertIsNone(self.helper.engine)
+            approve.assert_not_called()
+            self.helper.configure(self.config())
+            snapshot.reset_mock()
+            self.assertTrue(self.request("/api/setup")[1]["attached"])
+            snapshot.assert_not_called()
+
+    def test_unreadable_connection_is_not_fresh_or_raw_error_disclosure(self):
+        with patch.object(self.helper.pairing, "snapshot", side_effect=OSError("PRIVATE path")):
+            code, result = self.request("/api/setup")
+        self.assertEqual(code, 200)
+        self.assertIn("could not be verified", result["connection_error"])
+        self.assertNotIn("connection", result)
+        self.assertNotIn("PRIVATE", json.dumps(result))
+        self.assertFalse(result["attached"])
+
     def test_rejects_foreign_origin_and_rebinding_host(self):
         for headers in ({"Origin": "https://evil.invalid"}, {"Host": "evil.invalid"}):
             self.assertEqual(self.request("/api/setup", self.config(), extra_headers=headers)[0], 403)

@@ -94,34 +94,63 @@ const fullScopeHelp=$("scope-help").textContent;
 const fullKeyHelp=$("key-help").textContent;
 let step=1;
 let paired=false;
+let connectionBlocked=false;
 function pairingView(){
   $("pair-source").hidden=paired;
   $("paired-status").hidden=!paired;
   $("paired-status").textContent=paired?"Selected: "+$("target").value+". Connection checks run before transfer.":"";
 }
-function manualEdit(){paired=false;pairingView();syncDestination();}
+function manualEdit(){paired=false;connectionBlocked=false;pairingView();syncDestination();}
 function syncDestination(){const user=$("username").value.trim();const host=$("computer").value.trim();$("target").value=user+"@"+host;if(!$("target-home").dataset.custom)$("target-home").value=user?"/Users/"+user:"";}
 $("username").oninput=manualEdit;$("computer").oninput=manualEdit;$("target-home").oninput=()=>{$("target-home").dataset.custom="true";manualEdit()};$("identity").oninput=manualEdit;
 function folderSummary(){$("folder-summary").textContent=roots().length?roots().length+" project folder"+(roots().length===1?"":"s")+" selected.":"No project folders selected.";}
 $("workspaces").oninput=folderSummary;
 function showStep(next){step=next;for(let n=1;n<=3;n++)$("step-"+n).hidden=n!==step;$("step-progress").textContent="Step "+step+" of 3 · "+["Your new Mac","What to move","Review"][step-1];$("step-"+step).querySelector("h2").focus();}
-function connectionValid(){syncDestination();for(const id of ["computer","username","target-home"]){if(!$(id).checkValidity()){showStep(1);$("manual-connection").open=true;$(id).closest("details")?.setAttribute("open","");$(id).reportValidity();return false}}return true;}
+function connectionValid(){if(connectionBlocked){$("error").textContent="This saved connection is not ready. Start a fresh connection or explicitly configure existing SSH in Advanced setup.";showStep(1);return false}syncDestination();for(const id of ["computer","username","target-home"]){if(!$(id).checkValidity()){showStep(1);$("manual-connection").open=true;$(id).closest("details")?.setAttribute("open","");$(id).reportValidity();return false}}return true;}
 $("next-1").onclick=()=>{if(connectionValid())showStep(2)};$("back-2").onclick=()=>showStep(1);$("back-3").onclick=()=>showStep(2);
 $("next-2").onclick=()=>{const skills=$("mode").value==="skills";$("review").replaceChildren();for(const [label,value] of [["New Mac",$("target").value],["Moving",skills?"Selected custom skills":"Codex conversations, settings and skills"],["Project folders",String(roots().length)]]){const dt=document.createElement("dt"),dd=document.createElement("dd");dt.textContent=label;dd.textContent=value;$("review").append(dt,dd)}$("replacement-note").textContent=skills?"Matching destination skills are backed up and replaced. Other skills, conversations and projects are kept.":"This replaces selected destination data; it does not merge separate work. Keep your old Mac intact.";showStep(3)};
 function modeChanged(){const skills=$("mode").value==="skills";$("key-help").textContent=skills?"Selecting an SSH key does not add it to the migration, and the selection is not saved. Only selected skill contents are copied; review them for private files. Protected SSH and Codex login files are rejected.":fullKeyHelp;$("skill-components").hidden=!skills;$("workspace-label").textContent=skills?"Project folders to search for workspace skills, one per line":"Workspace folders on this Mac, one per line";$("scope-help").textContent=skills?"These folders are searched only when Workspace skills is checked. Only discovered .agents/skills directories are copied, not the whole project. Personal skills need no project-folder selection. Skill contents can include private files; review the discovered list before transfer.":fullScopeHelp;}
 $("mode").onchange=modeChanged;
 async function api(path,body){const r=await fetch(path,{method:body?"POST":"GET",headers:{"X-Codex-Migrate-Token":token,"Content-Type":"application/json"},...(body?{body:JSON.stringify(body)}:{})});const result=await r.json();if(!r.ok)throw Error(result.error||"The request failed");return result}
-$("receiver-toggle").onclick=()=>{const receiving=$("receiver").hidden;$("receiver").hidden=!receiving;$("setup").hidden=receiving;$("step-progress").hidden=receiving;$("receiver-toggle").textContent=receiving?"Back to the old Mac setup":"I’m on the new Mac";if(receiving)$("receiver").querySelector("h2").focus();else showStep(step)};
+function receiverView(receiving){$("receiver").hidden=!receiving;$("setup").hidden=receiving;$("step-progress").hidden=receiving;$("receiver-toggle").textContent=receiving?"Back to the old Mac setup":"I’m on the new Mac";}
+$("receiver-toggle").onclick=()=>{const receiving=$("receiver").hidden;receiverView(receiving);if(receiving)$("receiver").querySelector("h2").focus();else showStep(step)};
+function selectPaired(r){const split=r.target.lastIndexOf("@");$("username").value=r.target.slice(0,split);$("computer").value=r.target.slice(split+1);$("target").value=r.target;$("target-home").value=r.target_home;$("target-home").dataset.custom="true";$("identity").value="";paired=true;connectionBlocked=false;pairingView();$("manual-connection").open=false;}
 async function connectionAction(button,action,payload,done){button.disabled=true;$("error").textContent="";try{done(await api("/api/connection/"+action,payload))}catch(e){$("error").textContent=e.message}finally{button.disabled=false}}
 $("create-card").onclick=()=>connectionAction($("create-card"),"request",{},r=>{$("source-card").value=r.card;$("request-area").hidden=false;$("create-card").hidden=true;$("copy-request").focus()});
 $("approve-card").onclick=()=>connectionAction($("approve-card"),"approve",{card:$("request-card").value,apply:true},r=>{$("reply-card").value=r.card;$("reply-area").hidden=false;$("receiver-request-area").hidden=true;$("copy-reply").focus()});
-$("accept-card").onclick=()=>connectionAction($("accept-card"),"accept",{card:$("accepted-card").value,apply:true},r=>{const split=r.target.lastIndexOf("@");$("username").value=r.target.slice(0,split);$("computer").value=r.target.slice(split+1);$("target").value=r.target;$("target-home").value=r.target_home;$("target-home").dataset.custom="true";$("identity").value="";paired=true;pairingView();$("manual-connection").open=false;$("next-1").focus()});
+$("accept-card").onclick=()=>connectionAction($("accept-card"),"accept",{card:$("accepted-card").value,apply:true},r=>{selectPaired(r);$("next-1").focus()});
 $("revoke-pair").onclick=()=>{if(confirm("Remove this old Mac’s SSH access? Wait until migration and recovery have finished."))connectionAction($("revoke-pair"),"revoke",{apply:true},r=>{$("message").textContent=r.message;$("reply-area").hidden=true;$("reply-card").value="";$("receiver-request-area").hidden=false})};
-$("restart-pair").onclick=()=>{if(confirm("Start a new connection? Previous local files will be kept. Remove the old access on the new Mac before approving another card."))connectionAction($("restart-pair"),"restart",{apply:true},r=>{paired=false;pairingView();$("request-area").hidden=true;$("create-card").hidden=false;$("target").value="";$("username").value="";$("computer").value="";$("target-home").value="";$("source-card").value="";$("accepted-card").value="";$("message").textContent=r.message})};
+$("restart-pair").onclick=()=>{if(confirm("Start a new connection? Previous local files will be kept. Remove the old access on the new Mac before approving another card."))connectionAction($("restart-pair"),"restart",{apply:true},r=>{paired=false;connectionBlocked=false;pairingView();$("request-area").hidden=true;$("create-card").hidden=false;$("target").value="";$("username").value="";$("computer").value="";$("target-home").value="";$("source-card").value="";$("accepted-card").value="";$("message").textContent=r.message})};
 async function copyCard(id){try{await navigator.clipboard.writeText($(id).value);$("message").textContent="Copied. Paste it into Codex Migrate on your other Mac."}catch(e){$(id).closest("details").open=true;$(id).focus();$(id).select();$("message").textContent="Card selected. Press Command-C to copy."}}
 $("copy-request").onclick=()=>copyCard("source-card");$("copy-reply").onclick=()=>copyCard("reply-card");
 function attached(){ $("receiver-toggle").hidden=true;$("receiver").hidden=true; $("attached").hidden=false;$("setup").hidden=true;$("step-progress").hidden=true;$("continue").href="/migration#token="+encodeURIComponent(token);$("message").textContent="The helper is ready. No transfer was started automatically."; }
-async function load(){try{const s=await api("/api/setup");if(s.attached){attached();return}const c=s.saved||{};$("target").value=c.target||"";const split=(c.target||"").lastIndexOf("@");$("username").value=split>=0?c.target.slice(0,split):"";$("computer").value=split>=0?c.target.slice(split+1):"";$("target-home").value=c.target_home||"";if(c.target_home&&c.target_home!=="/Users/"+$("username").value)$("target-home").dataset.custom="true";else delete $("target-home").dataset.custom;$("workspaces").value=(c.workspace_roots||[]).join("\n");$("mode").value=c.mode||"full";$("personal-skills").checked=!c.components||c.components.includes("personal-skills");$("workspace-skills").checked=(c.components||[]).includes("workspace-skills");paired=!!c.paired;pairingView();modeChanged();folderSummary();$("apply").checked=false;$("fields").disabled=false;$("message").textContent=s.saved?"Restored your last setup. Review it before continuing; changes remain disabled.":""}catch(e){$("error").textContent=e.message+". Reopen the browser from the local helper if its token is missing."}}
+function restoreConnection(s,c){
+  const source=s.connection?.source, receiver=s.connection?.receiver;
+  if(source?.status==="request_ready"){$("source-card").value=source.card;$("request-area").hidden=false;$("create-card").hidden=true;}
+  if(source?.status==="paired"&&(!c.target||c.paired))selectPaired(source);
+  if(receiver){
+    if(!source&&!c.target)receiverView(true);
+    if(receiver.status==="approved"){$("reply-card").value=receiver.card;$("reply-area").hidden=false;$("receiver-request-area").hidden=true;}
+    if(receiver.status==="approval_pending"){$("request-card").value=receiver.request_card;$("message").textContent="Connection approval was interrupted or access is missing. Review and approve again to restore access; nothing resumed automatically.";}
+    if(receiver.status==="expired")$("message").textContent="This connection expired. Remove its old access, then approve a fresh card from the old Mac.";
+  }
+  if(s.connection_error||source?.status==="expired"||(c.paired&&source?.status!=="paired")){
+    connectionBlocked=!!c.paired||!!source||!c.target;paired=false;pairingView();
+    $("error").textContent=s.connection_error||"The saved connection is missing or expired. Start a fresh connection; previous files are kept.";
+  }
+}
+async function load(){try{
+  const s=await api("/api/setup");if(s.attached){attached();return}
+  const c=s.saved||{};$("target").value=c.target||"";const split=(c.target||"").lastIndexOf("@");
+  $("username").value=split>=0?c.target.slice(0,split):"";$("computer").value=split>=0?c.target.slice(split+1):"";
+  $("target-home").value=c.target_home||"";
+  if(c.target_home&&c.target_home!=="/Users/"+$("username").value)$("target-home").dataset.custom="true";else delete $("target-home").dataset.custom;
+  $("workspaces").value=(c.workspace_roots||[]).join("\n");$("mode").value=c.mode||"full";
+  $("personal-skills").checked=!c.components||c.components.includes("personal-skills");$("workspace-skills").checked=(c.components||[]).includes("workspace-skills");
+  paired=!!c.paired;pairingView();modeChanged();folderSummary();$("apply").checked=false;$("fields").disabled=false;
+  $("message").textContent=s.saved?"Restored your last setup. Review it before continuing; changes remain disabled.":"";
+  restoreConnection(s,c);
+}catch(e){$("error").textContent=e.message+". Reopen the browser from the local helper if its token is missing."}}
 async function folders(path){$("folders").disabled=true;$("suggest").disabled=true;try{const r=await api(path,{});$("workspaces").value=[...new Set([...roots(),...r.paths])].join("\n");folderSummary();$("message").textContent=r.message}catch(e){$("error").textContent=e.message}finally{$("folders").disabled=false;$("suggest").disabled=false}}
 $("folders").onclick=()=>folders("/api/folders");$("suggest").onclick=()=>folders("/api/suggestions");
 $("setup").onsubmit=async e=>{e.preventDefault();if(step<3){$(step===1?"next-1":"next-2").click();return}if(!connectionValid())return;$("open").disabled=true;$("error").textContent="";try{await api("/api/setup",{target:$("target").value.trim(),target_home:$("target-home").value.trim(),workspace_roots:roots(),identity_file:$("identity").value.trim(),apply:$("apply").checked,paired,mode:$("mode").value,components:$("mode").value==="skills"?["personal-skills","workspace-skills"].filter(id=>$(id).checked):[]});location.href="/migration#token="+encodeURIComponent(token)}catch(e){$("error").textContent=e.message;$("open").disabled=false}};
@@ -284,8 +313,17 @@ JSON.stringify(app.chooseFolder({withPrompt: "Choose workspace folders for Codex
                     if not self._authorized():
                         self._json(403, {"error": "Missing or invalid local control token"})
                         return
-                    self._json(200, {"saved": setup.registry.read().get("saved"),
-                                     "attached": setup.engine is not None})
+                    result = {"saved": setup.registry.read().get("saved"),
+                              "attached": setup.engine is not None}
+                    if setup.engine is None:
+                        with setup._request_lock:
+                            try:
+                                result["connection"] = setup.pairing.snapshot()
+                            except MigrationError as exc:
+                                result["connection_error"] = str(exc)
+                            except Exception:
+                                result["connection_error"] = "Saved connection could not be verified. Files were kept; use connection recovery or contact support."
+                    self._json(200, result)
                     return
                 if self.path == "/":
                     self._html(SETUP_HTML)

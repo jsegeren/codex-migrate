@@ -72,6 +72,87 @@ class PairingTests(unittest.TestCase):
             self.old.accept(accepted)
         self.assertFalse((self.old.root / "known_hosts").exists())
 
+    def test_snapshot_is_read_only_and_restores_each_connection_step(self):
+        self.assertEqual(self.old.snapshot(), {})
+        self.assertFalse(self.old.root.exists())
+        request = self.old.request()["card"]
+        reopened = Pairing(self.old.home, self.old.root.parent)
+        self.assertEqual(reopened.snapshot()["source"]["card"], request)
+        reply = self.new.approve(request, apply=True)["card"]
+        path = self.new.home / ".ssh/authorized_keys"
+        before = path.stat().st_mtime_ns
+        receiver = Pairing(self.new.home, self.new.root.parent)
+        self.assertEqual(receiver.snapshot()["receiver"]["card"], reply)
+        self.assertEqual(path.stat().st_mtime_ns, before)
+        self.old.accept(reply, apply=True)
+        source = reopened.snapshot()["source"]
+        self.assertEqual(source["status"], "paired")
+        self.assertEqual(source["target"], self.details["target"])
+        self.assertEqual(source["target_home"], self.details["home"])
+
+    def test_interrupted_approval_can_be_restored_or_revoked_without_authorizing(self):
+        from codex_migrate.pairing import _write
+        request = self.old.request()["card"]
+        def interrupted(path, *args, **kwargs):
+            if path.name == "authorized_keys":
+                raise OSError("fixture interruption")
+            return _write(path, *args, **kwargs)
+        with patch("codex_migrate.pairing._write", side_effect=interrupted):
+            with self.assertRaises(OSError):
+                self.new.approve(request, apply=True)
+        path = self.new.home / ".ssh/authorized_keys"
+        self.assertFalse(path.exists())
+        state = self.new.snapshot()["receiver"]
+        self.assertEqual(state["status"], "approval_pending")
+        self.assertEqual(state["request_card"], request)
+        self.assertFalse(path.exists())
+        # Covers interruption before the SSH directory was created as well.
+        path.parent.rmdir()
+        self.new.revoke(apply=True)
+        self.assertFalse(path.parent.exists())
+        self.assertFalse((self.new.root / "approved.json").exists())
+
+    def test_edited_or_duplicate_key_never_reports_successful_revocation(self):
+        request, _ = self.pair()
+        path = self.new.home / ".ssh/authorized_keys"
+        owned = path.read_bytes()
+        key = decode_card((self.new.root / "approved.json").read_text(), "accepted")["key"].encode()
+        for changed in (owned.rstrip(b"\n"), owned.replace(b"restrict,", b""),
+                        owned + key + b" additional access\n", key.replace(b" ", b"\t") + b"\n"):
+            with self.subTest(kind=changed[:12]):
+                path.write_bytes(changed)
+                with self.assertRaisesRegex(MigrationError, "unverified"):
+                    self.new.snapshot()
+                with self.assertRaisesRegex(MigrationError, "unverified"):
+                    self.new.revoke(apply=True)
+                with self.assertRaisesRegex(MigrationError, "unverified"):
+                    self.new.approve(request, apply=True)
+                self.assertEqual(path.read_bytes(), changed)
+                self.assertTrue((self.new.root / "approved.json").exists())
+
+    def test_expired_snapshot_withholds_cards_and_revocation_survives_clock_changes(self):
+        request, _ = self.pair()
+        expires = decode_card(request, "request")["expires"]
+        with patch("codex_migrate.pairing.time.time", return_value=expires + 1):
+            for helper, role in ((self.old, "source"), (self.new, "receiver")):
+                state = helper.snapshot()[role]
+                self.assertEqual(state["status"], "expired")
+                self.assertNotIn("card", state)
+                self.assertNotIn("request_card", state)
+        with patch("codex_migrate.pairing.time.time", return_value=1):
+            self.new.revoke(apply=True)
+        self.assertEqual((self.new.home / ".ssh/authorized_keys").read_bytes(), b"")
+
+    def test_snapshot_rejects_changed_trust_and_partial_key_creation(self):
+        self.pair()
+        path = self.old.root / "known_hosts"
+        path.write_bytes(b"different host\n")
+        with self.assertRaisesRegex(MigrationError, "changed"):
+            self.old.snapshot()
+        (self.old.root / "request.json").unlink()
+        with self.assertRaisesRegex(MigrationError, "interrupted"):
+            self.old.snapshot()
+
     def test_wrong_reply_and_changed_host_never_replace_trust(self):
         request, accepted = self.pair()
         good = (self.old.root / "known_hosts").read_bytes()

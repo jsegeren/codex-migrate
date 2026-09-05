@@ -112,7 +112,8 @@ def decode_card(card, kind, allow_expired=False):
         if (not isinstance(value, dict) or set(value) != keys or value["kind"] != kind
                 or not isinstance(value["id"], str) or not re.fullmatch(r"[a-f0-9]{32}", value["id"])
                 or type(value["expires"]) is not int
-                or not (0 if allow_expired else time.time()) < value["expires"] <= time.time() + LIFETIME + 60):
+                or not 0 < value["expires"] <= 253402300799
+                or (not allow_expired and not time.time() < value["expires"] <= time.time() + LIFETIME + 60)):
             raise ValueError()
         public_key(value["key"])
         if kind == "accepted":
@@ -127,6 +128,19 @@ def decode_card(card, kind, allow_expired=False):
         raise MigrationError("This connection card is invalid, expired, or for a different step. Copy a fresh card from the other Mac.") from None
 
 
+def _authorized_line(record):
+    expires = datetime.fromtimestamp(record["expires"], timezone.utc).strftime("%Y%m%d%H%M%SZ")
+    return ('restrict,expiry-time="%s" %s codex-migrate-%s\n' % (expires, record["key"], record["id"])).encode()
+
+
+def _contains_key(contents, record):
+    # Conservative: edited options, tabs, comments or duplicate entries must not
+    # cause a false revocation claim. Never delete an entry we cannot identify.
+    encoded = record["key"].split(" ", 1)[1].encode()
+    return any(encoded in line for line in contents.splitlines()
+               if line.strip() and not line.lstrip().startswith(b"#"))
+
+
 class Pairing:
     def __init__(self, home, state_root):
         self.home = Path(home)
@@ -139,6 +153,65 @@ class Pairing:
         self.root.mkdir(mode=0o700, exist_ok=True)
         _directory(self.root)
         return user
+
+    def _authorization(self):
+        ssh = self.home / ".ssh"
+        try:
+            _directory(ssh)
+        except FileNotFoundError:
+            return None
+        try:
+            return _read(ssh / "authorized_keys", limit=1024 * 1024)
+        except FileNotFoundError:
+            return None
+
+    def snapshot(self):
+        """Restore visible setup from checked local evidence, without writes."""
+        if not self.root.exists() and not self.root.is_symlink():
+            return {}
+        _account(self.home)
+        _directory(self.root.parent)
+        _directory(self.root)
+        result = {}
+        request_path = self.root / "request.json"
+        if not request_path.exists() and any((self.root / name).exists() for name in ("identity", "accepted.json", "known_hosts")):
+            raise MigrationError("Connection setup was interrupted or its request record is missing. Use Start a fresh connection to preserve the old files before trying again.")
+        if request_path.exists() or request_path.is_symlink():
+            request = decode_card(_read(request_path).decode(), "request", allow_expired=True)
+            if request["key"] != self._generated_public():
+                raise MigrationError("Connection files changed. Keep them intact and contact support.")
+            source = {"status": "request_ready", "card": encode_card(request), "expires": request["expires"]}
+            accepted_path = self.root / "accepted.json"
+            if accepted_path.exists() or accepted_path.is_symlink():
+                accepted = decode_card(_read(accepted_path).decode(), "accepted", allow_expired=True)
+                alias = "codex-migrate-" + request["id"]
+                if (any(accepted[k] != request[k] for k in ("id", "key", "expires"))
+                        or _read(self.root / "known_hosts") != (alias + " " + accepted["host_key"] + "\n").encode()):
+                    raise MigrationError("Connection files changed. Keep them intact and contact support.")
+                source.update(status="paired", target=accepted["target"], target_home=accepted["home"])
+            if request["expires"] <= time.time():
+                source["status"] = "expired"
+                source.pop("card", None)
+            result["source"] = source
+        approved_path = self.root / "approved.json"
+        if approved_path.exists() or approved_path.is_symlink():
+            approved = decode_card(_read(approved_path).decode(), "accepted", allow_expired=True)
+            contents = self._authorization() or b""
+            line = _authorized_line(approved)
+            remainder = b"".join(item for item in contents.splitlines(keepends=True) if item != line)
+            if _contains_key(remainder, approved):
+                raise MigrationError("This connection's SSH entry was edited or duplicated. Access is unverified; contact support. Existing entries were kept.")
+            receiver = {"status": "approval_pending", "expires": approved["expires"], "target": approved["target"]}
+            if line in contents.splitlines(keepends=True):
+                receiver.update(status="approved", card=encode_card(approved))
+            else:
+                receiver["request_card"] = encode_card({k: approved[k] for k in ("id", "expires", "key")} | {"kind": "request"})
+            if approved["expires"] <= time.time():
+                receiver["status"] = "expired"
+                receiver.pop("card", None)
+                receiver.pop("request_card", None)
+            result["receiver"] = receiver
+        return result
 
     def request(self):
         self._prepare()
@@ -205,8 +278,10 @@ class Pairing:
         _directory(ssh)
         path = ssh / "authorized_keys"
         before = _read(path, limit=1024 * 1024) if path.exists() or path.is_symlink() else None
-        expires = datetime.fromtimestamp(request["expires"], timezone.utc).strftime("%Y%m%d%H%M%SZ")
-        line = ('restrict,expiry-time="%s" %s codex-migrate-%s\n' % (expires, request["key"], request["id"])).encode()
+        line = _authorized_line(request)
+        remainder = b"".join(item for item in (before or b"").splitlines(keepends=True) if item != line)
+        if _contains_key(remainder, request):
+            raise MigrationError("This connection's SSH entry was edited or duplicated. Access is unverified; contact support. Existing entries were kept.")
         # Never alter existing entries, including their options or comments.
         if line not in (before or b"").splitlines(keepends=True):
             contents = before or b""
@@ -221,13 +296,13 @@ class Pairing:
         self._prepare()
         record = self.root / "approved.json"
         approved = decode_card(_read(record).decode(), "accepted", allow_expired=True)
-        _directory(self.home / ".ssh")
         path = self.home / ".ssh/authorized_keys"
-        before = _read(path, limit=1024 * 1024)
-        expires = datetime.fromtimestamp(approved["expires"], timezone.utc).strftime("%Y%m%d%H%M%SZ")
-        owned = ('restrict,expiry-time="%s" %s codex-migrate-%s\n' % (expires, approved["key"], approved["id"])).encode()
-        after = b"".join(line for line in before.splitlines(keepends=True) if line != owned)
-        if after != before:
+        before = self._authorization()
+        owned = _authorized_line(approved)
+        after = b"".join(line for line in (before or b"").splitlines(keepends=True) if line != owned)
+        if _contains_key(after, approved):
+            raise MigrationError("This key also appears in an edited or duplicate SSH entry. Access removal is unverified; contact support. Existing entries were kept.")
+        if before is not None and after != before:
             _write(path, after, expected=before)
         os.replace(record, self.root / ("revoked-" + approved["id"] + ".json"))
         return {"message": "This connection's access was removed. Existing SSH entries were kept."}
