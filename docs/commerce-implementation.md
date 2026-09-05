@@ -153,13 +153,25 @@ opened to bypass any of these checks.
   Browser submission with Stripe's synthetic test card completed at $50 USD,
   with `livemode: false` and Managed Payments enabled. No real money moved.
   The database recorded one purchase and one provider-accepted mail attempt;
-  inbox arrival and refund/download acceptance were not yet verified here.
+  the recipient mailbox subsequently showed that exact test message in Spam.
+  Provider acceptance is therefore verified, but inbox deliverability still
+  needs work. Refund acceptance remains open.
 - That real browser test found purchase fetches omitted the hosting-auth cookie,
   causing protected Preview requests to fail while authenticated API checks
   passed. Purchase, checkout and availability fetches now retain same-origin
   credentials. Payment authority still uses explicit bearer credentials and
   fresh Stripe verification; cookies do not authorize a purchase. Regression
-  assertions cover each request. Hosted browser retesting remains required.
+  assertions cover each request. Corrected Preview
+  `dpl_3q9NMXFwJyvowAwPjTEFFHXse286` passed browser retesting: the same paid
+  session showed “Your purchase is verified” and enabled Download for Mac.
+  The existing sandbox webhook alias now targets that Preview.
+- The real paid session's hosted status and download APIs both returned 200.
+  Independent retrieval of the authorized private file returned 200, 451 bytes,
+  a matching archive SHA-256 and an attachment response. The Chrome buyer-button
+  path instead reached `ERR_BLOCKED_BY_CLIENT`; no browser-downloaded file was
+  found. Do not count that as a successful browser download or disable browser
+  security protections to obtain a passing result. Diagnose the client block
+  and repeat the actual browser acceptance before release.
 - September 5 sandbox setup: created endpoint `we_1UCK0vQwGK6ZgBcKbA8f3rXL`
   in `acct_1Rkc6nQwGK6ZgBcK` for `checkout.session.completed` and
   `checkout.session.async_payment_succeeded`. The endpoint targets this
