@@ -135,7 +135,12 @@ opened to bypass any of these checks.
 
 ## Evidence
 
-- 151 Node tests passed; the real-database test is skipped in the default suite.
+- 176 Node tests passed; the real-database test is skipped in the default suite.
+- Sandbox checkout now rejects missing/malformed/incorrect operator tokens before
+  any runtime, database or provider access. Request IDs must be strings rather
+  than values coercible to UUIDs. Direct handler tests cover authorization order,
+  the exact one-time line item, Managed Payments, retry idempotency, live/sandbox
+  separation, wrong accounts/prices/products, and unverified redirect rejection.
 - The purchase CTA now reads a no-store availability endpoint that stays closed
   for missing configuration, sandbox mode, or an unreviewed release. Only an
   explicitly enabled live release displays hardware compatibility and the $50
@@ -146,6 +151,9 @@ opened to bypass any of these checks.
   the hidden prelaunch fallback, visible purchase state, retry keyboard focus,
   17px button text without underlining, and no narrow-screen horizontal overflow.
   These are UI checks, not a completed hosted purchase or live release.
+  Preview deployment `dpl_BB1e3pSjRGu16BnSnfpYdU4V5MWq` from `9b03dcc` reached
+  READY: availability returned HTTP 200 with `available: false`, and checkout
+  returned HTTP 503 with `checkout_closed`. Production was not promoted.
 - Full Python regression run: 586 tests completed, 579 passed and seven explicit
   filesystem skips, in 141.061 seconds. Mock notarization output in that suite
   is not an actual signed release.

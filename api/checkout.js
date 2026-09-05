@@ -1,24 +1,27 @@
 const { timingSafeEqual } = require('node:crypto');
 const { runtime } = require('../commerce/runtime');
 const { reply, failure, body } = require('../commerce/http');
-const { CommerceError } = require('../commerce/config');
-function makeHandler(load = runtime, env = process.env) {
+const { CommerceError, configuration } = require('../commerce/config');
+function makeHandler(load = runtime, env = process.env, configure = configuration) {
   return async (req, res) => {
     if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); return reply(res, 405, { error: 'post_required' }); }
     try {
       if (env.COMMERCE_CHECKOUT_OPEN !== 'yes') throw new CommerceError('checkout_closed');
       const data = body(req);
-      if (Object.keys(data).some(k => k !== 'requestId') ||
+      if (Object.keys(data).some(k => k !== 'requestId') || typeof data.requestId !== 'string' ||
           !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(data.requestId || '')) {
         throw new CommerceError('invalid_request', 400);
       }
-      const { config, stripe } = await load();
+      const config = configure(env);
       if (!config.live) {
         const expected = env.COMMERCE_SANDBOX_OPERATOR_TOKEN;
         const supplied = req.headers.authorization || '';
-        if (!/^[a-f0-9]{64}$/.test(expected || '') || supplied.length !== expected.length + 7 ||
+        if (typeof supplied !== 'string' || !/^Bearer [a-f0-9]{64}$/.test(supplied) ||
+            !/^[a-f0-9]{64}$/.test(expected || '') ||
             !timingSafeEqual(Buffer.from(supplied), Buffer.from(`Bearer ${expected}`))) throw new CommerceError('sandbox_operator_required', 403);
       }
+      // No database connection or provider request before sandbox authorization.
+      const { stripe } = await load(env);
       if ((await stripe.accounts.retrieve()).id !== config.account) throw new CommerceError('account_mismatch');
       const price = await stripe.prices.retrieve(config.price, { expand: ['product'] });
       if (price.livemode !== config.live || !price.active || price.unit_amount !== 5000 || price.currency !== 'usd' ||
