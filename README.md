@@ -484,7 +484,7 @@ addresses reported by an unverified machine.
 ## Privacy and security
 
 - No migration-app telemetry
-- No workspace analytics (the public website has separate, explicit opt-in analytics)
+- No workspace analytics (the public website has separate, region-aware analytics)
 - No cloud service
 - No account creation
 - No copied Codex account authentication or installation identity

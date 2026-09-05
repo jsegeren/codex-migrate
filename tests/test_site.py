@@ -140,8 +140,9 @@ class SiteTests(unittest.TestCase):
         self.assertIn('sizes="(max-width: 760px) 144px, (max-width: 980px) 160px, 280px"', source)
         self.assertIn('srcset="/assets/codex-product-dark-80.avif" type="image/avif"', header)
         self.assertIn('src="/assets/codex-product-dark-80.png" width="40" height="40"', header)
-        heading_row = source.split('<div class="hero-heading">', 1)[1].split('</div>', 1)[0]
-        self.assertIn('<h1>Keep the work.', heading_row)
+        heading_row = source.split('<div class="hero-heading">', 1)[1].split('<div class="product-reference">', 1)[0]
+        self.assertIn('<h1>Change the Mac.', heading_row)
+        self.assertIn('<span class="accent">Keep the work.</span>', heading_row)
         self.assertIn('class="hero-inline-icon"', heading_row)
         self.assertNotIn('class="terminal-card"', source)
 
@@ -153,40 +154,55 @@ class SiteTests(unittest.TestCase):
         icon = styles.split("\n.hero-inline-icon {", 1)[1].split("}", 1)[0]
         self.assertIn("display: block", layout)
         self.assertIn("display: grid", heading)
-        self.assertIn("minmax(0, 560px) 280px", heading)
+        self.assertIn("minmax(0, 690px) 280px", heading)
+        self.assertIn("justify-content: space-between", heading)
         self.assertIn("grid-row: 1", icon)
         self.assertIn("align-self: start", icon)
         self.assertNotIn("align-items: flex-end", styles)
-        self.assertIn("margin-bottom: 16px", title)
+        self.assertIn("margin: 0 0 16px", title)
+        self.assertIn('<div class="hero-message">', (SITE / "index.html").read_text())
 
-    def test_website_analytics_is_explicitly_opt_in_and_separate_from_app(self):
+    def test_website_analytics_is_region_aware_and_separate_from_app(self):
         analytics = (SITE / "analytics.js").read_text()
         privacy = " ".join(self.parse("privacy.html").text)
         home = " ".join(self.parse("index.html").text)
         vercel = (ROOT / "vercel.json").read_text()
         for page in SITE.glob("*.html"):
             with self.subTest(page=page.name):
-                self.assertIn('src="/analytics.js?v=20260904"', page.read_text())
+                self.assertIn('src="/analytics.js?v=20260904-regional"', page.read_text())
         self.assertIn('const GRANTED = "granted"', analytics)
         self.assertIn('const PUBLIC_HOSTS = new Set(["migrate.segeren.com", "codex-migrate.vercel.app"]);', analytics)
         self.assertIn('!PUBLIC_HOSTS.has(window.location.hostname)', analytics)
+        self.assertIn('fetch("/api/analytics-region"', analytics)
+        self.assertIn('analyticsMode === "default"', analytics)
         self.assertIn('script.src = `https://www.googletagmanager.com/gtag/js?id=', analytics)
-        self.assertIn("Accept analytics", analytics)
-        self.assertIn("No thanks", analytics)
+        self.assertIn("Analytics cookies?", analytics)
+        self.assertIn(">Allow</button>", analytics)
+        self.assertIn(">Decline</button>", analytics)
         self.assertIn("clearAnalyticsCookies();", analytics)
-        self.assertIn("if (tagLoaded) window.location.reload();", analytics)
+        self.assertIn('window.gtag("consent", "default", consentValues(granted));', analytics)
+        self.assertIn('window.gtag("consent", "update", consentValues(true));', analytics)
         self.assertIn('cookie_domain: "none"', analytics)
         self.assertIn('cookie_prefix: "cm"', analytics)
         self.assertIn('cookie_expires: 60 * 60 * 24 * 425', analytics)
         self.assertIn('cookie_update: true', analytics)
         self.assertIn("No app telemetry", home)
-        self.assertIn("The Google tag is not loaded until you select “Accept analytics.”", privacy)
+        self.assertIn("In markets where prior consent is not required, analytics cookies are enabled by default.", privacy)
+        self.assertIn("European Economic Area, United Kingdom, and Switzerland", privacy)
         self.assertIn("It does not receive your name, email address, Codex conversations", privacy)
         self.assertIn("Google Signals may add aggregate", privacy)
         self.assertIn("https://www.googletagmanager.com", vercel)
         self.assertIn("https://analytics.google.com", vercel)
         self.assertIn("https://stats.g.doubleclick.net", vercel)
         self.assertIn("https://www.google.com", vercel)
+
+    def test_consent_ui_is_compact_and_not_a_global_banner(self):
+        styles = (SITE / "styles.css").read_text()
+        consent = styles.split("\n.analytics-consent {", 1)[1].split("}", 1)[0]
+        self.assertIn("360px", consent)
+        self.assertIn("right: 16px", consent)
+        self.assertNotIn("left:", consent)
+        self.assertNotIn("880px", consent)
 
     def test_modern_headings_and_black_text_on_light_surfaces(self):
         styles = (SITE / "styles.css").read_text()

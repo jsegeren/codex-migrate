@@ -5,15 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Move your local Codex conversations, settings, skills, repositories, worktrees, and unfinished work to a new Mac—with a resumable, verifiable migration.">
     <meta name="theme-color" content="#f7f4ed">
-    <meta property="og:title" content="Codex Migrate — Keep the work. Change the Mac.">
+    <meta property="og:title" content="Codex Migrate — Change the Mac. Keep the work.">
     <meta property="og:description" content="An unofficial, privacy-first Mac-to-Mac migration tool for local Codex workspaces.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://migrate.segeren.com/">
     <link rel="canonical" href="https://migrate.segeren.com/">
-    <title>Codex Migrate — Keep the work. Change the Mac.</title>
+    <title>Codex Migrate — Change the Mac. Keep the work.</title>
     <link rel="icon" href="/assets/mark.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="/styles.css?v=20260904-analytics">
-    <script src="/analytics.js?v=20260904" defer></script>
+    <link rel="stylesheet" href="/styles.css?v=20260904-regional">
+    <script src="/analytics.js?v=20260904-regional" defer></script>
   </head>
   <body>
     <header class="site-header">
@@ -37,7 +37,14 @@
         <div class="hero-copy">
           <p class="eyebrow"><span class="status-dot"></span> Open source now · Mac app in development</p>
           <div class="hero-heading">
-            <h1>Keep the work.<br><span class="accent">Change the Mac.</span></h1>
+            <div class="hero-message">
+              <h1>Change the Mac.<br><span class="accent">Keep the work.</span></h1>
+              <p class="lede">Move local Codex conversations, settings, skills, repositories, branches, worktrees, and unfinished files—without handing your workspace to a cloud migration service.</p>
+              <div class="actions">
+                <a class="button button-primary" data-analytics-event="select_free_cli" href="https://github.com/jsegeren/codex-migrate">Get the free CLI</a>
+                <a class="button button-secondary" data-analytics-event="select_launch_email" href="#launch-email">Email me at launch</a>
+              </div>
+            </div>
             <picture class="hero-inline-media">
               <source srcset="/assets/codex-product-dark-288.avif 288w, /assets/codex-product-dark-560.avif 560w" sizes="(max-width: 760px) 144px, (max-width: 980px) 160px, 280px" type="image/avif">
               <img class="hero-inline-icon" src="/assets/codex-product-dark-288.png"
@@ -45,11 +52,6 @@
                 sizes="(max-width: 760px) 144px, (max-width: 980px) 160px, 280px"
                 width="280" height="280" fetchpriority="high" decoding="async" alt="Codex product icon">
             </picture>
-          </div>
-          <p class="lede">Move local Codex conversations, settings, skills, repositories, branches, worktrees, and unfinished files—without handing your workspace to a cloud migration service.</p>
-          <div class="actions">
-            <a class="button button-primary" data-analytics-event="select_free_cli" href="https://github.com/jsegeren/codex-migrate">Get the free CLI</a>
-            <a class="button button-secondary" data-analytics-event="select_launch_email" href="#launch-email">Email me at launch</a>
           </div>
         </div>
         <div class="product-reference">
@@ -59,7 +61,7 @@
 
       <section class="proof-strip" aria-label="Product principles">
         <div><strong>No cloud copy</strong><span>Your data stays Mac-to-Mac</span></div>
-        <div><strong>No app telemetry</strong><span>Website analytics is opt-in</span></div>
+        <div><strong>No app telemetry</strong><span>Regional website analytics controls</span></div>
         <div><strong>No lock-in</strong><span>The engine is MIT licensed</span></div>
         <div><strong>No blind overwrite</strong><span>Backup, install, verify</span></div>
       </section>
@@ -206,7 +208,7 @@
       <div class="shell footer-grid">
         <div><a class="brand" href="/"><span class="brand-mark" aria-hidden="true">CM</span><span>Codex Migrate</span></a><p>Independent software by Segeren Studio.</p></div>
         <div><h2>Project</h2><a href="https://github.com/jsegeren/codex-migrate">GitHub</a><a href="https://github.com/jsegeren/codex-migrate/issues">Support</a><a href="https://github.com/jsegeren/codex-migrate/blob/main/SECURITY.md">Security</a></div>
-        <div><h2>Legal</h2><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a><a href="/refunds.html">Refunds</a></div>
+        <div><h2>Legal</h2><a href="/privacy.html">Privacy</a><a href="/privacy.html#website-analytics" data-analytics-preferences>Analytics choices</a><a href="/terms.html">Terms</a><a href="/refunds.html">Refunds</a></div>
       </div>
       <div class="shell footer-bottom"><p>© 2026 Segeren Studio.</p><p>Codex product icon and OpenAI marks belong to OpenAI.</p></div>
     </footer>

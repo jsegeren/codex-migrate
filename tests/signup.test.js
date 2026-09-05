@@ -35,7 +35,7 @@ test('valid request sends consent to fixed maintainer, not visitor', async () =>
   assert.equal(res.headers['X-Robots-Tag'], 'noindex');
   assert.doesNotMatch(res.body, /reader@example/);
   assert.match(res.body, /data-analytics-event="generate_lead"/);
-  assert.match(res.body, /src="\/analytics\.js\?v=20260904"/);
+  assert.match(res.body, /src="\/analytics\.js\?v=20260904-regional"/);
 });
 test('supports urlencoded body and alias origin', async () => {
   assert.equal((await submit({ body: 'email=reader%40example.net&consent=yes&website=', headers: { origin: 'https://codex-migrate.vercel.app', 'content-type': 'application/x-www-form-urlencoded; charset=UTF-8' } })).statusCode, 200);

@@ -926,6 +926,43 @@ Wi-Fi/Thunderbolt route comparison, cable removal and resumed transfer on two
 Macs remain release acceptance gates; these automated checks do not claim that
 hardware proof.
 
+## Regional analytics follow-up
+
+The original global analytics banner was intentionally retired because it
+obscured a meaningful portion of the product page for every visitor. Full GA4
+measurement now starts by default outside the EEA, United Kingdom and
+Switzerland. Those consent-required markets start in Google's advanced consent
+mode with analytics and advertising storage denied, retain cookieless modeled
+measurement, and receive a compact 360px corner choice instead of the prior
+page-wide banner. Explicit choices persist and remain available from the
+footer in every market.
+
+The same-origin regional endpoint uses Vercel's edge-provided country code and
+returns only `default` or `consent`; it does not return or store a visitor's
+country or IP address. Missing or malformed location data fails closed into
+consent mode. The CLI, Mac app and local migration dashboard remain free of
+telemetry.
+
+Production deployment `codex-migrate-et8m3t11x-joshuas-projects-d3a5c48d.vercel.app`
+was aliased to the canonical domain. The live U.S. edge returned `default`
+without a banner, created only `cm_ga` and `cm_ga_1MZ87MY2X4`, and produced no
+console errors. At the browser boundary, a forced consent-market response
+displayed a 360px card, created no cookies before choice, and sent a denied
+cookieless page view. **Allow** created the same two host-only cookies;
+**Decline** retained no analytics cookie and persisted the choice. The footer
+control reopened the choice in the default market and successfully withdrew
+storage. This is not a claim that the test originated from an EEA IP.
+
+The hero was also rebalanced against the full 1160px shell and now reads
+**Change the Mac. Keep the work.** The icon sits on the right side of that
+composition and no longer defines the text row's height. Rendered 1440px and
+390px checks both measured a 16px headline-to-subheading gap and zero horizontal
+overflow. The final live 1440px check matched those measurements. Lighthouse
+scored 100 in Performance, Accessibility, Best Practices and SEO. The complete
+Python regression passed 564 tests with seven expected filesystem skips; all 20
+Node endpoint/Help tests, native Swift typechecking, CLI startup, JavaScript
+syntax and diff checks also passed.
+
 ### Reference guidance
 
 - [Lighthouse scoring excludes manual checks](https://developer.chrome.com/docs/lighthouse/accessibility/scoring).

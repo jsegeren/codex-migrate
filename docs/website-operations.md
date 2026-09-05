@@ -77,17 +77,26 @@ website** for `https://migrate.segeren.com` (measurement ID `G-1MZ87MY2X4`).
 The measurement ID is public configuration; no Analytics API credential belongs
 in the repository.
 
-The local `site/analytics.js` consent controller is the only supported loader.
-It makes no Google request before an explicit **Accept analytics** choice and
-does not load the production tag on localhost or an unrecognized hostname.
-**No thanks** is persisted in browser local storage, and the privacy page lets a
-visitor reopen the choice. This is public-website measurement only: the CLI,
-Mac app, local dashboard, migration state, conversations and repositories do
-not send analytics.
+The local `site/analytics.js` regional controller is the only supported loader.
+It queries the same-origin `/api/analytics-region` endpoint, which maps Vercel's
+edge-provided country code to either `default` or `consent` without returning or
+retaining the country. Unknown locations fail closed. The production tag does
+not load on localhost or an unrecognized hostname.
+
+Full GA4 measurement is enabled by default outside the EEA, United Kingdom and
+Switzerland. In those consent-required markets, the tag starts in advanced
+consent mode with analytics and advertising storage denied, sends only
+cookieless measurement pings, and shows a compact 360px corner choice. **Allow**
+enables full measurement; **Decline** retains cookieless measurement and clears
+Codex Migrate-specific cookies. Explicit choices persist in browser local
+storage and can be changed from the footer. There is no global consent banner.
+This is public-website measurement only: the CLI, Mac app, local dashboard,
+migration state, conversations and repositories do not send analytics.
 
 The intentionally small event model is:
 
-- automatic consented page views and GA enhanced measurement;
+- automatic page views and GA enhanced measurement, subject to the regional
+  storage mode;
 - `select_free_cli` for the primary open-source calls to action;
 - `select_launch_email` for the homepage launch-email call to action;
 - `select_you_one` for the separate You.one cross-promotion; and
@@ -101,11 +110,12 @@ arrives.
 
 Privacy and reporting settings were reviewed on September 4, 2026. Google
 Signals is enabled for aggregate demographics, interests and cross-device
-insights from consented visitors; user-provided data remains off, and the site
+insights from eligible visitors with full measurement; user-provided data remains off, and the site
 does not send signup emails or other user IDs to GA. Ads personalization remains
 disallowed in all regions. Event and user retention are both 14 months and user
-retention resets on new activity. The tag uses Codex Migrate-specific, host-only
-cookies with a 14-month expiry that refreshes for returning-user continuity.
+retention resets on new activity. When storage is granted, the tag uses Codex
+Migrate-specific, host-only cookies with a 14-month expiry that refreshes for
+returning-user continuity.
 Granular location/device reporting remains enabled for the approximate
 city/region, browser and device reporting disclosed in the privacy policy.
 

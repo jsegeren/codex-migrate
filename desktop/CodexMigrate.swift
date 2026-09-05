@@ -270,7 +270,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         WindowGroup("Codex Migrate") {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    Text("Keep the work. Change the Mac.").font(.largeTitle.bold())
+                    Text("Change the Mac. Keep the work.").font(.largeTitle.bold())
                     Link("Help / Email support", destination: supportURL)
                     Text("Run this app on the old Mac. Data moves directly over SSH; we do not receive your workspace.")
                     Button("Open browser setup") { model.launch("launch") }.disabled(model.running)
