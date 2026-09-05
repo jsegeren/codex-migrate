@@ -4,6 +4,15 @@ const SITE = 'https://migrate.segeren.com';
 class CommerceError extends Error {
   constructor(code, status = 503) { super(code); this.code = code; this.status = status; }
 }
+function commerceSite(env = process.env) {
+  // Only this project's Vercel-generated preview origin may replace the live
+  // site, and only in sandbox mode. Never derive payment links from a request.
+  if (env.COMMERCE_MODE !== 'sandbox' || env.VERCEL_ENV !== 'preview') return SITE;
+  if (!/^codex-migrate-[a-z0-9]+-joshuas-projects-d3a5c48d\.vercel\.app$/.test(env.VERCEL_URL || '')) {
+    throw new CommerceError('sandbox_origin_unavailable');
+  }
+  return `https://${env.VERCEL_URL}`;
+}
 function validRelease(release, live) {
   return Boolean(release && /^[a-f0-9]{64}$/.test(release.sha256 || '') &&
     /^[a-f0-9]{40}$/.test(release.source || '') && /^[A-Za-z0-9._-]{1,100}$/.test(release.id || '') &&
@@ -34,9 +43,9 @@ function configuration(env = process.env, catalog = releases) {
   if (!validRelease(release, live) || release.id !== env.COMMERCE_RELEASE) {
     throw new CommerceError('release_unavailable');
   }
-  return { mode, live, key, secret, release, catalog, site: SITE,
+  return { mode, live, key, secret, release, catalog, site: commerceSite(env),
     blobStore: env.COMMERCE_BLOB_STORE_ID,
     account: env.COMMERCE_STRIPE_ACCOUNT, product: env.COMMERCE_PRODUCT,
     price: env.COMMERCE_PRICE, webhookSecret: env.COMMERCE_WEBHOOK_SECRET };
 }
-module.exports = { configuration, CommerceError, SITE, validRelease };
+module.exports = { configuration, CommerceError, SITE, validRelease, commerceSite };

@@ -82,9 +82,19 @@ Private server-only variables:
 - Existing `SENDGRID_API_KEY` and `LAUNCH_FROM_EMAIL` provide transactional mail.
 
 The API needs Accounts, Products, Prices, Payment Intents and Charges read
-access plus Checkout Sessions write access. The current local sandbox key
-does **not** yet have the additional Payment Intents/Charges permissions;
-Founder confirmation was requested. No permission expansion has been applied.
+access plus Checkout Sessions write access. The Founder approved the two
+additional read scopes. After Stripe's identity checkpoint, September 5 API
+readback returned HTTP 200 for both Payment Intents and Charges using the
+existing sandbox restricted key. No live key or write scope was added.
+
+Sandbox Vercel previews use their own platform-provided `VERCEL_URL` for return
+URLs, delivery links and exact request-origin checks. The hostname must match
+this project's deployment prefix and existing team suffix; missing or malformed
+preview identity fails closed. Request headers never select the link origin.
+Live mode and Production remain pinned to `https://migrate.segeren.com`.
+The public purchase CTA remains hidden in sandbox mode and operator authorization
+is still mandatory. This enables isolated hosted testing without redirecting a
+test buyer into the unconfigured Production purchase route.
 
 Use the direct database URL as `COMMERCE_DATABASE_URL_UNPOOLED` and set
 `COMMERCE_MIGRATION_CONFIRM=codex-migrate-commerce` with the matching mode to run

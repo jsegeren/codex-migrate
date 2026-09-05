@@ -1,13 +1,13 @@
 const { timingSafeEqual } = require('node:crypto');
 const { runtime } = require('../commerce/runtime');
 const { reply, failure, body } = require('../commerce/http');
-const { CommerceError, configuration } = require('../commerce/config');
+const { CommerceError, configuration, commerceSite } = require('../commerce/config');
 function makeHandler(load = runtime, env = process.env, configure = configuration) {
   return async (req, res) => {
     if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); return reply(res, 405, { error: 'post_required' }); }
     try {
       if (env.COMMERCE_CHECKOUT_OPEN !== 'yes') throw new CommerceError('checkout_closed');
-      const data = body(req);
+      const data = body(req, commerceSite(env));
       if (Object.keys(data).some(k => k !== 'requestId') || typeof data.requestId !== 'string' ||
           !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(data.requestId || '')) {
         throw new CommerceError('invalid_request', 400);

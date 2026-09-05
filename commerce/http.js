@@ -12,8 +12,8 @@ function failure(res, error) {
   return reply(res, error instanceof CommerceError ? error.status : 503,
     { error: error instanceof CommerceError ? error.code : 'temporarily_unavailable' });
 }
-function body(req) {
-  if (req.headers.origin !== SITE) throw new CommerceError('invalid_origin', 403);
+function body(req, origin = SITE) {
+  if (req.headers.origin !== origin) throw new CommerceError('invalid_origin', 403);
   if ((req.headers['content-type'] || '').split(';')[0] !== 'application/json') throw new CommerceError('invalid_request', 415);
   if (Number(req.headers['content-length']) > 2048) throw new CommerceError('invalid_request', 413);
   const data = req.body;
