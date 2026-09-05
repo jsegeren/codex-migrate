@@ -842,13 +842,24 @@ signup email addresses and user IDs are not sent to GA, and ads personalization
 is disallowed in all regions. Event/user retention is 14 months and rolling
 user-retention reset is on.
 
-The website tag is consent-gated and production-host allowlisted. Browser
-verification showed zero Google requests before a choice and after a persisted
-decline. Accepting stored the choice and loaded the tag; after adding the
-production-host gate, a granted localhost session also made zero Google
-requests, preventing development traffic from polluting production reports.
-The privacy page exposes a working preference control. The CLI, Mac app and
-local dashboard remain telemetry-free.
+The website tag is consent-gated and production-host allowlisted. Deployment
+`dpl_A37xXhJY91mxBasEVWJoYkUH484L` was checked on the canonical production
+domain in a fresh browser. Before a choice there were zero Google requests,
+zero cookies and zero console errors. Accepting loaded the tag, set only
+host-scoped `cm_ga` and `cm_ga_1MZ87MY2X4` cookies, and produced successful 204
+measurement responses. Enabling Google Signals initially exposed three
+collection endpoints omitted from the CSP; the live check caught the blocked
+requests, the CSP was limitedly expanded to those exact endpoints, and the
+redeployed acceptance run had zero CSP or console errors.
+
+The privacy-page preference control was then used to choose **No thanks**. It
+removed both product-specific cookies, persisted the denied choice, and
+reloaded without another Google request. A second reload likewise made no
+Google request. The cleanup intentionally does not delete a generic parent
+domain `_ga` cookie that may belong to another Segeren site. A granted localhost
+session also makes zero Google requests, preventing development traffic from
+polluting production reports. The CLI, Mac app and local dashboard remain
+telemetry-free.
 
 The complete local regression ran 548 tests successfully with seven expected
 filesystem skips. Node signup/help tests, native Swift typechecking, JavaScript
