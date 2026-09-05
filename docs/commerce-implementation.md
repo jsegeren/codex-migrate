@@ -200,7 +200,10 @@ opened to bypass any of these checks.
   download, retained useful focus and had no horizontal overflow. This proves
   the user-gesture correction and rendered behavior, not the hosted private
   Blob or paid session. Repeat the actual hosted browser acceptance before
-  release.
+  release. Exact commit `793e237` is deployed on guarded Preview
+  `dpl_Ny7QyfH8W2x5vTXLB6Z5weC4cQR6`; the stable sandbox alias points to it,
+  serves the new link implementation, and continues to report availability
+  `false`.
 - September 5 sandbox setup: created endpoint `we_1UCK0vQwGK6ZgBcKbA8f3rXL`
   in `acct_1Rkc6nQwGK6ZgBcK` for `checkout.session.completed` and
   `checkout.session.async_payment_succeeded`. The endpoint targets this

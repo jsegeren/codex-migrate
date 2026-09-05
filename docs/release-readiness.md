@@ -13,9 +13,11 @@ the original asynchronous Chrome navigation hit a client download block. The
 purchase page now binds the verified private URL to a real link so the buyer's
 trusted click starts the download; 185 website tests pass, and real Chromium
 downloaded a mocked attachment from that click at desktop and 320px without
-overflow. Hosted private-Blob and paid-session retesting remains open, so
-end-to-end delivery is not yet accepted. Actual signed app upload, signing and
-cross-Mac acceptance also remain open.
+overflow. Exact commit `793e237` is deployed on guarded Preview
+`dpl_Ny7QyfH8W2x5vTXLB6Z5weC4cQR6`; its stable sandbox alias serves the new
+link code and still reports availability `false`. Hosted private-Blob and
+paid-session retesting remains open, so end-to-end delivery is not yet accepted.
+Actual signed app upload, signing and cross-Mac acceptance also remain open.
 See [commerce implementation](commerce-implementation.md).
 Purchase-only private delivery is selected and implemented. A real 8 MiB storage
 fixture passed authenticated byte verification, anonymous/altered-link denial,
