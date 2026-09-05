@@ -51,6 +51,13 @@ purchase, weaken SSH host-key checking, or enable live checkout as a workaround.
   narrow 390px source/receiver screenshots were inspected with no overflow.
   These use fixture account/host metadata, not a separate Mac or VoiceOver.
   Local screenshots: `output/playwright/pairing-recovery-{source,receiver}-{1280,390}.png`.
+  Clean source `62d871e2643b226eb32e1ba55c12c92d2220e959` produced
+  `build/desktop-qth6movg/Codex-Migrate-0.1.0-build1-arm64-LOCAL-UNSIGNED.zip`,
+  SHA-256 `7efe7e0301c061b57a325e49a0c12b291ca1c5469a4fe78724d682612d6b85f5`.
+  Nine desktop tests ran against that actual bundled executable (eight passed,
+  one filesystem skip). They cover process/setup boundaries, not a packaged
+  cross-Mac pairing handshake. This is an unsigned engineering artifact; the
+  user's open helper was not restarted or replaced.
 
 - Guided connection-card setup now replaces manual SSH-key configuration for
   standard receiving accounts. Both helpers stay loopback-only. A dedicated
