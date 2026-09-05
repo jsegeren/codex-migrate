@@ -54,15 +54,19 @@ available yet. Local unsigned builds are engineering artifacts, not releases.
 
 ## Browser-first setup
 
-Open Codex Migrate on the **old Mac**, then choose **Open browser setup**.
-The helper serves setup and the real migration dashboard on a private loopback
-address. Enter the destination, choose local workspace folders, and review the
-scope. Existing SSH configuration is used unless you enter a custom key path.
+Open Codex Migrate on the **old Mac**. Your browser opens automatically;
+there is no separate native setup window. Follow three short steps: enter the
+new Mac's name and username, choose what to move, then review your selection.
+The home folder is filled in automatically; custom paths and SSH key settings
+are under Advanced connection settings. Existing SSH configuration is used by default.
+The helper serves setup and the migration dashboard on a private loopback address.
 This is not a hosted upload: workspace data stays on the Macs.
 
 Destination changes start disabled. Enabling them only makes the dashboard's
 transfer controls available; you still inspect and start explicitly. Backup and
-finalization guards are unchanged. The helper refuses a normal close while
+finalization guards are unchanged. Closing a browser tab does not stop the
+helper or transfer. The menu-bar icon reopens the browser or quits the helper.
+The helper refuses a normal quit while
 inspection, a transfer, a paused process, or installation is active. Use **Stop
 safely**, or wait for installation and verification to finish, before closing.
 
@@ -92,46 +96,29 @@ command remains a one-pass alternative; its staging is not imported here.
 Native picker permission behavior and the full browser recovery journey still
 require clean-Mac validation before release.
 
-## Alternative native setup
+## Older engineering builds
 
-Open Codex Migrate on the **old Mac**. Enter `new-user@new-mac.local` and the new
-Mac's `/Users/new-user` home directory. Optionally select an existing SSH key.
-Choose the workspace folders to transfer. “Suggest common folders” checks
-Git, Projects, and Developer under your home; it is not an exhaustive scan.
+The former native setup form is no longer part of the app. Its saved files are
+left intact, but are not silently imported into browser migrations. If you have
+an unfinished migration created with an older build, keep that build and use
+its original configuration to finish or stop it safely before switching.
 
-The last launched destination, folder selection, and skills choices are saved
-in an owner-only local file under `~/Library/Application Support/Codex Migrate`.
-They are restored when you reopen the app; **changes are always disabled**.
-Review the restored scope before continuing. SSH key selections, credentials,
-and dashboard tokens are not saved. Reselect a custom SSH key if needed.
-“Restore last launched setup” also restores these values after editing the form.
-Only the most recent setup is saved; this is not a multiple-migration library.
-
-Folders are copied with their Git metadata and unfinished work. Credentials
-stored inside a selected workspace are also copied. Review the scope carefully.
-
-Click **Inspect both Macs**. Resolve any permission, space, identity, or connection
-error before enabling changes. macOS may request access to selected folders;
-grant only the access needed for your migration. Full Disk Access is not enabled
-automatically by this app.
-
-Enable changes only after reviewing the plan. Open the migration dashboard,
-then choose Start transfer. It uses a free local port and opens in your browser.
-The URL includes a private control token—do not share it. Keep the native app
-open while the dashboard is in use. These alternative controls use the native
-setup window and the same browser-based progress dashboard.
+“Suggest common folders” checks Git, Projects, and Developer under your home;
+it is not an exhaustive scan. Selected folders include Git metadata, unfinished
+work, and any credentials stored inside them. Review your selection. macOS may
+request folder access; Full Disk Access is not enabled automatically.
 
 ## Interrupted transfers
 
-During inspection or a skills export, use **Stop operation** in the setup
-window. Inspection and staging can stop; any staged files are retained. Once
+During inspection or transfer, use **Stop safely** in the browser.
+Inspection and staging can stop; any staged files are retained. Once
 skills backup/replacement starts, a stop request waits for that transaction and
 verification (or rollback) to finish. Keep both Macs connected and wait for the
 reported outcome. Force Quit and power loss cannot provide this guarantee.
 
 Use Stop safely in the dashboard before closing it. Paused transfers must be
-stopped safely or resumed; the native app refuses to quit while its engine is
-open. Rerun with the same destination and selected roots to reuse staging.
+stopped safely or resumed; the helper refuses to quit during an active operation.
+Rerun with the same destination and selected roots to reuse staging.
 Do not change scope mid-migration. After a crash or reboot, staged data is retained.
 Never remove the old Mac's data just because the progress bar reached 100%.
 
@@ -167,16 +154,17 @@ validate representative work before retiring the old Mac.
 
 ## Skills only
 
-Select personal and/or workspace skills, then choose Plan skill export. After
-reviewing the plan, enable changes and choose Apply skill export. That action
-requires an additional confirmation and backs up matching destination skills.
+Choose **Custom skills only** in the browser, then select personal and/or
+workspace skills. Review the setup, inspect the discovered skills, and start
+staging. **Finalize** is a separate confirmation and backs up matching
+destination skills before replacement.
 Restart Codex if updated skills do not immediately appear.
 
 ## Support
 
-Setup, recovery, and security guides are bundled with the app. Use the **Read
-… offline** buttons even when the network is unavailable. Online links remain
-available for current documentation and issue reporting.
+Use **Help / Email support** in the browser to open help and prepare a diagnostic
+report for review. Setup, recovery, and security guides are also bundled in the
+app's Resources/docs folder. Online links provide current documentation.
 
 Support is best-effort. We aim to provide an initial response within a few
 business days, depending on availability, complexity, and the information

@@ -29,7 +29,9 @@ HTML = r"""<!doctype html>
     * { box-sizing:border-box; }
     body { margin:0; min-height:100vh; background:radial-gradient(circle at 20% 0,#172038 0,transparent 36%),var(--bg); color:var(--text); font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
     main { width:min(920px,calc(100% - 32px)); margin:48px auto; }
-    header { display:flex; justify-content:space-between; gap:24px; align-items:flex-start; margin-bottom:24px; }
+    header { display:flex; justify-content:space-between; gap:24px; align-items:flex-start; margin-bottom:32px; }
+    header > div { min-width:0; }
+    header > .support-link { flex:none; background:transparent; border-color:#8996ad; color:#d9cdff; }
     h1 { margin:0; font-size:clamp(30px,6vw,54px); letter-spacing:-.045em; line-height:1; }
     .tag { border:1px solid var(--line); border-radius:999px; padding:7px 11px; color:var(--muted); white-space:nowrap; }
     .lede { color:var(--muted); font-size:17px; max-width:650px; margin:14px 0 0; }
@@ -66,7 +68,7 @@ HTML = r"""<!doctype html>
     code { color:#dbe5ff; overflow-wrap:anywhere; }
     #path-command pre { white-space:pre-wrap; overflow-wrap:anywhere; font-size:15px; }
     footer { margin:20px 4px; color:var(--muted); font-size:14px; }
-    @media (max-width:680px) { main{margin:24px auto}.grid{grid-template-columns:1fr}.status-row{align-items:flex-end}.panel{padding:18px}header{display:block}.tag{display:inline-block;margin-top:16px} }
+    @media (max-width:680px) { main{margin:24px auto}.grid{grid-template-columns:1fr}.status-row{align-items:flex-end}.panel{padding:18px}header{flex-direction:column;gap:24px}.tag{display:inline-block;margin-top:16px} }
   </style>
 </head>
 <body>
@@ -171,7 +173,7 @@ function renderSkills(s){
   $("skill-count").textContent=Array.isArray(skills)?`${skills.length} selected${verified!=null?` · ${verified} verified`:" · not yet verified"}`:"Not inspected yet";
   $("skill-list").replaceChildren(...(skills||[]).map(skill=>{const li=document.createElement("li");li.textContent=`${skill.name} → ${skill.destination}`;return li}));
   if(repair){
-    document.querySelector(".lede").textContent="Custom skills only. Stage selected personal or workspace skills, then finalize with verified backups. Conversations, configuration and whole repositories are not migrated.";
+    document.querySelector(".lede").textContent="Move selected custom skills with verified backups. Conversations, settings and whole projects stay untouched.";
     $("codex-scope").textContent="Not included — conversations and configuration stay unchanged";
     $("workspace-heading").textContent="Folders searched for workspace skills (not copied whole):";
     if(!(s.components||[]).includes("workspace-skills")){$("workspace-count").textContent="0";$("workspace-list").replaceChildren();}

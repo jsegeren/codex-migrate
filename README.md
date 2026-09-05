@@ -175,6 +175,9 @@ For guided local browser setup instead of command-line configuration, run
 selection, then the real migration dashboard. No transfer starts automatically;
 changes are disabled unless you explicitly enable them for that session.
 Browser-created migrations restore their last configuration on reopening.
+The Mac app opens this same browser flow automatically. Its menu-bar helper
+has only Open and Quit controls, not a second setup form. Closing the browser
+tab leaves the helper running; quitting is guarded while operations are active.
 If you already started through `serve` or native setup, resume through that
 same entry point; browser setup does not import its migration records.
 

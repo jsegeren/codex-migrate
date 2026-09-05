@@ -118,6 +118,31 @@ class SetupTests(unittest.TestCase):
         with self.helper._request_lock:
             self.assertFalse(self.helper.can_shutdown())
 
+    def test_browser_shutdown_requires_local_token_and_stops_idle_server(self):
+        self.assertEqual(self.request("/api/shutdown", {}, authorized=False)[0], 403)
+        self.assertEqual(self.request("/api/shutdown", {}, extra_headers={"Origin": "https://example.com"})[0], 403)
+        self.assertFalse(self.helper._closing)
+        self.assertEqual(self.request("/api/shutdown", {})[0], 200)
+        self.thread.join(timeout=2)
+        self.assertFalse(self.thread.is_alive())
+        self.assertTrue(self.helper._closing)
+
+    def test_browser_shutdown_cannot_interrupt_running_paused_or_worker(self):
+        self.helper.configure(self.config())
+        for status in ("running", "paused"):
+            self.helper.state.update(status=status)
+            self.assertEqual(self.request("/api/shutdown", {})[0], 409)
+            self.assertFalse(self.helper._closing)
+        self.helper.state.update(status="idle")
+        release = threading.Event()
+        self.helper.engine._thread = threading.Thread(target=lambda: release.wait(3))
+        self.helper.engine._thread.start()
+        try:
+            self.assertEqual(self.request("/api/shutdown", {})[0], 409)
+        finally:
+            release.set()
+            self.helper.engine._thread.join(timeout=3)
+
     def test_suggestions_only_use_existing_common_folders(self):
         code, result = self.request("/api/suggestions", {})
         self.assertEqual(code, 200)

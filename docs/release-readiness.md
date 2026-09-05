@@ -36,6 +36,28 @@ purchase, weaken SSH host-key checking, or enable live checkout as a workaround.
 
 ## Candidate checks completed on the development Mac
 
+- Browser-only UX revision: the native setup form has been removed. The Mac
+  launcher starts its bundled local helper and opens the browser automatically;
+  its menu provides Open and guarded Quit only. Setup is three steps with
+  separate host/username inputs, automatic standard home paths, folder selection,
+  and review. Advanced settings and setup diagnostics start collapsed. The
+  existing backup, replacement, and explicit-change guards remain in force.
+  Real Chromium checks covered desktop setup, a 390px review screen, step focus,
+  saved setup with changes reset off, automatic home paths, and read-only
+  skills configuration into the real dashboard with no remote contact.
+  The dashboard also reflows at 320px without horizontal overflow. Its narrow
+  header now retains a 24px gap above Help and 32px below it; Help is secondary
+  rather than a filled primary action. SSH pairing still requires preconfigured
+  key login. This is not yet nontechnical, end-to-end onboarding acceptance.
+  Older native migration state is preserved but not silently imported; retain
+  the original build to complete an unfinished migration created there.
+  Verification: 566 Python tests completed, 559 passed and seven explicit
+  filesystem skips; six support-interaction Node tests passed; Swift typechecking
+  passed. After removing button underlines, all 13 support tests passed again,
+  and Chromium confirmed no underline, a 24px header gap, and no overflow at
+  390px. These tests include token/origin-protected idle shutdown and refusal
+  to shut down while running, paused, or with a live operation worker.
+
 - Clean source `491e58a2f8cf19515ac301c3e16d7cdb3a33de28` now has a current
   unsigned arm64 engineering package, including the trusted-route selection,
   rsync adapter and SSH error guidance added since the prior package. The

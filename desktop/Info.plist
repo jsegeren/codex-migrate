@@ -10,6 +10,7 @@
   <key>CFBundleVersion</key><string>1</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
   <key>NSHighResolutionCapable</key><true/>
+  <key>LSUIElement</key><true/>
   <key>NSLocalNetworkUsageDescription</key><string>Connect to the destination Mac you select for a private SSH migration.</string>
   <key>NSDocumentsFolderUsageDescription</key><string>Inventory and transfer workspace folders you explicitly select.</string>
   <key>NSDesktopFolderUsageDescription</key><string>Inventory and transfer workspace folders you explicitly select.</string>

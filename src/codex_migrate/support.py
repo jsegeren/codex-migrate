@@ -153,7 +153,7 @@ def diagnostic_report(state):
 SUPPORT_CSS = """
 .support-link { display:inline-block; padding:12px 15px; border:1px solid #a08bd3;
   border-radius:10px; color:#f7f8fa; background:#6042a6; font-size:16px;
-  font-weight:700; text-decoration:underline; line-height:1.4; }
+  font-weight:700; text-decoration:none; line-height:1.4; }
 a:focus-visible,button:focus-visible,textarea:focus-visible {
   outline:3px solid #d9cdff; outline-offset:4px; }
 #migration-help { margin-top:20px; padding:20px; border:1px solid #8996ad;

@@ -91,8 +91,10 @@ class SupportTests(unittest.TestCase):
             self.assertNotIn("PRIVATE", json.dumps(report))
 
     def test_help_is_available_before_configuration_and_during_failure(self):
+        self.assertIn('href="#migration-help"', HTML)
+        self.assertIn('href="#setup-help"', SETUP_HTML)
+        self.assertIn('id="setup-help"', SETUP_HTML)
         for document in (HTML, SETUP_HTML):
-            self.assertIn('href="#migration-help"', document)
             self.assertIn('id="prepare-support"', document)
             self.assertIn('id="support-report" readonly', document)
             self.assertIn('id="support-status" role="status"', document)
@@ -149,7 +151,8 @@ class SupportTests(unittest.TestCase):
         setup.feed(SETUP_HTML)
         self.assertTrue(setup.inside["identity"])
         self.assertFalse(setup.inside["apply"])
-        self.assertIn("it does not merge existing work", SETUP_HTML)
+        self.assertTrue(setup.inside["prepare-support"])
+        self.assertIn("it does not merge separate work", SETUP_HTML)
 
     def test_email_draft_is_fixed_and_does_not_send_or_attach_automatically(self):
         url = urlparse(SUPPORT_URL)
@@ -163,7 +166,9 @@ class SupportTests(unittest.TestCase):
         self.assertIn("attach", fields["body"][0])
         native = (Path(__file__).parents[1] / "desktop/CodexMigrate.swift").read_text()
         self.assertIn(SUPPORT_EMAIL, native)
-        self.assertIn('Link("Help / Email support"', native)
+        self.assertIn('"Open Codex Migrate"', native)
+        self.assertNotIn('WindowGroup', native)
+        self.assertIn('Help / Email support', SETUP_HTML)
 
     def test_corrupt_or_missing_state_does_not_become_a_fresh_migration(self):
         for payload in ("not json", "[]", "null", '{"error":"PRIVATE"}'):

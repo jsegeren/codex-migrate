@@ -179,8 +179,11 @@ class DesktopTests(unittest.TestCase):
                                     headers=headers), timeout=3)
                 self.assertEqual(denied.exception.code, 400)
                 denied.exception.close()
-                process.terminate()
+                with urlopen(Request(base + "/api/shutdown", data=b'{}',
+                                     headers=headers), timeout=3) as response:
+                    self.assertEqual(response.status, 200)
                 process.wait(timeout=15)
+                self.assertEqual(process.returncode, 0)
             finally:
                 if process.poll() is None:
                     process.kill()
