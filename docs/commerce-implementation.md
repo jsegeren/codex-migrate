@@ -72,6 +72,16 @@ recovery control. Desktop 1280px and narrow 320px checks had no horizontal
 overflow; the recovery control was 17px with a visible keyboard focus ring.
 This is bounded UI/fixture evidence, not a new live purchase or signed app test.
 
+Exact source `bc157cfad01756738f535a6f7bff60b021023c3e` is deployed to
+Production `dpl_AGAMocPzqDuzRWArp4nfHuY7J229` and guarded Preview
+`dpl_43e887vkoHeeN8HcfHcFpCcci89L`. The canonical site's `purchase.js`
+matched the committed bytes and `/api/availability` remained `available: false`.
+The Preview reverified the existing paid sandbox session through `/api/purchase`
+and returned the exact 451-byte fixture with a 299,926 ms remaining lifetime.
+No new payment, email, production credential or release-catalog entry was
+created. Existing emailed Preview URLs retain their own immutable deployments;
+this does not retroactively update those old test pages.
+
 Private recovery-link credentials live in URL fragments, are removed from the
 current history entry, and travel to the API in POST bodies. This page loads
 no analytics. HMAC credentials are environment-bound and must be kept private;
