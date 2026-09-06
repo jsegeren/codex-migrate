@@ -1,8 +1,9 @@
 # One-launch authentic conversation test handoff
 
 Prepared September 6, 2026. This is an engineering harness, not customer UI.
-Its live cross-Mac run has **not** occurred yet. The existing synthetic acceptance
-receipts and original personal workspaces are not changed by preparing the files.
+Its live cross-Mac preparation passed both account sign-in checks, but authentic
+conversation creation failed before migration began. There is no authentic
+migration acceptance receipt yet. Original personal workspaces are not selected.
 
 ## Founder steps
 
@@ -64,7 +65,7 @@ The package is the clean `28d5b10` unsigned arm64 candidate recorded in
 passed `codesign --verify --deep --strict` again in the handoff directory.
 
 `PYTHONPATH=tests .venv/bin/python -m unittest test_authentic_mac_handoff -q`
-passes 18 deterministic tests, without a real account login or model call.
+passes 26 deterministic tests, without a real account login or model call.
 Launcher shell syntax is checked. The installed local Codex CLI is 0.153.4;
 the protocol field names were checked against its generated schema.
 
@@ -94,3 +95,31 @@ The 18 deterministic checks pass on system Python 3.9.6. These changes have not
 yet been exercised by a new account-local run. Updating the Shared program does
 not restart an exited process in another user's account. No password caching,
 privilege bypass, personal-account transfer or credential copying was introduced.
+
+## Second launch: both sign-ins passed, first model turn failed
+
+Runner PID 8999 reported `source_ready: true`, `target_ready: true`,
+`failed_phase: creating_genuine_test_conversations`, `migration_started: false`,
+and `Codex turn failed`. The runner exited before starting the migration helper.
+The previous generic turn diagnostic discarded the failure category; it does
+not establish a quota, network, permission, or model cause.
+
+The diagnostic repair now maps the installed 0.153.4 protocol's allowlisted
+`codexErrorInfo` categories and bounded integer HTTP status codes into fixed
+messages. Provider messages, additional details, account records, and transcript
+contents are never published. Unknown shapes remain a generic withheld error.
+On restart, an incomplete fixture receipt is validated and its exact thread is
+read through `thread/read`. Failed/interrupted turns produce a safe diagnostic;
+other partial states still require review. This path never retries a model turn,
+creates a replacement thread, or marks an incomplete fixture as complete.
+
+All 26 harness tests pass on system Python 3.9 and the Python 3.12 virtualenv,
+including redaction, malformed errors, partial-thread identity checks, and
+non-retry behavior. `git diff --check` passes. These are deterministic tests,
+not a successful live rerun. The Shared script update cannot restart the exited
+owner-account process. A strict, noninteractive localhost SSH check failed with
+connection refused; no authentication material or privilege settings were changed.
+
+Next account-local launch is diagnostic only for the existing failed fixture.
+It should not ask for sign-in again when both accounts remain authenticated.
+Review its actual error category before choosing any retry or account action.

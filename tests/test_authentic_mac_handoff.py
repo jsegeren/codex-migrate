@@ -136,6 +136,86 @@ class HandoffTests(unittest.TestCase):
         app.turn('fixture', 'fixture prompt')
         self.assertEqual(app.completed, [])
 
+    def test_failed_turn_exposes_only_allowlisted_category(self):
+        app = self.protocol()
+        app.events.put({'id': 1, 'result': {'turn': {'id': 'turn1'}}})
+        app.events.put({'method': 'turn/completed', 'params': {
+            'threadId': 'fixture', 'turn': {'id': 'turn1', 'status': 'failed',
+            'error': {'codexErrorInfo': 'usageLimitExceeded',
+                      'message': 'private provider data', 'additionalDetails': 'private detail'}}}})
+        with self.assertRaisesRegex(handoff.SafeError, '^Codex turn failed: usageLimitExceeded$'):
+            app.turn('fixture', 'fixture prompt')
+
+    def test_all_known_turn_categories_are_fixed_diagnostics(self):
+        for code in handoff.TURN_ERROR_CODES:
+            with self.subTest(code=code):
+                self.assertEqual(handoff.turn_failure({'error': {'codexErrorInfo': code}}),
+                                 'Codex turn failed: ' + code)
+
+    def test_turn_http_status_is_bounded_and_never_raw_text(self):
+        for name in handoff.TURN_HTTP_ERRORS:
+            for status in (401, 429, 503, None, True, 'private', -1, 600, 429.0):
+                with self.subTest(name=name, status=status):
+                    result = handoff.turn_failure({'error': {'message': 'private',
+                        'codexErrorInfo': {name: {'httpStatusCode': status, 'private': 'secret'}}}})
+                    suffix = ' (HTTP ' + str(status) + ')' if type(status) is int and 100 <= status <= 599 else ''
+                    self.assertEqual(result, 'Codex turn failed: ' + name + suffix)
+
+    def test_unknown_or_malformed_turn_errors_never_leak(self):
+        for code in ('private', {'private': {'httpStatusCode': 401}},
+                     {'httpConnectionFailed': 'private'},
+                     {'httpConnectionFailed': {}, 'private': 'secret'}, ['private'], None):
+            with self.subTest(kind=type(code).__name__):
+                self.assertEqual(handoff.turn_failure({'error': {'codexErrorInfo': code,
+                    'message': 'secret', 'additionalDetails': 'secret'}}),
+                    'Codex turn failed; error category unavailable')
+        for turn in (None, [], {}, {'error': 'private'}):
+            self.assertEqual(handoff.turn_failure(turn), 'Codex turn failed; error category unavailable')
+
+    def test_interrupted_turn_is_not_described_as_success(self):
+        self.assertEqual(handoff.turn_failure({'status': 'interrupted'}),
+                         'Codex test turn was interrupted')
+
+    def partial_fixture(self):
+        root = handoff.root_for(self.home)
+        record = {'id': 'fixture', 'kind': 'project',
+                  'marker': 'migration-fixture-' + 'a' * 32, 'complete': False}
+        handoff.save(root / 'threads.json', [record])
+        (self.home / handoff.WORKSPACE_NAME).mkdir(mode=0o700)
+        return root / 'threads.json'
+
+    def test_partial_thread_diagnosis_does_not_retry_or_change_receipt(self):
+        manifest = self.partial_fixture()
+        original = manifest.read_bytes()
+        fake = Mock()
+        fake.call.return_value = {'thread': {'id': 'fixture', 'turns': [
+            {'status': 'failed', 'error': {'codexErrorInfo': 'badRequest', 'message': 'secret'}}]}}
+        with patch.object(handoff, 'server', return_value=contextlib.nullcontext(fake)):
+            with self.assertRaisesRegex(handoff.SafeError, '^Codex turn failed: badRequest$'):
+                handoff.fixture_threads(self.home)
+        fake.call.assert_called_once_with('thread/read', {'threadId': 'fixture', 'includeTurns': True})
+        fake.turn.assert_not_called()
+        self.assertEqual(manifest.read_bytes(), original)
+
+    def test_partial_thread_completed_or_active_still_requires_review(self):
+        self.partial_fixture()
+        for status in ('completed', 'inProgress', 'private'):
+            fake = Mock()
+            fake.call.return_value = {'thread': {'id': 'fixture', 'turns': [{'status': status}]}}
+            with patch.object(handoff, 'server', return_value=contextlib.nullcontext(fake)):
+                with self.assertRaisesRegex(handoff.SafeError, 'no automatic model retry'):
+                    handoff.fixture_threads(self.home)
+            fake.turn.assert_not_called()
+
+    def test_partial_thread_response_identity_must_match(self):
+        self.partial_fixture()
+        fake = Mock()
+        fake.call.return_value = {'thread': {'id': 'different-thread', 'turns': []}}
+        with patch.object(handoff, 'server', return_value=contextlib.nullcontext(fake)):
+            with self.assertRaisesRegex(handoff.SafeError, 'response needs review'):
+                handoff.fixture_threads(self.home)
+        fake.turn.assert_not_called()
+
     def test_server_tool_requests_rejected_not_approved(self):
         app = self.protocol()
         app.events.put({'id': 9, 'method': 'item/commandExecution/requestApproval', 'params': {}})

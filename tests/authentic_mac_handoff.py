@@ -39,6 +39,39 @@ class SafeError(RuntimeError):
     """Only fixed operator-facing diagnostics; never a subprocess error body."""
 
 
+TURN_ERROR_CODES = frozenset({
+    'contextWindowExceeded', 'sessionBudgetExceeded', 'usageLimitExceeded',
+    'rateLimitExceeded', 'serverOverloaded', 'cyberPolicy',
+    'misalignmentPolicyViolation', 'internalServerError', 'unauthorized',
+    'badRequest', 'threadRollbackFailed', 'sandboxError', 'other',
+})
+TURN_HTTP_ERRORS = frozenset({
+    'httpConnectionFailed', 'responseStreamConnectionFailed',
+    'responseStreamDisconnected', 'responseTooManyFailedAttempts',
+})
+
+
+def turn_failure(turn):
+    """Map protocol fields to bounded diagnostics, never provider error text."""
+    if not isinstance(turn, dict):
+        return 'Codex turn failed; error category unavailable'
+    if turn.get('status') == 'interrupted':
+        return 'Codex test turn was interrupted'
+    error = turn.get('error')
+    code = error.get('codexErrorInfo') if isinstance(error, dict) else None
+    if isinstance(code, str) and code in TURN_ERROR_CODES:
+        return 'Codex turn failed: ' + code
+    if isinstance(code, dict) and len(code) == 1:
+        name = next(iter(code))
+        detail = code[name]
+        if name in TURN_HTTP_ERRORS and isinstance(detail, dict):
+            status = detail.get('httpStatusCode')
+            suffix = (' (HTTP ' + str(status) + ')'
+                      if type(status) is int and 100 <= status <= 599 else '')
+            return 'Codex turn failed: ' + name + suffix
+    return 'Codex turn failed; error category unavailable'
+
+
 def require(ok, message):
     if not ok:
         raise SafeError(message)
@@ -217,7 +250,7 @@ class AppServer:
             if event.get('method') == 'turn/completed':
                 params = event['params']
                 if params.get('threadId') == identifier and params['turn']['id'] == turn_id:
-                    require(params['turn']['status'] == 'completed', 'Codex turn failed')
+                    require(params['turn']['status'] == 'completed', turn_failure(params['turn']))
                     return
         raise SafeError('Codex test turn timed out')
 
@@ -275,7 +308,26 @@ def fixture_threads(home):
         require(app.signed_in(), 'Sign into Codex with ChatGPT in the source test account')
         for index, kind in enumerate(('project', 'loose', 'archived')):
             if index < len(records):
-                require(records[index].get('complete') is True, 'Partial conversation needs review')
+                if records[index].get('complete') is not True:
+                    # Read only the exact fixture recorded before the failure.
+                    # Do not create another thread, retry a paid turn, or alter
+                    # Codex's session/database files to conceal the failed run.
+                    record = records[index]
+                    require(isinstance(record.get('id'), str)
+                            and re.fullmatch(r'[a-zA-Z0-9_-]{1,100}', record['id']) is not None
+                            and record.get('kind') == kind
+                            and isinstance(record.get('marker'), str)
+                            and re.fullmatch(r'migration-fixture-[a-f0-9]{32}', record['marker']) is not None,
+                            'Partial conversation receipt needs review')
+                    history = app.call('thread/read', {'threadId': record['id'], 'includeTurns': True})
+                    thread = history.get('thread') if isinstance(history, dict) else None
+                    require(isinstance(thread, dict) and thread.get('id') == record['id'],
+                            'Partial conversation response needs review')
+                    turns = thread.get('turns')
+                    if isinstance(turns, list) and turns and isinstance(turns[-1], dict):
+                        if turns[-1].get('status') in ('failed', 'interrupted'):
+                            raise SafeError(turn_failure(turns[-1]))
+                    raise SafeError('Partial conversation needs review; no automatic model retry')
                 continue
             marker = 'migration-fixture-' + uuid.uuid4().hex
             response = app.call('thread/start', {'cwd': str(workspace if kind == 'project' else home),
