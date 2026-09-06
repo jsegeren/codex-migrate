@@ -73,7 +73,7 @@ conversations open; those are separate acceptance runs.
 
 ## Current gate map
 
-Checked September 4 against the source checkpoints below and the live public site. Historical
+Updated September 5 against the source checkpoints and acceptance evidence below. Historical
 checkpoints below are evidence, not separate promises that their then-pending
 work is still missing. Neither the full release nor the release-candidate
 handoff is complete while the engineering acceptance gates remain open.
@@ -82,14 +82,14 @@ handoff is complete while the engineering acceptance gates remain open.
 | --- | --- | --- |
 | Supported conversations, organization, settings, skills and complete selected workspaces | Frozen content/tree checks, retained destination identity, Git dependency discovery and bound Git baseline; local installation/rollback fixtures | Codex must reopen representative restored chats, settings and projects on the separate Mac. Codex leads; Josh provides disposable accounts. |
 | Scope is explicit, not “everything on the Mac” | Selected roots and dependency issues are reported; unsupported visible storage overrides, source project configuration, retained destination ancestor configuration, fixed system defaults, visible managed-preference keys, filenames and cloud-only flags stop early | Real configuration/version/provider matrix; managed preference visibility across launch contexts, cloud-managed policy, arbitrary role references and unflagged cloud storage remain unverified. Codex owns testing and any resulting fixes. |
-| Full and selective migration, pause/resume and recovery | Full/skills-only staging, persisted setup, mandatory verified backups, guarded replacement, guided reconciliation and preserved displaced work have local fixture coverage | Packaged full and skills-only runs across the two Macs, including disconnect, restart, low space and recovery. Never use Josh's active migrated workspace. |
+| Full and selective migration, pause/resume and recovery | Real packaged cross-Mac synthetic full installation, personal-skills CLI export, browser-API workspace-skills pause/stop/restart/resume/finalization, and scoped interrupted-transaction recovery passed; verified backups and displaced work were preserved | Rendered buyer flow, physical disconnect/reconnect, real low-space and complete-installer interruption cases, plus authentic Codex data acceptance remain open. Never use Josh's active migrated workspace. |
 | Git and old-home paths remain usable | Local linked-worktree/alternate-storage checks with source home offline; read-only path/Git rechecks preserve installed work | Different-user cross-Mac acceptance and representative development commands. Matching fingerprints alone do not prove every future command works. |
 | Browser-first local-data experience and clear status/help | Loopback helper, SSH transfer, saved setup, collapsed optional Help, bounded private-free diagnostic events, operation-specific controls, and strict-host-key multi-address speed testing with fastest-route selection | Native permission/VoiceOver checks and real Wi-Fi/direct-link selection and interruption acceptance. Automatic updating is not implemented. |
 | Public website, useful guides, screenshots, price and launch intake | Six live pages; two informative guides; sample-labelled real UI screenshots; $50 planned edition with checkout closed; prior controlled SendGrid inbox receipt and signup tests | Preserve the existing rate-limit and launch-only consent. No new email was sent in the latest read-only audit. |
 | Website accessibility and performance | Prior Lighthouse/axe results plus fresh desktop/320px rendering, six-page text-spacing and 200% text-size overflow checks | Manual assistive-technology and broader keyboard acceptance remain open; no WCAG-conformance claim. See the audit for exact scope. |
 | Domain, search discovery, analytics and cross-promotion | Live canonical domain/robots/sitemap; recorded Search Console ownership, successful sitemap submission and accepted homepage request; separate GA4 property with region-aware default/full measurement, consent-mode handling for the EEA/UK/Switzerland, 14-month retention, returning-user continuity, aggregate Google Signals reporting, granular location/device reporting, ads personalization and user-provided data disabled, launch-request key event and Search Console link; live U.S. edge returned default mode with no banner and both host-only GA cookies; browser-forced consent mode showed the compact control, set no cookies before choice, produced a denied cookieless measurement, and correctly allowed or declined; You.one link on the live homepage; fresh HTTP 200 check of segeren.com confirms its “Explore Codex Migrate” link to the canonical domain | Watch native reports after real visits. A request originating from an actual EEA/UK/Swiss edge remains useful additional confirmation, but endpoint unit tests and browser-boundary simulation cover the branch. Actual demographics depend on consent, Google eligibility and reporting thresholds; indexing, ranking and traffic are not guaranteed. No repeated indexing request needed. |
 | Reproducible identifiable packaged app | Clean-source unsigned arm64 bundle, checksum and eight passing actual engine checks (one filesystem skip); signing/notarization pipeline has mocked tests. The intended Apple account remains Pending, its enrollment email requires government-ID verification, and this Mac still has no Developer ID identity or notary profile. | Josh selects one accepted ID file in Apple's authenticated upload page; after Apple activates the existing purchase, confirm its team, install signing credentials securely, then notarize/staple and test the exact quarantined download on a clean Mac. Do not purchase again. |
-| Paid purchase, delivery, support and refunds | Best-effort support/legal pages; actual sandbox payment and full manual refund recorded, test link deactivated; Founder selected the existing Stripe account, superseding Lemon Squeezy | Codex verifies account/seller and Managed Payments eligibility, then implements and tests server-verified, replay-safe fulfillment and recoverable delivery of the exact signed artifact before checkout opens. Additional provider terms remain separate from choosing Stripe. |
+| Paid purchase, delivery, support and refunds | Existing Stripe Managed Payments sandbox purchase, guarded persistent fulfillment, private fixture delivery through a trusted browser click, recovery link, and refund denial passed; branded launch email reached the inbox | Verify branded purchase-email inbox delivery, live seller/account readiness, and purchase/download of the exact approved signed artifact before opening checkout. Sandbox fixture delivery is not an app release. |
 
 September 5 account and connection check: both standard disposable accounts,
 `codexmigratesource` and `codexmigratetarget`, now exist on their respective
@@ -171,6 +171,15 @@ backup and content. Independent checks confirmed matching payload, no pending
 transaction and preserved full-workspace data; switching back to the full setup
 retained its exact receipt. This is control-API evidence, not rendered UI or
 physical-disconnect acceptance. All 49 setup/component tests pass.
+
+The current `dea13079` package also passed real cross-Mac connection revocation
+through its HTTP endpoints using separate temporary helper registries. The new
+key authenticated before removal; a fresh, non-multiplexed SSH process was
+denied afterward. The independent original connection still worked. Both test
+helpers stopped, the revocation record was retained, and the installed migration
+receipt and absence of a pending transaction were independently rechecked.
+This is packaged API/SSH evidence, not a rendered Remove access interaction.
+See the scoped receipt for exact reports and limitations.
 
 Do not create another Apple
 purchase, weaken SSH host-key checking, or enable live checkout as a workaround.

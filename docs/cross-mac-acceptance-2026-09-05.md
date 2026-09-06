@@ -120,6 +120,32 @@ of this newer bundle on the target Mac. The prior full migration and controlled
 recovery ran the preceding candidate; the newer bundle changes shared selective
 preflight only.
 
+## Real SSH access removal
+
+The `dea13079` package was copied to the destination disposable account,
+checksum-verified, and checked with `codesign --verify --deep --strict`. Separate
+packaged source and receiver helpers ran with fresh owner-only registries. Their
+real connection-card HTTP endpoints generated, approved and accepted a new
+temporary key. The accepted target identity matched the independently pinned
+original connection. Private keys and loopback tokens stayed on their owning
+Macs; no password was requested.
+
+A fresh SSH process using only this new key authenticated as the destination
+test account. After the receiver's Remove access endpoint completed, a second
+fresh process failed with SSH exit 255 and `Permission denied`. Multiplexing and
+agent fallback were disabled. The original independent pinned connection still
+authenticated, demonstrating that the removal did not strand the existing test
+setup. Both temporary helpers stopped; a separate read verified the receiver
+process was gone, its revocation record remained, no migration transaction was
+pending, and the original installed receipt remained at `path_compatibility`.
+
+Reports: `CodexMigrate-Synthetic-51qnp907/result.json` and
+`CodexMigrate-Synthetic-dzd6sfsy/result.json`. This closes the real SSH
+revocation/isolation check through the packaged API, not rendered browser
+confirmation, key-expiry timing, or signed/quarantined first launch. Temporary
+private connection state and the engineering package remain in the disposable
+accounts for evidence review; no personal account's access was changed.
+
 ## Automated checks at this checkpoint
 
 `PYTHONPATH=src:tests python3 -m unittest test_recovery test_restore
@@ -129,6 +155,15 @@ eight passed and one case-sensitive-filesystem fixture skipped.
 After the destination-project fix, all 49 setup/component/browser-engine tests
 passed. The new bundle's actual-engine desktop suite also ran nine checks:
 eight passed and one filesystem fixture skipped.
+
+The broader source regression run after access-removal acceptance completed
+`python3 -m unittest discover -s tests -p 'test_*.py'`: 588 tests, 581 passed,
+seven skipped, no failures (131.674 seconds). `npm test` completed 186 tests:
+185 passed, one skipped, no failures. The Node database integration test is
+skipped without its explicit test-database environment. These are local
+regressions, not new live commerce or Apple checks. The Python build tests print
+simulated signed/notarized success for mocked temporary fixtures; no real
+Developer ID signature or notarization was produced by this run.
 
 ## Evidence retention and remaining gates
 
