@@ -4,8 +4,10 @@ const { CommerceError, validRelease } = require('./config');
 // Every link is GET-only, bound to one content-addressed object, and expires
 // within five minutes. No signing key or whole-store delegation reaches clients.
 function privateDownloads(config, env = process.env, sdk = blob, clock = Date.now) {
-  const auth = { storeId: config.blobStore,
-    ...(env.COMMERCE_BLOB_READ_WRITE_TOKEN ? { token: env.COMMERCE_BLOB_READ_WRITE_TOKEN } : {}) };
+  // Explicit token connections must not accidentally use ambient deployment
+  // OIDC: the SDK prioritizes OIDC over its BLOB_READ_WRITE_TOKEN fallback.
+  const token = env.COMMERCE_BLOB_READ_WRITE_TOKEN || env.BLOB_READ_WRITE_TOKEN;
+  const auth = { storeId: config.blobStore, ...(token ? { token } : {}) };
   return async release => {
     if (!validRelease(release, config.live)) throw new CommerceError('release_unavailable');
     const origin = `https://${config.blobStore.toLowerCase()}.private.blob.vercel-storage.com`;

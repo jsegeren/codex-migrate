@@ -28,6 +28,17 @@ test('private download issues only exact-file GET access for five minutes', asyn
   assert.equal(JSON.stringify(result).includes('fixture-private'), false);
   assert.equal(f.calls.find(c => c[0] === 'sign')[2].access, 'private');
 });
+for (const [env, token] of [
+  [{ BLOB_READ_WRITE_TOKEN: 'generic-fixture', VERCEL_OIDC_TOKEN: 'ambient-fixture' }, 'generic-fixture'],
+  [{ COMMERCE_BLOB_READ_WRITE_TOKEN: 'commerce-fixture', BLOB_READ_WRITE_TOKEN: 'generic-fixture' }, 'commerce-fixture'],
+  [{}, undefined],
+]) test('explicit storage connection credentials take precedence over ambient OIDC', async () => {
+  const f = fixture(); const result = await privateDownloads(config, env, f.sdk, () => now)(release);
+  assert.equal(f.calls.find(c => c[0] === 'head')[2].token, token);
+  assert.equal(f.calls.find(c => c[0] === 'issue')[1].token, token);
+  assert.equal(JSON.stringify(result).includes('generic-fixture'), false);
+  assert.equal(JSON.stringify(result).includes('commerce-fixture'), false);
+});
 test('remaining lifetime accounts for signing time and rejects expiration during signing', async () => {
   const f = fixture(); let elapsed = 0;
   const original = f.sdk.presignUrl;

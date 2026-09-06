@@ -1,5 +1,5 @@
 {
-  "buildCommand": null,
+  "buildCommand": "node ops/commerce-preflight.js",
   "outputDirectory": "site",
   "cleanUrls": true,
   "trailingSlash": false,

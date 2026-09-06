@@ -1,6 +1,7 @@
 # Ship the site, APIs and commerce runtime; never operator data or app archives.
 node_modules/
-ops/
+ops/*
+!ops/commerce-preflight.js
 .env*
 .venv/
 .git/
