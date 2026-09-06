@@ -40,6 +40,14 @@ The deployment reached **Ready**. This proves live catalog read permissions
 and private transport with production credentials, not Checkout write scope,
 payment capture, live event delivery, email or signed-app acceptance.
 
+After protected-deployment checks returned availability false and HTTP 503
+`checkout_closed`, source and evidence were fast-forwarded to main and pushed.
+The same verified deployment was promoted to the canonical domain; Vercel
+confirmed promotion success, and fresh public requests again returned
+`{"available":false}` and HTTP 503 `checkout_closed`. The website therefore
+has the verified infrastructure fix, not an enabled paid release. The build-only
+preflight switch is not a standing project setting.
+
 The full Node suite passed 232 tests with one skipped; the focused commerce
 suite passed 106 with one skipped. An incorrectly positioned test-reporter flag
 in one npm invocation was rejected; the corrected direct Node invocation is
