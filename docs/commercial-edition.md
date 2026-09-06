@@ -28,7 +28,13 @@ The downloadable Mac edition will cost **$50 one time**, including best-effort
 maintainer support. No subscription and no pre-orders. Checkout stays closed
 until a signed, notarized build, clean-Mac validation, and delivery are verified.
 
-The signed Mac app is in development and is not available for download today.
+The project is in **Beta**. The signed Mac app is not publicly downloadable yet;
+early unsigned/unnotarized Mac builds may be requested from Josh and are handled
+case by case. Beta does not mean release acceptance is complete. Keep the source
+Mac and an independent backup; finalization replaces selected destination data,
+not merges independently active workspaces. Do not send credentials or workspace
+contents when requesting access.
+
 The full open-source CLI is available today. The intended paid refund window
 is 30 days from purchase. Current release status and policies are published at
 <https://migrate.segeren.com>.

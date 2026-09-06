@@ -15,8 +15,16 @@ Josh.** It opens the guided local browser workflow for setup, transfer progress,
 pause/resume, verification, and recovery. Your workspace moves directly between
 your Macs, not through our servers.
 
-**In testing—not on sale yet.** The signed, notarized release is being prepared.
-No subscription and no pre-orders.
+**Beta.** The signed, notarized public release is being prepared. Want to try
+an early Mac build? **[Request beta access from Josh](mailto:joshua@segeren.com?subject=Codex%20Migrate%20beta%20access)**
+with your Mac model, macOS version, and what you want to migrate. Requests are
+handled case by case; early builds are unsigned/unnotarized, not the finished
+paid release. Do not email credentials or workspace contents.
+
+Keep the old Mac and an independent backup. Finalization replaces selected
+destination data after backup; it does not merge two independently active
+workspaces. Broader compatibility and recovery testing is still underway.
+The $50 public release is not on sale yet. No subscription and no pre-orders.
 
 **[Get an email when the $50 Mac app launches →](https://migrate.segeren.com/#launch-email)**
 · [See the Mac edition](https://migrate.segeren.com/#founding-edition)
@@ -47,7 +55,7 @@ and structure verification and sufficient free space is available. There is no
 skip-backup option. Same-disk backups do not protect against disk failure;
 keep the old Mac intact. See [backup and recovery details](docs/recovery.md).
 
-> **Alpha:** This project was extracted from a successful real-world migration
+> **Beta:** This project was extracted from a successful real-world migration
 > spanning hundreds of gigabytes. The core safety model is implemented and
 > tested, but the public CLI
 > still needs broader hardware and Codex-version testing. Read the plan before
