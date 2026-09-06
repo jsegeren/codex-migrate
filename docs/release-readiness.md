@@ -7,8 +7,10 @@ September 5 setup follow-up fixes a reproduced asynchronous folder-selection
 review race, stale retry errors and lost keyboard focus. Desktop and 320px
 Chromium fixture checks pass, as do 584 Python tests (12 skipped) and 210
 JavaScript tests (one skipped). The mode label now fits the narrow selector.
-The retained `286f6b9` package does not contain this later source fix; rebuild
-before final device acceptance. See the [bounded setup receipt](folder-selection-acceptance-2026-09-05.md).
+The clean `fc0ba9c` unsigned package includes this fix; its independent checksum,
+extracted ad-hoc signature and desktop checks passed (eight tests, one skip).
+Use it instead of `286f6b9` for the next authorized device check. See the
+[bounded setup and package receipt](folder-selection-acceptance-2026-09-05.md).
 
 September 5 fresh Search Console inspections now confirm **Page is indexed**
 for the homepage, `/moving-to-a-new-mac`, and `/backup-and-recovery`, with

@@ -134,6 +134,13 @@ class DesktopTests(unittest.TestCase):
                 self.assertEqual(url.hostname, "127.0.0.1")
                 token = parse_qs(url.fragment)["token"][0]
                 base = "http://127.0.0.1:%d" % url.port
+                with urlopen(base + "/", timeout=3) as response:
+                    html = response.read().decode()
+                # Check the actual bundled page so an older candidate cannot
+                # pass solely against the current checkout's setup template.
+                self.assertIn('<option value="full">Full Codex migration</option>', html)
+                self.assertIn('for(const id of ["folders","suggest","next-2"])$(id).disabled=true;', html)
+                self.assertIn('button.getClientRects().length)button.focus()', html)
                 request = Request(base + "/api/setup", headers={"X-Codex-Migrate-Token": token})
                 with urlopen(request, timeout=3) as response:
                     state = json.load(response)

@@ -46,6 +46,34 @@ participated. This is not native VoiceOver, WCAG conformance, physical
 interruption, or full clean-Mac acceptance. The fixture and isolated browser
 were stopped after inspection; disposable screenshots and snapshots were removed.
 
-The retained `286f6b9` unsigned package predates this source change. A new clean
-package must include it before final device/signing acceptance. No running
-test-account helper was replaced and no app download was published in this pass.
+## Updated packaged candidate
+
+The new unsigned candidate is built from clean source
+`fc0ba9c43b348dd6ad35fa9b881e6bd4b2c9d369`, version 0.1.0/build 1, arm64,
+using Python 3.12.3 and PyInstaller 6.22.2 on macOS 26.5.1. The builder recorded
+`source_dirty: false` and `build_mode: local-test`.
+
+- Retained directory: ignored `build/rc-fc0ba9c/`.
+- Archive: `Codex-Migrate-0.1.0-build1-arm64-LOCAL-UNSIGNED.zip` (8,337,638 bytes).
+- SHA-256: `f813002e4b4809e38ae5101cfc1f30aa3298a93189cc9661e0980243e5b85b8b`.
+
+The source branch `codex/rc-setup-2026-09-05` was pushed before building in one
+clean sibling worktree. The output was retained, then the empty build directory
+and worktree were removed and Git worktrees pruned. No manual worktree remains.
+
+Independent checksum verification passed. The ZIP was extracted outside the
+checkout; `codesign --verify --deep --strict` passed and embedded build metadata
+matched. This is an ad-hoc signature, not Developer ID, notarization or Gatekeeper
+acceptance. The extracted engine passed the nine-test desktop suite with eight
+passes and one case-sensitive-filesystem skip. An added HTTP-page assertion
+checks that the actual bundle contains the Review-selection guard, focus fix,
+and shortened mode label rather than relying only on checkout source. Packaged
+children run with system-only PATH and without Python/DYLD overrides. This is
+startup, configuration/authorization and packaged engine evidence, not a remote
+migration. The disposable extraction was removed after confirming no process
+had it open.
+
+Use this candidate instead of the retained `286f6b9` package for the next
+authorized engineering device check. No running test-account helper was
+replaced and no app download was published in this pass. Apple activation,
+authentic Codex reopening and the remaining clean-Mac release gates stay open.
