@@ -3,8 +3,57 @@
 Status: implementation and private-storage transport tested; **not a live checkout release**.
 The committed release catalog contains only a harmless sandbox delivery fixture.
 Live credentials and catalog settings are now saved in Vercel Production, but
-the remaining runtime configuration and signed release are incomplete. The live
+the signed release and full live purchase acceptance are incomplete. The live
 webhook is disabled and checkout remains closed. No app archive was published.
+
+### Production provisioning accepted — September 6 follow-up
+
+The committed Drizzle migration was applied to the explicitly pinned isolated
+main database using a direct connection. Independent readback shows the
+`live` environment marker, both purchase tables and Drizzle migration history,
+and zero purchases. The pooled connection and a newly generated independent
+32-byte recovery-link secret are saved as sensitive Production settings.
+The initial CLI setting save was rejected because it used a team slug instead
+of the repository policy's exact team ID; the guard was preserved, the correct
+ID was supplied, and separate readback confirmed both saves. No migration retry
+was needed and no customer or sandbox records were changed.
+
+Source `28c898e5dba7c83d39ddae30bcc7a22002d73d8f` adds an opt-in build-time
+preflight, not a public endpoint. Ordinary builds skip all provider access;
+`COMMERCE_PREFLIGHT=yes` requires Production, the exact live account/catalog,
+the isolated database, valid private settings and checkout explicitly closed.
+It creates no payment, email, database row or app upload. SDK exceptions are
+reported only as a fixed failure code and a locally selected stage.
+
+Inspection found that the Blob SDK selects ambient OIDC before its environment
+token fallback. The delivery adapter now explicitly passes a configured
+commerce token or `BLOB_READ_WRITE_TOKEN`, preserving token-authenticated
+connections; OIDC remains available when neither is configured. Regression
+tests verify precedence and no credential in the returned download metadata.
+
+Unpromoted production deployment `dpl_7yhQnNvgVqiagpeFsQtSYTSCswvK` built that
+exact source with the preflight enabled. Its build at `2026-09-06T08:37:24Z`
+reported all checks successful: fresh Stripe account/product/one-time $50 USD
+price reads, exact live database identity, signed access to the existing
+451-byte harmless fixture with matching content, and anonymous access denied.
+The deployment reached **Ready**. This proves live catalog read permissions
+and private transport with production credentials, not Checkout write scope,
+payment capture, live event delivery, email or signed-app acceptance.
+
+The full Node suite passed 232 tests with one skipped; the focused commerce
+suite passed 106 with one skipped. An incorrectly positioned test-reporter flag
+in one npm invocation was rejected; the corrected direct Node invocation is
+the passing full-suite result. Production database readback after preflight
+still shows zero purchases. Apple still reports **Pending**, and this Mac has
+zero valid code-signing identities. Test-account elevation is not currently
+available without a fresh administrator authorization.
+
+To repeat the provisioning check, build an exact committed source on the
+existing project with Production credentials, `COMMERCE_PREFLIGHT=yes` supplied
+as a build-only variable and domain promotion disabled. Do not set that opt-in
+permanently: marketing builds should not depend on commerce-provider uptime.
+The fixed sandbox fixture is deliberately used only by this operator check;
+the live release catalog validation is unchanged and still rejects it.
 
 ## Live integration provisioning — September 6
 
@@ -49,7 +98,7 @@ that Production had no commerce variables or webhook.
   These are local tests, not live payment or signed-app acceptance. The canonical
   `/api/availability` response remains `{"available":false}`.
 
-Next: apply the already sandbox-tested schema to the isolated live database,
+At that checkpoint, next steps were to apply the already sandbox-tested schema to the isolated live database,
 save its production connection and a durable independent recovery-link secret,
 verify live restricted-key permissions and private storage access, then deploy
 and exercise the complete receiver against the approved signed release. Apple
@@ -150,8 +199,9 @@ release gates before enabling any buyer checkout.
   products, prices, settings, customers, keys or databases were modified.
 - The separate `codex-migrate-commerce` Neon project was created through the
   existing Vercel integration. Its `commerce-sandbox` branch contains the
-  tested schema and clearly synthetic purchase records. The main branch has
-  no purchase schema or customer records. No new vendor account was created.
+  tested schema and clearly synthetic purchase records. Main now has the same
+  schema with a live environment marker and no purchase/customer records.
+  No new vendor account was created.
 - Both computes and new-compute defaults are capped at 0.25 CU with 300-second
   idle suspension, on the existing usage-priced Launch installation. Database
   storage and active compute incur that plan's normal charges; this is not a

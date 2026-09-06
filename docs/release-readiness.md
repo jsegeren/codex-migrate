@@ -3,7 +3,17 @@
 The downloadable paid app is **not released**. Publishing source and the
 informational website does not open checkout or certify a customer download.
 
-September 6 live-integration provisioning: the dedicated restricted Stripe key,
+September 6 production preflight passed on an unpromoted deployment of
+`28c898e`: fresh live Stripe account/catalog reads, the isolated live purchase
+schema, and verified private transport of the 451-byte harmless fixture, with
+anonymous access denied. The database connection and independent recovery-link
+secret are saved; the purchase table remains empty. Full Node tests passed 232
+with one skipped. A storage-token precedence fix is included. This closes those
+provisioning checks, not live Checkout write/capture, webhook processing,
+signed-app delivery or authentic Codex migration. Apple is still Pending and
+no signing identity is installed. See the [follow-up receipt](commerce-implementation.md#production-provisioning-accepted--september-6-follow-up).
+
+Earlier September 6 live-integration provisioning: the dedicated restricted Stripe key,
 live catalog identifiers and webhook verification secret are saved in Vercel
 Production, with checkout explicitly off. The new live webhook is **Disabled**;
 private Blob storage is connected to Production and Development. These are
