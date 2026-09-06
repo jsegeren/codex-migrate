@@ -8,7 +8,10 @@ use an owner-only temporary file, flush/fsync and same-directory atomic replace.
 A failed serialization, sync or replacement preserves the previously saved
 submission ID so the existing wait/resume path can retry without resubmitting.
 Eleven release-orchestration tests pass, including injected write failures and
-successful retry using the original ID. This is local mocked orchestration
+successful retry using the original ID. The complete Python suite then ran 598
+tests: 586 passed and 12 were skipped (`PYTHONPATH=src python3 -m unittest
+discover -s tests -q`). An initial invocation without `PYTHONPATH=src` failed
+module imports and was corrected; it was not a passing run. This is local mocked orchestration
 evidence, not Apple acceptance or a hardware power-loss durability guarantee.
 Failure to save the initial submission still requires operator reconciliation
 with Apple; the local file and Apple's submission are not one transaction.
