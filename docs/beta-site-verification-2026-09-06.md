@@ -25,6 +25,20 @@ signup implementation, or social image changed.
 - The commerce build preflight returned `skipped` with no explicit preflight
   environment. It is not recorded as a commerce acceptance pass.
 
+## Production verification
+
+- Published clean tracked source `eb52402a13c450e0fca18fbbefb8df4ef14fa512`
+  to the existing Vercel project. Untracked social-image drafts were excluded.
+- Deployment: `dpl_GmSEjMqGNTaojhpSgps4vaodXcJx`, status `READY`, aliased to
+  `https://migrate.segeren.com`.
+- An unmocked browser visit confirmed the Beta availability text, $50 request
+  button, hidden checkout panel, and `/api/availability` returning
+  `{"available":false}`.
+- Both guide routes and `/og-dark-v1.png` returned HTTP 200. The homepage still
+  points to that existing social image.
+- No customer emails, checkout sessions, charges, or migration operations were
+  triggered by this website verification.
+
 ## Remaining release evidence
 
 The new authentic cross-Mac runner had not written a status report at the time
