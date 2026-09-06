@@ -1,11 +1,24 @@
 """Shared fail-closed backup checks. Remote output never includes file contents."""
 
 import json
+from datetime import datetime, timezone
+from pathlib import Path
+import secrets
 import shlex
 from typing import Sequence, Tuple
 
 
 MIN_RESERVE_BYTES = 2 * 1024**3
+
+
+def new_backup_path(home: str, prefix: str) -> str:
+    """Name a fresh attempt without reusing backups after fast/clock-skew retries.
+
+    The destination's existing-path check and lock still enforce non-overwrite.
+    Timestamp is for people; the random suffix distinguishes attempts.
+    """
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return str(Path(home) / (prefix + "-" + timestamp + "-" + secrets.token_hex(8)))
 
 
 # A conservative full-copy budget is required even though APFS clones normally

@@ -15,7 +15,7 @@ from codex_migrate.destination_lock import locked_destination_script
 from codex_migrate.transaction import transaction_commands, rollback_checks, recovery_preflight_script
 from codex_migrate.cancellation import Cancellation
 from codex_migrate.backup import (
-    BACKUP_FUNCTIONS, MIN_RESERVE_BYTES, size_command, verification_receipt,
+    BACKUP_FUNCTIONS, MIN_RESERVE_BYTES, new_backup_path, size_command, verification_receipt,
 )
 from codex_migrate.migration import MigrationEngine, MigrationError, _value
 from codex_migrate.processes import require_codex_closed_script
@@ -177,11 +177,7 @@ class ComponentExporter:
         migration_id: str,
         backup: str = "",
     ) -> Dict[str, object]:
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        backup = backup or str(
-            Path(self.config.target_home)
-            / ("Codex-Migrate-Component-Backup-" + timestamp)
-        )
+        backup = backup or new_backup_path(self.config.target_home, "Codex-Migrate-Component-Backup")
         preconditions = []
         backups = []
         installs = []

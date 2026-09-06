@@ -1,6 +1,7 @@
 """Disposable local browser-engine transactions; SSH never runs in these tests."""
 
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from process_fixtures import closed_codex_script, fixture_prefix
 import platform
@@ -119,6 +120,23 @@ class ComponentMigrationTests(unittest.TestCase):
         self.assertEqual(restarted.state.read()["migration_id"], before["migration_id"])
         self.assertEqual(restarted.state.read()["status"], "ready_to_finalize")
         self.fixture.assert_destination_original()
+
+    def test_browser_retry_in_same_second_retains_failed_backup(self):
+        self.engine._run_preseed()
+        with patch("codex_migrate.backup.datetime") as clock:
+            clock.now.return_value = datetime(2026, 9, 5, tzinfo=timezone.utc)
+            # Fail after a backup directory exists, without consuming staging.
+            self.prefix = "cp() { return 74; }\n"
+            with self.assertRaises(RuntimeError):
+                self.engine._install_and_verify()
+            first = Path(self.engine.state.read()["pending_backup"])
+            self.assertTrue(first.exists())
+            self.prefix = ""
+            receipt = self.engine._install_and_verify()
+        self.assertNotEqual(first, Path(receipt["backup"]))
+        self.assertTrue(first.exists())
+        self.assertTrue(receipt["backup_verified"])
+        self.assertEqual((self.fixture.destination_skill / "SKILL.md").read_text(), "current skill")
 
     def test_post_install_corruption_rolls_back_only_selected_skills(self):
         self.engine._run_preseed()

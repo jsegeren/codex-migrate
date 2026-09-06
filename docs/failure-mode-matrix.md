@@ -24,7 +24,7 @@ it early and give a safe, actionable explanation.
 | Intel/Apple Silicon and native project dependencies | Artifacts identify architecture; development evidence is Apple Silicon. | Clean-machine packaging tests for each advertised architecture; explain when dependencies need rebuilding. |
 | Permissions, managed accounts, denied access | Process-owner checks and failed read/copy checks fail closed. | Real permission-denial UX checks; no silent omission or excessive privilege requests. |
 | Disconnect, sleep, changed route, helper restart | Staging reuse and simulated cancellation/restart tests exist. | Real cross-Mac disconnect/reconnect and route-change tests with disposable accounts. |
-| Disk fills during backup/install/rollback | Conservative budgeting, rechecks, verified backups, and failure fixtures exist. Three opt-in real APFS disk-image checks now pass: initial low free space, space consumed after backup, and an actual ENOSPC error inside the pre-replacement installer shell; all preserve originals/staging and allow retry after removing only artificial pressure. See the bounded receipt below. | Actual copy/journal/rollback ENOSPC and broader second-Mac/hardware recovery remain open. A disposable image is not a real receiving-Mac or protected-phase failure proof; keep source and independent backup. |
+| Disk fills during backup/install/rollback | Conservative budgeting, rechecks, verified backups, and failure fixtures exist. Five opt-in real APFS disk-image checks cover initial low space, space consumed after backup, pre-replacement ENOSPC, terminal completion under disk exhaustion, and forced installation failure with rollback under that pressure. The observed rollback was independently verified. See the bounded receipt below. | Actual production copy/journal/rollback ENOSPC and broader second-Mac/hardware recovery remain open. APFS retained room for metadata in the tested protected-phase cases; keep source and independent backup. |
 | Connector credentials and external dependencies | Destination Codex identity is retained; source SSH keys are excluded. Other configuration can reference uncopied dependencies. | Explicit reauthentication/reinstallation guidance. Do not equate copied configuration with working integrations. |
 | User gets stuck and needs support | Visible Help, email draft, reviewed local diagnostic report, and bounded event history are implemented. | Check keyboard/mobile UI and privacy tests; never require private content just to request help. |
 
@@ -69,3 +69,39 @@ CODEX_MIGRATE_REAL_DISK_TEST=yes PYTHONPATH=src:tests python3 -m unittest test_r
 The adapter is the existing local synthetic fixture, including its closed-Codex
 process snapshot and dummy destination identity. No SSH, authentic Codex state,
 personal workspace, GUI recovery or packaged two-Mac acceptance is claimed.
+
+### Protected-phase extension and retry defect
+
+Two additional disk-image cases exhaust the volume with a bounded write after
+replacement and content verification, immediately before the production terminal
+transaction call. The filler exceeds 2 GiB and real remaining free space is below
+64 MiB. The production journal, clone-copy, rollback and verification operations
+are unchanged:
+
+- The large write fails, but APFS still permits the small completion writes.
+  Installed synthetic conversation/workspace contents, preserved original backup,
+  the `installed` terminal receipt and absence of a pending record independently
+  confirm success. Requiring every large-write ENOSPC to fail installation would
+  be an incorrect test expectation.
+- An explicit installer exit at that same boundary forces rollback while the
+  disk pressure remains. The observed result is a verified automatic rollback:
+  original Codex/workspace files match, the terminal receipt says `restored`, and
+  the pending record is removed. The test also requires explicit verified
+  recovery after reclaiming space if a future filesystem run instead reports an
+  unconfirmed rollback; that alternative was not exercised in this run.
+
+The expanded run reproduced a separate real defect: two attempts within one
+second chose the same timestamp-only backup folder. Retry hit the existing-path
+guard and failed without a useful message. Full migration, CLI skills export and
+browser skills repair now share a timestamp-plus-random-attempt name. Existing
+path checks and destination locking remain in force; old backups are not reused,
+removed or overwritten. Frozen-clock regressions cover full retry, consecutive
+CLI repairs, and a failed browser repair followed by successful retry.
+
+The combined run passed 119 tests across real disk-space, backup, transactions,
+CLI/browser components, full skills, recovery inspection and restoration. All
+disposable disk images were detached and removed after verification.
+
+These cases do not prove ENOSPC during an actual production journal/clone write:
+the tested APFS filesystem retained enough metadata capacity. Physical power
+loss, a second receiving Mac and broader filesystem versions remain separate.

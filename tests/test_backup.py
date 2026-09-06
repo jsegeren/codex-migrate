@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -133,6 +134,20 @@ class BackupTests(unittest.TestCase):
         self.assert_originals_untouched()
         self.assertFalse((Path(self.state.read()["pending_backup"]) / "verification.json").exists())
 
+    def test_fast_retry_preserves_previous_attempt_backup(self):
+        with patch("codex_migrate.backup.datetime") as clock:
+            clock.now.return_value = datetime(2026, 9, 5, tzinfo=timezone.utc)
+            self.engine.transport = self.transport("space_after_backup")
+            with self.assertRaisesRegex(RuntimeError, "Not enough destination space"):
+                self.engine._install_and_verify()
+            first = Path(self.state.read()["pending_backup"])
+            self.assertTrue(first.exists())
+            self.engine.transport = self.transport()
+            receipt = self.engine._install_and_verify()
+            self.assertNotEqual(first, Path(receipt["backup"]))
+            self.assertEqual((first / ".codex/old.txt").read_text(), "original")
+            self.assertTrue(receipt["backup_verified"])
+
     def test_corrupt_backup_blocks_before_replacement(self):
         self.engine.transport = self.transport("corruption")
         with self.assertRaisesRegex(RuntimeError, "Backup verification found differences"):
@@ -193,6 +208,29 @@ class BackupTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "Not enough destination space"):
                 exporter.run()
         self.assertFalse((self.target / "Codex-Migrate-Component-Staging").exists())
+
+    def test_two_cli_repairs_in_same_second_keep_distinct_backups(self):
+        skill = self.source / ".agents/skills/example"
+        destination = self.target / ".agents/skills/example"
+        skill.mkdir(parents=True)
+        destination.mkdir(parents=True)
+        (skill / "SKILL.md").write_text("new")
+        (destination / "SKILL.md").write_text("old")
+        stage = self.target / "component-stage"
+        shutil.copytree(skill, stage / "items/0")
+        (stage / ".codex-migrate-owner").write_text("a" * 32)
+        exporter = ComponentExporter(self.config, ["personal-skills"])
+        exporter.transport = self.transport()
+        item = SkillExport("example", str(skill), str(destination), "user")
+        with patch("codex_migrate.backup.datetime") as clock:
+            clock.now.return_value = datetime(2026, 9, 5, tzinfo=timezone.utc)
+            first = exporter._install([item], str(stage), "a" * 32)
+            shutil.copytree(skill, stage / "items/0")
+            (stage / ".codex-migrate-owner").write_text("a" * 32)
+            second = exporter._install([item], str(stage), "a" * 32)
+        self.assertNotEqual(first["backup"], second["backup"])
+        self.assertEqual((Path(first["backup"]) / "items/0/SKILL.md").read_text(), "old")
+        self.assertEqual((Path(second["backup"]) / "items/0/SKILL.md").read_text(), "new")
 
     def test_component_reopened_codex_blocks_replacement_after_backup(self):
         skill = self.source / ".agents/skills/example"

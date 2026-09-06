@@ -3,6 +3,16 @@
 The downloadable paid app is **not released**. Publishing source and the
 informational website does not open checkout or certify a customer download.
 
+September 5 disk-pressure follow-up: real bounded APFS image tests cover
+pre-replacement low space, space consumed during backup, and protected completion
+and rollback under disk exhaustion. They also exposed a fast-retry collision in
+timestamp-only backup names. Full migration and both skills-repair entry points
+now allocate distinct attempt-suffixed backup paths, retaining existing backup
+and lock guards. Frozen-clock regression tests cover all three paths. This
+source fix is not yet included in the retained `e6abe13` unsigned package; rebuild
+and verify the next exact candidate before device acceptance. See the
+[disk-pressure evidence and limitations](failure-mode-matrix.md#protected-phase-extension-and-retry-defect).
+
 September 5 evening acceptance: a new simulated $50 Managed Payments purchase
 was independently confirmed paid in Stripe test mode. Its actual branded
 delivery email reached the maintainer's Gmail Inbox, with correct From/Reply-To,

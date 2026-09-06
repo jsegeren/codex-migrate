@@ -25,7 +25,7 @@ from codex_migrate.git_verification import (check_installed, fingerprint, freeze
                                            installation_verified, require_runtime)
 from codex_migrate.exclusions import CODEX_EXCLUDES
 from codex_migrate.skills import SkillExport, discover_personal_skills, skill_verification_script
-from codex_migrate.backup import BACKUP_FUNCTIONS, size_command, verification_receipt
+from codex_migrate.backup import BACKUP_FUNCTIONS, new_backup_path, size_command, verification_receipt
 from codex_migrate.destination_lock import locked_destination_script
 from codex_migrate.transaction import transaction_commands, rollback_checks, recovery_preflight_script
 from codex_migrate.inventory import Inventory, collect
@@ -1049,8 +1049,7 @@ class MigrationEngine:
             source_inventory = self.inventory()
             expected_active = source_inventory.active_sessions.files
             expected_archived = source_inventory.archived_sessions.files
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        backup = str(Path(self.config.target_home) / (self.config.backup_prefix + "-" + timestamp))
+        backup = new_backup_path(self.config.target_home, self.config.backup_prefix)
         q_home = shlex.quote(self.config.target_home)
         q_codex = shlex.quote(self.config.target_codex)
         q_staging = shlex.quote(self.config.target_staging)

@@ -8,6 +8,7 @@ snapshot), not SSH, actual Codex state, or a complete packaged buyer flow.
 """
 
 from dataclasses import replace
+import json
 import os
 from pathlib import Path
 import platform
@@ -16,10 +17,15 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import test_backup as fixtures
+from process_fixtures import closed_codex_script
 from codex_migrate.backup import MIN_RESERVE_BYTES
 from codex_migrate.migration import MigrationEngine
+from codex_migrate.processes import require_codex_closed_script
+from codex_migrate.recovery import inspect_recovery
+from codex_migrate.restore import restore_recovery
 from codex_migrate.transaction import TRANSACTION_NAME
 
 
@@ -141,6 +147,90 @@ class RealDiskSpaceTests(unittest.TestCase):
         self.assertEqual((failed_backup / ".codex/old.txt").read_text(), "original")
         self.retry_after_reclaim()
         self.assertTrue(failed_backup.exists())
+
+    def pressure_before_completion(self, fail_install=False):
+        # All replacement/checks have run, but no terminal receipt is published.
+        # Fill the image and continue so the *production* journal/rollback writes,
+        # rather than the injected dd exit, determine the failure outcome.
+        marker = "\ncm_transaction installed || exit 78\n"
+        original = self.engine.transport.run_remote
+        def with_pressure(script, timeout=60):
+            self.assertEqual(script.count(marker), 1)
+            pressure = ("\nif LC_ALL=C /bin/dd if=/dev/zero of=" + shlex.quote(str(self.filler)) +
+                        " bs=1048576 count=4096 2>/dev/null; then exit 99; fi\n")
+            if fail_install:
+                pressure += "exit 74\n"
+            return original(script.replace(marker, pressure + marker), timeout=180)
+        self.engine.transport.run_remote = with_pressure
+
+    def assert_backup_and_source_preserved(self):
+        self.assertGreater(self.filler.stat().st_size, 2 * 1024**3)
+        self.assertLess(shutil.disk_usage(self.mount).free, 64 * 1024**2)
+        backup = Path(self.fixture.state.read()["pending_backup"])
+        self.assertTrue(json.loads((backup / "verification.json").read_text())["backup_verified"])
+        self.assertEqual((backup / ".codex/old.txt").read_text(), "original")
+        self.assertEqual((backup / "home-relative/Git/old.txt").read_text(), "original-work")
+        self.assertEqual((self.fixture.source / "Git/new.txt").read_text(), "new-work")
+        return backup
+
+    def test_disk_exhaustion_at_completion_has_verified_outcome(self):
+        self.pressure_before_completion()
+        try:
+            receipt = self.engine._install_and_verify()
+        except RuntimeError as error:
+            self.verify_or_recover_failed_install(str(error))
+            return
+        # APFS can retain room for small metadata writes after a large write
+        # fails. Success is valid only with independently matching installed data
+        # and a durable terminal receipt, not just the process's zero exit code.
+        backup = self.assert_backup_and_source_preserved()
+        self.assertTrue(receipt["backup_verified"])
+        self.assertEqual((self.fixture.target / "Git/new.txt").read_text(), "new-work")
+        self.assertEqual((self.fixture.target / ".codex/sessions/chat.jsonl").read_text(), "{}\n")
+        self.assertFalse((self.fixture.target / TRANSACTION_NAME).exists())
+        self.assertEqual(json.loads((backup / "transaction-receipt.json").read_text())["phase"],
+                         "installed")
+        print("APFS pressure outcome: installed data and terminal receipt verified", flush=True)
+        self.filler.unlink()
+
+    def test_rollback_under_real_disk_exhaustion_is_verified_or_recoverable(self):
+        # Explicit installer failure forces the rollback path while real disk
+        # pressure remains. No production rollback/check/journal call is mocked.
+        self.pressure_before_completion(fail_install=True)
+        with self.assertRaisesRegex(RuntimeError, "Installation failed") as error:
+            self.engine._install_and_verify()
+        self.verify_or_recover_failed_install(str(error.exception))
+
+    def verify_or_recover_failed_install(self, message):
+        self.assertNotIn("INSTALLED=1", message)
+        self.assertTrue(self.filler.exists())
+        backup = self.assert_backup_and_source_preserved()
+        journal = self.fixture.target / TRANSACTION_NAME
+        if "rollback was verified" in message:
+            self.assertFalse(journal.exists())
+            self.assertEqual((self.fixture.target / ".codex/old.txt").read_text(), "original")
+            self.assertEqual((self.fixture.target / "Git/old.txt").read_text(), "original-work")
+            self.assertEqual(json.loads((backup / "transaction-receipt.json").read_text())["phase"],
+                             "restored")
+            print("APFS pressure outcome: automatic rollback verified", flush=True)
+            self.filler.unlink()
+            return
+        self.assertIn("rollback is unconfirmed", message)
+        self.assertTrue(journal.exists())
+        self.filler.unlink()
+        self.engine.transport = self.fixture.transport()
+        self.engine.transport.run_remote_cancellable = (
+            lambda script, timeout, cancelled: self.engine.transport.run_remote(script, timeout))
+        inspection = inspect_recovery(self.fixture.config, self.engine.transport)
+        self.assertEqual(inspection["status"], "backup_verified")
+        guard = closed_codex_script(require_codex_closed_script(str(self.fixture.target)))
+        with patch("codex_migrate.restore.require_codex_closed_script", return_value=guard):
+            restored = restore_recovery(self.fixture.config, self.engine.transport, inspection)
+        self.assertEqual(restored["status"], "restored")
+        self.assertFalse(journal.exists())
+        self.assertEqual((self.fixture.target / ".codex/old.txt").read_text(), "original")
+        self.assertEqual((self.fixture.target / "Git/old.txt").read_text(), "original-work")
+        print("APFS pressure outcome: explicit recovery verified after space reclaimed", flush=True)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,6 @@
 """Skills-only browser migrations using the existing transfer state machine."""
 
 from dataclasses import replace
-from datetime import datetime, timezone
 import hashlib
 import json
 import os
@@ -9,7 +8,7 @@ from pathlib import Path
 import platform
 import re
 
-from codex_migrate.backup import BACKUP_FUNCTIONS, MIN_RESERVE_BYTES, size_command
+from codex_migrate.backup import BACKUP_FUNCTIONS, MIN_RESERVE_BYTES, new_backup_path, size_command
 from codex_migrate.components import ComponentExporter
 from codex_migrate.migration import MigrationEngine, MigrationError
 
@@ -128,8 +127,7 @@ class ComponentMigrationEngine(MigrationEngine):
         migration_id = self.state.read().get("migration_id")
         if not isinstance(migration_id, str) or not re.fullmatch(r"[0-9a-f]{32}", migration_id):
             raise MigrationError("Staging ownership marker is missing from local state")
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        backup = str(Path(self.config.target_home) / ("Codex-Migrate-Component-Backup-" + timestamp))
+        backup = new_backup_path(self.config.target_home, "Codex-Migrate-Component-Backup")
         self.state.update(pending_backup=backup)
         self.exporter.transport = self.transport
         receipt = self.exporter._install(items, self.config.target_staging, migration_id, backup=backup)
