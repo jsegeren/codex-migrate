@@ -15,7 +15,7 @@ const env = { COMMERCE_MODE: 'sandbox', COMMERCE_STRIPE_KEY: 'rk_test_fixture', 
   COMMERCE_STRIPE_ACCOUNT: 'acct_fixture', COMMERCE_PRODUCT: 'prod_fixture', COMMERCE_PRICE: 'price_fixture',
   COMMERCE_WEBHOOK_SECRET: 'whsec_fixture', COMMERCE_RELEASE: release.id, COMMERCE_BLOB_STORE_ID: 'fixturestore' };
 const config = configuration(env, { [release.id]: release });
-const signDownload = async r => ({ url: `https://fixturestore.private.blob.vercel-storage.com/${r.pathname}?fixture=1`, expiresAt: Date.now() + 300000 });
+const signDownload = async r => ({ url: `https://fixturestore.private.blob.vercel-storage.com/${r.pathname}?fixture=1`, expiresAt: Date.now() + 300000, expiresInMs: 300000 });
 function fixture() {
   const s = { id: 'cs_test_fixture', livemode: false, mode: 'payment', status: 'complete', payment_status: 'paid',
     managed_payments: { enabled: true }, metadata: { product: 'codex-migrate', release: release.id },
@@ -75,6 +75,7 @@ test('refund after fulfillment blocks a previously issued download link', async 
   const f = fixture(); await f.api.fulfill(f.s.id);
   const token = tokenFor(f.s.id, config);
   assert.equal((await f.api.download(token)).sha256, release.sha256);
+  assert.equal((await f.api.download(token)).expiresInMs, 300000);
   f.s.payment_intent.latest_charge.refunded = true;
   await assert.rejects(f.api.download(token), /requires_support/);
 });

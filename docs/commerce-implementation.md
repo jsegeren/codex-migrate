@@ -46,6 +46,32 @@ these states in private provider dashboards before deciding to resend. A
 database failure after provider acceptance can also leave an uncertain send.
 Purchase access remains independent of email delivery.
 
+The purchase page refreshes an expired or nearly expired file link in place
+when the buyer activates Download for Mac. It then asks for another ordinary
+download click, preserving the browser gesture rather than navigating after an
+asynchronous request. After a download request, **Get a fresh link** also
+recovers a stopped download without reopening email. Refresh always uses the
+existing payment/refund/dispute verification path; it never resends purchase
+mail or creates another checkout.
+
+The signer returns remaining lifetime after signing. The page measures elapsed
+time from before the request, using both wall-clock and monotonic elapsed time
+with a five-second margin. It does not compare the buyer's calendar clock with
+the server's expiry timestamp. This covers ordinary delay, sleep that pauses
+the monotonic clock, and wall-clock rollback while awake; it is not a guarantee
+against every simultaneous clock/sleep anomaly or network delay after clicking.
+Storage still enforces actual expiration independently.
+
+September 5 expiry verification: 202 Node tests passed with one database test
+skipped. Regression cases cover clock skew, sleep, clock rollback, slow
+responses, duplicate clicks, invalid lifetimes, expiration during signing,
+and a refund encountered on refresh. A real Chrome local synthetic fixture
+exercised expired-link keyboard activation, a replacement link, a denied next
+refresh, and successful Check again. Focus remained on the active download or
+recovery control. Desktop 1280px and narrow 320px checks had no horizontal
+overflow; the recovery control was 17px with a visible keyboard focus ring.
+This is bounded UI/fixture evidence, not a new live purchase or signed app test.
+
 Private recovery-link credentials live in URL fragments, are removed from the
 current history entry, and travel to the API in POST bodies. This page loads
 no analytics. HMAC credentials are environment-bound and must be kept private;

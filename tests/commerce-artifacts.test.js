@@ -18,14 +18,24 @@ function fixture() {
 }
 test('private download issues only exact-file GET access for five minutes', async () => {
   const f = fixture(); const result = await f.download(release);
-  assert.deepEqual(Object.keys(result).sort(), ['expiresAt', 'url']);
+  assert.deepEqual(Object.keys(result).sort(), ['expiresAt', 'expiresInMs', 'url']);
   assert.equal(result.expiresAt, now + 300000);
+  assert.equal(result.expiresInMs, 300000);
   const issuance = f.calls.find(c => c[0] === 'issue')[1];
   assert.deepEqual(issuance.operations, ['get']);
   assert.equal(issuance.pathname, release.pathname);
   assert.equal(issuance.storeId, config.blobStore);
   assert.equal(JSON.stringify(result).includes('fixture-private'), false);
   assert.equal(f.calls.find(c => c[0] === 'sign')[2].access, 'private');
+});
+test('remaining lifetime accounts for signing time and rejects expiration during signing', async () => {
+  const f = fixture(); let elapsed = 0;
+  const original = f.sdk.presignUrl;
+  f.sdk.presignUrl = async (...args) => { elapsed += 10000; return original(...args); };
+  const download = privateDownloads(config, {}, f.sdk, () => now + elapsed);
+  assert.equal((await download(release)).expiresInMs, 290000);
+  f.sdk.presignUrl = async (...args) => { elapsed += 300000; return original(...args); };
+  await assert.rejects(download(release), /release_unavailable/);
 });
 for (const [name, patch] of [
   ['public URL', { url: 'https://github.com/jsegeren/codex-migrate/releases/download/v1/app.zip' }],

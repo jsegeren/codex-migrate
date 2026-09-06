@@ -26,7 +26,11 @@ function privateDownloads(config, env = process.env, sdk = blob, clock = Date.no
     const url = new URL(presignedUrl);
     if (url.origin !== origin || url.pathname !== `/${release.pathname}` ||
         url.username || url.password || url.hash || !url.search) throw new CommerceError('release_unavailable');
-    return { url: url.toString(), expiresAt: delegation.validUntil };
+    const expiresInMs = delegation.validUntil - clock();
+    if (!Number.isSafeInteger(expiresInMs) || expiresInMs <= 0 || expiresInMs > 300000) {
+      throw new CommerceError('release_unavailable');
+    }
+    return { url: url.toString(), expiresAt: delegation.validUntil, expiresInMs };
   };
 }
 module.exports = { privateDownloads };

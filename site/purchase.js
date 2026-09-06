@@ -11,6 +11,7 @@
   if (location.hash) history.replaceState(null, '', location.pathname);
   let token = credential.startsWith('session=') ? null : credential;
   let busy = false;
+  let linkLifetime = 0, requestWallTime = 0, requestMonotonicTime = 0;
   async function call(action, value) {
     // Keep same-origin hosting authentication on protected previews. Purchase
     // authority still comes from the explicit credential and fresh Stripe read.
@@ -29,6 +30,10 @@
     status.textContent = 'Checking your purchase…';
     try {
       if (!token) token = (await call('status', credential.slice('session='.length))).token;
+      // Measure age from before the request, conservatively including network
+      // time. A wrong calendar clock does not invalidate a server-issued link;
+      // wall elapsed time covers sleep, monotonic elapsed time clock rollback.
+      requestWallTime = Date.now(); requestMonotonicTime = performance.now();
       const result = await call('download', token);
       const url = new URL(result.url);
       if (url.protocol !== 'https:' || !/^[a-z0-9]{8,64}\.private\.blob\.vercel-storage\.com$/.test(url.hostname) ||
@@ -36,8 +41,12 @@
           !/^[a-f0-9]{64}$/.test(result.sha256) ||
           !/^[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.zip$/.test(result.filename) ||
           !['live', 'sandbox'].some(mode => url.pathname === `/${mode}/${result.sha256}/${result.filename}`) ||
-          !Number.isSafeInteger(result.expiresAt) || result.expiresAt <= 0) throw new Error('temporarily_unavailable');
-      status.textContent = 'Your purchase is verified. Keep your delivery email to return to this download.';
+          !Number.isSafeInteger(result.expiresAt) || result.expiresAt <= 0 ||
+          !Number.isSafeInteger(result.expiresInMs) || result.expiresInMs <= 0 || result.expiresInMs > 300000) {
+        throw new Error('temporarily_unavailable');
+      }
+      linkLifetime = result.expiresInMs;
+      status.textContent = 'Your purchase is verified. Select Download for Mac to save the file.';
       checksum.textContent = `Archive SHA-256: ${result.sha256}`; integrity.hidden = false;
       download.setAttribute('href', url.toString()); download.removeAttribute('aria-disabled');
       download.hidden = false; retry.hidden = true;
@@ -53,6 +62,7 @@
       status.textContent = messages[error.message] || 'We couldn’t check your download right now. Try again or email Josh. Do not purchase again.';
       download.removeAttribute('href'); download.setAttribute('aria-disabled', 'true');
       download.hidden = true; retry.hidden = false; integrity.hidden = true;
+      retry.textContent = 'Check again';
     } finally {
       busy = false; retry.disabled = false;
       if ((document.activeElement === initiatingControl && initiatingControl.hidden) ||
@@ -64,7 +74,10 @@
   download.addEventListener('click', event => {
     if (busy) { event.preventDefault(); return; }
     if (!download.getAttribute('href')) { event.preventDefault(); check(); return; }
-    status.textContent = 'Download requested. Check your browser’s downloads. If it stops, reopen your delivery email for a fresh link.';
+    const age = Math.max(Date.now() - requestWallTime, performance.now() - requestMonotonicTime);
+    if (age >= linkLifetime - 5000) { event.preventDefault(); check(); return; }
+    status.textContent = 'Download requested. Check your browser’s downloads. If it stops, select Get a fresh link below.';
+    retry.textContent = 'Get a fresh link'; retry.hidden = false;
   });
   retry.addEventListener('click', () => check());
   // Opening another delivery link in this same tab must consume the new
