@@ -91,14 +91,27 @@ handoff is complete while the engineering acceptance gates remain open.
 | Reproducible identifiable packaged app | Clean-source unsigned arm64 bundle, checksum and eight passing actual engine checks (one filesystem skip); signing/notarization pipeline has mocked tests. The intended Apple account remains Pending, its enrollment email requires government-ID verification, and this Mac still has no Developer ID identity or notary profile. | Josh selects one accepted ID file in Apple's authenticated upload page; after Apple activates the existing purchase, confirm its team, install signing credentials securely, then notarize/staple and test the exact quarantined download on a clean Mac. Do not purchase again. |
 | Paid purchase, delivery, support and refunds | Best-effort support/legal pages; actual sandbox payment and full manual refund recorded, test link deactivated; Founder selected the existing Stripe account, superseding Lemon Squeezy | Codex verifies account/seller and Managed Payments eligibility, then implements and tests server-verified, replay-safe fulfillment and recoverable delivery of the exact signed artifact before checkout opens. Additional provider terms remain separate from choosing Stripe. |
 
-Current access limits: the source Mac is unlocked and the standard disposable
-source account `codexmigratesource` now exists with a synthetic acceptance
-fixture. The new Mac's user-supplied host fingerprint has been matched and
-pinned; strict SSH to `Joshuas-MacBook-Pro-128.local` succeeds. A fresh account
-check confirms `codexmigratetarget` does not exist, and noninteractive sudo
-requires a password. Administrator authorization to create that isolated
-destination account still blocks the transfer portion of
-real-account acceptance, not all engineering work. Do not create another Apple
+September 5 account and connection check: both standard disposable accounts,
+`codexmigratesource` and `codexmigratetarget`, now exist on their respective
+Macs. The maintainer opened the packaged app in both accounts; process checks
+confirmed the native helpers and bundled engines remained running after
+switching back to the personal accounts. Both Thunderbolt interfaces reported
+active, but fastest-route selection and transfer performance are not yet proved.
+The source request and destination reply were exchanged as public card files.
+The reply matched the request, the intended disposable destination home, and the
+independently confirmed host identity. An account-local read-only check then
+verified accepted pairing, dedicated-key SSH access to the destination test
+account, packaged source-engine startup, and successful synthetic source
+inventory. No private keys, login credentials, or control tokens were exported.
+
+The destination test account has not passed Codex initialization: the required
+destination identity files did not pass the presence check. No migration was
+started by that check. A synthetic
+destination fixture can exercise the engine separately, but cannot establish
+Codex sign-in or restored conversation usability. The prepared synthetic
+migration driver still awaits macOS administrator authorization to execute as
+the disposable source account. This is not completed transfer or recovery
+evidence. Do not create another Apple
 purchase, weaken SSH host-key checking, or enable live checkout as a workaround.
 Apple's authenticated upload page is open and ready for one government-issued
 ID (JPG, PNG, TIFF or PDF, at most 5 MB); Codex must not select or upload identity
@@ -115,9 +128,9 @@ documents without Josh's direct choice.
   empty environment, a disposable `HOME`, and only system paths. The source
   repository and developer Python were not used. This proves transport integrity
   and second-Mac bundled-engine startup; it does not prove Finder launch,
-  Gatekeeper/notarization, the browser UI, or a migration. The disposable
-  destination account is still required for those checks so the maintainer's
-  restored Codex workspace is never selected.
+  Gatekeeper/notarization, the browser UI, or a migration. Both disposable
+  accounts have since launched the helper as recorded above; the remaining
+  transfer, recovery, and restored-Codex checks still use isolated test accounts.
 
 - Current unsigned engineering package: clean source
   `ef3952d875bf3efb9651f07134cb9f23089a7e66`, built at
