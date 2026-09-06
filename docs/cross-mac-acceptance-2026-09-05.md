@@ -2,7 +2,7 @@
 
 Status: **engineering progress, not release approval**.
 
-## Receiving-Mac reboot: verification still pending
+## Receiving-Mac reboot and subsequent read-only verification
 
 The maintainer reported an unexpected receiving-Mac crash and restart after the
 synthetic installation, while home-path compatibility remained unresolved.
@@ -21,13 +21,40 @@ migration was restarted, no permissions were relaxed, and no backup was removed.
 
 A fixed-scope home-path setup launcher was copied exclusively to the receiving
 Mac's `/Users/Shared/Finish Codex Migrate Test Setup.command`. Its received bytes
-and shell syntax were checked; it has **not been executed**. It verifies the
+and shell syntax were checked before execution. It verifies the
 receiving Mac's pinned public host identity and personal administrator account,
 then invokes the production exclusive compatibility command only for the two
 disposable home paths. It requires an administrator prompt, rejects conflicting
-paths, and cannot overwrite an existing entry. The missing link and subsequent
-Git/content verification remain open. Restarting the source acceptance runner
-also requires renewed authorization to execute as the isolated source account.
+paths, and cannot overwrite an existing entry.
+
+The maintainer then authorized that command on the receiving Mac. A fresh
+inspection confirmed the root-owned, direct link from the disposable source
+home to the disposable destination home. A separate administrator authorization
+on the source Mac launched a one-shot **non-root, source-account** verifier;
+the stopped migration-driving runner was not restarted. The verifier used the
+existing account-private connection and loopback token without exporting them,
+and invoked only the packaged helper's read-only Check Git action.
+
+Report `CodexMigrate-PostReboot-p0ky73hx/result.json` records:
+
+- Direct home-path mapping verified.
+- Selected installed synthetic file contents, empty directory and relative link
+  verified, including main/linked-worktree unfinished files and an unrelated skill.
+- Selected original backup contents verified and the synthetic SQLite database
+  passed its read-only integrity/content checks.
+- No pending destination installation transaction.
+- Packaged Git verification matched the frozen source baseline at **both
+  discovered Git locations**; path status is `mapped`, Git status is `verified`.
+- The app reached `complete / verified` with its installation receipt unchanged.
+  No copy, installation or restoration was restarted.
+
+The verifier exited successfully. This closes the different-home, two-Mac
+packaged Git check for this synthetic fixture and adds bounded post-reboot
+retention evidence. It does not prove every migrated byte was rechecked after
+reboot, recovery from a full-installer crash, future development commands, or
+authentic Codex chat reopening. The product release remains unapproved.
+
+## Original synthetic installation candidate
 
 Candidate source: `54cfa832753e70d10bf3b07b935d1e8e059b92ff`.
 Unsigned arm64 ZIP SHA-256:
@@ -58,11 +85,12 @@ An independent SSH read checked these outcomes:
 - An unrelated destination skill is unchanged.
 - The terminal receipt records installation, and no pending transaction remains.
 
-The app remains `needs_attention / path_compatibility`: the old home path is
-missing on the new Mac. It does not silently claim a working restored workspace.
-The fixture's Git branches and stash were within the content-verified copy, but
-different-home Git command usability remains unproved until compatibility is
-resolved. Synthetic JSONL/database fixtures are not authentic Codex chats.
+At initial installation the app remained `needs_attention / path_compatibility`:
+the old home path was missing on the new Mac. It did not silently claim a
+working restored workspace. The fixture's Git branches and stash were within
+the content-verified copy.
+The subsequent compatibility and packaged Git checks are recorded above.
+Synthetic JSONL/database fixtures are not authentic Codex chats.
 
 ## Controlled interrupted transaction and packaged recovery
 

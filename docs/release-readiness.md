@@ -83,7 +83,7 @@ handoff is complete while the engineering acceptance gates remain open.
 | Supported conversations, organization, settings, skills and complete selected workspaces | Frozen content/tree checks, retained destination identity, Git dependency discovery and bound Git baseline; local installation/rollback fixtures | Codex must reopen representative restored chats, settings and projects on the separate Mac. Codex leads; Josh provides disposable accounts. |
 | Scope is explicit, not “everything on the Mac” | Selected roots and dependency issues are reported; unsupported visible storage overrides, source project configuration, retained destination ancestor configuration, fixed system defaults, visible managed-preference keys, filenames and cloud-only flags stop early | Real configuration/version/provider matrix; managed preference visibility across launch contexts, cloud-managed policy, arbitrary role references and unflagged cloud storage remain unverified. Codex owns testing and any resulting fixes. |
 | Full and selective migration, pause/resume and recovery | Real packaged cross-Mac synthetic full installation, personal-skills CLI export, browser-API workspace-skills pause/stop/restart/resume/finalization, and scoped interrupted-transaction recovery passed; verified backups and displaced work were preserved | Rendered buyer flow, physical disconnect/reconnect, real low-space and complete-installer interruption cases, plus authentic Codex data acceptance remain open. Never use Josh's active migrated workspace. |
-| Git and old-home paths remain usable | Local linked-worktree/alternate-storage checks with source home offline; read-only path/Git rechecks preserve installed work | Different-user cross-Mac acceptance and representative development commands. Matching fingerprints alone do not prove every future command works. |
+| Git and old-home paths remain usable | Local linked-worktree/alternate-storage checks with source home offline; different-user packaged two-Mac synthetic check now verifies the direct home-path alias and both discovered Git locations against the frozen source baseline after a receiving-Mac reboot, preserving the installation receipt | Authentic Codex workspace reopening and representative development commands. The synthetic baseline check does not prove every future command works. |
 | Browser-first local-data experience and clear status/help | Loopback helper, SSH transfer, saved setup, collapsed optional Help, bounded private-free diagnostic events, operation-specific controls, and strict-host-key multi-address speed testing with fastest-route selection | Native permission/VoiceOver checks and real Wi-Fi/direct-link selection and interruption acceptance. Automatic updating is not implemented. |
 | Public website, useful guides, screenshots, price and launch intake | Six live pages; two informative guides; sample-labelled real UI screenshots; $50 planned edition with checkout closed; prior controlled SendGrid inbox receipt and signup tests | Preserve the existing rate-limit and launch-only consent. No new email was sent in the latest read-only audit. |
 | Website accessibility and performance | Prior Lighthouse/axe results plus fresh desktop/320px rendering, six-page text-spacing and 200% text-size overflow checks | Manual assistive-technology and broader keyboard acceptance remain open; no WCAG-conformance claim. See the audit for exact scope. |
@@ -191,6 +191,17 @@ Desktop/390px/320px rendering and text spacing had no horizontal overflow;
 selected axe A/AA rules found no violations, with contrast requiring the bounded
 manual review documented in the scoped receipt. These checks do not replace
 native VoiceOver or a complete rendered migration/recovery journey.
+
+After the receiving Mac unexpectedly rebooted, the maintainer approved the
+fixed-scope test home-path command. A separately authorized one-shot, non-root
+source-account verifier checked selected installed/backup fixture contents,
+SQLite integrity, the direct home alias and absence of a pending transaction.
+The current packaged helper's read-only Check Git then matched both discovered
+locations against the original source baseline and reached `complete / verified`
+without changing the installation receipt or restarting migration. Report:
+`CodexMigrate-PostReboot-p0ky73hx/result.json`. This clears the synthetic
+different-home Git blocker, not authentic Codex reopening, a crash during the
+complete installer, or release approval. The one-shot verifier exited.
 
 Do not create another Apple
 purchase, weaken SSH host-key checking, or enable live checkout as a workaround.
