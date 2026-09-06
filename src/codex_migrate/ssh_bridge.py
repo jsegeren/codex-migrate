@@ -5,7 +5,7 @@ import json
 import os
 import shlex
 
-from codex_migrate.config import MigrationConfig, SSHOptions, TARGET_PATTERN
+from codex_migrate.config import MigrationConfig, SSHOptions, TARGET_PATTERN, RSYNC_IPV6_ALIAS
 from codex_migrate.errors import MigrationError
 from codex_migrate.machines import destination_guard
 from codex_migrate.destination_lock import locked_receiver_command
@@ -26,14 +26,19 @@ def run(arguments):
         guard = destination_guard(payload["comparison"])
         args = list(arguments[1:])
         user, host = target.split("@", 1)
+        hosts = {host, host.strip("[]")}
+        if host.startswith("["):
+            # The actual IPv6 destination remains bound to the validated payload.
+            # Accept the colon-free rsync operand without resolving it as a host.
+            hosts.add(RSYNC_IPV6_ALIAS)
         # Both Apple openrsync and classic rsync remote-shell conventions.
         if args[:1] == ["-l"]:
             if len(args) < 3 or args[1] != user:
                 raise ValueError("remote user mismatch")
             args = args[2:]
-            expected = {host, host.strip("[]")}
+            expected = hosts
         else:
-            expected = {target, user + "@" + host.strip("[]")}
+            expected = {user + "@" + candidate for candidate in hosts}
         if not args or args.pop(0) not in expected:
             raise ValueError("remote host mismatch")
         if len(args) < 3 or args[0] not in ("rsync", "/usr/bin/rsync") or args[1] != "--server":

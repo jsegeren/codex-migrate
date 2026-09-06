@@ -17,7 +17,7 @@ import threading
 import time
 from typing import Callable, List, Optional, Sequence, Tuple
 
-from codex_migrate.config import MigrationConfig
+from codex_migrate.config import MigrationConfig, RSYNC_IPV6_ALIAS
 from codex_migrate.machines import destination_guard, machine_comparison
 
 
@@ -564,7 +564,9 @@ class SSHTransport:
         source_path = str(Path(source))
         if not source_path.endswith("/"):
             source_path += "/"
-        remote = "%s:%s" % (self._connection_target, destination.rstrip("/") + "/")
+        user, host = self._target_parts(self._connection_target)
+        rsync_target = (user + "@" + RSYNC_IPV6_ALIAS) if ":" in host else self._connection_target
+        remote = "%s:%s" % (rsync_target, destination.rstrip("/") + "/")
         command = [
             "/usr/bin/rsync",
             "-aE",

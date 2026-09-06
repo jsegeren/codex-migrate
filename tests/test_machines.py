@@ -122,6 +122,7 @@ class MachineTests(unittest.TestCase):
             # rsync implementation-dependent --rsync-path token splitting.
             self.assertTrue(command[-1].startswith("/bin/zsh -f -c "))
         for args in (["someone@other.invalid", "rsync", "--server", "."],
+                     ["user@codex-migrate-receiver.invalid", "rsync", "--server", "."],
                      ["-l", "other", "fixture.invalid", "rsync", "--server", "."],
                      ["user@fixture.invalid", "sh", "--server", "."],
                      ["user@fixture.invalid", "rsync", "--server", "--sender", "."]):
@@ -136,27 +137,29 @@ class MachineTests(unittest.TestCase):
                 execute.assert_not_called()
                 self.assertNotIn("PRIVATE", str(error.exception))
 
-    def test_bridge_keeps_ipv6_brackets_for_rsync_but_removes_them_for_ssh(self):
+    def test_bridge_ipv6_alias_always_executes_pinned_real_destination(self):
         transport = SSHTransport(MigrationConfig(
             target="user@[fe80::1234%en7]",
             target_home="/Users/user",
         ).validate())
         with patch("codex_migrate.machines.local_machine_uuid", return_value=SOURCE):
             payload = shlex.split(transport.rsync_bridge_command())[-1]
-        with patch("codex_migrate.ssh_bridge.os.execv") as execute:
-            run_bridge([
-                payload,
-                "-l",
-                "user",
-                "fe80::1234%en7",
-                "rsync",
-                "--server",
-                ".",
-                "/Users/user/staging",
-            ])
-        command = execute.call_args.args[1]
-        self.assertEqual(command[-2], "user@fe80::1234%en7")
-        self.assertNotIn("user@[fe80::1234%en7]", command)
+        for prefix in (["-l", "user", "fe80::1234%en7"],
+                       ["-l", "user", "codex-migrate-receiver.invalid"],
+                       ["user@codex-migrate-receiver.invalid"]):
+            with self.subTest(prefix=prefix), patch("codex_migrate.ssh_bridge.os.execv") as execute:
+                run_bridge([payload] + prefix + ["rsync", "--server", ".", "/Users/user/staging"])
+            command = execute.call_args.args[1]
+            self.assertEqual(command[-2], "user@fe80::1234%en7")
+            self.assertNotIn("user@[fe80::1234%en7]", command)
+            self.assertNotIn("user@codex-migrate-receiver.invalid", command)
+        for prefix in (["user@[fe80"], ["other@codex-migrate-receiver.invalid"],
+                       ["-l", "other", "codex-migrate-receiver.invalid"],
+                       ["user@untrusted.invalid"]):
+            with self.subTest(prefix=prefix), patch("codex_migrate.ssh_bridge.os.execv") as execute:
+                with self.assertRaises(MigrationError):
+                    run_bridge([payload] + prefix + ["rsync", "--server", ".", "/Users/user/staging"])
+                execute.assert_not_called()
 
     def test_every_remote_script_rechecks_destination(self):
         transport = SSHTransport(MigrationConfig(target="user@fixture.invalid", target_home="/Users/user"))
@@ -174,6 +177,12 @@ class MachineTests(unittest.TestCase):
             self.assertNotIn(SOURCE, script)
 
     def test_guarded_rsync_protocol_preserves_spaces_and_refuses_self_target(self):
+        self._assert_guarded_rsync_protocol("user@alias-for-this-mac.invalid")
+
+    def test_guarded_rsync_protocol_supports_scoped_ipv6(self):
+        self._assert_guarded_rsync_protocol("user@[fe80::1234%en7]")
+
+    def _assert_guarded_rsync_protocol(self, target):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             source, destination = root / "source space", root / "destination space's [files]"
@@ -197,7 +206,7 @@ class MachineTests(unittest.TestCase):
             actual = local_machine_uuid()
             other = SOURCE if actual != SOURCE else "87654321-1234-1234-1234-123456789ABC"
             for identity, allowed in ((actual, False), (other, True)):
-                transport = SSHTransport(MigrationConfig(target="user@alias-for-this-mac.invalid", target_home=str(root.resolve())))
+                transport = SSHTransport(MigrationConfig(target=target, target_home=str(root.resolve())))
                 with patch("codex_migrate.machines.local_machine_uuid", return_value=identity):
                     entry = shlex.split(transport.rsync_bridge_command())
                 entry[1] = str(bridge)

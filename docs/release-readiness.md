@@ -104,14 +104,27 @@ verified accepted pairing, dedicated-key SSH access to the destination test
 account, packaged source-engine startup, and successful synthetic source
 inventory. No private keys, login credentials, or control tokens were exported.
 
-The destination test account has not passed Codex initialization: the required
-destination identity files did not pass the presence check. No migration was
-started by that check. A synthetic
-destination fixture can exercise the engine separately, but cannot establish
-Codex sign-in or restored conversation usability. The prepared synthetic
-migration driver still awaits macOS administrator authorization to execute as
-the disposable source account. This is not completed transfer or recovery
-evidence. Do not create another Apple
+The destination test account did not initially pass Codex initialization. A
+separately marked synthetic fixture now supplies dummy destination identity
+files and distinct original destination data for engine testing. These are not
+real credentials or proof of Codex sign-in. The time-limited non-admin runner
+configured the shipped browser helper and completed preflight and staging across
+the two Macs. Finalization stopped during its final delta with rsync exit 76,
+before replacement or an installation receipt.
+
+Diagnosis reproduced successful dry runs through the configured hostname and
+failure through the selected scoped IPv6 direct-link route. Apple openrsync
+split the bracketed IPv6 operand at its first colon; the adapter correctly
+rejected the resulting truncated host. The fix gives rsync a colon-free
+parser alias for IPv6 while the adapter continues to connect to the actual
+payload-bound address with the existing SSH identity and machine guards. A new
+test using real local rsync reproduces the old failure and verifies the fix,
+including self-migration rejection, destination-lock exclusion, and paths with
+spaces. Adapter tests reject wrong users, truncated hosts, and an IPv6 alias
+used with a non-IPv6 payload. Packaged cross-Mac retry, installation, recovery,
+and real restored-conversation checks remain required.
+
+Do not create another Apple
 purchase, weaken SSH host-key checking, or enable live checkout as a workaround.
 Apple's authenticated upload page is open and ready for one government-issued
 ID (JPG, PNG, TIFF or PDF, at most 5 MB); Codex must not select or upload identity

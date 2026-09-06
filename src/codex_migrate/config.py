@@ -17,6 +17,10 @@ TARGET_PATTERN = re.compile(
     r"^[A-Za-z_][A-Za-z0-9._-]*@(?:[A-Za-z0-9][A-Za-z0-9._-]*|\[[0-9A-Fa-f:]+(?:%[A-Za-z0-9._-]+)?\])$"
 )
 
+# Apple openrsync splits even bracketed IPv6 operands at the first colon.
+# This parser-only alias is resolved by our adapter, never by DNS or SSH.
+RSYNC_IPV6_ALIAS = "codex-migrate-receiver.invalid"
+
 
 def path_key(path: str) -> tuple:
     """Conservative Mac path identity, without rewriting the path used for I/O.

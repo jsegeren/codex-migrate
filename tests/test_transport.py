@@ -357,7 +357,7 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(len(child.communicate.call_args.kwargs["input"]), 1024 * 1024)
         self.assertEqual(transport._active_remote, [])
 
-    def test_scoped_ipv6_uses_rsync_brackets_but_not_ssh_hostname_brackets(self):
+    def test_scoped_ipv6_uses_parser_alias_for_rsync_and_real_address_for_ssh(self):
         transport = SSHTransport(
             MigrationConfig(
                 target="user@[fe80::1234%en7]",
@@ -372,7 +372,7 @@ class TransportTests(unittest.TestCase):
         self.assertIn("user@fe80::1234%en7", spawn.call_args.args[0])
         self.assertNotIn("user@[fe80::1234%en7]", spawn.call_args.args[0])
         process = transport.rsync_process("/Users/source/project", "/Users/user/staging")
-        self.assertEqual(process.command[-1], "user@[fe80::1234%en7]:/Users/user/staging/")
+        self.assertEqual(process.command[-1], "user@codex-migrate-receiver.invalid:/Users/user/staging/")
 
     def test_rsync_excludes_destination_authentication(self):
         config = MigrationConfig(
