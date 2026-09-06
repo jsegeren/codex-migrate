@@ -234,6 +234,37 @@ The two helpful public guides returned HTTP 200; refreshed Search Console still
 reported the homepage as `Discovered - currently not indexed`, with no last crawl.
 Google indexing and the paid release remain incomplete.
 
+September 5 search/outreach follow-up: native Search Console inspection reported
+both `/moving-to-a-new-mac` and `/backup-and-recovery` as unknown to Google.
+Each then completed Google's live indexing check and received the explicit
+confirmation that it was added to the priority crawl queue. This is accepted
+submission, not indexing or a ranking result. Do not repeatedly resubmit these
+URLs. The repository's GitHub About website link was corrected from its Vercel
+alias to `https://migrate.segeren.com` and independently read back.
+
+The [GitHub source reply on X](https://x.com/JoshuaSegeren/status/2096436646887755886)
+is published. A single, maintainer-disclosed
+[reply in the existing Codex continuity discussion](https://github.com/openai/codex/discussions/14067#discussioncomment-18311565)
+is also published as `jsegeren`. It explicitly distinguishes one-time Mac
+migration from continuous sync, identifies the CLI as alpha, excludes Windows,
+and recommends retaining an independent backup and the old Mac. No community
+endorsement or partnership is implied. Three new social-image concepts remain
+preview-only pending the maintainer's selection; no replacement image has been
+deployed or posted. A fresh local signing-identity check found zero valid
+identities; Apple activation/signing is still unverified.
+
+The same follow-up reran the complete Python suite using the CI import path:
+`PYTHONPATH=src python3 -m unittest discover -s tests -p 'test_*.py' -q`.
+It ran 588 tests in 148 seconds: 581 passed, seven skipped, no failures. An
+initial invocation without `PYTHONPATH=src` failed module imports; this was a
+test invocation error, not a product fix. The JavaScript working-tree suite
+passed 190 tests with one skip, including one uncommitted social-preview test;
+the previously committed suite accounts for 189 passing tests. Signing outputs
+printed by build tests are mocked fixture results, not Apple notarization.
+The live production availability endpoint was separately read and still
+returned `available: false`. No authentic Codex, physical disconnect, native
+VoiceOver or signed-download acceptance gate is closed by these results.
+
 ## Candidate checks completed on the development Mac
 
 - Second-Mac package smoke: the previous unsigned candidate below was copied as
