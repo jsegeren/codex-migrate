@@ -3,6 +3,15 @@
 The downloadable paid app is **not released**. Publishing source and the
 informational website does not open checkout or certify a customer download.
 
+September 6 receipt-write recovery follow-up: five new local APFS fault-injection
+cases cover partial initial/install/rollback records, receipt sync failure, and
+failure after receipt rename. Explicit restoration preserved later work and
+recovered the original destination without falsely claiming prior success.
+All 63 focused transaction/recovery tests passed; the five new cases also passed
+on Python 3.9.6. No runtime change was required. This is not physical disk-full,
+power-loss, or authentic cross-Mac acceptance. See the
+[bounded recovery evidence](receipt-write-recovery-2026-09-06.md).
+
 September 6 production preflight passed on an initially unpromoted deployment of
 `28c898e`: fresh live Stripe account/catalog reads, the isolated live purchase
 schema, and verified private transport of the 451-byte harmless fixture, with
