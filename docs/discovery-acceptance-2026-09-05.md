@@ -71,14 +71,25 @@ profile setup are authorized project work, but remain pending. Do not use,
 identify, or link the Founder's personal Reddit account. Do not imply an
 independent recommendation by saying the maintainer merely found this tool.
 
-Next actions: choose an available professional founder handle, complete the
-normal signup with any required human terms/verification checkpoints, configure
+September 5 signup preparation: opened Reddit's normal signed-out registration
+flow with the professional `joshua@segeren.com` email. The requested email
+verification succeeded without exposing or retaining its one-time code.
+`JoshuaSegerenFounder` is entered and Reddit displays that it is available.
+This is **not a reserved handle or a created account**: signup is waiting at
+the password step. No password was generated, saved or submitted, no personal
+Reddit account was opened, and no profile or post was published. The prepared
+Chrome tab was retained for the Founder to set a password in their own password
+manager. Do not restart email verification or create a duplicate account while
+that signup is pending.
+
+Next actions: finish the password/signup and any required human verification
+checkpoints, configure
 a truthful founder profile, and read current subreddit rules. Then load the
 exact Mac-specific comment, check for an existing reply, and respond there at
 most once from the new account with maintainer disclosure. Do not bypass
 CAPTCHA, manufacture account reputation, hijack the original author's showcase,
-send unsolicited DMs, or imply Windows/continuous-sync support. No signup or
-Reddit post has occurred yet.
+send unsolicited DMs, or imply Windows/continuous-sync support. No completed
+account creation or Reddit post has occurred yet.
 
 Draft for that Mac-specific request only, not posted:
 
