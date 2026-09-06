@@ -121,8 +121,39 @@ payload-bound address with the existing SSH identity and machine guards. A new
 test using real local rsync reproduces the old failure and verifies the fix,
 including self-migration rejection, destination-lock exclusion, and paths with
 spaces. Adapter tests reject wrong users, truncated hosts, and an IPv6 alias
-used with a non-IPv6 payload. Packaged cross-Mac retry, installation, recovery,
-and real restored-conversation checks remain required.
+used with a non-IPv6 payload. The fixed package has now resumed the retained
+staging and completed the synthetic installation over that scoped IPv6 route.
+Its receipt verifies one active and one archived synthetic transcript, retained
+Codex state, two workspace roots, one personal skill, mandatory backup, and
+unchanged dummy destination identity. Independent destination reads confirmed
+original destination rules/conversation/workspace in the backup; installed rules,
+SQLite fixture, uncommitted and untracked main/linked-worktree files, an empty
+directory and relative link; and the unrelated destination skill. The terminal
+installation receipt exists and no pending transaction remains. The app correctly
+reports **needs attention / path compatibility**, because the different source
+home path does not yet exist on the new Mac. Git usability and real conversation
+reopening are not established by these results.
+
+A separate, tightly scoped cross-Mac recovery exercise also passed using the
+same packaged engine. The production transaction writer created and verified a
+backup of disposable destination-only data, then a deliberate remote SIGKILL
+interrupted replacement. This is a controlled interrupted transaction, not a
+complete packaged-installer crash or hardware power-loss test. The unmodified
+packaged dashboard API reported `backup_verified`, accepted explicit exact-scope
+restoration, and reported `restore_verified`. After stopping/restarting that
+helper, Check recovery again reported `restore_verified`. Independent reads
+proved the original data was restored, newer entries were retained in the
+recovery slots, an originally absent entry became absent again without losing
+its newer files, the backup stayed intact, and the pending record was cleared.
+The separate full-migration fixture remained untouched. Recovery correctly did
+not claim migration completion. Its temporary helper was stopped; evidence and
+test data remain retained. See [the scoped acceptance receipt](cross-mac-acceptance-2026-09-05.md).
+
+The same bundled engine's personal-skills-only CLI export then completed with
+verified backup. Independent private before/after snapshots confirmed the Git
+tree, unrelated destination skill, and Codex tree excluding identity files were
+unchanged. This is packaged selective-CLI evidence, not the separate browser
+skills-only interruption/UI acceptance.
 
 Do not create another Apple
 purchase, weaken SSH host-key checking, or enable live checkout as a workaround.
@@ -132,7 +163,7 @@ documents without Josh's direct choice.
 
 ## Candidate checks completed on the development Mac
 
-- Second-Mac package smoke: the current unsigned candidate below was copied as
+- Second-Mac package smoke: the previous unsigned candidate below was copied as
   its ZIP to a separate Apple Silicon Mac under `/Users/Shared`. The receiving
   Mac independently matched SHA-256
   `130d8c5e47c685e06d475615efb25e87c6fa83f137fcd4950635b61162b354b3`,
@@ -146,6 +177,18 @@ documents without Josh's direct choice.
   transfer, recovery, and restored-Codex checks still use isolated test accounts.
 
 - Current unsigned engineering package: clean source
+  `54cfa832753e70d10bf3b07b935d1e8e059b92ff`, built at
+  `2026-09-06T01:39:36Z` into
+  `build/desktop-6ct1qn__/Codex-Migrate-0.1.0-build1-arm64-LOCAL-UNSIGNED.zip`.
+  SHA-256: `dd429acebf7139e061338f86f57412a359388741bb64ce2a8d584902e2833ccc`.
+  Archive checksums and deep/strict ad-hoc signature checks passed on both Macs.
+  Actual bundled-engine tests: eight passed, one case-sensitive-volume fixture
+  skipped. The fixed source also passes 98 focused transport, pairing, machine
+  guard, recovery, restoration and guided-recovery tests. This package performed
+  the cross-Mac synthetic installation and scoped recovery above. It remains
+  unsigned by Developer ID and unnotarized; it is not a customer release.
+
+- Previous unsigned engineering package: clean source
   `ef3952d875bf3efb9651f07134cb9f23089a7e66`, built at
   `2026-09-05T15:56:47Z` into
   `build/desktop-ffnag3t1/Codex-Migrate-0.1.0-build1-arm64-LOCAL-UNSIGNED.zip`.
@@ -154,9 +197,9 @@ documents without Josh's direct choice.
   against the actual bundled engine: eight passed and the case-sensitive
   filesystem fixture skipped. This includes the authenticated Segeren sender
   evidence committed immediately before the build; the desktop runtime is
-  unchanged from the prior candidate. This is the package to use for the next
-  disposable-account acceptance run; it is not signed, notarized, sold, or a
-  clean-Mac result.
+  unchanged from the prior candidate. It exposed the scoped-IPv6 rsync failure
+  and is superseded by the fixed package above; it is not signed, notarized,
+  sold, or a clean-Mac result.
 
 - Previous unsigned engineering package: clean source
   `50e2325cdc3edcd0df882fff53ba1840c1c4a329`, including pairing recovery and
