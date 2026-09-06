@@ -85,6 +85,17 @@ class SiteTests(unittest.TestCase):
         self.assertIn("no subscription", text)
         self.assertIn("free cli", text)
 
+    def test_beta_request_is_clear_without_claiming_checkout_is_open(self):
+        source = (SITE / "index.html").read_text()
+        text = " ".join(self.parse("index.html").text)
+        self.assertIn("Request Mac beta access — $50", text)
+        self.assertIn("unsigned and unnotarized", text)
+        self.assertIn("No payment until a tested build is ready for your setup", text)
+        self.assertIn('<div id="checkout-panel" hidden>', source)
+        self.assertIn('subject=Codex%20Migrate%20%2450%20beta%20access', source)
+        for page in ("index.html", "moving-to-a-new-mac.html", "backup-and-recovery.html"):
+            self.assertNotIn("alpha", (SITE / page).read_text().lower())
+
     def test_transfer_copy_explains_network_choices_and_cable_limit(self):
         text = " ".join(self.parse("index.html").text)
         self.assertIn("Wi-Fi or a compatible USB-C/Thunderbolt network connection", text)
@@ -229,12 +240,12 @@ class SiteTests(unittest.TestCase):
     def test_launch_interest_uses_consented_form_and_separate_early_build_email(self):
         page = self.parse("index.html")
         emails = [href for href in page.hrefs if href.startswith(
-            "mailto:joshua@segeren.com?subject=Codex%20Migrate%20early%20build%20request&")]
+            "mailto:joshua@segeren.com?subject=Codex%20Migrate%20%2450%20beta%20access&")]
         self.assertEqual(len(emails), 1)
         text = " ".join(page.text)
         self.assertIn("Your request goes to Josh’s inbox via SendGrid", text)
         self.assertIn("case by case", text)
-        self.assertIn("unnotarized test builds", text)
+        self.assertIn("unsigned and unnotarized", text)
         source = (SITE / "index.html").read_text()
         self.assertIn('action="/api/signup" method="post"', source)
         self.assertIn('type="checkbox" value="yes" required', source)

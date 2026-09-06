@@ -17,7 +17,7 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:site" content="@JoshuaSegeren">
     <meta name="twitter:title" content="Codex Migrate — Change the Mac. Keep the work.">
-    <meta name="twitter:description" content="Move local Codex chats, skills and selected workspaces between Macs. Free open-source CLI alpha; paid Mac app in testing.">
+    <meta name="twitter:description" content="Move local Codex chats, skills and selected workspaces between Macs. Free open-source beta; $50 Mac beta access by request.">
     <meta name="twitter:image" content="https://migrate.segeren.com/og-dark-v1.png">
     <meta name="twitter:image:alt" content="Codex Migrate: Change the Mac. Keep the work. Codex product icon labelled For Codex. Independent tool, not affiliated with OpenAI.">
     <link rel="canonical" href="https://migrate.segeren.com/">
@@ -47,7 +47,7 @@
     <main>
       <section class="hero shell">
         <div class="hero-copy">
-          <p class="eyebrow" id="hero-availability"><span class="status-dot"></span> Open source now · Mac app in development</p>
+          <p class="eyebrow" id="hero-availability"><span class="status-dot"></span> Open-source beta · Mac builds by request</p>
           <div class="hero-heading">
             <div class="hero-message">
               <h1>Change the Mac.<br><span class="accent">Keep the work.</span></h1>
@@ -80,7 +80,7 @@
 
       <section class="product-preview shell" aria-labelledby="preview-heading">
         <div class="section-intro">
-          <p class="eyebrow">Inside the alpha</p>
+          <p class="eyebrow">Inside the beta</p>
           <h2 id="preview-heading">See what’s moving. Stay in control.</h2>
           <p>The local dashboard shows the connection, copied data, selected folders, and backup checks. Pause or stop safely during staging, then resume when you’re ready.</p>
         </div>
@@ -88,7 +88,7 @@
           <a href="/assets/dashboard-transfer.png" aria-label="Open full-size screenshot of the transfer dashboard">
             <picture><source srcset="/assets/dashboard-transfer-720.avif 720w, /assets/dashboard-transfer-1120.avif 1120w" sizes="(max-width: 680px) calc(100vw - 30px), 1120px" type="image/avif"><img src="/assets/dashboard-transfer.png" width="1120" height="1168" loading="lazy" decoding="async" alt="Codex Migrate’s local dashboard showing transfer progress, SSH connection, workspace folders, backup requirements, and pause and safe-stop controls."></picture>
           </a>
-          <figcaption>Actual alpha dashboard, shown with sample data—not a live customer transfer. The signed Mac app is still in development. <a href="/assets/dashboard-transfer.png">View full size</a>.</figcaption>
+          <figcaption>Actual dashboard, shown with sample data—not a live customer transfer. Early Mac builds are unsigned and unnotarized. <a href="/assets/dashboard-transfer.png">View full size</a>.</figcaption>
         </figure>
         <p><a href="/backup-and-recovery">See the backup protection screen and recovery guide</a>.</p>
       </section>
@@ -129,7 +129,7 @@
         <div class="section-intro centered">
           <p class="eyebrow">One engine. Two ways to use it.</p>
           <h2>Safety is not a paid feature.</h2>
-          <p>The full migration engine stays free and inspectable. The paid edition is for people who want a signed Mac experience and maintainer support.</p>
+          <p>The full migration engine stays free and inspectable. The paid edition adds a packaged Mac app and personal, best-effort support from Josh.</p>
         </div>
         <div class="pricing-grid">
           <article class="price-card">
@@ -147,8 +147,8 @@
           </article>
 
           <article class="price-card featured" id="founding-edition">
-            <div class="badge" id="edition-state">In development · not on sale yet</div>
-            <p class="plan-name">Mac app · v1 license</p>
+            <div class="badge" id="edition-state">Beta · early access by request</div>
+            <p class="plan-name">Mac app + personal support</p>
             <p class="price"><span>$</span>50</p>
             <p class="price-note">One payment · no subscription</p>
             <ul class="check-list compact">
@@ -158,7 +158,11 @@
               <li>One-click migration controls and reports</li>
               <li>Best-effort maintainer support</li>
             </ul>
-            <p class="disclosure" id="edition-disclosure"><strong>Not on sale yet. No pre-orders.</strong> The $50 downloadable edition is in development. Checkout opens only after signing, notarization, clean-Mac testing, and download delivery are verified. The free CLI is available today.</p>
+            <div id="edition-disclosure">
+              <a class="button button-secondary full" href="mailto:joshua@segeren.com?subject=Codex%20Migrate%20%2450%20beta%20access&amp;body=My%20Mac%20models%20and%20macOS%20versions%3A%0AWhat%20I%20want%20to%20migrate%3A%0A">Request Mac beta access — $50</a>
+              <p class="disclosure">Early builds are <strong>unsigned and unnotarized</strong>, with access handled case by case. No payment until a tested build is ready for your setup. Keep the old Mac and an independent backup. Don’t email credentials or workspace contents.</p>
+              <p class="disclosure">The signed public release is not on sale yet. No pre-orders. Prefer to wait? Request a launch email below.</p>
+            </div>
             <div id="checkout-panel" hidden>
               <p id="checkout-platform" class="disclosure"></p>
               <button id="checkout-button" class="button button-primary full" type="button" aria-describedby="checkout-platform checkout-status">Buy the Mac app — $50</button>
@@ -176,7 +180,6 @@
                 <button class="button button-primary full" type="submit">Request a launch email</button>
               </form>
               <p class="disclosure" id="launch-privacy">Your request goes to Josh’s inbox via SendGrid. No payment, preorder, or newsletter. Email Josh to opt out. <a href="/privacy.html">Privacy</a>.</p>
-              <p class="disclosure">Want to discuss an early unsigned build? <a href="mailto:joshua@segeren.com?subject=Codex%20Migrate%20early%20build%20request&amp;body=I%27d%20like%20to%20discuss%20trying%20an%20early%20unsigned%20Codex%20Migrate%20build.%0A%0AMy%20Mac%20model%20and%20macOS%20version%3A%0AWhat%20I%20want%20to%20migrate%3A%0A">Email Josh</a>. Requests are considered case by case. These are unnotarized test builds, not the finished paid app; access is not guaranteed. Don’t email credentials or workspace contents.</p>
             </div>
           </article>
         </div>
@@ -206,7 +209,7 @@
           <details><summary>Is this made by OpenAI?</summary><p>No. Codex Migrate is an independent compatibility project. It is not affiliated with, supported by, or endorsed by OpenAI.</p></details>
           <details><summary>Does it copy my Codex login?</summary><p>No. Authentication and installation identity are deliberately excluded. You sign in on the new Mac first; the migration preserves that new identity.</p></details>
           <details><summary>Can I transfer over Wi-Fi or a cable?</summary><p>Yes. Use Wi-Fi or a compatible USB-C/Thunderbolt network connection between your Macs; Ethernet works too. The transfer uses secure SSH in each case. After verifying the new Mac, Codex Migrate checks its reachable private network addresses and selects the faster verified route. USB-C cables vary in capability and speed, so the cable setup must provide a working network connection—not just charging. Enable Remote Login on the new Mac, then follow the <a href="/moving-to-a-new-mac">connection guide</a>.</p></details>
-          <details><summary>Can I buy the paid app today?</summary><p id="purchase-faq">Not yet. The $50 downloadable Mac edition is in development. We are not taking pre-orders. The complete open-source CLI is usable today.</p></details>
+          <details><summary>Can I try the Mac beta?</summary><p id="purchase-faq">Request access to the $50 Mac beta from Josh. Early builds are unsigned and unnotarized, and offered case by case after testing for the supported setup. No payment is taken until a tested build is ready for you. The signed public release is not on sale yet; the complete open-source CLI is available today.</p></details>
           <details><summary>Does it work on Windows?</summary><p>Not yet. Codex Migrate currently supports Mac-to-Mac migration only, including the open-source CLI. A Windows version is feasible, but it needs its own work on file locations, permissions, backups, packaging, and recovery testing. Windows and cross-platform transfers are not supported today, and there is no announced release date.</p></details>
           <details><summary>What if the transfer is interrupted?</summary><p>Rerun it. Staging uses resumable transfer semantics, so completed data is reused. The source Mac is never deleted or modified.</p></details>
           <details><summary>Can I migrate only one thing?</summary><p>Yes. Personal and repository-scoped skills can already be exported independently; more selective components will use the same guarded workflow.</p></details>
