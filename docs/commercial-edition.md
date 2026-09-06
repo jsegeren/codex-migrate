@@ -25,8 +25,35 @@ readiness is tracked in [the desktop guide](desktop-setup.md).
 ## Founding Edition
 
 The downloadable Mac edition will cost **$50 one time**, including best-effort
-maintainer support. No subscription and no pre-orders. Checkout stays closed
-until a signed, notarized build, clean-Mac validation, and delivery are verified.
+maintainer support. No subscription and no pre-orders. The general self-service
+checkout stays closed until a signed, notarized build, clean-Mac validation, and
+delivery are verified.
+
+### Paid beta by request
+
+The Founder approved a separate **$50 paid beta with manual delivery**, without
+waiting for Apple Developer activation. This is not an instruction to open the
+general checkout or weaken its signed-artifact checks.
+
+Before accepting a beta payment:
+
+- Complete and review the authentic cross-Mac migration and recovery acceptance
+  for the exact candidate. Record remaining limitations honestly; a beta label
+  is not a passing test result.
+- Confirm the buyer's setup fits the tested scope and provide the price,
+  unsigned/unnotarized status, best-effort support and 30-day refund policy
+  before payment. Do not imply Apple endorsement or a signed release.
+- Explain that finalization replaces selected destination data after backup,
+  rather than merging independent work. Require keeping the old Mac and an
+  independent backup during beta use.
+- Freeze the exact tested build and verify its checksum and delivery. Record
+  the purchase and delivered version privately, using the existing Stripe
+  account once its applicable seller/product setup is confirmed.
+
+The beta is an actual deliverable, not a pre-order for a future signed app.
+Do not collect a payment while its tested build or delivery is unavailable.
+Do not promise a launch date or guaranteed fix. Standard signing/notarization
+and clean-Mac acceptance remain required for the later general release.
 
 The project is in **Beta**. The signed Mac app is not publicly downloadable yet;
 early unsigned/unnotarized Mac builds may be requested from Josh and are handled
