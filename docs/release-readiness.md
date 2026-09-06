@@ -9,8 +9,11 @@ and rollback under disk exhaustion. They also exposed a fast-retry collision in
 timestamp-only backup names. Full migration and both skills-repair entry points
 now allocate distinct attempt-suffixed backup paths, retaining existing backup
 and lock guards. Frozen-clock regression tests cover all three paths. This
-source fix is not yet included in the retained `e6abe13` unsigned package; rebuild
-and verify the next exact candidate before device acceptance. See the
+source fix is now included in the clean `286f6b9` unsigned candidate. Its ZIP
+checksum, extracted ad-hoc signature and desktop suite passed (eight tests, one
+filesystem skip); no cross-Mac transfer ran in that package check. Use the
+[new packaged candidate](packaged-retry-candidate-2026-09-05.md) for the next
+authorized device acceptance, not the older `e6abe13` bundle. See the
 [disk-pressure evidence and limitations](failure-mode-matrix.md#protected-phase-extension-and-retry-defect).
 
 September 5 evening acceptance: a new simulated $50 Managed Payments purchase
