@@ -164,8 +164,13 @@ the old package detected that only after staging and showed a generic error.
 No replacement occurred and no pending transaction was found. Shared preflight
 now rejects missing/linked destination project paths early with actionable
 guidance and no folder creation. Regression tests cover missing and linked
-projects; the fix requires a new package and cross-Mac retry. The previous
-successful personal-skills CLI result does not cover this workspace case.
+projects. The new package below then rejected the missing project during real
+cross-Mac inspection. After preparing only the disposable destination project,
+the same staging resumed and the 128 MiB workspace skill installed with verified
+backup and content. Independent checks confirmed matching payload, no pending
+transaction and preserved full-workspace data; switching back to the full setup
+retained its exact receipt. This is control-API evidence, not rendered UI or
+physical-disconnect acceptance. All 49 setup/component tests pass.
 
 Do not create another Apple
 purchase, weaken SSH host-key checking, or enable live checkout as a workaround.
@@ -189,6 +194,16 @@ documents without Josh's direct choice.
   transfer, recovery, and restored-Codex checks still use isolated test accounts.
 
 - Current unsigned engineering package: clean source
+  `12f63334509f26b501cdaf24b78449f210f4dc4b`, build metadata timestamp
+  `2026-09-06T01:52:53Z`, at
+  `build/desktop-d1n63q95/Codex-Migrate-0.1.0-build1-arm64-LOCAL-UNSIGNED.zip`.
+  SHA-256: `dea13079338eb8f5709b12325c689f82e8e91786c8c88cf463ed5ba808b8a4b0`.
+  Deep/strict ad-hoc signature verification passed, as did eight actual bundled
+  engine checks with one case-sensitive-volume skip. This is the package used
+  for the successful cross-Mac workspace-skill retry. First launch of this exact
+  bundle on the target Mac, signing/notarization and full release remain open.
+
+- Previous unsigned engineering package: clean source
   `54cfa832753e70d10bf3b07b935d1e8e059b92ff`, built at
   `2026-09-06T01:39:36Z` into
   `build/desktop-6ct1qn__/Codex-Migrate-0.1.0-build1-arm64-LOCAL-UNSIGNED.zip`.

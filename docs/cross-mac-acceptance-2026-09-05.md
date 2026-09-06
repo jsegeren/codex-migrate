@@ -100,7 +100,25 @@ the existing-project requirement into shared CLI/browser preflight, rejects
 linked or missing parent paths without creating folders, and explains that a
 workspace-skills repair updates an existing project rather than migrating it.
 A regression covers both missing and linked destination project roots before
-any staging or backup. A fresh packaged retry is required for this source fix.
+any staging or backup.
+
+The retry used clean source `12f63334509f26b501cdaf24b78449f210f4dc4b`,
+packaged ZIP SHA-256
+`dea13079338eb8f5709b12325c689f82e8e91786c8c88cf463ed5ba808b8a4b0`.
+The new package rejected the still-missing project during inspection with the
+specific explanation. After the harness created only the matching disposable
+destination project, Resume reused the same staging owner ID and Finalize
+completed with one verified workspace skill and verified backup. Independent
+reads compared the 128 MiB installed payload with the source, confirmed no
+pending transaction and preserved full-workspace data. Returning to the prior
+full setup retained its exact installation receipt. Report:
+`CodexMigrate-Synthetic-kt7seh4w/result.json`.
+
+This is a successful real two-Mac packaged skills control-API run. It does not
+cover rendered UI, VoiceOver, a physical cable pull, OS reboot, or first launch
+of this newer bundle on the target Mac. The prior full migration and controlled
+recovery ran the preceding candidate; the newer bundle changes shared selective
+preflight only.
 
 ## Automated checks at this checkpoint
 
@@ -108,6 +126,9 @@ any staging or backup. A fresh packaged retry is required for this source fix.
 test_guided_recovery test_machines test_transport test_pairing`:
 98 tests passed. Separate actual-bundled-engine desktop tests ran nine checks:
 eight passed and one case-sensitive-filesystem fixture skipped.
+After the destination-project fix, all 49 setup/component/browser-engine tests
+passed. The new bundle's actual-engine desktop suite also ran nine checks:
+eight passed and one filesystem fixture skipped.
 
 ## Evidence retention and remaining gates
 
