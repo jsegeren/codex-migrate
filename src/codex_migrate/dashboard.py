@@ -55,8 +55,8 @@ HTML = r"""<!doctype html>
     #backup-safety p { margin:6px 0; overflow-wrap:anywhere; }
     #backup-safety.blocked { border:2px solid var(--red); background:#3a151a; }
     #recovery-message:focus,#path-message:focus,#git-check-message:focus { outline:3px solid #d9cdff; outline-offset:4px; }
-    #path-next { margin-top:16px; }
-    #path-next[hidden],#transfer-controls[hidden] { display:none; }
+    #path-next,#recovery-next { margin-top:16px; }
+    #path-next[hidden],#recovery-next[hidden],#transfer-controls[hidden] { display:none; }
     #recovery-items { padding-left:20px; }
     #recovery-items li { overflow-wrap:anywhere; }
     button { appearance:none; border:1px solid var(--line); background:#182134; color:var(--text); border-radius:11px; padding:11px 15px; font-family:inherit; font-size:15px; font-weight:700; line-height:1; cursor:pointer; }
@@ -82,6 +82,7 @@ HTML = r"""<!doctype html>
     <div class="status-row"><div><div class="eyebrow" id="phase">Not started</div><div id="status">Ready</div></div><div id="percent">0%</div></div>
     <div class="track" role="progressbar" aria-label="Migration progress" aria-valuemin="0" aria-valuemax="100"><div id="bar"></div></div>
     <div id="message" role="status" aria-live="polite">Connecting to the local migration service…</div>
+    <a id="recovery-next" class="support-link" href="#recovery-help" hidden>Review recovery options</a>
     <a id="path-next" class="support-link" href="#path-help" hidden>Review home-path setup</a>
     <div class="grid">
       <div class="metric"><span class="eyebrow">Route</span><strong id="route">—</strong></div>
@@ -240,6 +241,7 @@ function renderGit(s){
 }
 function renderEvents(events){const rows=(events||[]).map(event=>{const li=document.createElement('li');const recovery=event.recovery_status&&event.recovery_status!=='not_checked'?` · recovery check: ${event.recovery_status.replaceAll('_',' ')}`:'';const paths=event.path_status&&event.path_status!=='not_checked'?` · home paths: ${event.path_status.replaceAll('_',' ')}`:'';const git=event.git_status&&event.git_status!=='not_checked'?` · Git: ${event.git_status.replaceAll('_',' ')}`:'';li.textContent=`${event.at||'Time unavailable'} · ${event.phase.replaceAll('_',' ')} · ${event.status}${event.failure_category==='none'?'':` · ${event.failure_category.replaceAll('_',' ')}`}${recovery}${paths}${git}`;return li});if(!rows.length){const li=document.createElement('li');li.textContent='No events recorded yet.';rows.push(li)}$('migration-events').replaceChildren(...rows)}
 function renderRecovery(s){
+  renderRecoveryNext(s);
   const r=s.recovery||{}, checking=r.status==='checking', restoring=r.status==='restoring', attempt=s.recovery_attempt||{};
   const unresolved=['restoring','recovery_required'].includes(s.phase)||(s.recovery_attempt&&attempt.resolved!==true);
   const focused=document.activeElement?.id;
@@ -265,11 +267,22 @@ function renderRecovery(s){
   else if(!checking&&!restoring&&recoveryWasChecking&&['recovery-message','stop_recovery'].includes(focused))$('check_recovery').focus();
   recoveryWasChecking=checking||restoring;
 }
+function renderRecoveryNext(s){
+  const r=s.recovery||{};
+  const recoveryPhase=['restoring','restored','recovery_required'].includes(s.phase);
+  const interruptedInstall=['failed','interrupted'].includes(s.status)&&['installing','verifying'].includes(s.phase);
+  const unresolved=s.recovery_attempt&&s.recovery_attempt.resolved!==true;
+  const needsReview=recoveryPhase||interruptedInstall||unresolved||!!s.pending_backup||['backup_verified','restore_incomplete','restore_pending_cleanup','restore_unconfirmed','restore_changed'].includes(r.status);
+  // Do not suggest recovery while an ordinary installation is still running.
+  $('recovery-next').hidden=s.status==='complete'||!needsReview||(s.status==='running'&&!recoveryPhase);
+  $('recovery-next').textContent=r.status==='checking'?'View recovery check':s.phase==='restoring'?'View restoration progress':s.phase==='restored'?'Review restored files':'Review recovery options';
+}
 async function refresh(){try{const s=await api("/api/status");render(s);renderSkills(s);renderEvents(s.support_events)}catch(error){$("error").style.display="block";$("error").textContent=error.message}}
 async function action(name){const c=latestState.config||{};const confirmation=latestState.migration_mode==="skills"?`Back up, then replace ${latestState.inventory?.skill_exports?.length||0} listed skill(s) on ${c.target}? Conversations, configuration and whole repositories will not be migrated. Other skills will be kept.`:`Back up, then replace ${c.target_home}/.codex, ${c.workspace_roots?.length||0} selected workspace root(s), and ${latestState.inventory?.personal_skills?.length||0} personal skill(s) on ${c.target}? Other destination skills will be kept.`;if(name==="finalize"&&!confirm(confirmation))return;try{const s=await api("/api/action",{method:"POST",body:JSON.stringify({action:name,confirmed:name==="finalize"})});render(s);renderSkills(s)}catch(error){$("error").style.display="block";$("error").textContent=error.message}}
 for(const name of ["inspect","start","pause","resume","finalize","cancel","check_recovery","stop_recovery","check_paths","check_git","stop_git"]){$(name).addEventListener("click",()=>action(name))}
 $('copy-path-command').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(latestState.compatibility_command||'');$('path-message').textContent='Command copied. Run it on the new Mac, then check home paths again.'}catch(error){$('path-message').textContent='Clipboard access was unavailable. Select and copy the command below.'}});
 $('path-next').addEventListener('click',event=>{event.preventDefault();$('path-help').open=true;$('path-help').scrollIntoView({block:'start'});$('path-help').querySelector('summary').focus()});
+$('recovery-next').addEventListener('click',event=>{event.preventDefault();$('recovery-help').open=true;$('recovery-help').scrollIntoView({block:'start'});$('recovery-help').querySelector('summary').focus()});
 $('restore_recovery').addEventListener('click',async()=>{
   const r=latestState.recovery||{}, attempt=latestState.recovery_attempt||{}, c=latestState.config||{};
   const id=r.status==='backup_verified'?r.transaction_id:attempt.reference?.transaction_id;

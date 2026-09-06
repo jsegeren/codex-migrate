@@ -88,7 +88,7 @@ handoff is complete while the engineering acceptance gates remain open.
 | Public website, useful guides, screenshots, price and launch intake | Six live pages; two informative guides; sample-labelled real UI screenshots; $50 planned edition with checkout closed; prior controlled SendGrid inbox receipt and signup tests | Preserve the existing rate-limit and launch-only consent. No new email was sent in the latest read-only audit. |
 | Website accessibility and performance | Prior Lighthouse/axe results plus fresh desktop/320px rendering, six-page text-spacing and 200% text-size overflow checks | Manual assistive-technology and broader keyboard acceptance remain open; no WCAG-conformance claim. See the audit for exact scope. |
 | Domain, search discovery, analytics and cross-promotion | Live canonical domain/robots/sitemap; recorded Search Console ownership, successful sitemap submission and accepted homepage request; separate GA4 property with region-aware default/full measurement, consent-mode handling for the EEA/UK/Switzerland, 14-month retention, returning-user continuity, aggregate Google Signals reporting, granular location/device reporting, ads personalization and user-provided data disabled, launch-request key event and Search Console link; live U.S. edge returned default mode with no banner and both host-only GA cookies; browser-forced consent mode showed the compact control, set no cookies before choice, produced a denied cookieless measurement, and correctly allowed or declined; You.one link on the live homepage; fresh HTTP 200 check of segeren.com confirms its “Explore Codex Migrate” link to the canonical domain | Watch native reports after real visits. A request originating from an actual EEA/UK/Swiss edge remains useful additional confirmation, but endpoint unit tests and browser-boundary simulation cover the branch. Actual demographics depend on consent, Google eligibility and reporting thresholds; indexing, ranking and traffic are not guaranteed. No repeated indexing request needed. |
-| Reproducible identifiable packaged app | Clean-source unsigned arm64 bundle, checksum and eight passing actual engine checks (one filesystem skip); signing/notarization pipeline has mocked tests. The intended Apple account remains Pending, its enrollment email requires government-ID verification, and this Mac still has no Developer ID identity or notary profile. | Josh selects one accepted ID file in Apple's authenticated upload page; after Apple activates the existing purchase, confirm its team, install signing credentials securely, then notarize/staple and test the exact quarantined download on a clean Mac. Do not purchase again. |
+| Reproducible identifiable packaged app | Clean-source unsigned arm64 bundle, checksum and eight passing actual engine checks (one filesystem skip); signing/notarization pipeline has mocked tests. On September 5 the maintainer submitted the requested identity document and Apple's confirmation said the documents were processing. Activation is not confirmed, and no Developer ID identity or notary profile has been verified on this Mac. | After Apple activates the existing purchase, confirm its team, install signing credentials securely, then notarize/staple and test the exact quarantined download on a clean Mac. Do not purchase again or resubmit identity documents unless Apple requests it. |
 | Paid purchase, delivery, support and refunds | Existing Stripe Managed Payments sandbox purchase, guarded persistent fulfillment, private fixture delivery through a trusted browser click, recovery link, and refund denial passed; branded launch email reached the inbox | Verify branded purchase-email inbox delivery, live seller/account readiness, and purchase/download of the exact approved signed artifact before opening checkout. Sandbox fixture delivery is not an app release. |
 
 September 5 account and connection check: both standard disposable accounts,
@@ -205,9 +205,34 @@ complete installer, or release approval. The one-shot verifier exited.
 
 Do not create another Apple
 purchase, weaken SSH host-key checking, or enable live checkout as a workaround.
-Apple's authenticated upload page is open and ready for one government-issued
-ID (JPG, PNG, TIFF or PDF, at most 5 MB); Codex must not select or upload identity
-documents without Josh's direct choice.
+The maintainer has submitted the requested identity document. Apple's displayed
+confirmation says the documents are processing; this is not membership approval.
+No identity-document contents or file were copied into the repository or evidence.
+
+September 5 follow-up: the shipped browser dashboard now exposes a recovery
+next action beside its main status after interrupted installation, during
+restoration, and after verified restoration. It opens and keyboard-focuses the
+existing recovery disclosure without initiating a check or mutation. A real
+Chromium session exercised the updated UI against disposable local APFS data:
+Check recovery, cancel the exact-scope restore confirmation, confirm restoration,
+and verify the resulting original and preserved files. The independent fixture
+assertions passed and the UI remained `interrupted / restored`, not complete.
+Desktop 1280px and narrow 320px checks had no horizontal overflow; keyboard focus
+returned to Check recovery. All 28 targeted Python tests passed; the complete
+Node suite passed 189 tests with one skip. This is source-level local fixture
+evidence, not a newly built signed package, physical cross-Mac interruption,
+authentic Codex data, VoiceOver, or complete buyer-flow acceptance. The reusable
+fixture is `tests/manual_recovery_browser.py`; its transport is local and its
+process snapshot is explicitly synthetic. See
+[the focused recovery UI receipt](recovery-ui-acceptance-2026-09-05.md).
+
+The maintainer approved the alpha announcement, which was published on
+[X as @JoshuaSegeren](https://x.com/JoshuaSegeren/status/2096434267136098342).
+It accurately distinguishes the open-source CLI alpha from the paid Mac app
+still in testing. No forum comments or direct messages were sent in this pass.
+The two helpful public guides returned HTTP 200; refreshed Search Console still
+reported the homepage as `Discovered - currently not indexed`, with no last crawl.
+Google indexing and the paid release remain incomplete.
 
 ## Candidate checks completed on the development Mac
 
