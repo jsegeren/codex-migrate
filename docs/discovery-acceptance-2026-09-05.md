@@ -65,10 +65,20 @@ chats on a new Mac. Search rendering exposed that comment; the live logged-out
 page did not load it in the inspected state. The original post is about
 Windows/Mac synchronization, so our tool is not a substitute for its full goal.
 
-Next action requires an existing authorized Reddit sign-in, reading current
-subreddit rules, loading the exact Mac-specific comment, checking for an existing
-reply, and responding there at most once. Do not hijack the original author's
-showcase, send unsolicited DMs, or imply Windows/continuous-sync support.
+The Founder requested a separate public founder Reddit account as part of this
+project, explicitly lower priority than release readiness. Account creation and
+profile setup are authorized project work, but remain pending. Do not use,
+identify, or link the Founder's personal Reddit account. Do not imply an
+independent recommendation by saying the maintainer merely found this tool.
+
+Next actions: choose an available professional founder handle, complete the
+normal signup with any required human terms/verification checkpoints, configure
+a truthful founder profile, and read current subreddit rules. Then load the
+exact Mac-specific comment, check for an existing reply, and respond there at
+most once from the new account with maintainer disclosure. Do not bypass
+CAPTCHA, manufacture account reputation, hijack the original author's showcase,
+send unsolicited DMs, or imply Windows/continuous-sync support. No signup or
+Reddit post has occurred yet.
 
 Draft for that Mac-specific request only, not posted:
 
