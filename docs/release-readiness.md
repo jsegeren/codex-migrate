@@ -3,6 +3,15 @@
 The downloadable paid app is **not released**. Publishing source and the
 informational website does not open checkout or certify a customer download.
 
+September 5 live-commerce preparation: the approved Mac Founding Edition is now
+created in the existing live Stripe account with an independently verified
+$50 USD **one-time** price. Managed Payments onboarding now reports **Ready to
+use** and one eligible product; unrelated payments remain unchanged. No live
+payment, public checkout, webhook or app delivery was enabled. The canonical
+availability endpoint still returns false. Live integration provisioning,
+support/category review and signed-artifact acceptance remain open. See the
+[live catalog receipt](commerce-implementation.md#live-catalog-and-onboarding--september-5-follow-up).
+
 September 5 setup follow-up fixes a reproduced asynchronous folder-selection
 review race, stale retry errors and lost keyboard focus. Desktop and 320px
 Chromium fixture checks pass, as do 584 Python tests (12 skipped) and 210

@@ -4,7 +4,46 @@ Status: implementation and private-storage transport tested; **not a live checko
 The committed release catalog contains only a harmless sandbox delivery fixture; no commerce environment variables
 or webhooks have been installed in Production. No app archive was published.
 
-## Live seller readiness — September 5 evening
+## Live catalog and onboarding — September 5 follow-up
+
+Verified at `2026-09-06T04:42:43Z` (September 5 Pacific). The authorized live
+catalog preparation and Managed Payments wizard are now complete in the existing
+Segeren Studio account. This supersedes the empty-catalog observation below,
+but does not release the app or prove live fulfillment.
+
+- Product: `prod_VCxpogUxaT0OeT`, **Codex Migrate — Mac Founding Edition**.
+- Default price: `price_1UCXtaJfbWpcJIZbp9W60sIv`. Its independent price-detail
+  page shows USD, $50.00, **Interval: One-time**, and no other currencies.
+- Product category: `txcd_10202001`, downloadable non-recreational software for
+  personal use. This prepares individual retail downloads, not an enterprise-only
+  offer. Stripe marks the product **Eligible**. Business-use sales and the
+  included-support interpretation still need classification review before launch;
+  a category badge is not an individualized tax ruling.
+- The saved description explicitly includes best-effort email support from
+  Joshua Segeren, aiming to reply within a few business days without guaranteed
+  response times or fixes, and states non-affiliation with OpenAI.
+- Selected **Prebuilt checkout → Existing integration**. The displayed API
+  requirement matches the implemented `managed_payments[enabled]` request and
+  pinned `2025-03-31.basil` version. No shareable payment link was created.
+- The wizard displayed **You're done**. The subsequent settings page shows
+  **Ready to use**, one eligible product, and no Managed Payments transactions.
+  Stripe says status becomes active after the first transaction. This is not
+  evidence of a successful live payment.
+- Managed Payments remains disabled by default for other sessions/payment links.
+  The wizard presented no new terms-acceptance checkbox or payment confirmation
+  on these remaining steps. Its displayed fee remains 3.5% additional per
+  transaction; no charge was initiated.
+- Tax behavior remains Auto: Stripe's settings say USD tax is added on top of
+  the price. Do not represent $50 as universally tax-inclusive.
+
+No key was revealed, live webhook created, Production environment changed, or
+app uploaded. A fresh public `/api/availability` request returned
+`{"available":false}` after onboarding. Live credentials, isolated production
+purchase storage/webhook setup, signed-artifact delivery, and authentic
+cross-Mac acceptance remain release gates. The support-eligibility question
+below remains open; the dashboard's category acceptance does not resolve it.
+
+## Historical live seller inspection — September 5 evening
 
 A read-only check of the existing Segeren Studio live Stripe dashboard found:
 
