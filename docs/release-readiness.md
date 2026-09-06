@@ -3,6 +3,14 @@
 The downloadable paid app is **not released**. Publishing source and the
 informational website does not open checkout or certify a customer download.
 
+September 5 fresh Search Console inspections now confirm **Page is indexed**
+for the homepage, `/moving-to-a-new-mac`, and `/backup-and-recovery`, with
+successful smartphone crawls and matching Google-selected canonicals. This
+supersedes the historical unindexed observations below and closes that bounded
+indexing requirement, not ranking or traffic. Two additional relevant community
+opportunities were identified; both require sign-in and no new comment was
+posted. See [indexing and outreach evidence](discovery-acceptance-2026-09-05.md).
+
 September 5 disk-pressure follow-up: real bounded APFS image tests cover
 pre-replacement low space, space consumed during backup, and protected completion
 and rollback under disk exhaustion. They also exposed a fast-retry collision in
