@@ -1,5 +1,21 @@
 # Search indexing and community discovery — September 5, 2026
 
+## September 6 Founder-approved Reddit reply
+
+After reviewing the exact proposed text, the Founder explicitly requested its
+publication under rgorbie's Mac-specific question. The reply was submitted once
+from `JoshuaSegeren`; the browser showed the posted text, author and permalink:
+
+<https://www.reddit.com/r/codex/comments/1tqczl5/comment/p84or8q/>
+
+It identifies the author as the maintainer, links the free repository, describes
+the alpha and Mac-to-Mac scope, and tells readers to retain the old Mac and check
+restored work. No independent-customer endorsement, Windows support or completed
+paid release is claimed. The earlier unposted draft/status below describes the
+discovery pass before this explicit instruction, not the current posting state.
+Logged-in readback confirms submission, not moderation approval or visibility to
+every reader. No duplicate reply or wider posting campaign was initiated.
+
 ## September 6 contributor follow-up
 
 The existing OpenAI Codex discussion received a genuine reply from `d-jiao`,
@@ -95,8 +111,9 @@ found the tool.
 
 Current r/codex rule 9 says **Don't use bots. Read up on BotBouncer**. Its
 linked [policy explanation](https://www.reddit.com/r/BotBouncer/wiki/index/)
-describes moderation of automated/synthetic participation. No automated Reddit
-comment was submitted. Leave participation to the Founder personally or obtain
+describes moderation of automated/synthetic participation. During the initial
+discovery pass, no Reddit comment was submitted. The recommendation was to leave
+participation to the Founder personally or obtain
 moderator clarification; do not tune wording, timing or accounts to evade
 detection. The draft below is for review, not a posting receipt. No profile
 changes, reputation-building activity, unsolicited DMs or top-level promotion

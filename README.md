@@ -7,6 +7,28 @@ you sign into Codex on a new Mac: conversations, project organization,
 configuration, skills, automations, repositories, branches, worktrees, stashes,
 and unfinished files.
 
+## Get the Mac app — $50 one time
+
+Prefer a packaged app to cloning and running the source? **The paid Mac Founding
+Edition includes the downloadable Mac app and best-effort support directly from
+Josh.** It opens the guided local browser workflow for setup, transfer progress,
+pause/resume, verification, and recovery. Your workspace moves directly between
+your Macs, not through our servers.
+
+**In testing—not on sale yet.** The signed, notarized release is being prepared.
+No subscription and no pre-orders.
+
+**[Get an email when the $50 Mac app launches →](https://migrate.segeren.com/#launch-email)**
+· [See the Mac edition](https://migrate.segeren.com/#founding-edition)
+
+The complete **MIT-licensed CLI and source remain free**, including the same
+safety checks and guided browser workflow. Payment covers the packaged release
+and maintainer support—not stronger data protection. Support aims for an initial
+reply within a few business days; response times and fixes are not guaranteed.
+See [edition and support details](docs/commercial-edition.md).
+
+## How migration works
+
 It stages a resumable copy over SSH, preserves the new Mac's authentication,
 creates a rollback backup, installs only after both Codex apps are closed, and
 verifies the result before declaring completion.
@@ -503,21 +525,6 @@ addresses reported by an unverified machine.
 Read [the security model](docs/security-model.md) before using the alpha on an
 irreplaceable workspace. Please report vulnerabilities privately according to
 [SECURITY.md](SECURITY.md).
-
-## Free CLI and Founding Edition
-
-The migration engine is MIT-licensed and will remain inspectable and usable from
-the command line. A signed, notarized Mac app is in development for people who
-want automatic discovery, guided permissions, route testing, one-click controls,
-updates, and support. The planned price is **$50 one time** for the downloadable
-Mac edition. It is not a subscription or a pre-order. See
-[the commercial-edition principles](docs/commercial-edition.md).
-
-The signed Mac app is not available for download yet and checkout is closed
-until release checks pass. The complete free CLI is available today. Paid support
-will be best-effort, aiming for an initial response within a few business days,
-without a guaranteed response time, fix, or resolution deadline. See the
-[project website](https://migrate.segeren.com/#founding-edition).
 
 ## Need help?
 
