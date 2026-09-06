@@ -114,6 +114,42 @@ class ReleaseBuildTests(unittest.TestCase):
             self.assertEqual(run.call_count, 1)
             self.assertFalse((output / "notary-submission.json").exists())
 
+    def test_notary_receipt_write_failure_preserves_resumable_submission(self):
+        for failure in ("serialize", "sync", "replace"):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temporary:
+                path = Path(temporary) / "notary-submission.json"
+                original = json.dumps({"id": SUBMISSION, "status": "Submitted"})
+                path.write_text(original)
+                target, attribute = {
+                    "serialize": (build.json, "dumps"),
+                    "sync": (build.os, "fsync"),
+                    "replace": (Path, "replace"),
+                }[failure]
+                with patch.object(build.subprocess, "run", return_value=response()), \
+                     patch.object(target, attribute, side_effect=OSError("disk failure")), \
+                     self.assertRaises(OSError):
+                    build.wait_for_notarization(SUBMISSION, "profile", path)
+                self.assertEqual(path.read_text(), original)
+                self.assertEqual(list(path.parent.glob(".notary-*")), [])
+                # A retry waits on the original Apple ID, without submitting again.
+                with patch.object(build.subprocess, "run", return_value=response()) as invoke:
+                    build.wait_for_notarization(SUBMISSION, "profile", path)
+                self.assertEqual(invoke.call_args.args[0][2:4], ["wait", SUBMISSION])
+                self.assertEqual(json.loads(path.read_text())["status"], "Accepted")
+
+    def test_initial_notary_receipt_is_private_and_failed_write_leaves_no_partial(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "notary-submission.json"
+            record = {"id": SUBMISSION, "status": "Submitted"}
+            with patch.object(build.os, "fsync", side_effect=OSError("disk failure")), \
+                 self.assertRaises(OSError):
+                build.save_notary_receipt(path, record)
+            self.assertFalse(path.exists())
+            self.assertEqual(list(path.parent.iterdir()), [])
+            build.save_notary_receipt(path, record)
+            self.assertEqual(json.loads(path.read_text()), record)
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+
     def test_saved_notarization_can_resume_without_rebuild_or_resubmit(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

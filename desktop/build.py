@@ -7,6 +7,7 @@ import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
 import platform
 import plistlib
@@ -75,6 +76,20 @@ def notary_request(profile, *arguments):
     return response, identifier
 
 
+def save_notary_receipt(path, record):
+    """Keep the previous submission ID intact if a status write fails."""
+    descriptor, temporary = tempfile.mkstemp(prefix=".notary-", dir=path.parent)
+    temporary = Path(temporary)
+    try:
+        with os.fdopen(descriptor, "w") as stream:
+            stream.write(json.dumps(record, indent=2) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def wait_for_notarization(identifier, profile, receipt_path):
     response, waited_id = notary_request(profile, "wait", identifier)
     if waited_id != identifier:
@@ -84,7 +99,7 @@ def wait_for_notarization(identifier, profile, receipt_path):
         "id": identifier,
         "status": status if status in ("Accepted", "Invalid", "Rejected") else "Unknown",
     }
-    receipt_path.write_text(json.dumps(record, indent=2) + "\n")
+    save_notary_receipt(receipt_path, record)
     if record["status"] != "Accepted":
         raise ValueError("notarization was not Accepted; no release archive created")
     return record
@@ -96,7 +111,7 @@ def notarize(submission, profile, output):
     _, identifier = notary_request(profile, "submit", submission, "--no-wait")
     record = {"id": identifier, "status": "Submitted"}
     receipt_path = output / "notary-submission.json"
-    receipt_path.write_text(json.dumps(record, indent=2) + "\n")
+    save_notary_receipt(receipt_path, record)
     print("Notarization submission saved:", receipt_path, flush=True)
     return wait_for_notarization(identifier, profile, receipt_path)
 
