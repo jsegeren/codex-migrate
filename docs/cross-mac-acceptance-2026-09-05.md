@@ -2,6 +2,33 @@
 
 Status: **engineering progress, not release approval**.
 
+## Receiving-Mac reboot: verification still pending
+
+The maintainer reported an unexpected receiving-Mac crash and restart after the
+synthetic installation, while home-path compatibility remained unresolved.
+Fresh SSH inspection confirmed roughly four minutes of uptime and the same
+independently pinned host identity. The personal-account SSH connection worked
+without a password prompt. Metadata checks found the disposable destination
+account, its installed `.codex` directory, its recorded full-install backup,
+and the workspace-skills fixture still present. No destination migration helper
+was running. The separate time-limited source acceptance runner had exited;
+the source browser helper remained alive.
+
+These are presence and process checks, not post-reboot content verification or
+proof of recovery from a crash during replacement. Protected test-account
+contents remain unreadable through the personal-account connection. No
+migration was restarted, no permissions were relaxed, and no backup was removed.
+
+A fixed-scope home-path setup launcher was copied exclusively to the receiving
+Mac's `/Users/Shared/Finish Codex Migrate Test Setup.command`. Its received bytes
+and shell syntax were checked; it has **not been executed**. It verifies the
+receiving Mac's pinned public host identity and personal administrator account,
+then invokes the production exclusive compatibility command only for the two
+disposable home paths. It requires an administrator prompt, rejects conflicting
+paths, and cannot overwrite an existing entry. The missing link and subsequent
+Git/content verification remain open. Restarting the source acceptance runner
+also requires renewed authorization to execute as the isolated source account.
+
 Candidate source: `54cfa832753e70d10bf3b07b935d1e8e059b92ff`.
 Unsigned arm64 ZIP SHA-256:
 `dd429acebf7139e061338f86f57412a359388741bb64ce2a8d584902e2833ccc`.
