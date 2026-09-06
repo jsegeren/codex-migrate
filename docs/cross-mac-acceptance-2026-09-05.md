@@ -146,6 +146,49 @@ confirmation, key-expiry timing, or signed/quarantined first launch. Temporary
 private connection state and the engineering package remain in the disposable
 accounts for evidence review; no personal account's access was changed.
 
+## Rendered installed-workspace and Help checks
+
+Stable Chrome ran headlessly in the disposable source account against the
+actual packaged helper, with a fresh browser profile and without switching the
+maintainer's desktop session. The first rendered inspection showed that the
+home-path next action was buried below scope/backup information and six disabled
+transfer buttons. Source `cc86caf90b48d1126add618922c46af7fe52efc7` moves that
+action directly beneath the status and hides obsolete transfer controls after
+installation, while retaining controls for retryable transfers.
+
+Clean source produced unsigned ZIP SHA-256
+`b9fb1a040a396a70ae3a8f0d1bc13560c379b51b58ed7a1a516f1d192b2cc052`.
+An orderly helper update retained the existing installed receipt and reopened
+the full configuration read-only. Screenshots at 1280, 390 and 320 pixels show
+the next action beneath the status, without horizontal overflow or underlined
+button text. The supervising agent inspected the desktop and narrow rendering.
+
+Keyboard activation of the next action opened and focused the home-path
+disclosure. The read-only cross-Mac path check returned focus to its button.
+Keyboard Help/report preparation focused the diagnostic preview; a real browser
+download matched that preview byte-for-byte. The report excluded the tested
+private home paths, hostname and loopback token. No email was sent. The first
+path-check exercise did not complete within its browser step; a separately
+instrumented repeat passed. A further fresh-helper restart and keyboard run
+also passed, with the path check taking 7.001 seconds and the installed receipt
+unchanged before and after. This is not a claim of reliable network timing.
+
+Axe-core 4.8.3 found no violations of its selected WCAG 2.0/2.1 A/AA rules at
+those three widths, with 21 passing rules and color-contrast marked incomplete
+because of the backgrounds. Manual CSS color-pair calculations found 9.08:1
+for muted text against the brightest background-gradient endpoint, 6.99:1 for
+the next-action text, and 5.00:1 for the Help email-button text. These bounded
+checks are not whole-app WCAG certification. Increased text spacing also caused
+no horizontal overflow at those widths. Native VoiceOver, permission dialogs,
+setup/pairing, and the complete rendered migration/recovery journey remain open.
+
+Local reports: `CodexMigrate-Synthetic-_81vt4xh/result.json` (original layout),
+`CodexMigrate-Synthetic-xekezj7u/result.json` (updated layout/initial keyboard
+exercise), `CodexMigrate-Synthetic-dkinbgfo/result.json` (keyboard/Help pass),
+and `CodexMigrate-Synthetic-j5nuleud/result.json` (axe/text spacing). Screenshots
+stay alongside these local reports, not in the public website assets.
+The fresh-helper repeat is `CodexMigrate-Synthetic-goao06tf/result.json`.
+
 ## Automated checks at this checkpoint
 
 `PYTHONPATH=src:tests python3 -m unittest test_recovery test_restore
@@ -164,6 +207,11 @@ skipped without its explicit test-database environment. These are local
 regressions, not new live commerce or Apple checks. The Python build tests print
 simulated signed/notarized success for mocked temporary fixtures; no real
 Developer ID signature or notarization was produced by this run.
+
+After the next-action UI change: 29 dashboard/Git-readiness Python tests passed;
+eight focused JavaScript state/Help tests passed; the complete Node suite had
+187 passes and one explicit integration skip. The exact new bundled engine's
+desktop suite had eight passes and one filesystem skip.
 
 ## Evidence retention and remaining gates
 

@@ -181,6 +181,17 @@ receipt and absence of a pending transaction were independently rechecked.
 This is packaged API/SSH evidence, not a rendered Remove access interaction.
 See the scoped receipt for exact reports and limitations.
 
+Rendered checks of the installed-workspace state found the home-path next action
+buried beneath details and disabled transfer controls. Source `cc86caf` moves
+it directly beneath the status and hides finished transfer controls. Its clean
+unsigned `b9fb1a04` package retained the installed receipt during a read-only
+helper update. Real stable Chrome keyboard checks passed for the path disclosure,
+read-only path check, diagnostic preview focus and exact diagnostic download.
+Desktop/390px/320px rendering and text spacing had no horizontal overflow;
+selected axe A/AA rules found no violations, with contrast requiring the bounded
+manual review documented in the scoped receipt. These checks do not replace
+native VoiceOver or a complete rendered migration/recovery journey.
+
 Do not create another Apple
 purchase, weaken SSH host-key checking, or enable live checkout as a workaround.
 Apple's authenticated upload page is open and ready for one government-issued
