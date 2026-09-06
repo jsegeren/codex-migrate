@@ -113,7 +113,7 @@ def codex_binary():
 
 
 def prepare(home, role):
-    """Preserve earlier disposable state by rename, once; never inspect auth."""
+    """Adopt the marked test account in place; never reset a completed login."""
     root = root_for(home)
     journal = root / 'preparation.json'
     if journal.exists():
@@ -126,15 +126,14 @@ def prepare(home, role):
                    else '.codex-migrate-destination-fixture.json')
     marker = json.loads(checked(home / marker_name, private=False).read_text())
     require(marker.get('synthetic') is True, 'Disposable fixture marker missing')
-    current, previous = home / '.codex', root / 'previous-codex'
-    # A partial preparation never renames a newly initialized .codex again.
-    if previous.exists():
-        checked(previous, directory=True)
-    else:
-        checked(current, directory=True)
-        current.rename(previous)
+    # The user may sign in before launching this program. Retain all existing
+    # state, including earlier synthetic fixtures, and create genuine test
+    # conversations alongside it. Never move, read or copy credential files.
+    # Codex itself can create a 755 root; reject writable-by-others roots rather
+    # than requiring a permission change just to run this test.
+    current = home / '.codex'
     current.mkdir(mode=0o700, exist_ok=True)
-    checked(current, directory=True)
+    checked(current, directory=True, private=False)
     save(journal, {'role': role, 'phase': 'prepared'})
 
 
@@ -438,7 +437,7 @@ def driver():
         update('sign_into_Codex_in_both_test_accounts_then_quit_Codex')
         # Opening an app here is only appropriate when this script was launched
         # by the source account's logged-in desktop, not sudo from another user.
-        if Path('/dev/console').stat().st_uid == os.getuid():
+        if not login_ready(home) and Path('/dev/console').stat().st_uid == os.getuid():
             subprocess.run(['/usr/bin/open', '-b', 'com.openai.codex'],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         deadline = time.monotonic() + 3 * 3600
@@ -545,8 +544,8 @@ def main():
         time.sleep(1)
         require(worker.poll() is None, 'The runner could not start; tell the supervising Codex task')
         print('Test preparation is running in the background. This window can close.')
-        print('Once Codex opens: sign in, then quit it with Command-Q.')
-        print('On the NEW Mac: use Codex Migrate Target, open Codex, sign in, then Command-Q.')
+        print('Existing Codex sign-ins are retained. Keep Codex closed in both test accounts.')
+        print('If a sign-in is still needed: sign in normally, then Command-Q.')
         print('You can then return to your personal accounts. The test continues automatically.')
     elif args.remote_action:
         home = account('target')

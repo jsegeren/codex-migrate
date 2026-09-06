@@ -9,15 +9,18 @@ receipts and original personal workspaces are not changed by preparing the files
 1. On the **old Mac**, switch to **Codex Migrate Source**. With Codex closed,
    open `/Users/Shared/CodexMigrate-Authentic-20260906/Start Authentic Migration Test.command`.
    No administrator password is required when running in that account.
-2. When Codex opens there, sign in normally with ChatGPT, then quit Codex with
-   Command-Q. The launcher window may close; the runner is detached.
+2. If already signed into Codex, that sign-in is retained. Otherwise, when Codex
+   opens, sign in normally with ChatGPT, then quit with Command-Q. The launcher
+   window may close; the runner is detached.
 3. On the **new Mac**, switch to **Codex Migrate Target**, open Codex, sign in
    normally with ChatGPT, then quit with Command-Q. Return to personal accounts
    and leave both Macs awake and connected.
 
-Do not open Codex in the target account before the runner has preserved the
-previous synthetic state. The old-Mac Codex window is opened only after that
-preparation succeeds on both Macs. If it does not open, inspect the status first.
+Sign-ins completed before launching are supported. Quit Codex in both test
+accounts before starting the launcher. It no longer moves aside `.codex` or
+reopens an already authenticated source app. Existing synthetic fixture files
+remain alongside the newly created genuine conversations; the test is not a
+claim that every existing source conversation is authentic.
 
 The runner waits up to three hours for sign-ins and closed Codex processes.
 It then creates the fixture conversations, starts the current packaged migration
@@ -29,10 +32,10 @@ and attempts reopening/continuation through Codex's app-server on the new Mac.
 - Exact disposable account/home guards; root and personal accounts rejected.
 - Existing source pairing is reused with its pinned destination host key and
   strict SSH. Private keys and control tokens remain in the source account.
-- Before fresh Codex initialization, the old disposable `.codex` directory is
-  renamed into that account's private `.codex-migrate-authentic-test-20260906/previous-codex`.
-  It is retained, not deleted or copied. Credential files are never opened by
-  preparation. A prepared journal prevents another rename on restart.
+- Preparation retains the marked disposable account's existing `.codex` in
+  place. Credential files are never opened, moved or copied by preparation.
+  A Codex-created 755 root is accepted; links and writable-by-others roots are
+  rejected. Any previous preparation backup remains untouched.
 - Existing pending recovery blocks preparation. The old source helper is stopped
   only with an installed, idle receipt; an unknown or active helper blocks it.
 - A new standalone `Authentic-Migration-Test` Git project contains a committed
@@ -61,7 +64,7 @@ The package is the clean `28d5b10` unsigned arm64 candidate recorded in
 passed `codesign --verify --deep --strict` again in the handoff directory.
 
 `PYTHONPATH=tests .venv/bin/python -m unittest test_authentic_mac_handoff -q`
-passes 13 deterministic tests, without a real account login or model call.
+passes 15 deterministic tests, without a real account login or model call.
 Launcher shell syntax is checked. The installed local Codex CLI is 0.153.4;
 the protocol field names were checked against its generated schema.
 

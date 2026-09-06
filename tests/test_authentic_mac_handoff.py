@@ -41,11 +41,12 @@ class HandoffTests(unittest.TestCase):
     def test_preparation_preserves_old_data_and_is_idempotent(self):
         self.prepare()
         previous = self.home / handoff.STATE_NAME / 'previous-codex/sentinel'
-        self.assertEqual(previous.read_text(), 'old disposable data')
+        self.assertFalse(previous.exists())
+        self.assertEqual((self.home / '.codex/sentinel').read_text(), 'old disposable data')
         (self.home / '.codex/new-conversation').write_text('new genuine test data')
         self.prepare()
         self.assertEqual((self.home / '.codex/new-conversation').read_text(), 'new genuine test data')
-        self.assertEqual(previous.read_text(), 'old disposable data')
+        self.assertFalse(previous.exists())
 
     def test_partial_rename_resumes_without_moving_new_data(self):
         root = handoff.root_for(self.home)
@@ -67,7 +68,25 @@ class HandoffTests(unittest.TestCase):
             return original_read_bytes(path, *args, **kwargs)
         with patch.object(Path, 'read_text', text), patch.object(Path, 'read_bytes', binary):
             self.prepare()
-        self.assertTrue((self.home / handoff.STATE_NAME / 'previous-codex/auth.json').is_file())
+        self.assertTrue(auth.is_file())
+        self.assertFalse((self.home / handoff.STATE_NAME / 'previous-codex').exists())
+
+    def test_existing_login_and_codex_created_permissions_are_retained(self):
+        current = self.home / '.codex'
+        current.chmod(0o755)
+        for name in ('auth.json', 'installation_id'):
+            (current / name).write_text('dummy fixture only')
+        before = {path.name: path.stat().st_ino for path in current.iterdir()}
+        self.prepare()
+        self.assertEqual({path.name: path.stat().st_ino for path in current.iterdir()}, before)
+        self.assertEqual(current.stat().st_mode & 0o777, 0o755)
+
+    def test_writable_codex_root_requires_review_without_moving_files(self):
+        (self.home / '.codex').chmod(0o777)
+        with self.assertRaises(handoff.SafeError):
+            self.prepare()
+        self.assertTrue((self.home / '.codex/sentinel').is_file())
+        self.assertFalse((self.home / handoff.STATE_NAME / 'preparation.json').exists())
 
     def test_live_codex_pending_recovery_and_missing_marker_block_preparation(self):
         with patch.object(handoff, 'codex_closed', return_value=False):
