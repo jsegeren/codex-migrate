@@ -24,10 +24,48 @@ it early and give a safe, actionable explanation.
 | Intel/Apple Silicon and native project dependencies | Artifacts identify architecture; development evidence is Apple Silicon. | Clean-machine packaging tests for each advertised architecture; explain when dependencies need rebuilding. |
 | Permissions, managed accounts, denied access | Process-owner checks and failed read/copy checks fail closed. | Real permission-denial UX checks; no silent omission or excessive privilege requests. |
 | Disconnect, sleep, changed route, helper restart | Staging reuse and simulated cancellation/restart tests exist. | Real cross-Mac disconnect/reconnect and route-change tests with disposable accounts. |
-| Disk fills during backup/install/rollback | Conservative budgeting, rechecks, verified backups, and failure fixtures exist. | Broader real-machine failure/recovery evidence; keep source and independent backup. |
+| Disk fills during backup/install/rollback | Conservative budgeting, rechecks, verified backups, and failure fixtures exist. Three opt-in real APFS disk-image checks now pass: initial low free space, space consumed after backup, and an actual ENOSPC error inside the pre-replacement installer shell; all preserve originals/staging and allow retry after removing only artificial pressure. See the bounded receipt below. | Actual copy/journal/rollback ENOSPC and broader second-Mac/hardware recovery remain open. A disposable image is not a real receiving-Mac or protected-phase failure proof; keep source and independent backup. |
 | Connector credentials and external dependencies | Destination Codex identity is retained; source SSH keys are excluded. Other configuration can reference uncopied dependencies. | Explicit reauthentication/reinstallation guidance. Do not equate copied configuration with working integrations. |
 | User gets stuck and needs support | Visible Help, email draft, reviewed local diagnostic report, and bounded event history are implemented. | Check keyboard/mobile UI and privacy tests; never require private content just to request help. |
 
 No known safety gap is waived because the product costs $50. Unimplemented
 guards above remain engineering work, separate from Apple approval, commerce,
 and clean cross-Mac acceptance gates in [release readiness](release-readiness.md).
+
+## Real APFS disk-space acceptance — September 5
+
+`tests/test_real_disk_space.py` creates a private, disposable 3-GiB APFS sparse
+image, checks that it is a separate mounted device smaller than 4 GiB, and
+requires at least 8 GiB of host free space. The test never fills a real home
+volume. It is opt-in; ordinary unit discovery skips it.
+
+Three checks passed using the production installer script and real `df`, `du`,
+APFS clone-copy and verification commands:
+
+1. A successful 1,280-MiB allocation reduces actual free space below the 2-GiB
+   reserve. Installation stops before creating a backup or replacing data.
+2. The same allocation occurs after the Codex backup has been copied and
+   verified. The second production space check rejects replacement; the backup,
+   original files and staged data remain.
+3. A bounded 4-GiB write into that smaller image raises actual ENOSPC after the
+   Codex backup check. The installer shell stops before replacement or a verified
+   installation/backup receipt. This is an injected write in the installer shell,
+   not a production copy, journal, rollback or hardware-failure test.
+
+Each case verifies unchanged original destination files, retained staging, no
+pending replacement transaction and unchanged synthetic source content. After
+deleting only the exact artificial filler file, retry installs successfully with
+a verified backup of the original workspace. The failed attempt's backup stays
+intact where one was created. All three images were normally detached and their
+disposable contents removed; cleanup never force-detaches or recursively removes
+a still-mounted image. The existing 36 backup/transaction tests also passed.
+
+Reproduce on macOS from the repository root:
+
+```sh
+CODEX_MIGRATE_REAL_DISK_TEST=yes PYTHONPATH=src:tests python3 -m unittest test_real_disk_space -v
+```
+
+The adapter is the existing local synthetic fixture, including its closed-Codex
+process snapshot and dummy destination identity. No SSH, authentic Codex state,
+personal workspace, GUI recovery or packaged two-Mac acceptance is claimed.
