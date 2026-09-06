@@ -169,6 +169,35 @@ class HandoffTests(unittest.TestCase):
                 handoff.run(['fixture'])
         self.assertNotIn('private', str(error.exception))
 
+    def test_remote_app_close_reason_is_visible_without_raw_output(self):
+        message = 'Quit Codex in the disposable target account first'
+        result = Mock(returncode=1, stdout=json.dumps({'error': message}).encode(),
+                      stderr=b'private remote details')
+        with patch.object(handoff.subprocess, 'run', return_value=result):
+            with self.assertRaises(handoff.SafeError) as error:
+                handoff.remote([], 'fixture.invalid', 'prepare')
+        self.assertEqual(str(error.exception), message)
+
+    def test_unexpected_remote_errors_and_ssh_details_are_not_disclosed(self):
+        for status, output in ((1, b'{"error":"private remote details"}'),
+                               (1, b'private malformed output'),
+                               (255, b'private SSH details')):
+            with self.subTest(status=status, output_kind=type(output).__name__):
+                with patch.object(handoff.subprocess, 'run', return_value=Mock(
+                        returncode=status, stdout=output, stderr=b'private stderr')):
+                    with self.assertRaises(handoff.SafeError) as error:
+                        handoff.remote([], 'fixture.invalid', 'prepare')
+                self.assertNotIn('private remote', str(error.exception))
+                self.assertNotIn('private malformed', str(error.exception))
+                self.assertNotIn('private SSH', str(error.exception))
+
+    def test_remote_success_requires_zero_exit_and_object(self):
+        for status, output in ((1, b'{"ready":true}'), (0, b'[]')):
+            with patch.object(handoff.subprocess, 'run', return_value=Mock(
+                    returncode=status, stdout=output, stderr=b'')):
+                with self.assertRaises(handoff.SafeError):
+                    handoff.remote([], 'fixture.invalid', 'ready')
+
     def test_restart_does_not_open_codex_during_active_installation(self):
         root = handoff.root_for(self.home)
         (root / 'migration').mkdir(mode=0o700)

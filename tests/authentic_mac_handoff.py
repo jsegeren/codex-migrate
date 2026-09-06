@@ -89,7 +89,8 @@ def read(path):
 
 def run(command, timeout=30, **kwargs):
     result = subprocess.run(command, capture_output=True, timeout=timeout, **kwargs)
-    require(result.returncode == 0, 'Subprocess failed; raw output withheld')
+    require(result.returncode == 0, 'Subprocess failed (' + Path(command[0]).name
+            + '; exit ' + str(result.returncode) + '); raw output withheld')
     return result.stdout
 
 
@@ -353,9 +354,32 @@ def remote(options, target, action, payload=None):
     # Only fixed test actions and invented test-thread metadata cross the wire.
     encoded = base64.b64encode(json.dumps(payload).encode()).decode()
     command[-1] += ' --payload=' + shlex.quote(encoded)
-    result = run(command, timeout=720 if action == 'prove' else 90, input=code.encode())
-    response = json.loads(result)
-    require('error' not in response, 'Destination ' + action + ' needs review')
+    result = subprocess.run(command, timeout=720 if action == 'prove' else 90,
+                            input=code.encode(), capture_output=True)
+    require(result.returncode != 255, 'Destination SSH connection failed; pairing and network need review')
+    try:
+        response = json.loads(result.stdout)
+    except (ValueError, UnicodeError):
+        raise SafeError('Destination ' + action + ' returned no valid report (exit '
+                        + str(result.returncode) + '); raw output withheld') from None
+    require(isinstance(response, dict), 'Destination returned an invalid report')
+    if 'error' in response:
+        # Only program-defined diagnostics may cross into the public report.
+        # Never reflect arbitrary remote output or an exception body.
+        allowed = {
+            'Quit Codex in the disposable target account first',
+            'Destination migration helper must be idle and closed',
+            'Codex application is not installed in Applications',
+            'Unsafe test path', 'Unsafe home',
+            'Run in the disposable target account',
+            'Pending recovery needs review', 'Disposable fixture marker missing',
+            'Preparation needs review',
+        }
+        message = response['error']
+        raise SafeError(message if isinstance(message, str) and message in allowed
+                        else 'Destination ' + action + ' needs review; private details withheld')
+    require(result.returncode == 0, 'Destination ' + action + ' failed (exit '
+            + str(result.returncode) + '); raw output withheld')
     return response
 
 
@@ -431,8 +455,22 @@ def driver():
         run(['/usr/bin/codesign', '--verify', '--deep', '--strict', str(SHARED / 'Codex Migrate.app')])
         stop_old_helper()
         update('preparing_destination_test_account')
-        remote(options, reply['target'], 'prepare')
+        deadline = time.monotonic() + 3 * 3600
+        while True:
+            try:
+                remote(options, reply['target'], 'prepare')
+                break
+            except SafeError as error:
+                require(str(error) in ('Quit Codex in the disposable target account first',
+                        'Destination migration helper must be idle and closed'), str(error))
+                require(time.monotonic() < deadline, 'Destination app-close wait expired; rerun launcher')
+                update('waiting_for_target_apps_to_close', reason=str(error))
+                time.sleep(15)
         update('preparing_source_test_account')
+        while not codex_closed():
+            require(time.monotonic() < deadline, 'Source app-close wait expired; rerun launcher')
+            update('waiting_for_source_Codex_to_close')
+            time.sleep(15)
         prepare(home, 'source')
         update('sign_into_Codex_in_both_test_accounts_then_quit_Codex')
         # Opening an app here is only appropriate when this script was launched
@@ -518,7 +556,7 @@ def driver():
     except Exception as error:
         # No exception text, account records, subprocess output or control token
         # is copied into the public report.
-        update('needs_review', error_type=type(error).__name__,
+        update('needs_review', failed_phase=report['phase'], error_type=type(error).__name__,
                reason=str(error) if isinstance(error, SafeError) else 'Unexpected error; raw details withheld')
         print('Stopped safely. Tell the supervising Codex task; do not reset either test account.', flush=True)
     finally:

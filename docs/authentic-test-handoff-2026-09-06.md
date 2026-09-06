@@ -64,7 +64,7 @@ The package is the clean `28d5b10` unsigned arm64 candidate recorded in
 passed `codesign --verify --deep --strict` again in the handoff directory.
 
 `PYTHONPATH=tests .venv/bin/python -m unittest test_authentic_mac_handoff -q`
-passes 15 deterministic tests, without a real account login or model call.
+passes 18 deterministic tests, without a real account login or model call.
 Launcher shell syntax is checked. The installed local Codex CLI is 0.153.4;
 the protocol field names were checked against its generated schema.
 
@@ -74,3 +74,23 @@ test will not by itself certify their presentation in the desktop sidebar.
 After the automated test, separately open the three restored test conversations
 in the new Mac's desktop app and verify their visible history and continuation.
 That final rendered check remains explicit, as do the other open release gates.
+
+## First launch follow-up
+
+The Founder launched the harness after signing in. Its public result reported
+`needs_review`, `migration_started: false`, and a generic subprocess failure.
+The runner exited and the old source migration helper had stopped; no authentic
+migration receipt exists. The original diagnostic does not establish the failed
+remote operation's cause, and it must not be attributed to incorrect user input.
+
+The harness now preserves the failed phase, distinguishes SSH failures from
+remote program exits, and allows only known fixed remote diagnostics into the
+public report. It withholds arbitrary stderr and remote error bodies. A target
+Codex/migration app still open is now a bounded background wait, not an immediate
+exit. Source Codex closure is also awaited before preparation. Other failures
+remain explicit review stops; no protected migration is automatically reset.
+
+The 18 deterministic checks pass on system Python 3.9.6. These changes have not
+yet been exercised by a new account-local run. Updating the Shared program does
+not restart an exited process in another user's account. No password caching,
+privilege bypass, personal-account transfer or credential copying was introduced.
