@@ -1,5 +1,23 @@
 # Search indexing and community discovery — September 5, 2026
 
+## September 6 contributor follow-up
+
+The existing OpenAI Codex discussion received a genuine reply from `d-jiao`,
+thanking the maintainer and offering to contribute. A readback confirmed that
+reply belonged under our existing comment, rather than a separate promotion.
+
+- Opened [a focused help-wanted test issue](https://github.com/jsegeren/codex-migrate/issues/1)
+  for authentic Codex-created chats and projects on two disposable Mac accounts.
+  It explains the alpha status, destination replacement rather than merging,
+  invented fixtures, expected checks, and redacted evidence requirements.
+- [Replied to the volunteer](https://github.com/openai/codex/discussions/14067#discussioncomment-18314228)
+  as `jsegeren`, linking that issue and explicitly saying the CLI is alpha and
+  the signed app is not released. GitHub readback confirmed the published text
+  and author. No duplicate top-level advertisement or unsolicited DM was sent.
+- This is contributor outreach, not completed external testing. The authentic
+  application-level migration gate remains open until evidence is returned and
+  reviewed.
+
 ## Indexed pages: verified in Search Console
 
 Fresh URL inspections in the existing verified `https://migrate.segeren.com/`
@@ -25,8 +43,8 @@ traffic, conversions, permanent indexing, or indexing of every site page.
 ## Relevant communities, not a bulk-promotion list
 
 Existing published X and GitHub discussion replies are recorded in
-[release readiness](release-readiness.md). No additional comment, direct
-message, signup, or account creation occurred in this discovery pass.
+[release readiness](release-readiness.md). The original September 5 discovery
+pass made no posts; the September 6 contributor reply is recorded above.
 
 ### DEV: directly relevant Mac migration article
 
@@ -61,35 +79,28 @@ Draft, not posted:
 
 [r/codex discussion](https://www.reddit.com/r/codex/comments/1tqczl5/made_a_tool_to_sync_codex_chats_and_configs/)
 includes repeated requests for a tool and an August 23 comment about missing
-chats on a new Mac. Search rendering exposed that comment; the live logged-out
-page did not load it in the inspected state. The original post is about
+chats on a new Mac. The exact [Mac-specific comment by rgorbie](https://www.reddit.com/r/codex/comments/1tqczl5/comment/p5ff7x3/)
+was opened and read in the signed-in browser on September 6. It describes
+missing chats on a new Mac and asks whether a tool is available. No existing
+reply from us appeared under it. The original post is about
 Windows/Mac synchronization, so our tool is not a substitute for its full goal.
 
-The Founder requested a separate public founder Reddit account as part of this
-project, explicitly lower priority than release readiness. Account creation and
-profile setup are authorized project work, but remain pending. Do not use,
-identify, or link the Founder's personal Reddit account. Do not imply an
-independent recommendation by saying the maintainer merely found this tool.
+The Founder completed the public account **JoshuaSegeren**, associated with
+their professional email. September 6 browser readback confirmed the signed-in
+profile link `/user/JoshuaSegeren/`. This supersedes the earlier incomplete
+signup using the proposed handle `JoshuaSegerenFounder`; do not restart signup
+or create another account. The personal Reddit account remains outside scope.
+Do not imply an independent recommendation by saying the maintainer merely
+found the tool.
 
-September 5 signup preparation: opened Reddit's normal signed-out registration
-flow with the professional `joshua@segeren.com` email. The requested email
-verification succeeded without exposing or retaining its one-time code.
-`JoshuaSegerenFounder` is entered and Reddit displays that it is available.
-This is **not a reserved handle or a created account**: signup is waiting at
-the password step. No password was generated, saved or submitted, no personal
-Reddit account was opened, and no profile or post was published. The prepared
-Chrome tab was retained for the Founder to set a password in their own password
-manager. Do not restart email verification or create a duplicate account while
-that signup is pending.
-
-Next actions: finish the password/signup and any required human verification
-checkpoints, configure
-a truthful founder profile, and read current subreddit rules. Then load the
-exact Mac-specific comment, check for an existing reply, and respond there at
-most once from the new account with maintainer disclosure. Do not bypass
-CAPTCHA, manufacture account reputation, hijack the original author's showcase,
-send unsolicited DMs, or imply Windows/continuous-sync support. No completed
-account creation or Reddit post has occurred yet.
+Current r/codex rule 9 says **Don't use bots. Read up on BotBouncer**. Its
+linked [policy explanation](https://www.reddit.com/r/BotBouncer/wiki/index/)
+describes moderation of automated/synthetic participation. No automated Reddit
+comment was submitted. Leave participation to the Founder personally or obtain
+moderator clarification; do not tune wording, timing or accounts to evade
+detection. The draft below is for review, not a posting receipt. No profile
+changes, reputation-building activity, unsolicited DMs or top-level promotion
+occurred in this pass.
 
 Draft for that Mac-specific request only, not posted:
 
