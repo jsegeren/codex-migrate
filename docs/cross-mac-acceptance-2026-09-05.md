@@ -304,3 +304,15 @@ requires real Codex sign-in and supported-UI fixtures in the disposable accounts
 Do not copy personal authentication files, relax permissions, rerun the already
 completed home-alias command, or replace the active personal workspace to
 work around that checkpoint.
+
+### Later account-access recheck
+
+The source-account packaged helper PID 22523 was still running as UID 502 at
+the later September 5 check. The visible setup page on port 60809 belongs to a
+different helper, PID 25067 running as the personal account; it must not be
+mistaken for disposable-account execution authority. A fresh non-interactive
+`sudo -n -u codexmigratesource /usr/bin/true` still required an administrator
+password. No private account files were read and no migration was started.
+Renewed account execution approval and supported-UI Codex sign-in/fixtures
+remain required for authentic application acceptance. Existing synthetic
+receipts do not close that gate.

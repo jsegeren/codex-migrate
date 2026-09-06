@@ -43,6 +43,23 @@ purchase storage/webhook setup, signed-artifact delivery, and authentic
 cross-Mac acceptance remain release gates. The support-eligibility question
 below remains open; the dashboard's category acceptance does not resolve it.
 
+### Human support confirmation requested
+
+At the September 5 follow-up, Stripe's dashboard assistant escalated to its
+email support form. The form was submitted with the actual product/price,
+self-service delivery and migration behavior, optional incidental best-effort
+email support, and both personal/business buyer use cases. No attachments,
+credentials, buyer records or workspace data were sent. The request expressly
+asks for guidance without settings changes or opening sales.
+
+Stripe returned **Email received**. A fresh Support center load then showed
+one **Open** case, `sco_VCxthhKcu6lsRl`, titled **Your recent question for Stripe
+about Verification**. This generic routing title is not the requested outcome;
+the submitted body specifically asks for Managed Payments eligibility and
+mixed-use software tax-code guidance. Follow this case rather than submitting
+duplicates. The UI estimated 24 hours for email support, not a guaranteed SLA.
+No human decision has been received, and this is not an eligibility ruling.
+
 ## Historical live seller inspection — September 5 evening
 
 A read-only check of the existing Segeren Studio live Stripe dashboard found:
