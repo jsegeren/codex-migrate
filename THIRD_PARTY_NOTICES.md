@@ -19,6 +19,13 @@ represent endorsement.
 
 Product: https://openai.com/codex/
 
+`site/og-white-v1.png` is the Founder-selected AI-generated social card. It
+includes a generated depiction of the Codex product icon, labelled “For Codex,”
+separate from Codex Migrate's name and accompanied by a non-affiliation notice.
+It is not an original, pixel-identical copy of the product icon. The depiction
+does not make OpenAI's underlying artwork or trademarks MIT-licensed, and the
+card is not this project's app icon or favicon.
+
 Brand guidelines and usage terms: https://openai.com/brand/
 
 This notice does not grant third-party artwork rights beyond those provided by
