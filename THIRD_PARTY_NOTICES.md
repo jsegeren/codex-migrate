@@ -19,7 +19,8 @@ represent endorsement.
 
 Product: https://openai.com/codex/
 
-`site/og-white-v1.png` is the Founder-selected AI-generated social card. It
+`site/og-dark-v1.png` is the Founder-selected AI-generated social card;
+`site/og-white-v1.png` is the earlier light alternative. Each
 includes a generated depiction of the Codex product icon, labelled “For Codex,”
 separate from Codex Migrate's name and accompanied by a non-affiliation notice.
 It is not an original, pixel-identical copy of the product icon. The depiction
