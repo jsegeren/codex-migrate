@@ -3,6 +3,16 @@
 The downloadable paid app is **not released**. Publishing source and the
 informational website does not open checkout or certify a customer download.
 
+September 6 live-integration provisioning: the dedicated restricted Stripe key,
+live catalog identifiers and webhook verification secret are saved in Vercel
+Production, with checkout explicitly off. The new live webhook is **Disabled**;
+private Blob storage is connected to Production and Development. These are
+saved configuration changes, not a deployed or accepted payment flow. Production
+purchase schema/connection, recovery-link secret, live authorization and delivery
+checks, and the signed accepted artifact remain unfinished. Fresh focused
+commerce tests passed 84 cases with one skipped; the public availability response
+remains false. See the [provisioning receipt](commerce-implementation.md#live-integration-provisioning--september-6).
+
 September 5 signing-preparation follow-up: Apple submission status receipts now
 use an owner-only temporary file, flush/fsync and same-directory atomic replace.
 A failed serialization, sync or replacement preserves the previously saved

@@ -1,8 +1,61 @@
 # Purchase and delivery implementation — September 5, 2026
 
 Status: implementation and private-storage transport tested; **not a live checkout release**.
-The committed release catalog contains only a harmless sandbox delivery fixture; no commerce environment variables
-or webhooks have been installed in Production. No app archive was published.
+The committed release catalog contains only a harmless sandbox delivery fixture.
+Live credentials and catalog settings are now saved in Vercel Production, but
+the remaining runtime configuration and signed release are incomplete. The live
+webhook is disabled and checkout remains closed. No app archive was published.
+
+## Live integration provisioning — September 6
+
+Verified at `2026-09-06T08:30:05Z`. This supersedes older observations below
+that Production had no commerce variables or webhook.
+
+- The dedicated **Codex Migrate production checkout** restricted key was
+  rotated after its first one-time display was lost. Immediate expiration was
+  selected for the unused predecessor. The replacement was saved directly as
+  sensitive `COMMERCE_STRIPE_KEY` in Vercel Production without printing it.
+  Browser clipboard capture was matched privately to the key inventory before
+  saving; that clipboard value and the temporary credential binding were cleared.
+  This proves storage, not a successful live API authorization check.
+- Saved Production settings bind the existing Stripe account, approved live
+  product and one-time price, `COMMERCE_MODE=live`, and private store
+  `Ksz4f7gOIH2qRu9I`. `COMMERCE_CHECKOUT_OPEN=no` is explicit. Preview's sandbox
+  configuration was not changed.
+- Created destination `we_1UCbMoJfbWpcJIZbbNI7EmYl`, named
+  **codex-migrate-live**, at `https://migrate.segeren.com/api/stripe-webhook`.
+  It subscribes only to this account's `checkout.session.completed` and
+  `checkout.session.async_payment_succeeded` snapshot events. The dashboard
+  API version is `2025-06-30.basil`; the client remains pinned to
+  `2025-03-31.basil`. The receiver uses the event's session ID and fresh Stripe
+  reads for authority; the live-version combination still needs acceptance.
+  Stripe initially created it Active; it was then explicitly disabled, and
+  readback showed **Disabled**, with zero deliveries. Keep it disabled until
+  the complete receiver is deployed and ready.
+- Its signing secret was saved directly as sensitive
+  `COMMERCE_WEBHOOK_SECRET` in Production. The separate Preview value remains.
+  Vercel confirmed that a new deployment is required for these settings.
+  No explicit redeploy or live payment was initiated during this provisioning.
+- The existing private **codex-migrate-downloads** store connection now includes
+  **Production, Development**, preserving the `BLOB` prefix and read-write-token
+  authentication. This is not an OIDC upgrade. The installed SDK can use
+  `BLOB_READ_WRITE_TOKEN` when no explicit commerce token is supplied; hosted
+  production signing/download access has not yet been verified. Only sandbox
+  objects were visible; no signed app was uploaded.
+- Read-only Neon checks explicitly targeted project `codex-migrate-commerce`:
+  main has no application tables, and `commerce-sandbox` retains its sandbox
+  environment marker. No database migration or customer-data mutation ran.
+- Fresh focused commerce tests: 85 total, 84 passed, one skipped, zero failed.
+  These are local tests, not live payment or signed-app acceptance. The canonical
+  `/api/availability` response remains `{"available":false}`.
+
+Next: apply the already sandbox-tested schema to the isolated live database,
+save its production connection and a durable independent recovery-link secret,
+verify live restricted-key permissions and private storage access, then deploy
+and exercise the complete receiver against the approved signed release. Apple
+activation/signing, authentic cross-Mac acceptance and the support/category
+question remain separate gates. Do not enable checkout or webhook delivery just
+because credentials are present.
 
 ## Live catalog and onboarding — September 5 follow-up
 
