@@ -78,6 +78,30 @@ class ComponentExporter:
         checks.extend("test ! -L %s" % shlex.quote(str(path)) for path in (home, *home.parents))
         self.transport.run_remote("set -eu\n" + "\n".join(checks) + "\n"
                                   + recovery_preflight_script(self.config.target_home))
+        self._require_destination_projects(self.discover())
+
+    def _require_destination_projects(self, exports):
+        """Skills repairs do not create projects; reject missing/linked parents early."""
+        projects = sorted({item.destination.split("/.agents/skills/", 1)[0]
+                           for item in exports if item.scope == "workspace"})
+        if not projects:
+            return
+        checks = []
+        home = Path(self.config.target_home)
+        for project in map(Path, projects):
+            relative = project.relative_to(home)
+            current = home
+            for part in relative.parts:
+                current /= part
+                quoted = shlex.quote(str(current))
+                checks.extend(["test -d " + quoted, "test ! -L " + quoted])
+        message = ("The destination project folder is missing, linked, or inaccessible. "
+                   "Workspace-skills repairs update existing projects only. "
+                   "Migrate or prepare the matching project folder on the new Mac, "
+                   "then inspect again. No project folder was created.")
+        self.transport.run_remote("set -eu\nif ! ( " + " && ".join(checks)
+                                  + " ); then printf '%s\\n' " + shlex.quote(message)
+                                  + " >&2; exit 74; fi\n")
 
     def run(self) -> Dict[str, object]:
         exports = self.discover()

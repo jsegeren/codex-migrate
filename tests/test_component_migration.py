@@ -171,6 +171,36 @@ class ComponentMigrationTests(unittest.TestCase):
         self.assertEqual((self.fixture.target / "Git/project/.agents/skills/project-tool/SKILL.md").read_text(), "project skill")
         self.fixture.assert_destination_original()
 
+    def test_missing_or_linked_destination_project_blocks_before_staging(self):
+        from dataclasses import replace
+        project = self.fixture.source / "Git/project with spaces"
+        skill = project / ".agents/skills/project-tool"
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_text("project skill")
+        config = replace(self.fixture.config, workspace_roots=[str(project)])
+        state = StateStore(str(self.fixture.source / "missing-project-test-state"))
+        self.engine = ComponentMigrationEngine(config, state, ["workspace-skills"])
+        self.engine.transport = self.transport
+        destination = self.fixture.target / "Git/project with spaces"
+        destination.parent.mkdir(parents=True)
+        for linked in (False, True):
+            with self.subTest(linked=linked):
+                if linked:
+                    other = self.fixture.target / "other-project"
+                    other.mkdir()
+                    destination.symlink_to(other)
+                with self.assertRaisesRegex(RuntimeError, "Workspace-skills repairs update existing projects only"):
+                    self.engine._run_preseed()
+                self.assertEqual(self.copied_sources, [])
+                self.assertFalse(Path(self.engine.config.target_staging).exists())
+                self.assertIsNone(self.engine.state.read().get("pending_backup"))
+                self.fixture.assert_destination_original()
+                if not linked:
+                    self.assertFalse(destination.exists())
+                else:
+                    self.assertTrue(destination.is_symlink())
+                    self.assertEqual(list(other.iterdir()), [])
+
     def check_inflight_stop_and_resume(self, action, expected_status):
         (self.fixture.skill / "early-fixture.bin").write_bytes(b"y" * (64 * 1024))
         (self.fixture.skill / "large-fixture.bin").write_bytes(b"x" * (2 * 1024**2))

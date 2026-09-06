@@ -79,6 +79,29 @@ report is `CodexMigrate-Synthetic-4aw_ahb7/result.json`; its unused
 failed verification. The CLI's real receipt fields were `applied` and
 `backup_verified`.
 
+## Browser skills controls and newly discovered preflight issue
+
+A separate 128 MiB synthetic workspace skill was transferred through the
+packaged setup/dashboard HTTP controls. Pause interrupted a live rsync process
+and retained 3,425,962 bytes. Stop safely preserved that partial tree. After
+helper restart, mode/scope and the staging owner ID were retained; Resume was
+rejected while changes were disabled. Re-enabling changes and Resume reused the
+same staging. Finalize without its separate confirmation was also rejected.
+These are real packaged control-API checks, not rendered browser/accessibility
+acceptance. Local reports: `CodexMigrate-Synthetic-3zazb77m/result.json` and
+`CodexMigrate-Synthetic-53f6tbt_/result.json`.
+
+Confirmed finalization then failed before backup/replacement because this new
+test project did not yet exist on the receiving Mac. Recovery inspection found
+no pending transaction. The old package exposed only `remote command failed`
+and discovered the requirement after transferring the whole skill. This is a
+real UX defect, not a successful browser-repair result. The source fix moves
+the existing-project requirement into shared CLI/browser preflight, rejects
+linked or missing parent paths without creating folders, and explains that a
+workspace-skills repair updates an existing project rather than migrating it.
+A regression covers both missing and linked destination project roots before
+any staging or backup. A fresh packaged retry is required for this source fix.
+
 ## Automated checks at this checkpoint
 
 `PYTHONPATH=src:tests python3 -m unittest test_recovery test_restore

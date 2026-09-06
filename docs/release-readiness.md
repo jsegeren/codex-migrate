@@ -155,6 +155,18 @@ tree, unrelated destination skill, and Codex tree excluding identity files were
 unchanged. This is packaged selective-CLI evidence, not the separate browser
 skills-only interruption/UI acceptance.
 
+A subsequent 128 MiB workspace-skill run exercised the packaged browser control
+API: live-copy Pause retained partial bytes; Stop safely and helper restart
+retained staging/scope; Resume was denied with changes disabled; re-enabled
+Resume reused staging; and Finalize required separate confirmation. Finalization
+then exposed a real preflight defect: the destination project was absent, but
+the old package detected that only after staging and showed a generic error.
+No replacement occurred and no pending transaction was found. Shared preflight
+now rejects missing/linked destination project paths early with actionable
+guidance and no folder creation. Regression tests cover missing and linked
+projects; the fix requires a new package and cross-Mac retry. The previous
+successful personal-skills CLI result does not cover this workspace case.
+
 Do not create another Apple
 purchase, weaken SSH host-key checking, or enable live checkout as a workaround.
 Apple's authenticated upload page is open and ready for one government-issued
