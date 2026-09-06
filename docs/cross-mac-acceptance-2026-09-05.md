@@ -277,9 +277,30 @@ and `CodexMigrate-Synthetic-4sqzb7jk/result.json` (recovery/restart checks).
 Account-local state retains the full private transaction evidence. These local
 reports are not shipped assets and contain no credentials or content digests.
 
-Remaining release gates include different-home compatibility and Git usability,
-real Codex-created project/loose/archived conversation reopening and continuation,
+Different-home compatibility and both synthetic Git locations passed the
+post-reboot check recorded above; do not repeat their setup as if still missing.
+Remaining release gates include authentic project usability and development
+commands, real Codex-created project/loose/archived conversation reopening and continuation,
 packaged browser selective-repair and transfer interruption acceptance, native
 permissions/accessibility, Apple activation and Developer ID signing/notarization,
 and delivery of the actual approved artifact through the purchase flow. Checkout
 remains closed. Consult the main release-readiness gate map for the complete scope.
+
+## September 5, 9 PM access recheck
+
+The receiving Mac again accepted the existing personal-account SSH connection
+under strict checking against the independently pinned host key. Its disposable
+`codexmigratetarget` account remained registered; no migration helper appeared
+in the bounded remote process listing. The old Mac's existing source-account
+packaged helper (PID 22523, candidate `b9fb1a04`) was still a live process.
+The prior migration-driving process was not running, and a non-interactive
+attempt to run `/usr/bin/true` as `codexmigratesource` required an administrator
+password. No runner, migration, installation or recovery was restarted.
+
+These are reachability/process/access checks only. The previous synthetic
+receipt remains the relevant completed evidence. Further account-private
+execution requires renewed authorization; authentic chat acceptance separately
+requires real Codex sign-in and supported-UI fixtures in the disposable accounts.
+Do not copy personal authentication files, relax permissions, rerun the already
+completed home-alias command, or replace the active personal workspace to
+work around that checkpoint.
