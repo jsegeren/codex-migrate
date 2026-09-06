@@ -267,6 +267,15 @@ VoiceOver or signed-download acceptance gate is closed by these results.
 
 ## Candidate checks completed on the development Mac
 
+The latest unsigned engineering package is now built from clean source
+`e6abe132561b6ce2fca96dc7d10f62ae0d5f820a`, including the recovery next-action
+fix. Both its initial executable and a fresh extraction of the exact ZIP passed
+eight desktop checks, with one case-sensitive-filesystem skip. An added actual
+HTTP-page assertion rejects the older package that lacks the fix. The temporary
+build worktree was retired, the artifact retained, and the existing test-account
+helper left untouched. See the [exact artifact and evidence](packaged-recovery-candidate-2026-09-05.md).
+This does not close signing, native first-launch or real cross-Mac acceptance.
+
 - Second-Mac package smoke: the previous unsigned candidate below was copied as
   its ZIP to a separate Apple Silicon Mac under `/Users/Shared`. The receiving
   Mac independently matched SHA-256

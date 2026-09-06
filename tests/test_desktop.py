@@ -244,6 +244,14 @@ class DesktopTests(unittest.TestCase):
                     html = response.read().decode()
                     self.assertIn("Backup required before replacement", html)
                     self.assertIn('id="restore_recovery"', html)
+                    # Exercise the bundled page, not only the source template:
+                    # old packages must not silently miss the recovery fix.
+                    self.assertEqual(html.count('id="recovery-next"'), 1)
+                    self.assertLess(html.index('id="message"'), html.index('id="recovery-next"'))
+                    self.assertLess(html.index('id="recovery-next"'), html.index('class="grid"'))
+                    self.assertIn('href="#recovery-help"', html)
+                    self.assertIn('renderRecoveryNext(s);', html)
+                    self.assertIn("$('recovery-next').addEventListener('click'", html)
                     self.assertIn("Current entries will be kept separately, not merged", html)
                     self.assertIn("There is no skip-backup option", html)
                     self.assertIn("frame-ancestors 'none'", response.headers["Content-Security-Policy"])
