@@ -3,6 +3,18 @@
 The downloadable paid app is **not released**. Publishing source and the
 informational website does not open checkout or certify a customer download.
 
+September 5 evening acceptance: a new simulated $50 Managed Payments purchase
+was independently confirmed paid in Stripe test mode. Its actual branded
+delivery email reached the maintainer's Gmail Inbox, with correct From/Reply-To,
+authenticated `segeren.com` headers and TLS. The received recovery link verified
+the purchase; ordinary native Chrome saved the 451-byte harmless ZIP fixture,
+whose filename, catalog SHA-256 and sole README entry matched. Browser-controlled
+tabs still produced an attachment-navigation block, while a native-only tab
+succeeded without changing security settings. See the bounded evidence and
+test-harness caveat in [commerce implementation](commerce-implementation.md#branded-purchase-email-and-recovery-acceptance--september-5-evening).
+This closes that specific mailbox/recovery check, not signed-app delivery,
+broader deliverability, authentic Codex migration, or the paid release.
+
 September 5 commerce follow-up: guarded purchase verification, persistent
 delivery claims, recovery links and the download page now have automated and
 real sandbox-database coverage. Expanded sandbox read access is verified. A
@@ -248,9 +260,14 @@ is published. A single, maintainer-disclosed
 is also published as `jsegeren`. It explicitly distinguishes one-time Mac
 migration from continuous sync, identifies the CLI as alpha, excludes Windows,
 and recommends retaining an independent backup and the old Mac. No community
-endorsement or partnership is implied. Three new social-image concepts remain
-preview-only pending the maintainer's selection; no replacement image has been
-deployed or posted. A fresh local signing-identity check found zero valid
+endorsement or partnership is implied. The maintainer subsequently selected
+the dark B social image. Commit `9b18908` publishes it through the homepage's
+Open Graph and Twitter large-image metadata. Production deployment
+`dpl_21Wo4zdk6o5JPkShCfmcLtAs6cef` serves the 1731×909 PNG at
+`https://migrate.segeren.com/og-dark-v1.png`; HTTP checks using Twitterbot's
+user agent verified metadata, image availability and matching bytes. This is
+not proof that X refreshed the original post's cached card. No image attachment
+or replacement post was successfully published. A fresh local signing-identity check found zero valid
 identities; Apple activation/signing is still unverified.
 
 The same follow-up reran the complete Python suite using the CI import path:

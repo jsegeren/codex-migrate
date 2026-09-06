@@ -312,9 +312,51 @@ seconds. The message landed in the Segeren Inbox, where Gmail's expanded
 details showed From and Reply-To `joshua@segeren.com`, mailed-by
 `em5636.segeren.com`, signed-by `segeren.com`, and TLS. This is direct proof of
 the deployed branded sender, domain authentication, Reply-To, and inbox
-placement for launch intake. Purchase-delivery inbox placement remains a
-separate open acceptance item because the purchase message and delivery path
-are different.
+placement for launch intake. The separate purchase-delivery path was verified
+later that evening as recorded below; inbox placement for one maintainer mailbox
+is not a guarantee for every customer's mail provider.
+
+### Branded purchase email and recovery acceptance — September 5 evening
+
+One existing hosted sandbox checkout was completed using Stripe's synthetic
+card, the approved maintainer recipient, and synthetic billing data. Independent
+Stripe readback of session
+`cs_test_a1AFXk8U1cgH4eOj26SoR6AhQMBbtSqm2WjHlidHwvfXpBbLJVQf6DT21x`
+confirmed `livemode: false`, `status: complete`, `payment_status: paid`,
+`amount_total: 5000`, `currency: usd`, Managed Payments enabled, and the exact
+approved recipient. No real payment or app delivery occurred.
+
+The actual message, dated September 5 at 8:47 PM Pacific, appeared in Gmail's
+Inbox. Expanded headers showed From `Codex Migrate <joshua@segeren.com>`,
+Reply-To `Joshua Segeren <joshua@segeren.com>`, mailed-by
+`em5636.segeren.com`, signed-by `segeren.com`, and TLS. No Spam label, mailbox
+filter, allowlist, or browser security setting was changed to obtain this result.
+The earlier two messages remained in their separate Spam conversation.
+
+Opening the exact link from the received message on guarded Preview
+`dpl_Ny7QyfH8W2x5vTXLB6Z5weC4cQR6` reverified the purchase and exposed the
+real Download for Mac link. In a normal native Chrome tab, activation opened
+the Save dialog and Chrome reported the download complete. Independent local
+checks of the saved `Codex-Migrate-SANDBOX-DELIVERY-TEST.zip` found 451 bytes,
+the catalog SHA-256
+`1a9d8e5775804a42e03655c7653d4d5315fca718445a2aecff144f00faf53343`,
+and only the expected `README.txt` fixture. The temporary download was removed
+after verification. The email and sandbox payment record were retained.
+
+Test-harness caveat: the browser-controlled tab reached
+`ERR_BLOCKED_BY_CLIENT` on attachment navigation, even with native activation.
+The same emailed link in a newly opened native-only Chrome tab succeeded.
+This isolates a test-context difference, not the exact internal Chrome cause.
+Do not disable security protections or treat a controlled-tab failure as either
+proof of a product defect or proof of success. Verify an actual saved file in
+the ordinary buyer browser flow. Likewise, one inspected email field exposed
+an empty automation value while the screenshot showed duplicated text; visual
+verification and replacement corrected the test input without a product change.
+
+This closes the branded-sender purchase-email Inbox and email-recovery fixture
+download checks for this mailbox and Chrome session. It does not establish
+broader deliverability, signed-app delivery/launch, live payment readiness, or
+complete migration acceptance. Production checkout remains closed.
 
 ### Firewall configuration
 
