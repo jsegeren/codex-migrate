@@ -4,6 +4,37 @@ Status: implementation and private-storage transport tested; **not a live checko
 The committed release catalog contains only a harmless sandbox delivery fixture; no commerce environment variables
 or webhooks have been installed in Production. No app archive was published.
 
+## Live seller readiness — September 5 evening
+
+A read-only check of the existing Segeren Studio live Stripe dashboard found:
+
+- The setup guide marks email and business verification complete. This is not
+  proof that Managed Payments is activated or that every live capability works.
+- Managed Payments still offers **Continue setup**. Its saved wizard is at
+  **Create product**, with product review, checkout selection and finish setup
+  not started. The page displays a 3.5% add-on transaction fee.
+- The live catalog's unfiltered **All** view says **Add your first product**.
+  The successful sandbox product and price therefore cannot be reused as live
+  catalog identifiers. Do not infer catalog state from the general setup guide's
+  historical completed-product checkbox.
+- The product form defaults to recurring/monthly. The approved product is a
+  one-off $50 USD download; explicitly select one-off when preparing it.
+
+No product was saved, terms accepted, payment initiated, key revealed, or
+Production configuration changed during this check. The empty product form was
+cancelled. No You.one payment configuration was changed.
+
+Before live activation, finish Stripe's account/product eligibility review and
+review the actual terms. [Stripe's eligibility documentation](https://docs.stripe.com/payments/managed-payments/eligibility)
+supports downloadable software but excludes professional services and products
+requiring human intervention. Our intended purchase is a self-service software
+download with best-effort help, not a performed-for-you migration service.
+Confirm how Stripe treats that included support rather than assuming the
+sandbox proves eligibility or removing the support promise to pass setup.
+Choose the appropriate downloadable-software tax category from the actual
+product/use classification, not a generic SaaS label. Complete the remaining
+release gates before enabling any buyer checkout.
+
 ## Boundaries
 
 - The existing Stripe account remains the payment provider. No You.one
