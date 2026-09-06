@@ -1,0 +1,575 @@
+"""Private two-Mac acceptance runner. Never installed in the customer app.
+
+Run only as codexmigratesource. The existing pinned test-account connection is
+reused; no account password or Codex credential is read, copied or logged.
+The recipient receives this same fixed program, not an arbitrary-command queue.
+"""
+import argparse
+import base64
+import contextlib
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import pwd
+import queue
+import re
+import shlex
+import signal
+import stat
+import subprocess
+import tempfile
+import threading
+import time
+import urllib.request
+import uuid
+
+SOURCE = Path('/Users/codexmigratesource')
+TARGET = Path('/Users/codexmigratetarget')
+SHARED = Path('/Users/Shared/CodexMigrate-Authentic-20260906')
+PUBLIC = Path('/Users/Shared/CodexMigrate-Authentic-Status-20260906')
+STATE_NAME = '.codex-migrate-authentic-test-20260906'
+WORKSPACE_NAME = 'Authentic-Migration-Test'
+HOST = 'SHA256:uWR56FSP0RUbcQX8a+t/rsClg4/oYC73zSoFz4Q8r5c'
+ENGINE = SHARED / 'Codex Migrate.app/Contents/Resources/engine/codex-migrate-engine'
+
+
+class SafeError(RuntimeError):
+    """Only fixed operator-facing diagnostics; never a subprocess error body."""
+
+
+def require(ok, message):
+    if not ok:
+        raise SafeError(message)
+
+
+def account(role):
+    expected = SOURCE if role == 'source' else TARGET
+    user = pwd.getpwuid(os.getuid())
+    require(os.getuid() == os.geteuid() != 0 and user.pw_name == expected.name
+            and user.pw_dir == str(expected), 'Run in the disposable ' + role + ' account')
+    require(not expected.is_symlink() and expected.stat().st_uid == os.getuid(), 'Unsafe home')
+    return expected
+
+
+def checked(path, directory=False, private=True):
+    info = path.lstat()
+    require((stat.S_ISDIR(info.st_mode) if directory else stat.S_ISREG(info.st_mode))
+            and info.st_uid == os.getuid()
+            and not info.st_mode & (0o077 if private else 0o022), 'Unsafe test path')
+    return path
+
+
+def root_for(home):
+    root = home / STATE_NAME
+    root.mkdir(mode=0o700, exist_ok=True)
+    return checked(root, directory=True)
+
+
+def save(path, data, public=False):
+    # Atomic replacement in an already checked owner-controlled directory.
+    descriptor, temporary = tempfile.mkstemp(prefix='.receipt-', dir=path.parent)
+    try:
+        with os.fdopen(descriptor, 'w') as stream:
+            json.dump(data, stream, indent=2)
+            stream.write('\n')
+            stream.flush()
+            os.fsync(stream.fileno())
+            os.fchmod(stream.fileno(), 0o644 if public else 0o600)
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def read(path):
+    return json.loads(checked(path).read_text())
+
+
+def run(command, timeout=30, **kwargs):
+    result = subprocess.run(command, capture_output=True, timeout=timeout, **kwargs)
+    require(result.returncode == 0, 'Subprocess failed; raw output withheld')
+    return result.stdout
+
+
+def processes():
+    output = run(['/bin/ps', '-U', str(os.getuid()), '-o', 'pid=,comm=']).decode()
+    return [(int(parts[0]), parts[1]) for line in output.splitlines()
+            if len(parts := line.strip().split(None, 1)) == 2]
+
+
+def codex_closed():
+    names = {'Codex', 'ChatGPT', 'codex', 'codex-cli', 'codex_chronicle'}
+    return not any(Path(command).name in names for _, command in processes())
+
+
+def codex_binary():
+    for app in ('/Applications/ChatGPT.app', '/Applications/Codex.app'):
+        path = Path(app) / 'Contents/Resources/codex'
+        if path.is_file() and os.access(path, os.X_OK):
+            return str(path)
+    raise SafeError('Codex application is not installed in Applications')
+
+
+def prepare(home, role):
+    """Preserve earlier disposable state by rename, once; never inspect auth."""
+    root = root_for(home)
+    journal = root / 'preparation.json'
+    if journal.exists():
+        record = read(journal)
+        require(record == {'role': role, 'phase': 'prepared'}, 'Preparation needs review')
+        return
+    require(codex_closed(), 'Quit Codex in the disposable ' + role + ' account first')
+    require(not (home / '.codex-migrate-transaction.json').exists(), 'Pending recovery needs review')
+    marker_name = ('.codex-migrate-acceptance-fixture.json' if role == 'source'
+                   else '.codex-migrate-destination-fixture.json')
+    marker = json.loads(checked(home / marker_name, private=False).read_text())
+    require(marker.get('synthetic') is True, 'Disposable fixture marker missing')
+    current, previous = home / '.codex', root / 'previous-codex'
+    # A partial preparation never renames a newly initialized .codex again.
+    if previous.exists():
+        checked(previous, directory=True)
+    else:
+        checked(current, directory=True)
+        current.rename(previous)
+    current.mkdir(mode=0o700, exist_ok=True)
+    checked(current, directory=True)
+    save(journal, {'role': role, 'phase': 'prepared'})
+
+
+class AppServer:
+    def __init__(self, cwd):
+        # No inherited API keys, provider configuration or personal credentials.
+        env = {'PATH': '/usr/bin:/bin:/usr/sbin:/sbin', 'LANG': 'en_US.UTF-8',
+               'TMPDIR': tempfile.gettempdir()}
+        self.process = subprocess.Popen([codex_binary(), 'app-server', '--stdio'],
+                                        stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                        stderr=subprocess.DEVNULL, cwd=cwd, env=env,
+                                        start_new_session=True)
+        self.events = queue.Queue(maxsize=2048)
+        self.completed = []
+        self.serial = 0
+        threading.Thread(target=self._read, daemon=True).start()
+        try:
+            self.call('initialize', {'clientInfo': {'name': 'codex_migrate_acceptance',
+                      'version': '1.0'}, 'capabilities': {'experimentalApi': False}})
+            self.send({'method': 'initialized'})
+        except Exception:
+            self.close()
+            raise
+
+    def _read(self):
+        try:
+            while True:
+                line = self.process.stdout.readline(2 * 1024 * 1024)
+                if not line:
+                    break
+                require(len(line) < 2 * 1024 * 1024, 'Oversized protocol message')
+                self.events.put(json.loads(line), timeout=1)
+        except Exception:
+            pass
+        finally:
+            with contextlib.suppress(queue.Full):
+                self.events.put_nowait(None)
+
+    def send(self, message):
+        self.process.stdin.write((json.dumps(message) + '\n').encode())
+        self.process.stdin.flush()
+
+    def receive(self, deadline):
+        try:
+            event = self.events.get(timeout=max(0.01, deadline - time.monotonic()))
+        except queue.Empty:
+            raise SafeError('Codex protocol timed out') from None
+        require(event is not None, 'Codex process ended unexpectedly')
+        if 'method' in event and 'id' in event:
+            self.send({'id': event['id'], 'error': {'code': -32601,
+                       'message': 'Acceptance fixture does not approve tools or permissions'}})
+            raise SafeError('Unexpected tool/permission request')
+        return event
+
+    def call(self, method, params):
+        self.serial += 1
+        identifier = self.serial
+        self.send({'id': identifier, 'method': method, 'params': params})
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline:
+            event = self.receive(deadline)
+            if event.get('id') == identifier:
+                require('error' not in event, 'Codex rejected ' + method)
+                return event['result']
+            if event.get('method') == 'turn/completed':
+                self.completed.append(event)
+        raise SafeError('Codex request timed out')
+
+    def signed_in(self):
+        value = self.call('account/read', {'refreshToken': False}).get('account')
+        return isinstance(value, dict) and value.get('type') == 'chatgpt'
+
+    def turn(self, identifier, prompt):
+        response = self.call('turn/start', {'threadId': identifier,
+            'input': [{'type': 'text', 'text': prompt, 'text_elements': []}]})
+        turn_id = response['turn']['id']
+        deadline = time.monotonic() + 180
+        while time.monotonic() < deadline:
+            event = self.completed.pop(0) if self.completed else self.receive(deadline)
+            if event.get('method') == 'turn/completed':
+                params = event['params']
+                if params.get('threadId') == identifier and params['turn']['id'] == turn_id:
+                    require(params['turn']['status'] == 'completed', 'Codex turn failed')
+                    return
+        raise SafeError('Codex test turn timed out')
+
+    def close(self):
+        if self.process.poll() is None:
+            os.killpg(self.process.pid, signal.SIGTERM)
+            try:
+                self.process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                os.killpg(self.process.pid, signal.SIGKILL)
+                self.process.wait(timeout=5)
+        self.process.stdin.close()
+        self.process.stdout.close()
+
+
+@contextlib.contextmanager
+def server(home):
+    instance = None
+    try:
+        instance = AppServer(home)
+        yield instance
+    finally:
+        if instance:
+            instance.close()
+
+
+def login_ready(home):
+    if not codex_closed():
+        return False
+    # Presence only. Codex owns and validates the credential contents.
+    if not all((home / '.codex' / name).is_file() for name in ('auth.json', 'installation_id')):
+        return False
+    with server(home) as app:
+        return app.signed_in()
+
+
+def fixture_threads(home):
+    root = root_for(home)
+    manifest = root / 'threads.json'
+    records = read(manifest) if manifest.exists() else []
+    require(isinstance(records, list) and len(records) <= 3, 'Invalid fixture receipt')
+    workspace = home / WORKSPACE_NAME
+    if not workspace.exists():
+        workspace.mkdir(mode=0o700)
+        run(['/usr/bin/git', 'init', '-q', str(workspace)])
+        (workspace / 'README.md').write_text('Disposable Codex migration acceptance project.\n')
+        run(['/usr/bin/git', '-C', str(workspace), 'add', 'README.md'])
+        run(['/usr/bin/git', '-C', str(workspace), '-c', 'user.name=Migration Test',
+             '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'Fixture baseline'])
+        run(['/usr/bin/git', '-C', str(workspace), 'switch', '-c', 'acceptance/unfinished'])
+        (workspace / 'README.md').write_text('Disposable project with an uncommitted edit.\n')
+        (workspace / 'unfinished.txt').write_text('Preserve this untracked test work.\n')
+    checked(workspace, directory=True)
+    with server(home) as app:
+        require(app.signed_in(), 'Sign into Codex with ChatGPT in the source test account')
+        for index, kind in enumerate(('project', 'loose', 'archived')):
+            if index < len(records):
+                require(records[index].get('complete') is True, 'Partial conversation needs review')
+                continue
+            marker = 'migration-fixture-' + uuid.uuid4().hex
+            response = app.call('thread/start', {'cwd': str(workspace if kind == 'project' else home),
+                'approvalPolicy': 'never', 'sandbox': 'read-only', 'ephemeral': False,
+                'baseInstructions': 'This is a tiny migration test. Reply without using any tools.'})
+            identifier = response['thread']['id']
+            record = {'id': identifier, 'kind': kind, 'marker': marker, 'complete': False}
+            records.append(record)
+            save(manifest, records)
+            app.call('thread/name/set', {'threadId': identifier, 'name': 'Migration test: ' + kind})
+            app.turn(identifier, 'Remember this test marker: ' + marker + '. Reply only with that marker.')
+            if kind == 'archived':
+                app.call('thread/archive', {'threadId': identifier})
+            record['complete'] = True
+            save(manifest, records)
+    return records
+
+
+def prove_threads(home, records):
+    require(isinstance(records, list) and len(records) == 3, 'Expected three test conversations')
+    with server(home) as app:
+        require(app.signed_in(), 'Destination must retain its ChatGPT sign-in')
+        for item in records:
+            require(re.fullmatch(r'[a-zA-Z0-9_-]{1,100}', item['id']) is not None,
+                    'Invalid test thread ID')
+            require(re.fullmatch(r'migration-fixture-[a-f0-9]{32}', item['marker']) is not None,
+                    'Invalid test marker')
+            history = app.call('thread/read', {'threadId': item['id'], 'includeTurns': True})
+            require(item['marker'] in json.dumps(history), 'Original conversation content missing')
+            before_turns = len(history['thread']['turns'])
+            if item['kind'] == 'archived':
+                app.call('thread/unarchive', {'threadId': item['id']})
+            app.call('thread/resume', {'threadId': item['id'],
+                                      'approvalPolicy': 'never', 'sandbox': 'read-only'})
+            app.turn(item['id'], 'What test marker did I ask you to remember? Reply only with it. No tools.')
+            updated = app.call('thread/read', {'threadId': item['id'], 'includeTurns': True})
+            turns = updated['thread']['turns']
+            require(len(turns) > before_turns and any(
+                value.get('type') == 'agentMessage' and item['marker'] in value.get('text', '')
+                for value in turns[-1].get('items', [])), 'Conversation continuation failed')
+            if item['kind'] == 'archived':
+                app.call('thread/archive', {'threadId': item['id']})
+    return {'app_server_reopened_and_continued': 3, 'desktop_visual_check': 'not_yet_performed'}
+
+
+def connection():
+    folder = SOURCE / '.local/state/codex-migrate-browser/connection'
+    # Check each in-home ancestor before opening the owner-only pairing record.
+    cursor = SOURCE
+    for part in folder.relative_to(SOURCE).parts:
+        cursor /= part
+        checked(cursor, directory=True, private=False)
+    value = checked(folder / 'accepted.json').read_text().strip()
+    require(value.startswith('CM-CONNECT-1:') and len(value) <= 8192, 'Invalid pairing')
+    reply = json.loads(base64.urlsafe_b64decode(value.split(':', 1)[1]))
+    require(reply['kind'] == 'accepted' and reply['home'] == str(TARGET)
+            and re.fullmatch(r'codexmigratetarget@[A-Za-z0-9][A-Za-z0-9.-]*', reply['target'])
+            and re.fullmatch(r'[a-f0-9]{32}', reply['id']), 'Wrong paired account')
+    fingerprint = 'SHA256:' + base64.b64encode(hashlib.sha256(
+        base64.b64decode(reply['host_key'].split()[1])).digest()).decode().rstrip('=')
+    require(fingerprint == HOST, 'Wrong pinned Mac')
+    identity, known = checked(folder / 'identity'), checked(folder / 'known_hosts')
+    options = ['-F', '/dev/null', '-o', 'BatchMode=yes', '-o', 'IdentitiesOnly=yes',
+               '-o', 'IdentityAgent=none', '-o', 'StrictHostKeyChecking=yes',
+               '-o', 'ConnectTimeout=10', '-o', 'GlobalKnownHostsFile=/dev/null',
+               '-o', 'UserKnownHostsFile=' + str(known),
+               '-o', 'HostKeyAlias=codex-migrate-' + reply['id'], '-i', str(identity)]
+    return reply, options, identity, known
+
+
+def remote(options, target, action, payload=None):
+    require(action in ('prepare', 'ready', 'prove'), 'Unsupported remote action')
+    code = Path(__file__).read_text()
+    command = ['/usr/bin/ssh', *options, target,
+               '/usr/bin/python3 - ' + shlex.quote('--remote-action=' + action)]
+    # Only fixed test actions and invented test-thread metadata cross the wire.
+    encoded = base64.b64encode(json.dumps(payload).encode()).decode()
+    command[-1] += ' --payload=' + shlex.quote(encoded)
+    result = run(command, timeout=720 if action == 'prove' else 90, input=code.encode())
+    response = json.loads(result)
+    require('error' not in response, 'Destination ' + action + ' needs review')
+    return response
+
+
+def api(port, token, path, payload=None):
+    request = urllib.request.Request('http://127.0.0.1:' + str(port) + path,
+        data=None if payload is None else json.dumps(payload).encode(),
+        headers={'X-Codex-Migrate-Token': token, 'Content-Type': 'application/json'})
+    with urllib.request.urlopen(request, timeout=30) as response:
+        return json.load(response)
+
+
+def listener(pid):
+    output = run(['/usr/sbin/lsof', '-nP', '-a', '-p', str(pid), '-iTCP', '-sTCP:LISTEN', '-Fn']).decode()
+    ports = re.findall(r'^n127\.0\.0\.1:(\d+)$', output, re.M)
+    require(len(ports) == 1, 'Expected one loopback listener')
+    return int(ports[0])
+
+
+def stop_old_helper():
+    helpers = [(pid, cmd) for pid, cmd in processes() if Path(cmd).name == 'codex-migrate-engine']
+    require(len(helpers) <= 1, 'Multiple migration helpers require review')
+    for pid, command in helpers:
+        if command == str(ENGINE):
+            state_root = root_for(SOURCE)
+            require(read(state_root / 'runtime.json').get('pid') == pid, 'Unknown test helper process')
+            token = checked(state_root / 'migration/control-token').read_text().strip()
+            current = api(listener(pid), token, '/api/status')
+            require(current.get('status') in ('idle', 'ready', 'ready_to_finalize', 'complete', 'needs_attention')
+                    and current.get('phase') not in ('restoring', 'restored', 'recovery_required')
+                    and current.get('git_verification', {}).get('status') != 'checking'
+                    and current.get('path_compatibility', {}).get('status') != 'checking',
+                    'Existing test migration needs observation; leave its helper running')
+            return  # Attach only after it is safe to inspect Codex state again.
+        require(command.startswith('/Users/Shared/CodexMigrateAcceptance-'), 'Unknown helper')
+        token = checked(SOURCE / '.local/state/codex-migrate-browser/control-token').read_text().strip()
+        status = api(listener(pid), token, '/api/status')
+        require(bool(status.get('receipt')) and status.get('status') in ('complete', 'needs_attention')
+                and status.get('phase') in ('verified', 'git_verification', 'path_compatibility')
+                and status.get('git_verification', {}).get('status') != 'checking'
+                and status.get('path_compatibility', {}).get('status') != 'checking'
+                and status.get('recovery', {}).get('status') != 'checking', 'Old operation is not idle')
+        require((pid, command) in processes(), 'Helper changed during check')
+        os.kill(pid, signal.SIGTERM)
+        for _ in range(50):
+            if (pid, command) not in processes():
+                break
+            time.sleep(0.1)
+        require((pid, command) not in processes(), 'Old helper did not stop')
+
+
+def driver():
+    home = account('source')
+    root = root_for(home)
+    lock_path = root / 'runner.lock'
+    fd = os.open(lock_path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    lock = os.fdopen(fd, 'w')
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        raise SafeError('The test runner is already running') from None
+    PUBLIC.mkdir(mode=0o755, exist_ok=True)
+    checked(PUBLIC, directory=True, private=False)
+    report = {'phase': 'preparing', 'runner_pid': os.getpid(), 'migration_started': False,
+              'desktop_visual_check': 'not_yet_performed'}
+    def update(phase, **fields):
+        report.update(phase=phase, updated_at=time.time(), **fields)
+        save(PUBLIC / 'result.json', report, public=True)
+        print(phase.replace('_', ' '), flush=True)
+    engine = None
+    try:
+        reply, options, identity, known = connection()
+        codex_binary()
+        run(['/usr/bin/codesign', '--verify', '--deep', '--strict', str(SHARED / 'Codex Migrate.app')])
+        stop_old_helper()
+        update('preparing_destination_test_account')
+        remote(options, reply['target'], 'prepare')
+        update('preparing_source_test_account')
+        prepare(home, 'source')
+        update('sign_into_Codex_in_both_test_accounts_then_quit_Codex')
+        # Opening an app here is only appropriate when this script was launched
+        # by the source account's logged-in desktop, not sudo from another user.
+        if Path('/dev/console').stat().st_uid == os.getuid():
+            subprocess.run(['/usr/bin/open', '-b', 'com.openai.codex'],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        deadline = time.monotonic() + 3 * 3600
+        while time.monotonic() < deadline:
+            source_ready = login_ready(home)
+            destination_ready = remote(options, reply['target'], 'ready')['ready']
+            update('waiting_for_sign_in_and_quit', source_ready=source_ready, target_ready=destination_ready)
+            if source_ready and destination_ready:
+                break
+            time.sleep(15)
+        else:
+            raise SafeError('Sign-in wait expired; rerun the same launcher to resume')
+        update('creating_genuine_test_conversations')
+        records = fixture_threads(home)
+        update('three_genuine_conversations_created', conversations=3)
+        state = root / 'migration'
+        command = [str(ENGINE), 'serve', '--apply', '--no-open', '--port', '0',
+            '--source-home', str(home), '--target', reply['target'], '--target-home', str(TARGET),
+            '--workspace', str(home / WORKSPACE_NAME), '--state-dir', str(state),
+            '--identity-file', str(identity), '--known-hosts-file', str(known),
+            '--host-key-alias', 'codex-migrate-' + reply['id']]
+        existing = [(pid, cmd) for pid, cmd in processes() if cmd == str(ENGINE)]
+        require(len(existing) <= 1, 'Multiple test helpers require review')
+        if existing:
+            runtime = read(root / 'runtime.json')
+            require(runtime.get('pid') == existing[0][0], 'Unknown test helper process')
+            port = listener(existing[0][0])
+            token = checked(state / 'control-token').read_text().strip()
+        else:
+            engine = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                      start_new_session=True)
+            save(root / 'runtime.json', {'pid': engine.pid})
+            for _ in range(60):
+                time.sleep(0.5)
+                if engine.poll() is not None:
+                    raise SafeError('Packaged helper failed to start')
+                try:
+                    port = listener(engine.pid)
+                    token = checked(state / 'control-token').read_text().strip()
+                    break
+                except (OSError, SafeError):
+                    continue
+            else:
+                raise SafeError('Packaged helper startup timed out')
+        def wait_for(phase, desired):
+            end = time.monotonic() + 900
+            while time.monotonic() < end:
+                value = api(port, token, '/api/status')
+                update(phase, migration_status=value.get('status'), migration_phase=value.get('phase'))
+                if desired(value):
+                    return value
+                require(value.get('status') not in ('failed', 'interrupted', 'cancelled', 'waiting'),
+                        'Migration stopped; preserve state and inspect the protected dashboard')
+                time.sleep(2)
+            raise SafeError('Operation observation timed out; helper remains available')
+        status = api(port, token, '/api/status')
+        if not status.get('receipt'):
+            require(status.get('status') in ('idle', 'ready', 'ready_to_finalize'),
+                    'Existing transfer requires review; no automatic reset')
+            if status.get('status') != 'ready_to_finalize':
+                api(port, token, '/api/action', {'action': 'inspect'})
+                wait_for('inspecting', lambda s: s.get('status') == 'ready')
+                api(port, token, '/api/action', {'action': 'start'})
+                report['migration_started'] = True
+                wait_for('staging', lambda s: s.get('status') == 'ready_to_finalize')
+            api(port, token, '/api/action', {'action': 'finalize', 'confirmed': True})
+            status = wait_for('finalizing', lambda s: bool(s.get('receipt'))
+                              and s.get('path_compatibility', {}).get('status') != 'checking')
+        require(bool(status.get('receipt')), 'Missing installation receipt')
+        if status.get('git_verification', {}).get('status') != 'checking':
+            api(port, token, '/api/action', {'action': 'check_git'})
+        status = wait_for('checking_git', lambda s: s.get('git_verification', {}).get('status')
+                          in ('verified', 'failed', 'unavailable', 'source_issues'))
+        require(status.get('git_verification', {}).get('status') == 'verified', 'Git verification needs review')
+        update('reopening_and_continuing_on_new_Mac', installation_receipt=True)
+        result = remote(options, reply['target'], 'prove', records)
+        update('automated_acceptance_passed_visual_check_remaining', **result)
+    except Exception as error:
+        # No exception text, account records, subprocess output or control token
+        # is copied into the public report.
+        update('needs_review', error_type=type(error).__name__,
+               reason=str(error) if isinstance(error, SafeError) else 'Unexpected error; raw details withheld')
+        print('Stopped safely. Tell the supervising Codex task; do not reset either test account.', flush=True)
+    finally:
+        # Do not interrupt an in-progress protected install on an observation
+        # timeout. The helper owns its operation independently and keeps running.
+        if engine is not None and engine.poll() is None and report['phase'].startswith('automated_acceptance'):
+            engine.terminate()
+            engine.wait(timeout=30)
+        lock.close()
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--remote-action', choices=('prepare', 'ready', 'prove'))
+    parser.add_argument('--payload', default='bnVsbA==')
+    parser.add_argument('--background', action='store_true')
+    args = parser.parse_args()
+    if args.background:
+        account('source')
+        worker = subprocess.Popen(['/usr/bin/python3', str(Path(__file__).resolve())],
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
+        time.sleep(1)
+        require(worker.poll() is None, 'The runner could not start; tell the supervising Codex task')
+        print('Test preparation is running in the background. This window can close.')
+        print('Once Codex opens: sign in, then quit it with Command-Q.')
+        print('On the NEW Mac: use Codex Migrate Target, open Codex, sign in, then Command-Q.')
+        print('You can then return to your personal accounts. The test continues automatically.')
+    elif args.remote_action:
+        home = account('target')
+        if args.remote_action == 'prepare':
+            codex_binary()
+            require(not any(Path(cmd).name == 'codex-migrate-engine' for _, cmd in processes()),
+                    'Destination migration helper must be idle and closed')
+            prepare(home, 'target')
+            result = {'prepared': True}
+        elif args.remote_action == 'ready':
+            result = {'ready': login_ready(home)}
+        else:
+            require(codex_closed(), 'Quit destination Codex before automated reopening check')
+            result = prove_threads(home, json.loads(base64.b64decode(args.payload)))
+        print(json.dumps(result))
+    else:
+        driver()
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except SafeError as error:
+        # Messages are fixed by this program, never credential/provider output.
+        print(json.dumps({'error': str(error)}))
+        raise SystemExit(1)
