@@ -66,7 +66,7 @@ label{display:block;margin:16px 0 6px}input,textarea,button,select{font:inherit}
 <details><summary>Start a fresh connection</summary><p>Use this if your seven-day connection has expired. Previous local connection files are kept. On the new Mac, remove the previous connection’s access before approving the new card.</p><button type="button" class="secondary" id="restart-pair">Start a new connection</button></details>
 <div class="controls"><button type="button" id="next-1">Continue</button></div></div>
 <div id="step-2" class="setup-step" hidden><h2 tabindex="-1">What would you like to move?</h2>
-<label for="mode">What do you want to move?</label><select id="mode"><option value="full">Full Codex migration and selected workspaces</option><option value="skills">Custom skills only</option></select>
+<label for="mode">What do you want to move?</label><select id="mode"><option value="full">Full Codex migration</option><option value="skills">Custom skills only</option></select>
 <fieldset id="skill-components" hidden><legend>Skills to include</legend><label class="check"><input type="checkbox" id="personal-skills" checked><span>Personal custom skills (.agents/skills and legacy .codex/skills)</span></label><label class="check"><input type="checkbox" id="workspace-skills"><span>Workspace skills inside the project folders selected below</span></label><p>Skills only: conversations, configuration and whole repositories are not copied. Other destination skills are kept. Inspect the list, stage it, then confirm Finalize separately.</p></fieldset>
 <p id="folder-summary" aria-live="polite">No project folders selected.</p>
 <div class="controls"><button type="button" id="folders">Choose folders on this Mac…</button><button type="button" id="suggest" class="secondary">Suggest common folders</button></div>
@@ -158,7 +158,19 @@ async function load(){try{
   $("message").textContent=s.saved?"Restored your last setup. Review it before continuing; changes remain disabled.":"";
   restoreConnection(s,c);
 }catch(e){$("error").textContent=e.message+". Reopen the browser from the local helper if its token is missing."}}
-async function folders(path){$("folders").disabled=true;$("suggest").disabled=true;try{const r=await api(path,{});$("workspaces").value=[...new Set([...roots(),...r.paths])].join("\n");folderSummary();$("message").textContent=r.message}catch(e){$("error").textContent=e.message}finally{$("folders").disabled=false;$("suggest").disabled=false}}
+async function folders(path){
+  if($("folders").disabled||$("suggest").disabled)return;
+  const button=$(path==="/api/folders"?"folders":"suggest"),hadFocus=document.activeElement===button;
+  for(const id of ["folders","suggest","next-2"])$(id).disabled=true;
+  $("error").textContent="";
+  $("message").textContent=path==="/api/folders"?"Choose folders in the macOS dialog, then return here.":"Looking for common project folders…";
+  try{const r=await api(path,{});$("workspaces").value=[...new Set([...roots(),...r.paths])].join("\n");folderSummary();$("message").textContent=r.message}
+  catch(e){$("error").textContent=e.message;$("message").textContent=""}
+  finally{
+    for(const id of ["folders","suggest","next-2"])$(id).disabled=false;
+    if(hadFocus&&(document.activeElement===document.body||document.activeElement===button)&&button.getClientRects().length)button.focus();
+  }
+}
 $("folders").onclick=()=>folders("/api/folders");$("suggest").onclick=()=>folders("/api/suggestions");
 $("setup").onsubmit=async e=>{e.preventDefault();if(step<3){$(step===1?"next-1":"next-2").click();return}if(!connectionValid())return;$("open").disabled=true;$("error").textContent="";try{await api("/api/setup",{target:$("target").value.trim(),target_home:$("target-home").value.trim(),workspace_roots:roots(),identity_file:$("identity").value.trim(),apply:$("apply").checked,paired,mode:$("mode").value,components:$("mode").value==="skills"?["personal-skills","workspace-skills"].filter(id=>$(id).checked):[]});location.href="/migration#token="+encodeURIComponent(token)}catch(e){$("error").textContent=e.message;$("open").disabled=false}};
 load();

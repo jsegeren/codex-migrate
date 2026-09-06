@@ -3,6 +3,13 @@
 The downloadable paid app is **not released**. Publishing source and the
 informational website does not open checkout or certify a customer download.
 
+September 5 setup follow-up fixes a reproduced asynchronous folder-selection
+review race, stale retry errors and lost keyboard focus. Desktop and 320px
+Chromium fixture checks pass, as do 584 Python tests (12 skipped) and 210
+JavaScript tests (one skipped). The mode label now fits the narrow selector.
+The retained `286f6b9` package does not contain this later source fix; rebuild
+before final device acceptance. See the [bounded setup receipt](folder-selection-acceptance-2026-09-05.md).
+
 September 5 fresh Search Console inspections now confirm **Page is indexed**
 for the homepage, `/moving-to-a-new-mac`, and `/backup-and-recovery`, with
 successful smartphone crawls and matching Google-selected canonicals. This
