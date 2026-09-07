@@ -181,6 +181,12 @@ test('delivery mail disables tracking and limits sandbox to its approved sink', 
   assert.equal(sent.tracking_settings.click_tracking.enable, false); assert.equal(sent.tracking_settings.open_tracking.enable, false);
   assert.deepEqual(sent.reply_to, { email: 'joshua@segeren.com', name: 'Joshua Segeren' });
   assert.match(sent.subject, /TEST ONLY/);
+  assert.match(sent.content[0].value, /No real purchase or app is delivered/);
+  assert.equal(await deliveryMail({ ...value, to: mailEnv.COMMERCE_SANDBOX_EMAIL,
+    release: { ...release, kind: 'signed-notarized', testingOnly: true } }, mailEnv, request), 'accepted');
+  assert.match(sent.content[0].value, /signed app candidate for operator testing/);
+  assert.match(sent.content[0].value, /No real payment was charged/);
+  assert.doesNotMatch(sent.content[0].value, /No real purchase or app is delivered/);
   assert.equal(await deliveryMail({ ...value, live: true }, mailEnv, request), 'accepted');
   assert.deepEqual(sent.reply_to, { email: 'joshua@segeren.com', name: 'Joshua Segeren' });
 });

@@ -21,7 +21,10 @@ async function deliveryMail({ to, link, release, live }, env = process.env, requ
         personalizations: [{ to: [{ email: to }] }],
         subject: live ? 'Your Codex Migrate download' : 'TEST ONLY — Codex Migrate delivery check',
         content: [{ type: 'text/plain', value: [
-          live ? 'Thank you for purchasing Codex Migrate.' : 'Sandbox test only. No real purchase or app is delivered.',
+          live ? 'Thank you for purchasing Codex Migrate.' :
+            release.testingOnly === true && release.kind === 'signed-notarized'
+              ? 'Sandbox test only. No real payment was charged. This delivers the signed app candidate for operator testing, not a publicly released product.'
+              : 'Sandbox test only. No real purchase or app is delivered.',
           `Open your download: ${link}`,
           `Release: ${release.id}`, `Archive SHA-256: ${release.sha256}`,
           'Keep this email to recover your download. Treat this link as private.',

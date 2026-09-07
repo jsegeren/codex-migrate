@@ -5,6 +5,8 @@
   --muted: #000;
   --line: #d8d1c3;
   --purple: #6042a6;
+  --cta: #4432b8;
+  --cta-hover: #35258e;
   --purple-bright: #d9cdff;
   --navy: #17233a;
   --white: #fffdf8;
@@ -63,8 +65,8 @@ h1 .accent { color: var(--purple); }
 .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
 .button { min-height: 50px; padding: 13px 21px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--ink); border-radius: 10px; font-weight: 740; text-decoration: none; transition: transform .18s ease, box-shadow .18s ease, background .18s ease; }
 .button:hover { transform: translateY(-2px); }
-.button-primary { background: var(--ink); color: var(--white); box-shadow: 0 8px 0 rgba(23,23,20,.12); }
-.button-primary:hover { background: var(--purple); border-color: var(--purple); }
+.button-primary { background: var(--cta); border-color: var(--cta); color: #fff; box-shadow: 0 8px 0 rgba(68,50,184,.12); }
+.button-primary:hover { background: var(--cta-hover); border-color: var(--cta-hover); }
 .button-secondary { background: transparent; }
 .button-secondary:hover { background: var(--white); }
 .button.light { border-color: rgba(255,255,255,.5); color: var(--white); }

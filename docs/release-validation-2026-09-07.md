@@ -83,3 +83,52 @@ not edit Vercel settings or enable checkout. Browser transport accepts either
 reviewed sandbox artifact, but explicitly does not claim buyer-flow acceptance.
 Actual upload, hosted test checkout and fulfillment are separate verification
 steps; catalog preparation alone does not prove them.
+
+### Hosted candidate purchase and email acceptance
+
+The sandbox object was uploaded privately and streamed back with all 8,305,798
+bytes and the candidate SHA-256 verified. The existing Chrome transport harness
+also verified attachment filename, byte count and hash. That harness explicitly
+does not claim buyer-flow acceptance.
+
+Protected Preview `dpl_AsWtuy7Ww5QQAM8krMxF4JEfbXMz`, from source
+`c614225c31cca7838004980b9e681b2caab91ac7`, selected ordinary Stripe and
+`sandbox-build4-arm64`. The existing commerce-sandbox alias was pointed to it;
+Production settings were not changed. One invitation, reference
+`469afae2-2cf7-4d14-84b3-7db12ee0e54d`, arrived in the owner's Inbox.
+
+The existing checkout completed using Stripe's synthetic test card, synthetic
+billing details and the approved owner email. No real money was charged or
+payment method saved. The browser identified itself as an AI agent. Session:
+`cs_test_a1R36ggecp8gHU0kth0UxqHackp7XNEe64Jv2SOj5fl2uZPnKGddAMOnky`.
+The returned buyer page verified the purchase and offered the exact build.
+The separate delivery email arrived at 11:42 AM Pacific with the correct release
+ID and archive hash. Opening its recovery link independently verified purchase.
+
+However, clicking Download for Mac in this user Chrome session navigated to
+`ERR_BLOCKED_BY_CLIENT`. No matching archive was found in Downloads. The block
+was not bypassed, no browser protection was disabled, and its cause is not yet
+attributed. Successful operator transport does not substitute for this failed
+buyer-download observation. Exact-session refund/revocation and owner purchase
+notification delivery remain unverified. Public availability still reports false.
+
+The sandbox fulfillment email contained stale fixture-only wording ("No real
+purchase or app is delivered"). The next source checkpoint distinguishes a
+signed test candidate from the harmless fixture; tracking remains disabled and
+sandbox email stays restricted to the approved owner address. Previously sent
+mail is unchanged. The Stripe sandbox product description also still contains
+fixture-era wording and needs updating before another operator test.
+
+### Primary CTA refinement
+
+At the Founder's request, primary website CTAs use dark purple-blue `#4432b8`
+with white text and `#35258e` on hover. Secondary buttons remain outlined; the
+white CTA on the purple closing section retains its existing contrast treatment.
+Playwright rendered the purchase page at 1440px and 390px using a synthetic
+API response (not payment evidence). Both views had no horizontal overflow,
+no button underlines and a visible 3px keyboard-focus outline. Screenshots were
+inspected. White-text contrast is 8.77:1 normally and 11.62:1 on hover.
+
+Regression checks: 261 Node tests, 260 passed and one explicitly skipped;
+all 22 site tests passed. These stylesheet/mail edits do not alter the signed
+app candidate. Publication remains a separate recorded step.

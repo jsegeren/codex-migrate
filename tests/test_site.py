@@ -248,6 +248,15 @@ class SiteTests(unittest.TestCase):
         self.assertIn("font-weight: 500", body)
         self.assertIn("font-weight: 600", lede)
 
+    def test_primary_cta_uses_dark_purple_blue_and_accessible_white_text(self):
+        styles = (SITE / "styles.css").read_text()
+        self.assertIn("--cta: #4432b8;", styles)
+        self.assertIn("--cta-hover: #35258e;", styles)
+        primary = styles.split("\n.button-primary {", 1)[1].split("}", 1)[0]
+        self.assertIn("background: var(--cta)", primary)
+        self.assertIn("color: #fff", primary)
+        self.assertIn("outline-offset: 4px", styles)
+
     def test_launch_interest_uses_consented_form_and_separate_early_build_email(self):
         page = self.parse("index.html")
         emails = [href for href in page.hrefs if href.startswith(
