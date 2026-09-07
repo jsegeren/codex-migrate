@@ -698,6 +698,77 @@ def retire_failed_staging_helper(options, target):
     raise SafeError('Old test helper did not stop; no replacement started')
 
 
+def shared_diagnostic(state):
+    """Export fixed facts, not raw errors, commands, paths or workspace data."""
+    require(isinstance(state, dict), 'Invalid diagnostic state')
+    def enum(value, choices):
+        return value if isinstance(value, str) and value in choices else 'unknown'
+    error = state.get('error')
+    error = error[:16384] if isinstance(error, str) else ''
+    # Matches are diagnostic hints, never proof that rollback succeeded. Only
+    # labels from this code leave the account; no matched input is copied.
+    signatures = {
+        'remote_command_no_details': 'remote command failed',
+        'remote_timeout': 'remote command timed out',
+        'permission_denied': 'permission denied',
+        'operation_not_permitted': 'operation not permitted',
+        'missing_file': 'no such file or directory',
+        'shell_syntax': 'parse error',
+        'syntax_error': 'syntax error',
+        'command_unavailable': 'command not found',
+        'read_only_variable': 'read-only variable',
+        'unbound_variable': 'parameter not set',
+        'disk_full': 'no space left',
+        'connection_lost': 'connection reset',
+        'backup_verification': 'backup verification',
+        'conversation_verification': 'conversation content verification',
+        'workspace_verification': 'workspace content verification',
+        'codex_state_verification': 'codex state content verification',
+        'skill_verification': 'personal skill verification',
+        'missing_install_receipt': 'destination installation did not produce a valid receipt',
+        'destination_lock': 'cannot safely lock the destination',
+        'rollback_unconfirmed': 'rollback is unconfirmed',
+    }
+    hints = [label for label, phrase in signatures.items() if phrase in error.lower()]
+    recovery = state.get('recovery')
+    recovery = recovery if isinstance(recovery, dict) else {}
+    receipt = state.get('receipt')
+    receipt = receipt if isinstance(receipt, dict) else {}
+    return {'report_format': 1, 'checked_at': time.time(), 'read_only': True,
+            'status': enum(state.get('status'), ('idle', 'ready', 'running', 'paused',
+                'cancelled', 'failed', 'interrupted', 'waiting', 'ready_to_finalize',
+                'complete', 'needs_attention')),
+            'phase': enum(state.get('phase'), ('not_started', 'inspecting',
+                'preflight_complete', 'staging', 'staged', 'final_delta',
+                'verifying_sources', 'installing', 'verified', 'restoring',
+                'restored', 'recovery_required', 'path_compatibility', 'git_verification')),
+            'error_present': bool(error), 'error_hints': hints,
+            'error_unclassified': bool(error) and not hints,
+            'staging_complete': state.get('staging_complete') is True,
+            'pending_backup_recorded': bool(state.get('pending_backup')),
+            'receipt_present': bool(receipt),
+            'verification': {key: receipt.get(key) if type(receipt.get(key)) is bool else None
+                for key in ('backup_verified', 'conversation_content_verified',
+                    'workspace_content_verified', 'codex_state_content_verified',
+                    'auth_preserved', 'installation_id_preserved')},
+            'recovery_status': enum(recovery.get('status'), ('not_checked', 'checking',
+                'failed', 'busy', 'no_pending_record', 'backup_verified', 'restoring',
+                'restore_incomplete', 'restore_unconfirmed', 'restore_verified',
+                'restore_pending_cleanup', 'restore_changed'))}
+
+
+def export_test_diagnostic():
+    """Read the saved current test state even when its helper has exited."""
+    home = account('source')
+    root = checked(home / STATE_NAME, directory=True)
+    state = checked(root / MIGRATION_STATE, directory=True)
+    result = shared_diagnostic(read(state / 'state.json'))
+    checked(PUBLIC, directory=True, private=False)
+    save(PUBLIC / 'installation-diagnostic.json', result, public=True)
+    print('Diagnostic saved in the shared folder. No screenshot or copy/paste needed.')
+    return result
+
+
 def open_test_dashboard():
     """Open only the known running test dashboard; never restart or mutate it."""
     home = account('source')
@@ -851,7 +922,13 @@ def driver():
         # is copied into the public report.
         update('needs_review', failed_phase=report['phase'], error_type=type(error).__name__,
                reason=str(error) if isinstance(error, SafeError) else 'Unexpected error; raw details withheld')
-        print('Stopped safely. Tell the supervising Codex task; do not reset either test account.', flush=True)
+        try:
+            export_test_diagnostic()
+        except Exception:
+            # Diagnostic failure never overwrites the original failure or
+            # launches/retries a migration. No exception body is exported.
+            update('needs_review', diagnostic_export='unavailable')
+        print('Test stopped. Preserve both accounts; installation/recovery may need review.', flush=True)
     finally:
         # Do not interrupt an in-progress protected install on an observation
         # timeout. The helper owns its operation independently and keeps running.
@@ -868,11 +945,16 @@ def main():
     parser.add_argument('--background', action='store_true')
     parser.add_argument('--diagnose', action='store_true')
     parser.add_argument('--open-dashboard', action='store_true')
+    parser.add_argument('--export-diagnostic', action='store_true')
     args = parser.parse_args()
+    require(not args.export_diagnostic or not (args.background or args.remote_action
+            or args.diagnose or args.open_dashboard), 'Conflicting test actions')
     require(not args.open_dashboard or not (args.background or args.remote_action or args.diagnose),
             'Conflicting test actions')
     require(not args.diagnose or not (args.background or args.remote_action), 'Conflicting test actions')
-    if args.open_dashboard:
+    if args.export_diagnostic:
+        export_test_diagnostic()
+    elif args.open_dashboard:
         open_test_dashboard()
     elif args.diagnose:
         diagnose()

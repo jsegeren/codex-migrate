@@ -26,13 +26,20 @@ success receipt. Do not rerun, reset or change either test account before
 examining the actual error and recovery evidence.
 
 `/Users/Shared/Show Codex Test Error.command`, launched inside the source test
-account on the old Mac, now opens only the exact known running helper's dashboard.
-It validates the owner, runtime PID/executable and token shape, performs one
-status GET, then opens a loopback URL with the existing token in its fragment.
-It never starts a helper, submits a migration/recovery action, copies credentials
-to a shared report, or restarts a stopped operation. Share the displayed error,
-not the browser URL. All 51 harness tests pass on Python 3.9 and 3.12, including
-read-only opening and missing/wrong-process rejection. The signed app itself
+account on the old Mac, now reads saved state and exports
+`/Users/Shared/CodexMigrate-Authentic-Status-20260906/installation-diagnostic.json`.
+No screenshot or copy/paste is needed. Future runner exceptions export this
+automatically. The already-exited runner cannot execute new code retroactively,
+so this current failure needs one owner-account export. No password is required.
+The export checks ownership and path permissions, uses atomic mode-644 output,
+and includes only fixed status, error-signature hints, backup-presence and
+verification flags. Unknown errors are explicitly unclassified; hints are not
+proof of root cause or rollback. Raw errors, paths, commands, tokens and workspace
+contents are excluded. It makes no network call or migration/recovery action
+and works without a live helper. All 56 harness tests pass on Python 3.9 and
+3.12, including automatic failure export, redaction and unsafe-path rejection.
+The optional `--open-dashboard` read-only viewer remains available for later
+owner review, but it is no longer the required handoff. The signed app itself
 has not changed. The original launch steps below are not an instruction to
 retry this failed installation.
 

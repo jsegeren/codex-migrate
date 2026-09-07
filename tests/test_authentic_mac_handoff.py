@@ -13,6 +13,86 @@ import authentic_mac_handoff as handoff
 
 
 class HandoffTests(unittest.TestCase):
+    def diagnostic_fixture(self):
+        root = handoff.root_for(self.home)
+        state = root / handoff.MIGRATION_STATE
+        state.mkdir(mode=0o700)
+        handoff.save(state / 'state.json', {'status': 'failed', 'phase': 'installing',
+            'error': 'permission denied /private/secret TOKEN_DO_NOT_EXPORT',
+            'pending_backup': '/private/backup', 'staging_complete': True})
+        public = self.home / 'shared-status'
+        public.mkdir(mode=0o755)
+        return state, public
+
+    def test_shared_diagnostic_never_exports_untrusted_strings(self):
+        sentinel = 'DO_NOT_EXPORT_CREDENTIAL'
+        report = handoff.shared_diagnostic({'status': sentinel, 'phase': sentinel,
+            'error': 'syntax error ' + sentinel, 'pending_backup': sentinel,
+            'receipt': {'auth_preserved': sentinel}, 'recovery': {'status': sentinel},
+            'support_history': [sentinel], 'config': sentinel})
+        self.assertNotIn(sentinel, json.dumps(report))
+        self.assertEqual(report['error_hints'], ['syntax_error'])
+        self.assertIsNone(report['verification']['auth_preserved'])
+        self.assertEqual(report['status'], 'unknown')
+        unknown = handoff.shared_diagnostic({'error': sentinel})
+        self.assertTrue(unknown['error_unclassified'])
+        self.assertNotIn(sentinel, json.dumps(unknown))
+
+    def test_export_saved_failure_without_process_network_or_mutation(self):
+        state, public = self.diagnostic_fixture()
+        before = (state / 'state.json').read_bytes()
+        with patch.object(handoff, 'account', return_value=self.home), \
+                patch.object(handoff, 'PUBLIC', public), \
+                patch.object(handoff, 'api') as api, \
+                patch.object(handoff, 'processes') as processes, \
+                patch.object(handoff.subprocess, 'Popen') as launch:
+            handoff.export_test_diagnostic()
+        path = public / 'installation-diagnostic.json'
+        result = json.loads(path.read_text())
+        self.assertEqual(result['phase'], 'installing')
+        self.assertEqual(result['error_hints'], ['permission_denied'])
+        self.assertNotIn('TOKEN_DO_NOT_EXPORT', path.read_text())
+        self.assertNotIn('/private', path.read_text())
+        self.assertEqual(path.stat().st_mode & 0o777, 0o644)
+        self.assertEqual((state / 'state.json').read_bytes(), before)
+        api.assert_not_called()
+        processes.assert_not_called()
+        launch.assert_not_called()
+
+    def test_export_rejects_symlink_and_writable_shared_directory(self):
+        state, public = self.diagnostic_fixture()
+        with patch.object(handoff, 'account', return_value=self.home), \
+                patch.object(handoff, 'PUBLIC', public):
+            public.chmod(0o777)
+            with self.assertRaises(handoff.SafeError):
+                handoff.export_test_diagnostic()
+            public.chmod(0o755)
+            (state / 'state.json').unlink()
+            (state / 'state.json').symlink_to(self.home / '.codex/sentinel')
+            with self.assertRaises(handoff.SafeError):
+                handoff.export_test_diagnostic()
+        self.assertFalse((public / 'installation-diagnostic.json').exists())
+
+    def test_driver_failure_automatically_exports_saved_diagnostic(self):
+        _, public = self.diagnostic_fixture()
+        with patch.object(handoff, 'account', return_value=self.home), \
+                patch.object(handoff, 'PUBLIC', public), \
+                patch.object(handoff, 'connection', side_effect=handoff.SafeError('Test fixture failure')):
+            handoff.driver()
+        self.assertTrue((public / 'installation-diagnostic.json').exists())
+        self.assertEqual(json.loads((public / 'result.json').read_text())['phase'], 'needs_review')
+
+    def test_export_route_cannot_start_driver(self):
+        with patch('sys.argv', ['handoff', '--export-diagnostic']), \
+                patch.object(handoff, 'export_test_diagnostic') as export, \
+                patch.object(handoff, 'driver') as driver:
+            handoff.main()
+        export.assert_called_once_with()
+        driver.assert_not_called()
+        with patch('sys.argv', ['handoff', '--export-diagnostic', '--background']):
+            with self.assertRaises(handoff.SafeError):
+                handoff.main()
+
     def test_open_dashboard_only_reads_known_helper_and_opens_token_fragment(self):
         root = handoff.root_for(self.home)
         state = root / handoff.MIGRATION_STATE

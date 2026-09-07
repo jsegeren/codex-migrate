@@ -2,6 +2,17 @@
 
 Status: implementation and private-storage transport tested; **not a live checkout release**.
 
+Stripe clarification, September 6: the dashboard reports Managed Payments
+ready and the product eligible; the open support question is not a rejection.
+It concerns incidental bundled product support versus selling a separate
+service, and mixed business/personal-use tax classification. Stripe's
+[Managed Payments documentation](https://docs.stripe.com/payments/managed-payments/how-it-works)
+explicitly retains seller product-level support while excluding service sales.
+Regular Checkout in the same existing account is an alternative, but shifts
+merchant/tax responsibility back to the seller; it is not an equivalent silent
+fallback. No provider mode or classification was changed. The failed authentic
+installation test remains a separate demonstrated release blocker.
+
 September 6 signed-artifact transport: the receipt-bound uploader on Node
 24.19.0 accepted the actual notarized build 2 archive from clean source
 `1ee2e410b13799941cecbaca5e8525cf35de02dc`, uploaded without overwriting, then
