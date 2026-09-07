@@ -610,3 +610,27 @@ still describes the paid app as in development and needs a focused copy update;
 this audit did not deploy a website change. Native/physical acceptance and
 real-sale inbox arrival remain unverified. The clean-Mac checklist and readiness
 overview now distinguish approved beta sales from full release certification.
+
+## Recovery guide availability correction
+
+The stale recovery-guide paragraph and launch-only links were corrected in
+`1ab0d9b`. The page now accurately describes the available signed/notarized
+Apple silicon beta, $50 one-time price, support/refund policy and continuing
+native/physical testing. Its safety guidance and independent-backup warning
+are unchanged. All 23 page tests passed. Chrome desktop and 390px rendering
+were reviewed; the new text wraps, the focused source button remains visible,
+and 390px document width equals viewport width. The temporary viewport override
+was reset. This is a focused page review, not native accessibility certification.
+
+The exact committed source was exported without unrelated untracked files and
+published to the existing canonical Vercel project as
+`dpl_6ki8uFxr4j7RzdCCVcsGpXqjzTZn`, READY and aliased to
+`https://migrate.segeren.com`. The initial CLI invocation rejected a team slug;
+using the repository policy's exact team ID passed the unchanged governance
+guard. No new project, credential, payment route, charge or app build was
+created. Both opt-in build-time operator jobs reported skipped.
+
+Live readback confirmed the corrected paragraph, canonical URL and beta link.
+Availability remains `available:true`, `priceUSD:50`, `architecture:arm64`,
+`channel:beta`. The previous indexing receipt remains unchanged; no repeat
+indexing request was sent. Receiving-Mac/native/physical checks remain open.
