@@ -1,11 +1,19 @@
 # Codex Migrate
 
-**Unofficial, privacy-first Mac-to-Mac migration for local Codex workspaces.**
+**Unofficial Mac-to-Mac migration for OpenAI Codex, including Codex in the ChatGPT desktop app.**
 
 Codex Migrate moves the local working state that does not magically appear when
 you sign into Codex on a new Mac: conversations, project organization,
 configuration, skills, automations, repositories, branches, worktrees, stashes,
 and unfinished files.
+
+### Using Codex in the ChatGPT app?
+
+This project is for the local Codex work you want to keep when changing Macs,
+whether you know it as OpenAI Codex, the Codex app, or Codex in the ChatGPT
+desktop app. It does not transfer ordinary ChatGPT cloud chats between accounts
+or migrate all ChatGPT modes. Support is limited to the local Codex data and
+selected workspace folders described below; compatibility testing is ongoing.
 
 ## Get the Mac app — $50 one time
 
@@ -15,19 +23,17 @@ Josh.** It opens the guided local browser workflow for setup, transfer progress,
 pause/resume, verification, and recovery. Your workspace moves directly between
 your Macs, not through our servers.
 
-**Beta.** The signed, notarized public release is being prepared. Want to try
-an early Mac build? **[Request beta access from Josh](mailto:joshua@segeren.com?subject=Codex%20Migrate%20beta%20access)**
-with your Mac model, macOS version, and what you want to migrate. Requests are
-handled case by case; early builds are unsigned/unnotarized, not the finished
-paid release. Do not email credentials or workspace contents.
+**[Get the signed Mac beta — $50 →](https://migrate.segeren.com/#founding-edition)**
+
+For Apple silicon Macs. Developer ID signed and Apple notarized, with
+best-effort support and a 30-day refund policy. Native accessibility,
+permissions and physical network-interruption testing are still underway;
+this is a beta, not a claim of complete compatibility or fault-free operation.
 
 Keep the old Mac and an independent backup. Finalization replaces selected
 destination data after backup; it does not merge two independently active
 workspaces. Broader compatibility and recovery testing is still underway.
-The $50 public release is not on sale yet. No subscription and no pre-orders.
-
-**[Get an email when the $50 Mac app launches →](https://migrate.segeren.com/#launch-email)**
-· [See the Mac edition](https://migrate.segeren.com/#founding-edition)
+No subscription or pre-order: the purchase is for the current packaged beta.
 
 The complete **MIT-licensed CLI and source remain free**, including the same
 safety checks and guided browser workflow. Payment covers the packaged release

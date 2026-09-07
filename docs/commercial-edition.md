@@ -24,12 +24,18 @@ readiness is tracked in [the desktop guide](desktop-setup.md).
 
 ## Founding Edition
 
-The downloadable Mac edition will cost **$50 one time**, including best-effort
-maintainer support. No subscription and no pre-orders. The general self-service
-checkout stays closed until a signed, notarized build, clean-Mac validation, and
-delivery are verified.
+The downloadable Mac beta costs **$50 one time**, including best-effort
+maintainer support and a 30-day refund policy. No subscription or pre-order.
 
-### Paid beta by request
+On September 7 the Founder explicitly authorized opening self-service paid beta
+downloads while the remaining acceptance checks continue. This supersedes the
+earlier manual-only beta policy below. The approved artifact is signed and
+notarized build 5 for Apple silicon, not an unsigned early build. Native
+accessibility, permissions and physical network-interruption checks remain
+unfinished and are disclosed before payment. See the
+[paid-beta launch record](paid-beta-launch-2026-09-07.md) for exact scope.
+
+### Historical policy: paid beta by request (superseded September 7)
 
 The Founder approved a separate **$50 paid beta with manual delivery**, without
 waiting for Apple Developer activation. This is not an instruction to open the
@@ -55,14 +61,14 @@ Do not collect a payment while its tested build or delivery is unavailable.
 Do not promise a launch date or guaranteed fix. Standard signing/notarization
 and clean-Mac acceptance remain required for the later general release.
 
-The project is in **Beta**. The signed Mac app is not publicly downloadable yet;
+Under that earlier policy, the signed Mac app was not publicly downloadable;
 early unsigned/unnotarized Mac builds may be requested from Josh and are handled
 case by case. Beta does not mean release acceptance is complete. Keep the source
 Mac and an independent backup; finalization replaces selected destination data,
 not merges independently active workspaces. Do not send credentials or workspace
 contents when requesting access.
 
-The full open-source CLI is available today. The intended paid refund window
+The full open-source CLI is available today. The paid refund window
 is 30 days from purchase. Current release status and policies are published at
 <https://migrate.segeren.com>.
 
