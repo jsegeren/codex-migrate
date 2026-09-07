@@ -78,7 +78,7 @@ class BackupTests(unittest.TestCase):
                     prefix += "cp() { echo 'Injected backup copy failure' >&2; return 74; }\n"
                 elif fault == "corruption":
                     backup = state.read()["pending_backup"]
-                    check = "verify_backup " + shlex.quote(codex)
+                    check = "verify_codex_backup " + shlex.quote(codex)
                     script = script.replace(check,
                         "printf 'modified' > " + shlex.quote(backup + "/.codex/old.txt")
                         + "\n" + check, 1)

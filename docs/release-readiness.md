@@ -3,7 +3,7 @@
 The downloadable paid app is **not released**. Publishing source and the
 informational website does not open checkout or certify a customer download.
 
-## Current release boundary — September 6 late evening
+## Current release boundary — September 7
 
 Authoritative current receipts are [signing](signing-candidate-2026-09-06.md)
 and [migration/commerce follow-up](release-followup-2026-09-06.md). The dated
@@ -19,15 +19,19 @@ Apple onboarding, signing, or payment provisioning.
   results, not a live sale or actual app delivery. Production checkout remains
   closed and the live webhook disabled.
 - The real two-Mac build-2 test remains failed during backup verification.
-  Its owner-exported report specifically says comparison differences; it does
-  not expose the differing entries. The original helper and all test state are
-  preserved. Build 3's local FIFO fix is not a demonstrated diagnosis of this
-  failure.
+  The authorized exact-backup probe completed successfully: one socket was
+  missing from the clone; file/directory/link counts matched. Neither build 2
+  nor build 3 accepted that comparison. The original helper and test state are
+  preserved. Source now has a narrow destination-runtime-socket correction,
+  including the pre-transaction check, but it is not yet a refreshed packaged
+  candidate or proof this actual socket qualifies and migration succeeds.
 - Test-account access is the current device-acceptance blocker. The personal
   account cannot read the source's private state, and its existing credentials
   do not authenticate to the fingerprint-verified target. Repeating the same
-  summary exporter is not a remedy. Do not reset, retry, replace the running
-  helper, weaken backup verification or claim recovery from the summary alone.
+  summary exporter is not a remedy. The one-shot authorized diagnostic has
+  already completed; do not ask the Founder to rerun it without a new reason.
+  Do not reset, retry or replace the running helper without a reviewed handoff,
+  or claim recovery from the diagnostic alone.
 - Remaining acceptance requires the authenticated test-account workflow:
   resolve the actual backup difference; complete migration and continue the
   real Codex conversations; demonstrate physical interruption/recovery and

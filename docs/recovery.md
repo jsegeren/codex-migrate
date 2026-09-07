@@ -15,6 +15,13 @@ Every backup must pass a checksum comparison of regular file contents, tree
 structure, and symbolic-link targets before any destination replacement begins.
 No file contents, checksum values, or differing filenames are logged. A failed
 copy or verification leaves the originals in place and keeps staging available.
+For the destination `.codex` folder, actual Unix sockets in recognized Codex
+runtime locations are omitted from the original-to-backup comparison: macOS
+does not clone them, and a socket cannot restore a running process. This does
+not exclude ordinary files with `.sock` names, links, directories, skills or
+workspace sockets. The saved backup and its recovery fingerprints have no
+socket exclusion. The same narrow original-data comparison is repeated before
+the installation transaction starts; missing or changed durable data blocks it.
 There is no skip-backup switch. If space is insufficient, free space on the
 destination and retry. External backup locations are not supported yet.
 

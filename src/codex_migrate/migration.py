@@ -1207,7 +1207,7 @@ backup_required=$({backup_size})
 backup_space {home} "$((backup_required + {reserve}))"
 mkdir -p {backup}
 cp -c -Rp {codex} {backup}/.codex
-verify_backup {codex} {backup}/.codex
+verify_codex_backup {codex} {backup}/.codex
 mkdir -p {backup}/home-relative
 {workspace_backups}
 backup_space {home} {reserve}

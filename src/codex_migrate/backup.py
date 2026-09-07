@@ -7,6 +7,8 @@ import secrets
 import shlex
 from typing import Sequence, Tuple
 
+from codex_migrate.backup_sockets import CODEX_BACKUP_RUNNER
+
 
 MIN_RESERVE_BYTES = 2 * 1024**3
 
@@ -78,6 +80,16 @@ verify_backup() {
 }
 '''
 
+# Only the full migration's destination .codex backup uses this comparison.
+# Workspaces and skills retain verify_backup without runtime exclusions.
+BACKUP_FUNCTIONS += "\nverify_codex_backup() {\n  " + (
+    "/usr/bin/env -u PERL5OPT -u PERL5LIB -u PERLLIB -u PERLIO -u PERL_UNICODE "
+    "LC_ALL=C /usr/bin/perl -e " + shlex.quote(CODEX_BACKUP_RUNNER)
+    + ' -- "$1" "$2" 2>/dev/null || {\n'
+    + "    echo 'Backup verification found differences or could not complete. Installation blocked.' >&2; return 73;\n"
+    + "  }\n}\n"
+)
+
 
 def size_command(paths: Sequence[str]) -> str:
     return "backup_size " + " ".join(shlex.quote(path) for path in paths)
@@ -87,10 +99,12 @@ def verification_receipt(backup: str, mappings: Sequence[Tuple[str, str]]) -> st
     """Written only after every backup passes, before any destructive install."""
     payload = json.dumps({
         "backup_verified": True,
-        "verification": "rsync checksum, tree structure and symbolic-link targets",
+        "verification": "file checksums, tree structure and symbolic-link targets",
         "scope": [{"original": a, "backup": b} for a, b in mappings],
         "limitations": "Same-disk rollback copy; not protection against disk failure. "
         "Not a point-in-time snapshot: close all apps writing selected files. "
+        "Recognized destination Codex runtime sockets are not restorable data and "
+        "are omitted; ordinary files and the saved recovery backup remain checked. "
         "Extended attributes, ACLs and hard-link topology are not independently verified.",
         "recovery": "Keep writing apps closed. Preserve current destination files by moving "
         "them aside, then restore each existing backup to its original path. Missing "

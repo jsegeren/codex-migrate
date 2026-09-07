@@ -5,6 +5,7 @@ import secrets
 import shlex
 
 from codex_migrate.tree_digest import PERL_IMPORTS, TREE_FUNCTIONS
+from codex_migrate.backup_sockets import SOCKET_EXCLUSION
 
 TRANSACTION_NAME = ".codex-migrate-transaction.json"
 PENDING_MESSAGE = ("An unfinished destination installation needs recovery. Keep Codex closed on the "
@@ -36,9 +37,8 @@ use JSON::PP;
 use Errno qw(ENOENT);
 use Encode ();
 my $codex_mode = 0;
-sub excluded { return 0; }
 sub validate_names { return; }
-''' + TREE_FUNCTIONS + r'''
+''' + SOCKET_EXCLUSION + TREE_FUNCTIONS + r'''
 sub fail {
     print STDERR "Destination recovery evidence could not be safely saved or verified. Keep Codex closed, staging and backups intact, and contact support.\n";
     exit 78;
@@ -209,7 +209,12 @@ if ($mode eq 'begin') {
         (!!$original) == (!!$copy) or fail();
         $item->{existed} = $original ? JSON::PP::true : JSON::PP::false;
         $item->{backup_digest} = $copy ? digest($item->{backup}) : undef;
-        verify_frozen($item, $item->{original});
+        if ($item->{original} eq $home . '/.codex') {
+            # Compare the original's durable data with the strictly frozen
+            # backup. Do not change saved digests or later recovery checks.
+            local $cm_ignore_codex_runtime_sockets = 1;
+            verify_frozen($item, $item->{original});
+        } else { verify_frozen($item, $item->{original}); }
     }
     flush_tree($backup, $device);
     flush_parent($backup);

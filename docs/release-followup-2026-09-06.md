@@ -1,5 +1,50 @@
 # Release follow-up: backup failure and owner notifications
 
+## September 7: exact backup diagnostic and source correction
+
+The Founder ran the one-shot administrator-authorized probe. It exited zero
+and saved its bounded shared report at timestamp `1788764465`. On the actual
+failed destination backup it found one missing socket, with matching counts
+of 1,989 regular files, 618 directories and three links, no extra entries and
+no changed node types. Both build-2 and build-3 rsync comparisons remained
+non-clean. No structural change was detected across the probe. There was no
+backup verification receipt or pending transaction. Counts do not independently
+prove file bytes match; the diagnostic deliberately exports no filenames,
+contents or hashes. It did not restart, repair or install anything.
+
+The source correction handles only actual sockets in recognized destination
+Codex runtime locations. A shared predicate is used by the full Codex backup's
+content/tree comparison and the original-data check immediately before creating
+the transaction. The backup itself retains strict, exclusion-free fingerprints;
+the durable transaction format and later recovery checks are unchanged.
+Workspace/skill checks and incoming source-data rules are unchanged. Ordinary
+files, links and directories with socket-looking names are not omitted.
+
+The real probe did not export the missing socket's location, so it does not
+prove that socket qualifies for this narrow exception. Current build 2 has not
+been replaced or retried. This source correction still requires a refreshed
+packaged candidate and the real two-Mac acceptance test; it is not release
+approval or a claim of successful migration.
+
+Initial local macOS acceptance: 55 tests passed on system Python 3.9, including
+actual APFS socket/clone handling, full installation with preserved destination
+identity, injected post-install failure with verified rollback, rejection of
+ordinary data loss/corruption and workspace sockets, and existing transaction
+write-failure tests. The full Python 3.12 suite then ran 698 tests: 686 passed,
+12 skipped. The expanded Python 3.9 backup/transaction/recovery/disk suite ran
+74 tests: 69 passed, five opt-in disk tests skipped. All 13 builder tests also
+passed on Python 3.9. Test-suite notarization messages are mocked, not actual
+Apple submissions. Build number 4 distinguishes the corrected candidate.
+
+The release task owns the single sibling build worktree
+`/Users/jsegeren/Git/codex-migrate-release-build` on
+`codex/signed-candidate-build4-2026-09-07`. It is retained only while building,
+notarizing or preserving this candidate's evidence; retire at handoff or by
+September 14, 2026 if Apple processing prevents completion. It must not replace
+the still-live build-2 test helper without a reviewed handoff.
+
+## Earlier investigation
+
 The refreshed owner-exported installation diagnostic at timestamp
 `1788761076.260705` reports `backup_comparison_differences`, not an incomplete
 comparison or missing backup receipt. It reports failed/installing, a pending
