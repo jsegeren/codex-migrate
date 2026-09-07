@@ -499,3 +499,50 @@ timestamp `1788815247.411524`, phase `passed`, runner 7042, original helper 7101
 restarted helper 8019. All exited. Retain staging and prior fixtures. This
 proves an unexpected transfer-connection termination and helper-restart resume;
 it does not claim physical Wi-Fi loss, cable removal, or route-switch behavior.
+
+## Build 5 real browser workspace-skills repair
+
+The create-once `tests/final_skills_browser_acceptance.py` and
+`tests/final_skills_browser.js` from pushed commit `b74d21a` ran as the disposable
+Source account after administrator approval. Node/Python syntax checks passed
+before dispatch. The browser-testing skill informed the fresh semantic snapshots,
+keyboard interaction, and responsive checks. The existing repository's direct
+Playwright-library pattern kept private control tokens out of CLI output, traces,
+screenshots and reports. Playwright 1.55.0 was installed only as disposable QA
+tooling; it is not an app dependency or part of the signed bundle.
+
+The harness reused the accepted connection in its existing private registry;
+it did not copy pairing credentials. Fresh `Codex-Migrate-BrowserSkills-20260907`
+folders contained one invented new source skill, a distinct old destination
+skill, and an out-of-scope destination sentinel. Configuration used a new
+registry scope hash, retaining earlier migration states and their evidence.
+
+Actual headless Chrome loaded the unmodified packaged build 5 browser setup.
+It restored the existing verified pairing, selected Custom skills only, unchecked
+personal skills, selected workspace skills and only the fresh test folder,
+reviewed the scope, verified changes initially disabled, and enabled changes.
+Inspect displayed one selected skill. Keyboard Start transfer reached
+ready-to-finalize. Keyboard Finalize opened the real confirmation dialog;
+its text explicitly said one skill and excluded conversations, configuration
+and whole repositories. Accepting that dialog completed the actual transfer.
+The rendered result showed one verified skill and a verified backup.
+
+An independent target check proved the new skill contents, unchanged outside
+sentinel, unchanged earlier fixture skill/project file and retained Codex data.
+Source authentication and installation identity were never opened by those
+comparison checks. Native VoiceOver was not run.
+
+Reflow checks passed at 1440, 390 and 320px with no horizontal overflow. The
+desktop and 320px completion screenshots were visually inspected: heading,
+status, scope, backup and support controls remained readable and separated;
+technical paths wrapped rather than spilling outside the panel. The narrow
+page is necessarily longer; this is not a WCAG certification. Private screenshots
+remain in Shared as `skills-browser-desktop.png` and `skills-browser-320.png`;
+they include test-machine identifiers and must not be used as public assets.
+
+Shared receipt:
+`/Users/Shared/CodexMigrate-Authentic-Status-20260906/final-skills-browser.json`,
+timestamp `1788815864.882771`, phase `passed`, runner 23622, helper 23658.
+Both exited. This closes the real browser selective-repair journey, not a
+skills-specific interruption, physical interface interruption, native folder
+permission denial, receiving-Mac quarantined launch, or VoiceOver check.

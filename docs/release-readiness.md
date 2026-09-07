@@ -48,8 +48,8 @@ Apple onboarding, signing, or payment provisioning.
   ZIP matches its signed hash. Build 4's actual app entitlement was also refunded
   in the sandbox and correctly denied a fresh download. These are test-money
   checks, not live sales or receiving-Mac acceptance.
-- Remaining acceptance must demonstrate physical interface interruption and
-  browser selective repair; validate quarantined first launch and native accessibility
+- Remaining acceptance must demonstrate physical interface interruption;
+  validate quarantined first launch and native accessibility
   on the destination; then verify delivery of the exact accepted artifact and
   activate the reviewed live purchase flow. The detailed device checklist is
   [clean-Mac acceptance](clean-mac-acceptance.md).
@@ -71,6 +71,14 @@ retained staging, and resumed the same migration after a helper restart. Both
 create-once runners exited successfully. Neither test switched Wi-Fi off or
 physically removed a cable; neither selects personal workspaces. See the dated
 release-validation receipt for exact scope and evidence.
+
+The actual signed build 5 browser workflow now also passed an independent
+workspace-skills repair on the two test accounts: restored pairing, scope
+selection, initially disabled changes, Inspect, keyboard Start/Finalize,
+explicit replacement confirmation, verified backup, and one updated skill.
+Target-side preservation checks passed and desktop/320px captures were inspected;
+1440/390/320px reflow had no horizontal overflow. This is not native VoiceOver
+or physical link removal evidence.
 
 The homepage and two helpful guides already have Search Console indexing
 evidence, and transparent GitHub community outreach is published. Neither
@@ -1501,8 +1509,8 @@ cross-Mac migration. Failure tests use disposable fixtures, not user data.
   developer-installed Python or Xcode.
 - Full different-user migration, packaged CLI skills repair, Pause/Stop/Resume,
   unexpected SSH-client loss plus helper restart, and controlled pending-transaction
-  recovery have real cross-Mac evidence. Complete the remaining browser selective
-  repair, native permissions, and physical Wi-Fi/direct-link cases from the
+  recovery have real cross-Mac evidence. Browser selective repair also passed.
+  Complete the remaining native permissions and physical Wi-Fi/direct-link cases from the
   clean-Mac checklist without rerunning the completed create-once fixtures.
 - Finish native UI/accessibility review against the exact release build.
 - Sandbox payment, actual signed build 5 email/download/recovery delivery, and
