@@ -546,3 +546,38 @@ timestamp `1788815864.882771`, phase `passed`, runner 23622, helper 23658.
 Both exited. This closes the real browser selective-repair journey, not a
 skills-specific interruption, physical interface interruption, native folder
 permission denial, receiving-Mac quarantined launch, or VoiceOver check.
+
+## Paid-beta follow-up: real permission denial and native-test access
+
+`tests/test_packaged_permission_denial.py` adds two unprivileged, real filesystem
+denial probes, using newly created temporary fixture homes rather than either
+personal workspace. One denies a nested workspace directory; the other denies
+a nested Codex sessions directory. Both passed against the exact signed build 5
+engine and against source. The OS independently raised PermissionError on those
+directories; inventory refused or explicitly reported unreadable data, did not
+emit fixture contents or a traceback, and left the files and transaction state
+unchanged. Fixture permissions were restored before automatic cleanup. This is
+POSIX filesystem-denial evidence, not native TCC or folder-picker acceptance.
+
+Native VoiceOver was initially off on the source Mac. System Settings enabled
+it, its first-run introduction appeared, and the actual screen-reader process
+started. The automation interface timed out reading VoiceOver itself and did
+not expose trustworthy caption/speech output. No successful speech-announcement
+or VoiceOver-navigation result is claimed. VoiceOver was switched back off,
+its process exited, and System Settings returned to the original General pane.
+No migration, pairing approval, diagnostic export or personal file inspection
+was performed during this attempt.
+
+A noninteractive read-only Source-account identity check required renewed macOS
+administrator authentication. Screen Sharing to the previously verified
+receiving host also failed, reporting that Screen Sharing or Remote Management
+must be enabled there. No remote access setting was changed. Receiving-Mac
+native first launch/permissions and physical-link interruption therefore remain
+unverified, not failed product tests. Existing SSH-kill/restart evidence must not
+be relabelled as cable removal. Access to the receiving test desktop and a brief
+physical-link test window are the remaining human dependencies.
+
+Separately, live Stripe account `acct_1Rkc6eJfbWpcJIZb` communication preferences
+were re-read: **Successful payment receipt — Email** remained checked. This is
+merchant-notification configuration evidence, not proof of an actual live-sale
+message arriving in Josh's mailbox. Buyer delivery email is a separate flow.
