@@ -147,7 +147,7 @@ class HandoffTests(unittest.TestCase):
     def test_shared_package_rejects_private_wrapper_and_nested_files_before_signing(self):
         shared = self.home / 'shared'
         app = shared / 'isolated-candidate/Codex Migrate.app'
-        engine = app / 'Contents/engine'
+        engine = app / 'Contents/Resources/engine/codex-migrate-engine'
         engine.parent.mkdir(parents=True)
         engine.write_text('disposable fixture')
         for directory in (shared, app.parent, app, engine.parent):

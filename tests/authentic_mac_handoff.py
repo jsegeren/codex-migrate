@@ -188,7 +188,7 @@ def run(command, timeout=30, **kwargs):
 
 def verify_shared_candidate():
     """Check public artifact access before asking another account to run it."""
-    app = SHARED / 'isolated-candidate/Codex Migrate.app'
+    app = ENGINE.parents[3]
     message = 'Shared test package permissions need repair; no migration started'
     try:
         for folder in (SHARED, app.parent, app):
@@ -795,7 +795,7 @@ def open_test_dashboard():
     print('Existing test dashboard opened. Do not retry or restore yet; share its error message.')
 
 
-def driver():
+def driver(reviewed_backup=None):
     home = account('source')
     root = root_for(home)
     lock_path = root / 'runner.lock'
@@ -900,7 +900,11 @@ def driver():
             raise SafeError('Operation observation timed out; helper remains available')
         status = api(port, token, '/api/status')
         if not status.get('receipt'):
-            require(status.get('status') in ('idle', 'ready', 'ready_to_finalize'),
+            reviewed_retry = (isinstance(reviewed_backup, dict)
+                and status.get('status') == 'failed' and status.get('phase') == 'installing'
+                and status.get('migration_id') == reviewed_backup.get('migration_id')
+                and status.get('pending_backup') == reviewed_backup.get('pending_backup'))
+            require(status.get('status') in ('idle', 'ready', 'ready_to_finalize') or reviewed_retry,
                     'Existing transfer requires review; no automatic reset')
             if status.get('status') != 'ready_to_finalize':
                 api(port, token, '/api/action', {'action': 'inspect'})

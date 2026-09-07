@@ -1,5 +1,27 @@
 # One-launch authentic conversation test handoff
 
+## September 7: guarded build 4 continuation
+
+The current Founder action is **Continue Build 4 Test.command** in
+`/Users/Shared` on the old Mac, opened from the personal account. It requests
+administrator authentication once and launches the existing disposable source
+account's worker in the background. No account switching or credential copying
+is required. The older diagnostic launcher is not the next action.
+
+The worker checks the exact notarized build 4 archive and signature, verifies
+the real failed destination backup using build 4's read-only comparison, and
+rechecks the unchanged failed/idle helper state before retiring build 2. It
+retains sign-ins, genuine conversations, staging, backups and migration state.
+A failed preflight stops before helper retirement or migration retry. Only the
+fixed disposable source workspace and target account are in scope.
+
+Progress is exported to
+`/Users/Shared/CodexMigrate-Authentic-Status-20260906/build4-continuation.json`;
+the acceptance outcome remains in that directory's `result.json`. Launching
+the worker is not evidence of migration success. The harness, backup socket and
+handoff regression suites pass all 71 tests; real two-Mac acceptance remains
+pending. Historical notes below describe earlier attempts.
+
 Prepared September 6, 2026. This is an engineering harness, not customer UI.
 Its latest live run passed both account sign-in checks and created three genuine
 conversations, but stopped during staging setup. There is no authentic
