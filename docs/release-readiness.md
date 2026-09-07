@@ -3,6 +3,40 @@
 The downloadable paid app is **not released**. Publishing source and the
 informational website does not open checkout or certify a customer download.
 
+## Latest checkpoint — September 6 evening
+
+Apple membership is now active through September 6, 2027. The signed-in
+`joshua@segeren.com` account shows team `P9J3JK79KQ`, while the Founder supplied
+`WCCLSPWZ9Y`; the intended signing team must be confirmed before certificate
+creation. No valid local signing identity is installed. Earlier Apple-Pending
+entries below are historical, not the current membership status.
+
+The authentic two-Mac run created three genuine conversations using the
+advertised supported model. Migration then failed after preflight, during
+staging preparation; it has no installation receipt. Its original helper and
+private state are retained. The read-only account-local diagnostic is prepared
+but has not run. See the [test handoff](authentic-test-handoff-2026-09-06.md).
+
+Staging ownership checks had a separate reproducible usability defect: missing,
+linked, or mismatched staging markers failed with generic shell output. Source
+now returns fixed, actionable messages that explain whether existing staging
+cannot be verified or belongs to another migration, without exposing paths or
+marker values. Seven real local shell cases verify fresh/matching staging,
+foreign/missing markers and linked paths; failures preserve staged fixture data
+and unrelated files. The destination lock and ownership comparison are retained.
+This is a source change, not a rebuilt package or diagnosis of the live failure.
+Verification on this checkpoint: 71 focused tests pass on Python 3.9; the full
+Python 3.12 suite ran 640 tests, with 628 passing and 12 skipped. Release-builder
+messages emitted by mocked orchestration tests are not real Apple submissions
+or evidence of a signed artifact. `git diff --check` passes.
+
+Purchase email notifications are enabled for the existing Stripe account; this
+includes that account's other successful payments, not only Codex Migrate.
+The GitHub star email automation is now daily at the Founder's preference,
+with no messages for unchanged state. Neither setting opens paid checkout.
+
+## Historical evidence
+
 September 6 production preflight passed on an initially unpromoted deployment of
 `28c898e`: fresh live Stripe account/catalog reads, the isolated live purchase
 schema, and verified private transport of the 451-byte harmless fixture, with
