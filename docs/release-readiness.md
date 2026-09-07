@@ -5,6 +5,13 @@ informational website does not open checkout or certify a customer download.
 
 ## Current release boundary — September 7
 
+Latest additional validation: [September 7 release checks](release-validation-2026-09-07.md).
+The 68-test opt-in disk/recovery/skills set passes, as does browser-driven
+restore on disposable data. The full Python suite passes 689/701 with 12 skips;
+website/commerce tests pass 257/258 with one skip. Live homepage Lighthouse
+scores 100 in all four categories. These results do not replace the remaining
+clean-Mac, physical-interruption, native accessibility and exact buyer-flow gates.
+
 Authoritative current receipts are [signing](signing-candidate-2026-09-06.md)
 and [migration/commerce follow-up](release-followup-2026-09-06.md). The dated
 entries below preserve history; they are not instructions to repeat completed
