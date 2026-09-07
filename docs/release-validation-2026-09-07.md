@@ -57,8 +57,9 @@ source revision; these checks do not silently substitute changed production code
    interrupted protected-phase recovery on synthetic data, and selective-skill
    repair with unrelated target state preserved. Local failure injection and
    the passing authentic migration are supporting evidence, not substitutes.
-3. Owner purchase notification and exact-session refund/revocation, then reviewed
-   release catalog, live webhook and checkout activation. Build 4 has now passed
+3. Owner purchase-notification delivery, then reviewed release catalog, live
+   webhook and checkout activation. Build 4's exact-session refund/revocation
+   passed as recorded below. Build 4 has also passed
    the actual sandbox entitlement → email → saved ZIP → quarantined-launch path
    on the current Mac, as recorded below. A replacement build containing the
    diagnostic fix needs its own signed-artifact and delivery checks.
