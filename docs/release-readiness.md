@@ -48,7 +48,7 @@ Apple onboarding, signing, or payment provisioning.
   ZIP matches its signed hash. Build 4's actual app entitlement was also refunded
   in the sandbox and correctly denied a fresh download. These are test-money
   checks, not live sales or receiving-Mac acceptance.
-- Remaining acceptance must demonstrate physical interruption/recovery and
+- Remaining acceptance must demonstrate physical interface interruption and
   browser selective repair; validate quarantined first launch and native accessibility
   on the destination; then verify delivery of the exact accepted artifact and
   activate the reviewed live purchase flow. The detailed device checklist is
@@ -58,9 +58,19 @@ Build 5's subsequent fixed-scope run also passed real cross-Mac Pause, Stop and
 Resume with 409,413,176 bytes of staged data retained. Its packaged CLI then
 repaired one workspace skill with verified backup while independent target-side
 checks confirmed the new skill, unrelated project file and retained Codex state.
-This does not substitute for physical link-loss, protected-phase recovery or
-receiving-Mac/native accessibility checks. The create-once runner has exited;
+This does not substitute for physical link-loss or receiving-Mac/native
+accessibility checks. The create-once runner has exited;
 do not rerun its old launcher over the retained fixtures.
+
+Build 5 also passed two subsequent real-SSH checks. A controlled, durably
+journaled fixture replacement was interrupted by killing its dedicated writer;
+the packaged dashboard API restored the original data, preserved newer data,
+verified the backup and reconciled the completed restoration. Separately, an
+unexpected kill of only the staging transfer's SSH child produced a failure,
+retained staging, and resumed the same migration after a helper restart. Both
+create-once runners exited successfully. Neither test switched Wi-Fi off or
+physically removed a cable; neither selects personal workspaces. See the dated
+release-validation receipt for exact scope and evidence.
 
 The homepage and two helpful guides already have Search Console indexing
 evidence, and transparent GitHub community outreach is published. Neither
@@ -1484,16 +1494,20 @@ cross-Mac migration. Failure tests use disposable fixtures, not user data.
   through Codex on the separate Mac. Frozen retained-state checks fix the
   configuration-copy corruption defect reproduced against `ddd598d`; matching
   files do not establish application-level compatibility.
-- Confirm Apple Developer membership activation and the intended account.
-- Create Developer ID signing credentials and notarization access securely.
-- Produce, notarize, staple, and verify the exact committed release artifact.
+- Apple membership, signing credentials, notarization access, and the exact
+  signed/stapled build 5 artifact are complete. Do not repeat enrollment,
+  certificate creation, or notarization for this unchanged candidate.
 - Verify quarantined download and first launch on a separate clean Mac without
   developer-installed Python or Xcode.
-- Exercise full and skills-only transfers, permissions, different usernames,
-  network interruption, restart, and recovery with cross-Mac fixtures.
+- Full different-user migration, packaged CLI skills repair, Pause/Stop/Resume,
+  unexpected SSH-client loss plus helper restart, and controlled pending-transaction
+  recovery have real cross-Mac evidence. Complete the remaining browser selective
+  repair, native permissions, and physical Wi-Fi/direct-link cases from the
+  clean-Mac checklist without rerunning the completed create-once fixtures.
 - Finish native UI/accessibility review against the exact release build.
-- Configure and test private purchase support, refund handling, payment, and
-  delivery of the exact artifact before enabling checkout.
+- Sandbox payment, actual signed build 5 email/download/recovery delivery, and
+  refund denial are complete. Final artifact acceptance and reviewed live
+  checkout/webhook activation remain; no live sale is claimed.
 
 No unsigned engineering ZIP is advertised or sold as a release. Route
 selection is implemented but not yet hardware-certified; exhaustive discovery

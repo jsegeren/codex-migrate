@@ -469,3 +469,33 @@ controls were clicked by a user. Those distinctions matter: local protected
 restore fault-injection tests and earlier browser recovery checks remain their
 own evidence. Receiving-Mac native launch/VoiceOver and exact release acceptance
 are still outstanding; live checkout has not been enabled by this test.
+
+## Build 5 unexpected transfer-connection loss and helper restart
+
+The fixed `tests/final_connection_loss_acceptance.py` from pushed commit
+`4ff85a1` ran in the disposable Source account after administrator approval.
+Thirteen combined harness checks passed, including process-selection guards
+rejecting another UID, a missing engine, an unrelated SSH process, and ambiguous
+transfer children. The run reused the existing synthetic source project
+read-only, with a create-once new state and staging directory.
+
+During the workspace transfer, the harness selected the unique SSH child of
+this exact engine's rsync child, checked the parent/UID relationship again, and
+sent SIGKILL only to that SSH client. It did not call Pause/Stop, switch network
+interfaces, stop the SSH server, or disturb unrelated sessions. The actual
+packaged engine reported failed/interrupted transfer without a completion
+receipt. A target-side check confirmed staging and retained destination data.
+
+The failed helper was then shut down normally and restarted with the exact
+same configuration/state. Resume retained the migration ID and reached
+ready-to-finalize, still without any full installation or receipt. Independent
+target checks again passed for the prior selected skill, unrelated project
+file, and retained Codex state. Final staged regular-file size was 677,848,813
+bytes; this is a size observation, not a full-installation claim.
+
+Shared receipt:
+`/Users/Shared/CodexMigrate-Authentic-Status-20260906/final-connection-loss.json`,
+timestamp `1788815247.411524`, phase `passed`, runner 7042, original helper 7101,
+restarted helper 8019. All exited. Retain staging and prior fixtures. This
+proves an unexpected transfer-connection termination and helper-restart resume;
+it does not claim physical Wi-Fi loss, cable removal, or route-switch behavior.
