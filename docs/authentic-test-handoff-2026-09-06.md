@@ -325,3 +325,18 @@ explicit recovery preserving later destination work. It does not substitute
 for the remaining packaged two-Mac interrupted-copy and interrupted-install
 acceptance runs. Skills-only selection and recovery of an incomplete transfer
 are different acceptance cases.
+
+The harness now checks Shared wrapper and bundle directory/file read/traverse
+permissions, plus engine executability, before code-signature verification or
+remote preparation. It reports a fixed permissions diagnostic and never changes
+permissions itself. The regression covers the exact private-wrapper failure,
+nested private directories/files, a non-executable engine and a missing engine;
+all fail before calling `codesign`. All 49 harness tests pass and the real Shared
+candidate passes this new publication preflight. This is not a source-account
+migration result.
+
+The first notarization launcher did not execute: the Founder's terminal transcript
+shows a stray `g` prepended to the absolute launcher path. The shell rejected
+that path before any password validation. A fresh Terminal instance was launched
+and a live owner-account `notarytool` process was confirmed. Credential validation
+and Keychain persistence must still be checked after password entry.

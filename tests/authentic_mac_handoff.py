@@ -186,6 +186,30 @@ def run(command, timeout=30, **kwargs):
     return result.stdout
 
 
+def verify_shared_candidate():
+    """Check public artifact access before asking another account to run it."""
+    app = SHARED / 'isolated-candidate/Codex Migrate.app'
+    message = 'Shared test package permissions need repair; no migration started'
+    try:
+        for folder in (SHARED, app.parent, app):
+            info = folder.lstat()
+            require(stat.S_ISDIR(info.st_mode) and info.st_mode & 0o005 == 0o005,
+                    message)
+        def traversal_error(error):
+            raise error
+        for folder, directories, files in os.walk(app, followlinks=False, onerror=traversal_error):
+            for path in [Path(folder)] + [Path(folder) / name for name in directories + files]:
+                info = path.lstat()
+                if stat.S_ISLNK(info.st_mode):
+                    continue  # codesign verifies bundle links below.
+                needed = 0o005 if stat.S_ISDIR(info.st_mode) else 0o004
+                require(info.st_mode & needed == needed, message)
+        require(ENGINE.is_file() and ENGINE.stat().st_mode & 0o005 == 0o005, message)
+    except OSError:
+        raise SafeError(message) from None
+    run(['/usr/bin/codesign', '--verify', '--deep', '--strict', str(app)])
+
+
 def processes():
     output = run(['/bin/ps', '-U', str(os.getuid()), '-o', 'pid=,comm=']).decode()
     return [(int(parts[0]), parts[1]) for line in output.splitlines()
@@ -696,8 +720,7 @@ def driver():
     try:
         reply, options, identity, known = connection()
         codex_binary()
-        run(['/usr/bin/codesign', '--verify', '--deep', '--strict',
-             str(SHARED / 'isolated-candidate/Codex Migrate.app')])
+        verify_shared_candidate()
         retire_failed_staging_helper(options, reply['target'])
         stop_old_helper()
         update('preparing_destination_test_account')

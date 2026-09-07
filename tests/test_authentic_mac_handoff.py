@@ -13,6 +13,37 @@ import authentic_mac_handoff as handoff
 
 
 class HandoffTests(unittest.TestCase):
+    def test_shared_package_rejects_private_wrapper_and_nested_files_before_signing(self):
+        shared = self.home / 'shared'
+        app = shared / 'isolated-candidate/Codex Migrate.app'
+        engine = app / 'Contents/engine'
+        engine.parent.mkdir(parents=True)
+        engine.write_text('disposable fixture')
+        for directory in (shared, app.parent, app, engine.parent):
+            directory.chmod(0o755)
+        engine.chmod(0o755)
+        with patch.object(handoff, 'SHARED', shared), patch.object(handoff, 'ENGINE', engine), \
+                patch.object(handoff, 'run') as run:
+            handoff.verify_shared_candidate()
+            run.assert_called_once_with(['/usr/bin/codesign', '--verify', '--deep', '--strict', str(app)])
+            for path, bad_mode, good_mode in ((app.parent, 0o700, 0o755),
+                                               (engine.parent, 0o700, 0o755),
+                                               (engine, 0o700, 0o755),
+                                               (engine, 0o644, 0o755)):
+                with self.subTest(path=path, mode=bad_mode):
+                    run.reset_mock()
+                    path.chmod(bad_mode)
+                    with self.assertRaisesRegex(handoff.SafeError, 'permissions need repair'):
+                        handoff.verify_shared_candidate()
+                    run.assert_not_called()
+                    self.assertEqual(path.stat().st_mode & 0o777, bad_mode)
+                    path.chmod(good_mode)
+            engine.unlink()
+            run.reset_mock()
+            with self.assertRaisesRegex(handoff.SafeError, 'permissions need repair'):
+                handoff.verify_shared_candidate()
+            run.assert_not_called()
+
     def test_staging_diagnostic_missing_matching_and_foreign_preserve_files(self):
         expected = 'a' * 32
         self.assertEqual(handoff.staging_diagnostic(self.home, expected)['staging'], 'missing')
