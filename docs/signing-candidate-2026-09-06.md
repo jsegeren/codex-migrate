@@ -1,5 +1,37 @@
 # First Developer ID candidate
 
+## Build 3 checkpoint — September 6 late evening
+
+The current release task owns the reused sibling worktree
+`/Users/jsegeren/Git/codex-migrate-release-build`, on pushed branch
+`codex/signed-candidate-build3-2026-09-06`, exact clean source
+`e542160fe8399971ee4827625c2bf3096a9497c2`. Build 3 includes the reproduced FIFO
+backup-verification fix; it does not claim to resolve the still-unclassified
+two-Mac backup failure. The source change passed 679 Python tests (667 passed,
+12 skipped); the build-number-only change passed all 13 builder tests.
+
+The real builder compiled and Developer ID signed the app at
+`build/desktop-u4d_z5m4/Codex Migrate.app`. Embedded-code checks, outer strict
+signature verification and the engine-version check passed. Independent outer
+signature verification passed again. The actual packaged engine then ran nine
+desktop checks: eight passed, one filesystem-specific skip.
+
+Notarization submission failed before a submission receipt was saved. Read-only
+history queries returned exit 69 with a missing-Keychain-profile-item error.
+The user login keychain remains the default and only user search-list keychain.
+The Mac is locked; the cause of profile unavailability is not established.
+No new Apple job or final release ZIP is confirmed, and no submission retry was
+attempted. Reconcile history/profile access before submitting again. Build 2,
+its accepted archive and the active failed-test helper are unchanged.
+
+Retain this clean worktree and its signed app for reconciliation and completion;
+do not rebuild or discard the evidence solely because the command exited.
+Retirement deadline: September 13, 2026, or sooner once the artifact is safely
+preserved and notarization no longer depends on this worktree. No process is
+still running for this build. Public checkout remains closed.
+
+## Earlier build history
+
 The Apple account credential was validated and stored in the local notarytool
 Keychain profile. No credential value is retained here. Signing uses Team ID
 `P9J3JK79KQ`; the enrollment ID is not the signing team.
