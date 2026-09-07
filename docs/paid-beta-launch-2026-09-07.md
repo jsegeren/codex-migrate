@@ -63,6 +63,11 @@ Live at <https://migrate.segeren.com/#founding-edition>.
 - Node suite: 277 tests, 276 passed, one skipped, zero failures. Coverage includes
   beta approval boundaries, hosted Checkout disclosures, UI labels, delivery
   email, and refusal of unreviewed artifacts.
+- GitHub's default-branch README and commercial policy now advertise the live
+  beta; focused documentation commit `5a1cdde6e42fb123ff57123397d393dbf49793c4`.
+  Repository description also points to the $50 signed beta. This documentation
+  update did not bulk-merge the separate engineering branch or trigger a new
+  website deployment (the existing Vercel project has no Git repository link).
 
 This is live checkout and exact private artifact verification, not a completed
 real-money purchase. Earlier successful sandbox purchase, webhook, email,
