@@ -175,3 +175,21 @@ fresh server request, then simulated refund and verified that reload hid the
 download and cleared recovery. All 270 Node tests ran: 269 passed, one skipped;
 all 22 site tests passed. This fixture is refresh/revocation evidence, not a new
 payment or an actual archive download. No signed app code changed.
+
+Source `29e1f78` was deployed to protected Preview
+`dpl_2DzEdALzZVMa3VHwbNjh6ahv2h9t` with the same sandbox account, catalog and
+existing entitlement. The already-delivered private recovery link was kept in
+browser memory and reopened on that corrected deployment; no new purchase,
+invitation or email was created. The actual buyer page verified the purchase,
+then a real reload again verified it and left Download for Mac visible. The
+corrected tab was preserved for the Founder. The existing sandbox alias now
+points to this Preview. Historical immutable Preview URLs are not rewritten.
+
+Production `dpl_6QYmdHyV5zqZWMtgeV2CSwEmdhkJ` was promoted after checking
+availability false. The live purchase script's SHA-256 matches the tested source
+(`b5659dae0f59d414acd33059238bf07c20747807306475e4b732ea58cb12be51`).
+Live availability remains false; both deployment builds skipped invitation and
+provisioning operations. The temporary Git export was retired to the owner's
+Trash as `codex-migrate-refresh-20260907`, recoverable; the local fixture server
+and browser were stopped. Buyer file saving and clean-Mac acceptance remain
+separate open gates.
