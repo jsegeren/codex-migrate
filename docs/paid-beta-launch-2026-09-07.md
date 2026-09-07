@@ -38,8 +38,36 @@ pause/stop/resume and browser skills-repair receipts remain separately scoped.
 
 ## Activation record
 
-Pending production deployment and final live checkout verification. Do not
-interpret this authorization record as evidence that checkout is already open.
+Live at <https://migrate.segeren.com/#founding-edition>.
+
+- Source deployed: `cd9f53c3118b0e65e0266cf852e55ed1c2992774`.
+- Closed preflight deployment: `dpl_43EhFcmPg2mp7eMindF4nZEJebH8`.
+  Actual production credentials verified the live account, product, $50
+  one-time price, database identity and private build-5 download. Full readback
+  matched the checksum; anonymous access was denied. One unpaid live Checkout
+  probe was created and expired, without supplying payment details or charging.
+- Paid-beta deployment: `dpl_5Dh2w27yiYvxdLxUvmzZiGAPDr4W`, READY and aliased to
+  the canonical domain. `COMMERCE_CHECKOUT_OPEN=yes` and
+  `COMMERCE_RELEASE=beta-build5-arm64`.
+- Canonical availability returns `available:true`, `priceUSD:50`,
+  `architecture:arm64`, `channel:beta`.
+- Existing Stripe product `prod_VCxpogUxaT0OeT` renamed “Codex Migrate — Mac
+  Beta”; the existing $50 price is unchanged. Existing webhook
+  `we_1UCbMoJfbWpcJIZbbNI7EmYl` is Active for the completed and asynchronous-paid
+  Checkout events. No secret was rotated and no unrelated product was changed.
+- Native Chrome displayed the live beta purchase card and followed its actual
+  Buy button to hosted Stripe Checkout. Product name, $50 price, hardware,
+  support/refund and remaining-test disclosures were present before Pay.
+  No payment details were entered and Pay was not pressed; the browser returned
+  to the site. This final browser-generated unpaid session can expire normally.
+- Node suite: 277 tests, 276 passed, one skipped, zero failures. Coverage includes
+  beta approval boundaries, hosted Checkout disclosures, UI labels, delivery
+  email, and refusal of unreviewed artifacts.
+
+This is live checkout and exact private artifact verification, not a completed
+real-money purchase. Earlier successful sandbox purchase, webhook, email,
+download and refund receipts remain test-money evidence. Native clean-Mac and
+accessibility checks listed above remain open.
 
 Rollback: set `COMMERCE_CHECKOUT_OPEN=no` and redeploy the validated source.
 Keep the release catalog and private artifact available for existing buyers;
