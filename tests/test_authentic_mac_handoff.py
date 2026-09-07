@@ -13,6 +13,72 @@ import authentic_mac_handoff as handoff
 
 
 class HandoffTests(unittest.TestCase):
+    def test_staging_diagnostic_missing_matching_and_foreign_preserve_files(self):
+        expected = 'a' * 32
+        self.assertEqual(handoff.staging_diagnostic(self.home, expected)['staging'], 'missing')
+        staging = self.home / 'Codex-Migrate-Staging'
+        staging.mkdir(mode=0o700)
+        marker = staging / '.codex-migrate-owner'
+        self.assertEqual(handoff.staging_diagnostic(self.home, expected)['staging'], 'missing_owner_marker')
+        for owner, outcome in ((expected, 'matching_owner'), ('b' * 32, 'different_owner'),
+                               ('invalid', 'invalid_owner_marker')):
+            marker.write_text(owner + '\n')
+            marker.chmod(0o600)
+            self.assertEqual(handoff.staging_diagnostic(self.home, expected)['staging'], outcome)
+            self.assertEqual(marker.read_text(), owner + '\n')
+
+    def test_staging_diagnostic_rejects_links_and_never_reads_target(self):
+        staging = self.home / 'Codex-Migrate-Staging'
+        staging.mkdir(mode=0o700)
+        (staging / '.codex-migrate-owner').symlink_to(self.home / '.codex/auth.json')
+        self.assertEqual(handoff.staging_diagnostic(self.home, 'a' * 32)['staging'], 'unsafe_or_unreadable')
+        (staging / '.codex-migrate-owner').unlink()
+        staging.rmdir()
+        staging.symlink_to(self.home / '.codex', target_is_directory=True)
+        self.assertEqual(handoff.staging_diagnostic(self.home, 'a' * 32)['staging'], 'unsafe_or_unreadable')
+
+    def test_staging_diagnostic_pending_record_is_presence_only(self):
+        (self.home / '.codex-migrate-transaction.json').symlink_to(self.home / 'absent')
+        with patch.object(Path, 'read_text', side_effect=AssertionError('must not read')):
+            self.assertTrue(handoff.staging_diagnostic(self.home, 'a' * 32)['pending_recovery'])
+        for value in (None, {}, 'secret', '../bad', 'a' * 33):
+            with self.assertRaises(handoff.SafeError):
+                handoff.staging_diagnostic(self.home, value)
+
+    def test_diagnose_exports_only_allowlisted_fields_without_actions(self):
+        root = handoff.root_for(self.home)
+        migration = root / 'migration'
+        migration.mkdir(mode=0o700)
+        handoff.save(migration / 'state.json', {'migration_id': 'a' * 32,
+                     'status': 'failed', 'phase': 'preflight_complete',
+                     'error': 'PRIVATE arbitrary details', 'control_token': 'PRIVATE'})
+        public = self.home / 'public'
+        public.mkdir(mode=0o755)
+        reply = {'staging': 'different_owner', 'pending_recovery': False, 'extra': 'PRIVATE'}
+        with patch.object(handoff, 'account', return_value=self.home), \
+                patch.object(handoff, 'connection', return_value=({'target': 'fixture'}, [], None, None)), \
+                patch.object(handoff, 'remote', return_value=reply) as remote, \
+                patch.object(handoff, 'PUBLIC', public), patch.object(handoff, 'api') as api, \
+                patch.object(handoff, 'driver') as driver, patch('builtins.print'):
+            handoff.diagnose()
+        remote.assert_called_once_with([], 'fixture', 'diagnose', 'a' * 32)
+        api.assert_not_called()
+        driver.assert_not_called()
+        encoded = (public / 'staging-diagnostic.json').read_text()
+        self.assertNotIn('PRIVATE', encoded)
+        self.assertNotIn('a' * 32, encoded)
+        self.assertTrue(json.loads(encoded)['failed_before_copy'])
+
+    def test_diagnose_route_never_starts_background_driver(self):
+        with patch('sys.argv', ['harness', '--diagnose']), \
+                patch.object(handoff, 'diagnose') as diagnostic, \
+                patch.object(handoff.subprocess, 'Popen') as spawn, \
+                patch.object(handoff, 'driver') as driver:
+            handoff.main()
+        diagnostic.assert_called_once_with()
+        spawn.assert_not_called()
+        driver.assert_not_called()
+
     def test_fast_background_exit_is_not_reported_as_start_failure_or_success(self):
         for code in (0, 1, -15):
             with self.subTest(code=code):

@@ -1,8 +1,8 @@
 # One-launch authentic conversation test handoff
 
 Prepared September 6, 2026. This is an engineering harness, not customer UI.
-Its live cross-Mac preparation passed both account sign-in checks, but authentic
-conversation creation failed before migration began. There is no authentic
+Its latest live run passed both account sign-in checks and created three genuine
+conversations, but stopped during staging setup. There is no authentic
 migration acceptance receipt yet. Original personal workspaces are not selected.
 
 ## Founder steps
@@ -182,3 +182,35 @@ source. This does not restart the exited source-account process: the corrected
 live acceptance run remains pending an account-local launch. Unlike the previous
 diagnostic-only update, this changes the identified cause and can proceed into
 migration if model generation and all existing safety checks pass.
+
+## Supported-model run: staging setup requires diagnosis
+
+Runner 75071 created all three genuine conversations with the advertised
+`gpt-6-astra` default. It started migration; the engine then reported `failed`
+with phase `preflight_complete`, before the staging/copy phase was entered.
+Packaged engine 75640 was left running with its private state. Do not reset it,
+delete destination staging, or claim that authentic installation passed.
+
+The stage-preparation code checks the destination staging owner marker before
+copying. Earlier tests used the same default staging folder; an ownership
+collision is a hypothesis, not a confirmed diagnosis. The current supervising
+personal account cannot read the source test account's private migration state;
+noninteractive sudo requires authentication and localhost SSH is unavailable.
+No permissions, credentials, or account isolation were bypassed.
+
+`Inspect Stopped Codex Test.command` runs `--diagnose` only in the source test
+account. It reads the existing migration reference, reuses the pinned connection,
+and checks fixed destination staging metadata. It exports only allowlisted
+staging-owner comparisons, pending-recovery presence, and fixed error codes to
+`/Users/Shared/CodexMigrate-Authentic-Status-20260906/staging-diagnostic.json`.
+It does not open Codex, call a model, start/stop a helper, transfer, finalize,
+delete, unlock, or alter either account's migration data. Control tokens and
+owner-marker values are never exported. The original result remains unchanged.
+This diagnostic still requires execution as the source test account; preparing
+the script is not proof it ran. The deterministic harness suite passes 41 tests.
+
+Apple membership was observed active through September 6, 2027 for
+`joshua@segeren.com`, showing team `P9J3JK79KQ`. The Founder supplied
+`WCCLSPWZ9Y`; signing-team selection is awaiting clarification. The local
+Keychain reports no valid code-signing identities. No certificate was created,
+notarization submitted, checkout opened, or paid release published.

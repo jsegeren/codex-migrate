@@ -486,7 +486,7 @@ def connection():
 
 
 def remote(options, target, action, payload=None):
-    require(action in ('prepare', 'ready', 'prove'), 'Unsupported remote action')
+    require(action in ('prepare', 'ready', 'prove', 'diagnose'), 'Unsupported remote action')
     code = Path(__file__).read_text()
     command = ['/usr/bin/ssh', *options, target,
                '/usr/bin/python3 - ' + shlex.quote('--remote-action=' + action)]
@@ -520,6 +520,68 @@ def remote(options, target, action, payload=None):
     require(result.returncode == 0, 'Destination ' + action + ' failed (exit '
             + str(result.returncode) + '); raw output withheld')
     return response
+
+
+def staging_diagnostic(home, migration_id):
+    """Read only fixed staging metadata; never adopt, remove or unlock it."""
+    require(isinstance(migration_id, str)
+            and re.fullmatch(r'[a-f0-9]{32}', migration_id), 'Invalid test migration reference')
+    staging = home / 'Codex-Migrate-Staging'
+    result = {'staging': 'missing', 'pending_recovery':
+              os.path.lexists(home / '.codex-migrate-transaction.json')}
+    if not os.path.lexists(staging):
+        return result
+    try:
+        checked(staging, directory=True)
+        descriptor = os.open(staging / '.codex-migrate-owner',
+                             os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(descriptor) as stream:
+            info = os.fstat(stream.fileno())
+            require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
+                    and info.st_nlink == 1 and not info.st_mode & 0o077
+                    and info.st_size <= 64, 'Unsafe test path')
+            owner = stream.read(128).strip()
+        if not re.fullmatch(r'[a-f0-9]{32}', owner):
+            result['staging'] = 'invalid_owner_marker'
+        else:
+            result['staging'] = 'matching_owner' if owner == migration_id else 'different_owner'
+    except FileNotFoundError:
+        result['staging'] = 'missing_owner_marker'
+    except (OSError, SafeError, UnicodeError):
+        result['staging'] = 'unsafe_or_unreadable'
+    return result
+
+
+def diagnose():
+    """Observe the failed test without restarting any app, transfer or model."""
+    home = account('source')
+    root = checked(home / STATE_NAME, directory=True)
+    state_root = checked(root / 'migration', directory=True)
+    state = read(state_root / 'state.json')
+    require(isinstance(state, dict), 'Invalid test state')
+    reply, options, _, _ = connection()
+    result = remote(options, reply['target'], 'diagnose', state.get('migration_id'))
+    # A compromised/malformed remote reply must not become a public data export.
+    staging = result.get('staging')
+    require(staging in ('missing', 'matching_owner', 'different_owner',
+                       'invalid_owner_marker', 'missing_owner_marker', 'unsafe_or_unreadable')
+            and type(result.get('pending_recovery')) is bool, 'Invalid diagnostic response')
+    error = state.get('error')
+    known_errors = {
+        'remote command failed': 'remote_command_failed_without_details',
+        'Cannot safely lock the destination. No migration data was changed; contact support.':
+            'destination_lock_validation_failed',
+        'Planning mode is read-only; restart with --apply to transfer': 'changes_disabled',
+    }
+    report = {'checked_at': time.time(), 'read_only': True,
+              'failed_before_copy': state.get('status') == 'failed'
+                  and state.get('phase') == 'preflight_complete',
+              'error_code': known_errors.get(error, 'unclassified_private_error')
+                  if isinstance(error, str) else 'unclassified_private_error',
+              'staging': staging, 'pending_recovery': result['pending_recovery']}
+    checked(PUBLIC, directory=True, private=False)
+    save(PUBLIC / 'staging-diagnostic.json', report, public=True)
+    print('Read-only diagnostic saved. No transfer, account or backup was changed.')
 
 
 def api(port, token, path, payload=None):
@@ -709,11 +771,15 @@ def driver():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--remote-action', choices=('prepare', 'ready', 'prove'))
+    parser.add_argument('--remote-action', choices=('prepare', 'ready', 'prove', 'diagnose'))
     parser.add_argument('--payload', default='bnVsbA==')
     parser.add_argument('--background', action='store_true')
+    parser.add_argument('--diagnose', action='store_true')
     args = parser.parse_args()
-    if args.background:
+    require(not args.diagnose or not (args.background or args.remote_action), 'Conflicting test actions')
+    if args.diagnose:
+        diagnose()
+    elif args.background:
         account('source')
         worker = subprocess.Popen(['/usr/bin/python3', str(Path(__file__).resolve())],
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
@@ -741,6 +807,8 @@ def main():
             result = {'prepared': True}
         elif args.remote_action == 'ready':
             result = {'ready': login_ready(home)}
+        elif args.remote_action == 'diagnose':
+            result = staging_diagnostic(home, json.loads(base64.b64decode(args.payload)))
         else:
             require(codex_closed(), 'Quit destination Codex before automated reopening check')
             result = prove_threads(home, json.loads(base64.b64decode(args.payload)))
