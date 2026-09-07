@@ -13,6 +13,46 @@ import authentic_mac_handoff as handoff
 
 
 class HandoffTests(unittest.TestCase):
+    def test_open_dashboard_only_reads_known_helper_and_opens_token_fragment(self):
+        root = handoff.root_for(self.home)
+        state = root / handoff.MIGRATION_STATE
+        state.mkdir(mode=0o700)
+        token = state / 'control-token'
+        token.write_text('a' * 64)
+        token.chmod(0o600)
+        handoff.save(root / handoff.RUNTIME_RECORD, {'pid': 123})
+        with patch.object(handoff, 'account', return_value=self.home), \
+                patch.object(handoff, 'processes', return_value=[(123, str(handoff.ENGINE))]), \
+                patch.object(handoff, 'listener', return_value=54321), \
+                patch.object(handoff, 'api', return_value={'status': 'failed'}) as api, \
+                patch.object(handoff.subprocess, 'run') as launch:
+            handoff.open_test_dashboard()
+            api.assert_called_once_with(54321, 'a' * 64, '/api/status')
+            self.assertEqual(launch.call_args.args[0],
+                             ['/usr/bin/open', 'http://127.0.0.1:54321/#token=' + 'a' * 64])
+            token.write_text('invalid token')
+            api.reset_mock()
+            launch.reset_mock()
+            with self.assertRaisesRegex(handoff.SafeError, 'Invalid test control token'):
+                handoff.open_test_dashboard()
+            api.assert_not_called()
+            launch.assert_not_called()
+
+    def test_open_dashboard_never_restarts_missing_or_different_helper(self):
+        root = handoff.root_for(self.home)
+        (root / handoff.MIGRATION_STATE).mkdir(mode=0o700)
+        handoff.save(root / handoff.RUNTIME_RECORD, {'pid': 123})
+        for running in ([], [(123, '/other/app')], [(124, str(handoff.ENGINE))]):
+            with self.subTest(running=running), \
+                    patch.object(handoff, 'account', return_value=self.home), \
+                    patch.object(handoff, 'processes', return_value=running), \
+                    patch.object(handoff, 'api') as api, \
+                    patch.object(handoff.subprocess, 'run') as launch:
+                with self.assertRaisesRegex(handoff.SafeError, 'no restart performed'):
+                    handoff.open_test_dashboard()
+                api.assert_not_called()
+                launch.assert_not_called()
+
     def test_shared_package_rejects_private_wrapper_and_nested_files_before_signing(self):
         shared = self.home / 'shared'
         app = shared / 'isolated-candidate/Codex Migrate.app'

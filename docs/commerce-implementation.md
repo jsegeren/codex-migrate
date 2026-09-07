@@ -1,6 +1,18 @@
 # Purchase and delivery implementation — September 5, 2026
 
 Status: implementation and private-storage transport tested; **not a live checkout release**.
+
+September 6 signed-artifact transport: the receipt-bound uploader on Node
+24.19.0 accepted the actual notarized build 2 archive from clean source
+`1ee2e410b13799941cecbaca5e8525cf35de02dc`, uploaded without overwriting, then
+independently streamed back and verified all 8,305,738 bytes and SHA-256
+`e6beb05820aaef74edbbb5c3247c898d4bef7f0c1dac1a813394e71a7289a40b`.
+It is in the existing private store at the content-addressed
+`live/<sha256>/Codex-Migrate-0.1.0-build2-arm64.zip` pathname. An independent
+anonymous GET returned HTTP 403. No release-catalog entry was enabled:
+`accepted` remains false and checkout remains closed. This closes actual app
+upload/private byte-transport verification, not browser purchase, email,
+clean-Mac launch, migration or recovery acceptance.
 The committed release catalog contains only a harmless sandbox delivery fixture.
 Live credentials and catalog settings are now saved in Vercel Production, but
 the signed release and full live purchase acceptance are incomplete. The live

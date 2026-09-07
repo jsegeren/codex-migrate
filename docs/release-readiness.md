@@ -5,6 +5,16 @@ informational website does not open checkout or certify a customer download.
 
 ## Latest checkpoint — September 6 evening
 
+Latest signed-candidate two-Mac run: staging completed and finalization reached
+`installing`, then failed. Both accounts were ready and all three genuine
+conversations were available. The owner-local runner exited; its packaged
+helper and private state remain intact for diagnosis. No successful installation
+or rollback is claimed. The read-only source-account error-viewer described in
+the [test handoff](authentic-test-handoff-2026-09-06.md) is ready; do not rerun
+the transfer or reset state before reviewing the actual error/recovery evidence.
+Actual notarized-archive upload, authenticated byte verification and anonymous
+access denial now pass in private storage; public checkout is unchanged.
+
 Apple membership is now active through September 6, 2027. The signed-in
 `joshua@segeren.com` account shows team `P9J3JK79KQ`. Apple Support's activation
 email explicitly identifies `WCCLSPWZ9Y` as the enrollment ID, not the Team ID;

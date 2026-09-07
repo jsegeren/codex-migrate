@@ -17,6 +17,25 @@ for that same account-local launch. See the [signing receipt](signing-candidate-
 
 ## Founder steps
 
+Latest live run after the signed-candidate update: runner 83988 confirmed both
+accounts ready and three genuine conversations, staged data and reached the
+installation phase. It then reported `failed` during `finalizing`, with
+`migration_phase: installing`. The runner exited; packaged helper 84016 remains
+running with its protected state. This is not an installation or rollback
+success receipt. Do not rerun, reset or change either test account before
+examining the actual error and recovery evidence.
+
+`/Users/Shared/Show Codex Test Error.command`, launched inside the source test
+account on the old Mac, now opens only the exact known running helper's dashboard.
+It validates the owner, runtime PID/executable and token shape, performs one
+status GET, then opens a loopback URL with the existing token in its fragment.
+It never starts a helper, submits a migration/recovery action, copies credentials
+to a shared report, or restarts a stopped operation. Share the displayed error,
+not the browser URL. All 51 harness tests pass on Python 3.9 and 3.12, including
+read-only opening and missing/wrong-process rejection. The signed app itself
+has not changed. The original launch steps below are not an instruction to
+retry this failed installation.
+
 1. On the **old Mac**, switch to **Codex Migrate Source**. With Codex closed,
    open `/Users/Shared/CodexMigrate-Authentic-20260906/Start Authentic Migration Test.command`.
    No administrator password is required when running in that account.

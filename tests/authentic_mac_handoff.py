@@ -698,6 +698,29 @@ def retire_failed_staging_helper(options, target):
     raise SafeError('Old test helper did not stop; no replacement started')
 
 
+def open_test_dashboard():
+    """Open only the known running test dashboard; never restart or mutate it."""
+    home = account('source')
+    root = checked(home / STATE_NAME, directory=True)
+    state = checked(root / MIGRATION_STATE, directory=True)
+    runtime = read(root / RUNTIME_RECORD)
+    require(isinstance(runtime, dict) and type(runtime.get('pid')) is int,
+            'Invalid test helper reference')
+    require((runtime['pid'], str(ENGINE)) in processes(),
+            'The expected test helper is not running; no restart performed')
+    port = listener(runtime['pid'])
+    token = checked(state / 'control-token').read_text().strip()
+    require(re.fullmatch(r'[a-f0-9]{64}', token) is not None, 'Invalid test control token')
+    status = api(port, token, '/api/status')
+    require(isinstance(status, dict) and isinstance(status.get('status'), str),
+            'Test dashboard status unavailable')
+    # Open the already-authorized local dashboard in this same account. The
+    # fragment is not sent to the HTTP server or printed in any shared report.
+    subprocess.run(['/usr/bin/open', 'http://127.0.0.1:' + str(port) + '/#token=' + token],
+                   check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    print('Existing test dashboard opened. Do not retry or restore yet; share its error message.')
+
+
 def driver():
     home = account('source')
     root = root_for(home)
@@ -844,9 +867,14 @@ def main():
     parser.add_argument('--payload', default='bnVsbA==')
     parser.add_argument('--background', action='store_true')
     parser.add_argument('--diagnose', action='store_true')
+    parser.add_argument('--open-dashboard', action='store_true')
     args = parser.parse_args()
+    require(not args.open_dashboard or not (args.background or args.remote_action or args.diagnose),
+            'Conflicting test actions')
     require(not args.diagnose or not (args.background or args.remote_action), 'Conflicting test actions')
-    if args.diagnose:
+    if args.open_dashboard:
+        open_test_dashboard()
+    elif args.diagnose:
         diagnose()
     elif args.background:
         account('source')
