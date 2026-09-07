@@ -312,3 +312,57 @@ configuration evidence, not proof of a new owner email arriving. Stripe's
 describes successful-payment notifications. No payment was made merely to
 exercise live mail delivery, and the sandbox customer delivery email is not
 being substituted for an owner alert. Live checkout remains closed.
+
+## Build 5 exact buyer delivery and downloaded launch
+
+Catalog/test source `367a665e1a656a54f8c936d56b393bf0e7feba40` adds
+`sandbox-build5-arm64` without accepting it for live sales. The private uploader
+read back all 8,305,628 bytes with the signed build 5 checksum recorded above.
+Both build 4 and build 5 sandbox entries remain `testingOnly: true` and
+`accepted: false`; regression tests reject turning either into a live release
+by changing only its accepted flag. Node checks: 271 run, 270 passed, one skip.
+
+Protected Preview `dpl_8hw3uT9CHpXTRSEGEfWkpfXH2mbD` became Ready at
+20:22 UTC and received the existing stable commerce-sandbox alias. Its one
+operator invitation used reference `dbe87a53-69ed-40ce-b103-4f7a5ad728a1`;
+mail acceptance and actual Inbox arrival were verified. Checkout session
+`cs_test_a1UlZOaZAUhOLjiReRU36WaDUsCtPnxZjyTH6Ck622gOMXQQE3Vxj6uraH`
+completed using Stripe's synthetic card and invented billing details. No real
+card or charge was used. The existing test product description was corrected
+to describe delivery of the invited test artifact rather than promising no
+software. Price and live product settings were unchanged.
+
+The actual buyer page verified payment and offered build 5. Reloading retained
+the download control and verified the entitlement again. The deployment's
+webhook request returned HTTP 200. The 13:27 Pacific fulfillment email arrived
+in Inbox, described the signed operator-test candidate correctly, and contained
+the exact archive checksum. Its private recovery link independently reopened a
+verified purchase page offering that same build. Tokens and signed URLs are not
+part of this receipt.
+
+Chrome's native Save dialog saved
+`/Users/jsegeren/Downloads/Codex-Migrate-0.1.0-build5-arm64.zip`. Its size and
+SHA-256 matched the signed archive, and Chrome quarantine remained present.
+Archive Utility extracted `Codex Migrate 2.app` alongside the older build,
+without overwriting it. Bundle build number was 5; strict/deep signature and
+Gatekeeper checks passed (Notarized Developer ID).
+
+The old build 4 helper was verified idle/unconfigured with no active child,
+then closed through its guarded SIGINT path. Normal macOS Open confirmation
+for the new download explicitly reported Apple's malicious-software check.
+After Open, the translocated build 5 launcher (49005) started its packaged
+engine (50219), listening only on `127.0.0.1:51550`, and automatically opened
+the current connection-card setup in Chrome. No migration or pairing began.
+
+A duplicate-launch probe did not replace the original engine or listener.
+Native automation could not select its warning dialog reliably, so the warning's
+rendered wording is not certified by this probe. The childless duplicate
+launcher (50625) was stopped; the original idle helper remains available.
+The packaged real-process exit-75/survival test remains the verified diagnostic
+evidence. Downloaded files, Shared candidate and existing test data are retained.
+
+This closes build 5's actual sandbox purchase, fulfillment, recovery-link,
+refresh, file-save and current-Mac quarantined-launch checks. It does not close
+receiving-Mac launch/VoiceOver, physical interruption/recovery, selective-repair
+acceptance, or actual owner-alert arrival. Live checkout stays closed until the
+remaining release acceptance is resolved.

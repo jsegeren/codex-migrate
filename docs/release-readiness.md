@@ -7,8 +7,8 @@ informational website does not open checkout or certify a customer download.
 
 Latest additional validation: [September 7 release checks](release-validation-2026-09-07.md).
 The 68-test opt-in disk/recovery/skills set passes, as does browser-driven
-restore on disposable data. The full Python suite passes 689/701 with 12 skips;
-website/commerce tests pass 257/258 with one skip. Live homepage Lighthouse
+restore on disposable data. The full Python suite passes 690/702 with 12 skips;
+website/commerce tests pass 270/271 with one skip. Live homepage Lighthouse
 scores 100 in all four categories. These results do not replace the remaining
 clean-Mac, physical-interruption, native accessibility and exact buyer-flow gates.
 
@@ -41,6 +41,13 @@ Apple onboarding, signing, or payment provisioning.
 - The authorized source-account runner completed and exported readable results
   to Shared. No further Founder action is needed for this completed run. Private
   test-account access remains scoped; there is no persistent privileged service.
+- Build 5 packages the duplicate-instance diagnostic fix and is signed,
+  notarized, stapled and privately stored. Its actual sandbox purchase,
+  webhook, Inbox delivery, emailed recovery link, purchase-page refresh,
+  Chrome file save and quarantined launch on the current Mac passed. The saved
+  ZIP matches its signed hash. Build 4's actual app entitlement was also refunded
+  in the sandbox and correctly denied a fresh download. These are test-money
+  checks, not live sales or receiving-Mac acceptance.
 - Remaining acceptance must demonstrate physical interruption/recovery and
   selective repair; validate quarantined first launch and native accessibility
   on the destination; then verify delivery of the exact accepted artifact and
