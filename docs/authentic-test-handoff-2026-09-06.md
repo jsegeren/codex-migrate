@@ -5,6 +5,16 @@ Its latest live run passed both account sign-in checks and created three genuine
 conversations, but stopped during staging setup. There is no authentic
 migration acceptance receipt yet. Original personal workspaces are not selected.
 
+September 6 late-evening candidate update: `isolated-candidate` now contains the
+exact extracted, Developer ID signed and Apple-notarized version 0.1.0 build 2
+archive from clean source `1ee2e410b13799941cecbaca5e8525cf35de02dc`. Signature,
+staple, Gatekeeper, embedded-code and Shared access preflights pass. The prior
+candidate is preserved at `isolated-candidate-build1-preserved`. No test runner
+was active during replacement; the latest actual test result remains stopped
+before migration. Both existing launcher paths remain valid. Notarization is
+not a prerequisite for engine testing, but the accepted artifact is now ready
+for that same account-local launch. See the [signing receipt](signing-candidate-2026-09-06.md).
+
 ## Founder steps
 
 1. On the **old Mac**, switch to **Codex Migrate Source**. With Codex closed,

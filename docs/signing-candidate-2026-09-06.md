@@ -62,6 +62,39 @@ The complete suite was then rerun from the exact clean build-2 source:
 670 tests ran in 143.6 seconds, with 658 passing and 12 skipped. The suite's
 mocked signing/notarization messages are not the real Apple job outcome.
 
-Pending: Apple's explicit Accepted result, staple/validation/Gatekeeper checks,
-final archive checksum, exact downloaded clean-Mac launch, and two-Mac
-migration/recovery acceptance. Nothing here opens paid checkout.
+## Apple accepted; exact archive prepared for two-Mac testing
+
+Apple accepted submission `da35b4d5-c297-476c-9036-13be0ea4c910`. The original
+builder exited successfully and completed stapling, validation, Gatekeeper
+assessment and archive creation at `2026-09-07T02:22:52Z`, approximately 42 minutes
+after submission. Independent signature, staple and Gatekeeper checks passed;
+Gatekeeper reports `source=Notarized Developer ID`.
+
+- Clean source: `1ee2e410b13799941cecbaca5e8525cf35de02dc`.
+- Artifact: `Codex-Migrate-0.1.0-build2-arm64.zip`.
+- SHA-256: `e6beb05820aaef74edbbb5c3247c898d4bef7f0c1dac1a813394e71a7289a40b`.
+
+The archive checksum was verified, then the archive was extracted into a fresh
+Shared directory. That extracted app passed signature, staple and Gatekeeper
+checks before becoming the test harness's `isolated-candidate`. The enclosing
+directory is mode 755; the actual harness's cross-user access/signature preflight
+and direct verification of every embedded Mach-O also pass. No test runner or
+isolated-candidate process was running at replacement. The earlier candidate is
+preserved separately as `isolated-candidate-build1-preserved`; no test-account
+state, authentication, staging or backups were changed.
+
+The exact archive and build/notary/checksum receipts are retained alongside the
+extracted app under `/Users/Shared/CodexMigrate-Authentic-20260906/isolated-candidate`.
+This is local artifact verification, not an actual downloaded clean-Mac launch
+or completed two-Mac migration/recovery acceptance. Those gates and real paid
+delivery acceptance remain open. Nothing here opens paid checkout.
+
+The build process has exited successfully. After rechecking the retained Shared
+archive checksum and confirming the exact source SHA on origin, the clean manual
+build worktree was retired with `git worktree remove` and `git worktree prune`.
+Original build outputs (including the rejected build 1 evidence) were moved
+recoverably to `/Users/jsegeren/.Trash/codex-migrate-build-evidence-20260906`;
+disposable bytecode caches are in the adjacent `codex-migrate-build-pycache-20260906`.
+The accepted artifact remains outside Trash in the Shared test directory above.
+The temporary Apple check was removed from the existing daily star automation
+after this terminal verified result; daily star monitoring remains unchanged.

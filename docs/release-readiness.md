@@ -18,11 +18,15 @@ Notarization credentials are now validated and saved in Keychain. The first
 real submission was rejected for the embedded Python framework signature; the
 builder fix seals framework resources and directly checks every embedded
 Mach-O signature. Clean version 0.1.0 build 2 from `1ee2e41` is submitted as
-`da35b4d5-c297-476c-9036-13be0ea4c910`; Apple last reports **In Progress**.
-Its real packaged-engine checks ran nine tests: eight passed and one skipped.
-This is not yet Accepted, stapled, or a publishable release ZIP. The builder
-remains live waiting on that exact submission; do not start another build or
-submit again just because processing takes time. See the
+`da35b4d5-c297-476c-9036-13be0ea4c910`; Apple has now **Accepted** it. The builder
+completed at `2026-09-07T02:22:52Z`, with a stapled arm64 release ZIP. Independent
+archive checksum, signature, staple, embedded-code and Gatekeeper checks pass;
+Gatekeeper reports `Notarized Developer ID`. The exact extracted archive is now
+the Shared test candidate, with the old candidate preserved separately. Its real
+packaged-engine checks ran nine tests: eight passed and one skipped; the complete
+source suite ran 670 tests, 658 passing and 12 skipped. Signing is complete,
+not release acceptance: clean-Mac launch, two-Mac migration/recovery and actual
+paid delivery remain open. No duplicate submission is needed. See the
 [signing receipt](signing-candidate-2026-09-06.md). Earlier Apple-Pending
 entries below are historical, not the current membership status.
 
