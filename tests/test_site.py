@@ -285,6 +285,17 @@ class SiteTests(unittest.TestCase):
             self.assertIn("https://migrate.segeren.com/" + path, sitemap)
         self.assertIn("no skip-backup switch", (SITE / "backup-and-recovery.html").read_text())
 
+    def test_recovery_guide_matches_live_beta_without_waiving_safety_limits(self):
+        source = (SITE / "backup-and-recovery.html").read_text()
+        text = " ".join(self.parse("backup-and-recovery.html").text)
+        self.assertIn("signed, notarized Mac beta is $50 one time for Apple silicon Macs", text)
+        self.assertIn("30-day refund policy", text)
+        self.assertIn("Native accessibility, permissions and physical network-interruption testing are ongoing", text)
+        self.assertIn("Keep the old Mac intact and maintain an independent backup", text)
+        self.assertIn('href="/#founding-edition">Get the Mac beta', source)
+        self.assertNotIn("still in development", text)
+        self.assertNotIn('href="/#launch-email"', source)
+
     def test_legal_pages_cover_purchase_basics(self):
         terms = " ".join(self.parse("terms.html").text).lower()
         refunds = " ".join(self.parse("refunds.html").text).lower()
