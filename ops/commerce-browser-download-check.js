@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Sandbox-only browser acceptance for the committed private delivery fixture.
+// Sandbox-only browser transport for a committed fixture or test-only candidate.
 // The signed URL remains in process/browser memory and is never printed.
 const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
@@ -37,7 +37,7 @@ async function main() {
       process.env.COMMERCE_MODE !== 'sandbox') throw new Error('explicit_sandbox_opt_in_required');
   const release = releases[process.env.COMMERCE_RELEASE];
   const storeId = process.env.COMMERCE_BLOB_STORE_ID;
-  if (!validRelease(release, false) || release.kind !== 'sandbox-fixture' ||
+  if (!validRelease(release, false) ||
       !/^[A-Za-z0-9]{8,64}$/.test(storeId || '')) throw new Error('sandbox_fixture_unavailable');
 
   // Keep the operator-only browser dependency out of ordinary application and
@@ -45,7 +45,8 @@ async function main() {
   failureStage = 'private-authorization';
   const signed = await privateDownloads({ live: false, blobStore: storeId })(release);
   failureStage = 'browser-download';
-  console.log(JSON.stringify({ ...await verifyBrowserDownload(signed, release), mode: 'sandbox' }));
+  console.log(JSON.stringify({ ...await verifyBrowserDownload(signed, release), mode: 'sandbox',
+    releaseId: release.id, buyerFlowVerified: false }));
 }
 
 module.exports = { verifyBrowserDownload };

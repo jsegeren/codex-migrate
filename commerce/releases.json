@@ -1,4 +1,15 @@
 {
+  "sandbox-build4-arm64": {
+    "id": "sandbox-build4-arm64",
+    "kind": "signed-notarized",
+    "testingOnly": true,
+    "accepted": false,
+    "source": "8d14dbf1877d1fc71a509d6eab86b18ec4014b52",
+    "sha256": "bba8b35f55b61389b0b36e65e50f45962975d7944d19293420e11a3f19a19d08",
+    "filename": "Codex-Migrate-0.1.0-build4-arm64.zip",
+    "size": 8305798,
+    "pathname": "sandbox/bba8b35f55b61389b0b36e65e50f45962975d7944d19293420e11a3f19a19d08/Codex-Migrate-0.1.0-build4-arm64.zip"
+  },
   "sandbox-delivery-2026-09-05": {
     "id": "sandbox-delivery-2026-09-05",
     "kind": "sandbox-fixture",

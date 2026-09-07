@@ -13,7 +13,8 @@ const STORE = 'Ksz4f7gOIH2qRu9I';
 const ORIGIN = `https://${STORE.toLowerCase()}.private.blob.vercel-storage.com`;
 const LIMIT = 100 * 1024 * 1024;
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
-function prepareArchive(receipt, bytes, id) {
+function prepareArchive(receipt, bytes, id, sandbox = false) {
+  if (typeof sandbox !== 'boolean') throw Error('invalid_upload_mode');
   if (!receipt || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(id || '') ||
       receipt.build_mode !== 'release' || receipt.source_dirty !== false ||
       !/^[a-f0-9]{40}$/.test(receipt.source_revision || '') ||
@@ -31,7 +32,8 @@ function prepareArchive(receipt, bytes, id) {
   }
   return { id, kind: 'signed-notarized', source: receipt.source_revision,
     sha256: receipt.sha256, filename, size: bytes.length,
-    pathname: `live/${receipt.sha256}/${filename}`, accepted: false };
+    pathname: `${sandbox ? 'sandbox' : 'live'}/${receipt.sha256}/${filename}`,
+    accepted: false, ...(sandbox ? { testingOnly: true } : {}) };
 }
 async function readOwned(file, maximum) {
   if (await fs.realpath(file) !== file) throw Error('linked_input');
@@ -48,7 +50,8 @@ async function uploadCandidate(candidate, bytes, sdk = blob) {
   if (!Buffer.isBuffer(bytes) || bytes.length > LIMIT || candidate.accepted !== false || candidate.kind !== 'signed-notarized' ||
       !/^Codex-Migrate-\d+\.\d+\.\d+-build[1-9]\d*-(arm64|x86_64)\.zip$/.test(candidate.filename || '') ||
       candidate.sha256 !== digest(bytes) ||
-      candidate.pathname !== `live/${digest(bytes)}/${candidate.filename}` || candidate.size !== bytes.length) {
+      ![undefined, true].includes(candidate.testingOnly) ||
+      candidate.pathname !== `${candidate.testingOnly === true ? 'sandbox' : 'live'}/${digest(bytes)}/${candidate.filename}` || candidate.size !== bytes.length) {
     throw Error('invalid_upload_candidate');
   }
   const url = `${ORIGIN}/${candidate.pathname}`;
@@ -76,12 +79,13 @@ async function uploadCandidate(candidate, bytes, sdk = blob) {
     next: 'Complete exact-artifact signed clean-Mac acceptance, then review the catalog entry. Checkout remains closed.' };
 }
 async function main(args = process.argv.slice(2)) {
-  let directory, id, apply = false;
+  let directory, id, apply = false, sandbox = false;
   while (args.length) {
     const flag = args.shift();
     if (flag === '--build-dir' && !directory) directory = args.shift();
     else if (flag === '--release-id' && !id) id = args.shift();
     else if (flag === '--apply' && !apply) apply = true;
+    else if (flag === '--sandbox' && !sandbox) sandbox = true;
     else throw Error('invalid_arguments');
   }
   if (!directory || !id) throw Error('build_dir_and_release_id_required');
@@ -91,7 +95,7 @@ async function main(args = process.argv.slice(2)) {
   // Validate basename before touching the archive path supplied by the receipt.
   if (!/^Codex-Migrate-\d+\.\d+\.\d+-build[1-9]\d*-(arm64|x86_64)\.zip$/.test(receipt.artifact || '')) throw Error('invalid_release_archive');
   const bytes = await readOwned(path.join(directory, receipt.artifact), LIMIT);
-  const candidate = prepareArchive(receipt, bytes, id);
+  const candidate = prepareArchive(receipt, bytes, id, sandbox);
   execFileSync('git', ['cat-file', '-e', `${candidate.source}^{commit}`], { cwd: ROOT, stdio: 'pipe', timeout: 10000 });
   if (!apply) return { candidate, planOnly: true, uploaded: false, accepted: false };
   return uploadCandidate(candidate, bytes);

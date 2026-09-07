@@ -65,3 +65,21 @@ The completed authentic run needs no repeat. The old build-4 continuation
 launcher deliberately requires the former failed state and must not be used
 for these new checks. No persistent administrator authorization or cross-account
 credential copying was introduced. Production checkout remains closed.
+
+## Exact-app sandbox delivery preparation
+
+The delivery catalog now includes `sandbox-build4-arm64`, bound to the exact
+signed build above, with `accepted: false` and `testingOnly: true`. It uses a
+separate content-addressed `sandbox/` object. Test payments may exercise the
+same entitlement and private-download code with actual app bytes. Live
+configuration rejects this entry even if acceptance is accidentally flipped;
+the sandbox pathname and test-only designation cannot authorize a live release.
+The harmless historical delivery fixture remains unchanged and available to
+its existing test purchases.
+
+The receipt-bound uploader's explicit `--sandbox` option retains signature
+receipt, source, checksum, size, private-access and no-overwrite checks. It does
+not edit Vercel settings or enable checkout. Browser transport accepts either
+reviewed sandbox artifact, but explicitly does not claim buyer-flow acceptance.
+Actual upload, hosted test checkout and fulfillment are separate verification
+steps; catalog preparation alone does not prove them.

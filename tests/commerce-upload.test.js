@@ -23,17 +23,17 @@ test('edited bytes and invalid release identifiers fail preparation', () => {
   assert.throws(() => prepareArchive(receipt, Buffer.from('not a zip'), 'v1'));
   assert.throws(() => prepareArchive(receipt, bytes, '../v1'));
 });
-function fixture(existing = false, wrongBytes = false) {
+function fixture(existing = false, wrongBytes = false, artifact = candidate) {
   let uploaded = existing; let writes = 0;
   const sdk = {
     get: async (url, options) => {
       assert.equal(options.access, 'private'); assert.equal(options.useCache, false);
       if (!uploaded) return null;
-      return { statusCode: 200, blob: { url, pathname: candidate.pathname, size: bytes.length, contentType: 'application/zip' },
+      return { statusCode: 200, blob: { url, pathname: artifact.pathname, size: bytes.length, contentType: 'application/zip' },
         stream: new ReadableStream({ start(c) { c.enqueue(wrongBytes ? Buffer.alloc(bytes.length) : bytes); c.close(); } }) };
     },
     put: async (pathname, value, options) => {
-      assert.equal(pathname, candidate.pathname); assert.deepEqual(value, bytes);
+      assert.equal(pathname, artifact.pathname); assert.deepEqual(value, bytes);
       assert.equal(options.access, 'private'); assert.equal(options.allowOverwrite, false); assert.equal(options.addRandomSuffix, false);
       writes++; uploaded = true;
     },
@@ -56,4 +56,19 @@ test('edited upload candidate is rejected before network access', async () => {
 test('missing and duplicate arguments never upload', async () => {
   await assert.rejects(main([]), /required/);
   await assert.rejects(main(['--apply', '--apply']), /arguments/);
+  await assert.rejects(main(['--sandbox', '--sandbox']), /arguments/);
+});
+test('sandbox candidate uses the same receipt and bytes without live acceptance', async () => {
+  const artifact = prepareArchive(receipt, bytes, 'test-build', true);
+  assert.equal(artifact.testingOnly, true);
+  assert.equal(artifact.accepted, false);
+  assert.equal(artifact.pathname, `sandbox/${receipt.sha256}/${receipt.artifact}`);
+  const f = fixture(false, false, artifact);
+  assert.equal((await uploadCandidate(artifact, bytes, f.sdk)).bytesVerified, bytes.length);
+  assert.equal(f.writes(), 1);
+  for (const patch of [{ testingOnly: undefined }, { testingOnly: false }, { accepted: true },
+    { pathname: candidate.pathname }]) {
+    await assert.rejects(uploadCandidate({ ...artifact, ...patch }, bytes, f.sdk));
+  }
+  assert.equal(f.writes(), 1);
 });

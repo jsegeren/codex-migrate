@@ -19,7 +19,9 @@ function validRelease(release, live) {
     release.url === undefined && /^[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.zip$/.test(release.filename || '') &&
     Number.isSafeInteger(release.size) && release.size > 0 && release.size <= 100 * 1024 * 1024 &&
     release.pathname === `${live ? 'live' : 'sandbox'}/${release.sha256}/${release.filename}` &&
-    (live ? release.kind === 'signed-notarized' && release.accepted === true : release.kind === 'sandbox-fixture'));
+    (live ? release.kind === 'signed-notarized' && release.accepted === true && release.testingOnly === undefined
+      : release.kind === 'sandbox-fixture' ||
+        (release.kind === 'signed-notarized' && release.accepted === false && release.testingOnly === true)));
 }
 function configuration(env = process.env, catalog = releases) {
   const mode = env.COMMERCE_MODE;
