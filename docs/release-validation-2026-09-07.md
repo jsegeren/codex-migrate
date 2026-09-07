@@ -429,3 +429,43 @@ repair with preservation checks. It does not prove physical link loss, an
 interrupted protected replacement/restore, browser skills-flow acceptance,
 receiving-Mac quarantined Finder launch or native VoiceOver. Those distinctions
 remain explicit release gates, not reasons to repeat the completed tests.
+
+## Build 5 real-SSH controlled replacement interruption and recovery
+
+The fixed, one-shot `tests/final_recovery_acceptance.py` from pushed commit
+`0adc0cb` ran as `codexmigratesource` after the macOS administrator prompt was
+approved. Nine combined harness tests passed before dispatch, including an
+actual local APFS transaction/kill probe and refusal to reuse its evidence.
+No new persistent privilege or credential copy was introduced.
+
+On the real destination `codexmigratetarget`, the harness created only the fresh
+`Codex-Migrate-Recovery-20260907/workspace` fixture and a sibling backup. It used
+the production destination lock and transaction-begin code (unchanged from the
+build 5 source) to freeze and durably record the backup. A dedicated fixture
+writer preserved the old directory, installed invented newer files, and killed
+itself with SIGKILL. The observing parent verified the signal termination,
+pending replacement journal, backup, and newer contents. No Codex directory or
+authentication identity was in the replacement scope.
+
+The unmodified signed build 5 engine then performed Check recovery and the
+explicitly confirmed Restore backup action through its token-authenticated
+loopback dashboard API, over the existing pinned strict-SSH connection. Its
+backup verification, protected restoration, and subsequent read-only
+reconciliation all passed. An independent target-side check verified the
+original files restored, newer files retained under the recovery preservation
+directory, backup contents unchanged, unrelated sentinel unchanged, and pending
+journal cleared. No migration-completion receipt was invented by restoration.
+
+Shared receipt:
+`/Users/Shared/CodexMigrate-Authentic-Status-20260906/final-recovery-checks.json`,
+timestamp `1788814765.686583`, phase `passed`, runner 95910, helper 95920. Both
+processes exited. Fixture, backup, displaced original, and preserved newer files
+remain intact; do not rerun the create-once harness over them.
+
+This closes the real-target controlled pending-replacement recovery check. It
+does not claim the entire original packaged installer was killed, a cable was
+physically disconnected, restoration itself was interrupted, or the browser
+controls were clicked by a user. Those distinctions matter: local protected
+restore fault-injection tests and earlier browser recovery checks remain their
+own evidence. Receiving-Mac native launch/VoiceOver and exact release acceptance
+are still outstanding; live checkout has not been enabled by this test.
