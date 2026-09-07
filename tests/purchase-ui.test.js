@@ -7,7 +7,8 @@ const sha256 = 'a'.repeat(64);
 const good = { url: `https://fixturestore.private.blob.vercel-storage.com/sandbox/${sha256}/fixture.zip?signed=fixture`,
   sha256, filename: 'fixture.zip', expiresAt: 1788580000000, expiresInMs: 300000 };
 const tick = () => new Promise(resolve => setImmediate(resolve));
-function fixture() {
+const privateToken = 'cs_test_fixture.' + 'b'.repeat(64);
+function fixture(options = {}) {
   const document = { body: {}, activeElement: null }; document.activeElement = document.body;
   const elements = new Map();
   document.getElementById = id => {
@@ -27,9 +28,13 @@ function fixture() {
     return elements.get(id);
   };
   const calls = []; const pending = [];
-  let wall = 9000000000000, monotonic = 0;
-  const location = { hash: '#private-fixture', pathname: '/purchase' };
+  let wall = options.now ?? 9000000000000, monotonic = 0;
+  const storage = options.storage || new Map();
+  const location = { hash: options.hash ?? '#' + privateToken, pathname: '/purchase' };
   vm.runInNewContext(source, { document, location, URL, AbortSignal,
+    sessionStorage: { getItem: key => { if (options.storageBlocked) throw Error('blocked'); return storage.get(key) ?? null; },
+      setItem: (key, value) => { if (options.storageBlocked) throw Error('blocked'); storage.set(key, value); },
+      removeItem: key => { if (options.storageBlocked) throw Error('blocked'); storage.delete(key); } },
     Date: { now: () => wall }, performance: { now: () => monotonic }, window: { addEventListener() {} },
     history: { replaceState() { location.hash = ''; } }, fetch: (url, options) => {
       calls.push({ url, options }); return new Promise(resolve => pending.push(resolve));
@@ -37,9 +42,50 @@ function fixture() {
   const finish = async (data = good, ok = true, status = ok ? 200 : 503) => {
     pending.shift()({ ok, status, json: async () => { if (data instanceof Error) throw data; return data; } }); await tick();
   };
-  return { document, get: document.getElementById, location, calls, finish,
+  return { document, get: document.getElementById, location, calls, finish, storage,
     advance(ms, monotonicMs = ms) { wall += ms; monotonic += monotonicMs; } };
 }
+test('reload rechecks a tab-scoped token and never reuses the old signed file URL', async () => {
+  const first = fixture(); await first.finish();
+  const stored = first.storage.get('codex-migrate-purchase-v1');
+  assert.equal(stored.includes(good.url), false);
+  const refreshed = fixture({ hash: '', storage: first.storage });
+  assert.equal(refreshed.get('purchase-download').hidden, true);
+  assert.equal(JSON.parse(refreshed.calls[0].options.body).credential, privateToken);
+  await refreshed.finish({ ...good, url: good.url + 'fresh' });
+  assert.equal(refreshed.get('purchase-download').getAttribute('href'), good.url + 'fresh');
+});
+test('checkout session exchange becomes a reloadable token only after verified download response', async () => {
+  const f = fixture({ hash: '#session=cs_test_fixture' });
+  await f.finish({ token: privateToken }); assert.equal(f.storage.size, 0);
+  await f.finish(); assert.equal(JSON.parse(f.storage.get('codex-migrate-purchase-v1')).token, privateToken);
+});
+for (const offset of [1800000, 1800001, -1]) test(`expired or future recovery record is discarded: ${offset}`, async () => {
+  const f = fixture(); await f.finish();
+  const next = fixture({ hash: '', storage: f.storage, now: 9000000000000 + offset });
+  assert.equal(next.calls.length, 0); assert.equal(next.storage.size, 0);
+});
+test('a new explicit link replaces the previous tab purchase without fallback', async () => {
+  const f = fixture(); await f.finish();
+  const next = fixture({ hash: '#invalid-new-link', storage: f.storage });
+  assert.equal(next.storage.size, 0);
+  assert.equal(JSON.parse(next.calls[0].options.body).credential, 'invalid-new-link');
+  await next.finish({ error: 'invalid_link' }, false); assert.equal(next.storage.size, 0);
+});
+test('refund on reload hides download and clears tab recovery', async () => {
+  const f = fixture(); await f.finish();
+  const next = fixture({ hash: '', storage: f.storage });
+  await next.finish({ error: 'purchase_requires_support' }, false);
+  assert.equal(next.get('purchase-download').hidden, true); assert.equal(next.storage.size, 0);
+});
+test('blocked storage does not prevent emailed-link downloads', async () => {
+  const f = fixture({ storageBlocked: true }); await f.finish();
+  assert.equal(f.get('purchase-download').hidden, false); assert.equal(f.storage.size, 0);
+});
+test('malformed tab storage is discarded without requesting a purchase', () => {
+  const f = fixture({ hash: '', storage: new Map([['codex-migrate-purchase-v1', '{bad']]) });
+  assert.equal(f.calls.length, 0); assert.equal(f.storage.size, 0);
+});
 test('page strips bearer fragment and gives a verified URL to the buyer click; no browser clock gate', async () => {
   const f = fixture(); assert.equal(f.location.hash, '');
   await f.finish(); assert.equal(f.get('purchase-download').hidden, false);

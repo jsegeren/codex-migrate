@@ -152,3 +152,26 @@ screenshots were moved to uniquely named `codex-migrate-*20260907*` entries in
 the owner's Trash after their processes finished. They are recoverable. The
 Shared signed candidate, private stored artifacts and unrelated untracked design
 files were preserved. No manual worktree was created.
+
+## Purchase-page refresh regression
+
+The Founder reported that refreshing removed the download button. Source
+inspection confirmed that fragment stripping plus memory-only credentials lost
+all purchase recovery on reload. This was a real UX bug, separate from the
+browser's blocked-download observation.
+
+The page now retains only a verified, bounded-format purchase token in
+tab-scoped session storage, reusable for 30 minutes from its initial page visit.
+It never stores signed artifact URLs, card details, cookies or local-storage
+credentials. Refresh obtains a fresh server-verified download link; saved state
+never bypasses current payment/refund/dispute checks. An explicit new fragment
+clears prior recovery before validation. Expired/future/malformed records and
+rejected purchases are discarded. Blocked storage leaves email-link access usable.
+The privacy page describes the storage and browser-session restoration caveat.
+
+All 29 purchase UI tests passed, including nine new cases. A real Chrome fixture
+opened a private link, verified fragment removal, reloaded successfully with a
+fresh server request, then simulated refund and verified that reload hid the
+download and cleared recovery. All 270 Node tests ran: 269 passed, one skipped;
+all 22 site tests passed. This fixture is refresh/revocation evidence, not a new
+payment or an actual archive download. No signed app code changed.

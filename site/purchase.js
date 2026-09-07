@@ -5,9 +5,27 @@
   const retry = document.getElementById('purchase-retry');
   const checksum = document.getElementById('purchase-checksum');
   const integrity = document.getElementById('purchase-integrity');
-  // Fragment credentials never reach server access logs or analytics. Remove
-  // them from this history entry immediately; keep only in this page's memory.
-  const credential = location.hash.slice(1);
+  // Strip private fragments from history. A short-lived, tab-scoped recovery
+  // token survives reload; it is never payment authority without a server check.
+  const storageKey = 'codex-migrate-purchase-v1';
+  const recoveryLifetime = 30 * 60 * 1000;
+  const validToken = value => typeof value === 'string' && value.length <= 330 &&
+    /^cs_(?:live|test)_[A-Za-z0-9]+\.[a-f0-9]{64}$/.test(value);
+  const forget = () => { try { sessionStorage.removeItem(storageKey); } catch {} };
+  let savedAt = Date.now();
+  const fragment = location.hash.slice(1);
+  let credential = fragment;
+  if (fragment) forget(); // A different/invalid link must never reuse an old purchase.
+  else {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(storageKey));
+      const age = Date.now() - saved?.savedAt;
+      if (validToken(saved?.token) && Number.isSafeInteger(saved.savedAt) &&
+          age >= 0 && age < recoveryLifetime) {
+        credential = saved.token; savedAt = saved.savedAt;
+      } else forget();
+    } catch { forget(); }
+  }
   if (location.hash) history.replaceState(null, '', location.pathname);
   let token = credential.startsWith('session=') ? null : credential;
   let busy = false;
@@ -46,11 +64,15 @@
         throw new Error('temporarily_unavailable');
       }
       linkLifetime = result.expiresInMs;
+      if (validToken(token)) {
+        try { sessionStorage.setItem(storageKey, JSON.stringify({ token, savedAt })); } catch {}
+      }
       status.textContent = 'Your purchase is verified. Select Download for Mac to save the file.';
       checksum.textContent = `Archive SHA-256: ${result.sha256}`; integrity.hidden = false;
       download.setAttribute('href', url.toString()); download.removeAttribute('aria-disabled');
       download.hidden = false; retry.hidden = true;
     } catch (error) {
+      if (['invalid_link', 'purchase_requires_support', 'purchase_not_verified'].includes(error.message)) forget();
       const messages = {
         rate_limited: 'Too many download checks. Wait a minute, then select Check again. Do not purchase again.',
         checkout_closed: 'Checkout is not open yet. If you have a payment receipt, email Josh for help.',
