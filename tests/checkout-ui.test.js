@@ -41,6 +41,13 @@ test('ready release displays hardware and honest $50 price without starting chec
   assert.equal(f.get('launch-email').hidden, true); assert.equal(f.calls.length, 1); assert.equal(f.navigations.length, 0);
   assert.equal(f.calls[0].options.credentials, 'same-origin');
 });
+test('beta availability preserves clear beta labels instead of announcing a finished release', async () => {
+  const f = fixture({ available: true, priceUSD: 50, architecture: 'arm64', channel: 'beta' });
+  await tick();
+  assert.equal(f.get('checkout-panel').hidden, false);
+  assert.match(f.get('checkout-button').textContent, /Buy the Mac beta.*50/);
+  assert.match(f.get('edition-state').textContent, /beta/);
+});
 test('delayed readiness preserves a focused or filled launch form', async () => {
   const focused = fixture(); focused.get('launch-email').focus(); await tick();
   assert.equal(focused.get('launch-email').hidden, false);
@@ -91,4 +98,10 @@ test('availability returns only price and hardware, never secret configuration',
   const res = response(); makeHandler(() => ({ live: true, key: 'private', release: { filename: 'Codex-Migrate-0.1.0-build1-arm64.zip' } }),
     { COMMERCE_CHECKOUT_OPEN: 'yes', COMMERCE_MODE: 'live' })({ method: 'GET' }, res);
   assert.deepEqual(res.value, { available: true, priceUSD: 50, architecture: 'arm64' });
+});
+test('beta availability exposes its channel but not approval internals', () => {
+  const res = response(); makeHandler(() => ({ live: true, key: 'private', release: {
+    filename: 'Codex-Migrate-0.1.0-build5-arm64.zip', channel: 'beta', acceptance: 'private-review' } }),
+  { COMMERCE_CHECKOUT_OPEN: 'yes', COMMERCE_MODE: 'live' })({ method: 'GET' }, res);
+  assert.deepEqual(res.value, { available: true, priceUSD: 50, architecture: 'arm64', channel: 'beta' });
 });

@@ -49,17 +49,19 @@
       const data = await response.json();
       if (data.available !== true || data.priceUSD !== 50 || !['arm64', 'x86_64'].includes(data.architecture)) return;
       const platform = data.architecture === 'arm64' ? 'Apple silicon Macs' : 'Intel Macs';
+      const beta = data.channel === 'beta';
       document.getElementById('checkout-platform').textContent = `For ${platform}. $50 USD plus applicable tax. Secure checkout through Stripe.`;
-      document.getElementById('edition-state').textContent = 'Available now';
+      document.getElementById('edition-state').textContent = beta ? 'Paid beta · available now' : 'Available now';
       document.getElementById('edition-signed').textContent = 'Signed and notarized Mac app';
       document.getElementById('edition-disclosure').hidden = true;
       // A slow readiness response must not remove a form someone is using.
       const launch = document.getElementById('launch-email');
       if (!launch.contains(document.activeElement) && !document.getElementById('launch-address').value) launch.hidden = true;
-      document.getElementById('hero-availability').textContent = 'Open source · Mac app available';
-      document.getElementById('purchase-faq').textContent = `Yes. The packaged app is $50 USD for ${platform}, including best-effort support. The CLI and source remain free.`;
+      document.getElementById('hero-availability').textContent = beta ? 'Open-source beta · Signed Mac beta available' : 'Open source · Mac app available';
+      document.getElementById('purchase-faq').textContent = `Yes. The signed, notarized ${beta ? 'beta ' : ''}app is $50 USD for ${platform}, including best-effort support and a 30-day refund policy. ${beta ? 'Native accessibility, permissions and physical network-interruption testing are ongoing. Keep your old Mac and an independent backup. ' : ''}The CLI and source remain free.`;
       const hero = document.getElementById('hero-paid-link');
-      hero.href = '#founding-edition'; hero.textContent = 'Get the Mac app — $50'; hero.removeAttribute('data-analytics-event');
+      hero.href = '#founding-edition'; hero.textContent = beta ? 'Get the Mac beta — $50' : 'Get the Mac app — $50'; hero.removeAttribute('data-analytics-event');
+      button.textContent = beta ? 'Buy the Mac beta — $50' : 'Buy the Mac app — $50';
       panel.hidden = false;
     }).catch(() => { /* Launch-email fallback stays usable when readiness cannot be checked. */ });
 })();

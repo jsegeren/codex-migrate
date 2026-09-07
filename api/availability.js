@@ -8,7 +8,8 @@ function makeHandler(configure = configuration, env = process.env) {
       if (env.COMMERCE_CHECKOUT_OPEN === 'yes' && env.COMMERCE_MODE === 'live') {
         const config = configure(env);
         const architecture = config.release.filename.match(/-(arm64|x86_64)\.zip$/)?.[1];
-        if (config.live && architecture) result = { available: true, priceUSD: 50, architecture };
+        if (config.live && architecture) result = { available: true, priceUSD: 50, architecture,
+          ...(config.release.channel === 'beta' ? { channel: 'beta' } : {}) };
       }
     } catch { /* Missing or unreviewed release stays closed; expose no configuration. */ }
     return reply(res, 200, result);

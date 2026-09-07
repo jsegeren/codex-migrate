@@ -18,6 +18,11 @@ function factory() {
 test('ordinary builds are offline and do not need commerce secrets', async () => {
   assert.deepEqual(await preflight({}, () => { throw Error('must not load'); }), { skipped: true });
 });
+test('exact release proof refuses missing reviewed configuration before network access', async () => {
+  let called = false;
+  await assert.rejects(preflight({ ...env, COMMERCE_PROVE_RELEASE: 'yes' }, () => { called = true; return factory(); }));
+  assert.equal(called, false);
+});
 for (const [name, value] of Object.entries({ VERCEL_ENV: 'preview', COMMERCE_MODE: 'sandbox',
   COMMERCE_CHECKOUT_OPEN: 'yes', COMMERCE_STRIPE_ACCOUNT: 'acct_other', COMMERCE_PRODUCT: 'prod_other',
   COMMERCE_PRICE: 'price_other', COMMERCE_BLOB_STORE_ID: 'other', COMMERCE_STRIPE_KEY: 'rk_test_fixture',

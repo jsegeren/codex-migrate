@@ -32,7 +32,10 @@ function makeHandler(load = runtime, env = process.env, configure = configuratio
       const session = await stripe.checkout.sessions.create({
         mode: 'payment', line_items: [{ price: config.price, quantity: 1 }],
         ...(standard ? { billing_address_collection: 'required' } : { managed_payments: { enabled: true } }),
+        ...(config.release.channel === 'beta' ? { custom_text: { submit: { message:
+          'Paid beta for Apple silicon Macs. Native accessibility, permissions and physical network-interruption testing are ongoing. Keep your old Mac and an independent backup. Includes best-effort support and a 30-day refund policy.' } } } : {}),
         metadata: { product: 'codex-migrate', release: config.release.id,
+          ...(config.release.channel === 'beta' ? { release_channel: 'beta' } : {}),
           checkout_provider: standard ? 'stripe' : 'managed' },
         success_url: `${config.site}/purchase#session={CHECKOUT_SESSION_ID}`, cancel_url: `${config.site}/#founding-edition`,
       }, { idempotencyKey: `codex-migrate-${config.mode}-${config.release.id}-${standard ? 'stripe-' : ''}${data.requestId}` });

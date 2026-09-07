@@ -43,6 +43,25 @@ test('commerce defaults closed and requires reviewed release, matching key mode 
   }
   assert.throws(() => configuration({ ...env, COMMERCE_MODE: 'live', COMMERCE_STRIPE_KEY: 'rk_live_fixture' }, { [release.id]: release }), /release_unavailable/);
 });
+test('only the explicitly approved signed beta manifest is eligible for live distribution', () => {
+  const { validRelease } = require('../commerce/config');
+  const beta = require('../commerce/releases.json')['beta-build5-arm64'];
+  assert.equal(validRelease(beta, true), true);
+  for (const patch of [{ accepted: false }, { acceptance: undefined }, { channel: 'unknown' },
+    { kind: 'unsigned' }, { testingOnly: true }, { pathname: beta.pathname.replace('live/', 'sandbox/') }]) {
+    assert.equal(validRelease({ ...beta, ...patch }, true), false);
+  }
+  assert.equal(validRelease(beta, false), false);
+});
+test('beta delivery email includes the remaining checks without adding tracking', async () => {
+  let mail;
+  assert.equal(await deliveryMail({ to: 'buyer@example.invalid', live: true, link: 'https://example.invalid/private',
+    release: { ...release, channel: 'beta' } }, { LAUNCH_FROM_EMAIL: 'sender@example.invalid', SENDGRID_API_KEY: 'fixture' },
+  async (url, options) => { mail = JSON.parse(options.body); return { status: 202 }; }), 'accepted');
+  assert.match(mail.content[0].value, /signed, notarized beta/);
+  assert.match(mail.content[0].value, /testing are ongoing/);
+  assert.equal(mail.tracking_settings.open_tracking.enable, false);
+});
 test('valid paid purchase verifies actual product, charge, and email', () => {
   assert.equal(validatePurchase(fixture().s, config).sessionId, 'cs_test_fixture');
 });

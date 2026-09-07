@@ -1,7 +1,9 @@
 # Desktop release readiness
 
-The downloadable paid app is **not released**. Publishing source and the
-informational website does not open checkout or certify a customer download.
+The Founder authorized a **self-service paid beta** on September 7 while the
+remaining acceptance checks continue. This is not full release certification.
+The [paid-beta launch record](paid-beta-launch-2026-09-07.md) controls the current
+distribution decision; the dated entries below preserve their original status.
 
 ## Current release boundary — September 7
 

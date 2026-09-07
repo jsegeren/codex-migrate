@@ -2,6 +2,7 @@
 // schema mutation or release-catalog bypass. A separate explicit flag can create
 // and expire one private Checkout session; never supplies payment details.
 const { createHash } = require('node:crypto');
+const { configuration } = require('../commerce/config');
 const EXPECTED = Object.freeze({
   account: 'acct_1Rkc6eJfbWpcJIZb', product: 'prod_VCxpogUxaT0OeT',
   price: 'price_1UCXtaJfbWpcJIZbp9W60sIv', store: 'Ksz4f7gOIH2qRu9I',
@@ -48,6 +49,7 @@ function dependencies(env) {
       return (await db.execute(sql`select name, mode from commerce_environment`)).rows;
     },
     signFixture: () => privateDownloads({ live: false, blobStore: EXPECTED.store }, env)(fixture),
+    signRelease: release => privateDownloads({ live: true, blobStore: EXPECTED.store }, env)(release),
     request: (url) => fetch(url, { redirect: 'error', signal: AbortSignal.timeout(15000) }),
   };
 }
@@ -57,6 +59,9 @@ async function preflight(env = process.env, makeDependencies = dependencies) {
   let stage = 'configuration';
   try {
     validateEnvironment(env);
+    // Optional exact-artifact readback with actual deployment credentials. No
+    // new authority or public operator endpoint; normal builds skip this path.
+    const release = env.COMMERCE_PROVE_RELEASE === 'yes' ? configuration(env).release : null;
     const deps = makeDependencies(env);
     stage = 'stripe-account';
     const account = await deps.account();
@@ -90,9 +95,15 @@ async function preflight(env = process.env, makeDependencies = dependencies) {
     required(rows.length === 1 && rows[0].name === 'codex-migrate-commerce' && rows[0].mode === 'live');
     stage = 'private-fixture';
     const size = await verifyFixture(deps);
+    let releaseBytes;
+    if (release) {
+      stage = 'private-release';
+      releaseBytes = await verifyFixture({ ...deps, signFixture: () => deps.signRelease(release) }, release);
+    }
     return { configured: true, stripeCatalog: true, liveDatabase: true,
       ...(standardCheckout ? { standardCheckout } : {}),
       privateFixtureBytes: size, anonymousAccessDenied: true, checkoutOpen: false,
+      ...(release ? { release: release.id, releaseBytes, releaseChecksumVerified: true } : {}),
       note: 'Provisioning only; no live payment, email, signed-app or migration acceptance.' };
   } catch {
     const error = new Error('commerce_preflight_failed'); error.stage = stage; throw error;

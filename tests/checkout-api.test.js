@@ -54,6 +54,18 @@ test('configured live buyer does not need the sandbox operator token', async () 
   assert.equal((await f.send()).statusCode, 200);
   assert.match(f.calls.find(c => typeof c === 'object').options.idempotencyKey, /-live-/);
 });
+test('paid beta checkout discloses limits before payment and records the beta channel', async () => {
+  const f = fixture(true); f.config.checkoutProvider = 'stripe';
+  f.config.release.channel = 'beta'; delete f.session.managed_payments;
+  assert.equal((await f.send()).statusCode, 200);
+  const data = f.calls.find(c => typeof c === 'object').data;
+  assert.equal(data.metadata.release_channel, 'beta');
+  assert.equal(data.metadata.checkout_provider, 'stripe');
+  assert.equal(data.managed_payments, undefined);
+  for (const text of ['Paid beta', 'Apple silicon', 'testing are ongoing', 'independent backup', '30-day refund']) {
+    assert(data.custom_text.submit.message.includes(text));
+  }
+});
 test('wrong account stops before looking up or creating a purchase', async () => {
   const f = fixture(); f.setAccount('acct_other');
   assert.equal((await f.send()).body.error, 'account_mismatch');

@@ -27,6 +27,7 @@ async function deliveryMail({ to, link, release, live }, env = process.env, requ
               : 'Sandbox test only. No real purchase or app is delivered.',
           `Open your download: ${link}`,
           `Release: ${release.id}`, `Archive SHA-256: ${release.sha256}`,
+          ...(release.channel === 'beta' ? ['This is the signed, notarized beta for Apple silicon Macs. Native accessibility, permissions and physical network-interruption testing are ongoing. Keep your old Mac and an independent backup. Details: https://migrate.segeren.com/#founding-edition'] : []),
           'Keep this email to recover your download. Treat this link as private.',
           'Need help? Reply to joshua@segeren.com. Please do not send credentials or workspace contents.',
           'This is a purchase-delivery message, not a marketing subscription.',

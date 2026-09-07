@@ -15,6 +15,8 @@ function commerceSite(env = process.env) {
 }
 function validRelease(release, live) {
   return Boolean(release && /^[a-f0-9]{64}$/.test(release.sha256 || '') &&
+    (release.channel === undefined || release.channel === 'beta' &&
+      release.acceptance === 'founder-approved-paid-beta-2026-09-07') &&
     /^[a-f0-9]{40}$/.test(release.source || '') && /^[A-Za-z0-9._-]{1,100}$/.test(release.id || '') &&
     release.url === undefined && /^[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.zip$/.test(release.filename || '') &&
     Number.isSafeInteger(release.size) && release.size > 0 && release.size <= 100 * 1024 * 1024 &&
@@ -42,7 +44,8 @@ function configuration(env = process.env, catalog = releases) {
     throw new CommerceError('commerce_not_configured');
   }
   // No release is enabled merely by an environment toggle. A reviewed manifest
-  // must be committed after the exact archive has passed release acceptance.
+  // must be committed after explicit distribution approval. Paid beta approval
+  // is channel-labelled and does not claim completion of the full release gates.
   const release = catalog[env.COMMERCE_RELEASE];
   if (!validRelease(release, live) || release.id !== env.COMMERCE_RELEASE) {
     throw new CommerceError('release_unavailable');
