@@ -22,6 +22,44 @@ def response(status="Accepted", identifier=SUBMISSION, returncode=0):
 
 
 class ReleaseBuildTests(unittest.TestCase):
+    def test_framework_bundles_sealed_inside_out_before_verification(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            engine = Path(temporary)
+            outer = engine / "Python.framework"
+            inner = outer / "nested/Child.framework"
+            inner.mkdir(parents=True)
+            (engine / "Alias.framework").symlink_to(outer, target_is_directory=True)
+            for identity in (None, "Developer ID Application: Fixture"):
+                with patch.object(build, "run") as run:
+                    build.seal_embedded_frameworks(engine, identity)
+                commands = [call.args for call in run.call_args_list]
+                self.assertEqual([command[-1] for command in commands], [inner, inner, outer, outer])
+                for command in commands[::2]:
+                    self.assertEqual(command[:4], ("codesign", "--force", "--sign", identity or "-"))
+                    self.assertEqual("--timestamp" in command, identity is not None)
+                    self.assertNotIn("--deep", command)
+                for command in commands[1::2]:
+                    self.assertEqual(command[:4], ("codesign", "--verify", "--deep", "--strict"))
+
+    def test_every_embedded_macho_is_verified_and_failure_propagates(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            engine = Path(temporary)
+            binaries = []
+            for index, magic in enumerate(("feedface", "cefaedfe", "feedfacf", "cffaedfe",
+                                           "cafebabe", "bebafeca", "cafebabf", "bfbafeca")):
+                path = engine / str(index)
+                path.write_bytes(bytes.fromhex(magic) + b"fixture")
+                binaries.append(path)
+            (engine / "plain.txt").write_text("not code")
+            (engine / "alias").symlink_to(binaries[0])
+            with patch.object(build, "run") as run:
+                build.verify_embedded_code(engine)
+            self.assertEqual([call.args for call in run.call_args_list],
+                             [("codesign", "--verify", "--strict", path) for path in binaries])
+            with patch.object(build, "run", side_effect=subprocess.CalledProcessError(1, "codesign")), \
+                    self.assertRaises(subprocess.CalledProcessError):
+                build.verify_embedded_code(engine)
+
     def make_partial_release(self, root, status="Submitted"):
         output = root / ("build/desktop-resume-" + status.lower().replace(" ", "-"))
         resources = output / "Codex Migrate.app/Contents/Resources"
