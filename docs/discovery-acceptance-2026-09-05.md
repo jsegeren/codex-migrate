@@ -1,5 +1,43 @@
 # Search indexing and community discovery — September 5, 2026
 
+## September 7 signed-beta launch and channel review
+
+Published from the Founder's `JoshuaSegeren` X account and verified by opening
+the resulting conversation:
+
+- [Signed Apple silicon beta announcement](https://x.com/JoshuaSegeren/status/2097103693162430668):
+  $50 one time, best-effort maintainer support, free MIT CLI, and an explicit
+  reminder to retain the old Mac and an independent backup. Attached the
+  Founder-selected `site/og-white-v1.png`, with alt text and its existing
+  independent-tool/non-affiliation notice. The destination includes
+  `utm_source=x&utm_medium=social&utm_campaign=signed_beta_sep2026`.
+- [Source and free CLI reply](https://x.com/JoshuaSegeren/status/2097105215048855675):
+  links the repository, explains the paid packaging/support distinction, and
+  clarifies that this is a Mac-to-Mac move, not continuous sync.
+
+This is a publication receipt, not proof of purchases or acquired customers.
+No paid advertising, unsolicited DMs, likes, reposts, or account changes were
+performed. The beta's remaining acceptance work remains open.
+
+Channel review also narrowed the next outreach candidates:
+
+- DEV's [AI guidelines](https://dev.to/guidelines-for-ai-assisted-articles-on-dev)
+  prohibit AI-generated comments. The older DEV draft below is **not eligible
+  for automated publication**; disclosure alone does not make it eligible.
+  The relevant migration article remains useful research, not a posting task.
+- [r/macapps' March moderation update](https://www.reddit.com/r/macapps/comments/1ryaeex/rmacapps_mods_went_too_far_whats_changing_phase_3/)
+  describes a separate AppPile route for unproven apps, reputation requirements,
+  and promotion limits. Inspect the current rules and active megathread before
+  considering a submission. No post was made there.
+- [Show HN](https://news.ycombinator.com/showhn.html) requires something readers
+  can actually try, rather than only a landing page. The runnable free CLI is
+  the appropriate candidate, with paid packaging disclosed separately. General
+  HN rules and account availability still need checking; no submission was made.
+
+The removed r/codex reply was not reposted. Windows migration requests,
+continuous-sync requests and unverified missing-chat repairs were not treated
+as problems this Mac-to-Mac beta has demonstrated it can solve.
+
 ## September 6 evening visibility recheck
 
 An unauthenticated public read of the exact submitted Reddit permalink
