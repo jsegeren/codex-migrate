@@ -132,3 +132,23 @@ inspected. White-text contrast is 8.77:1 normally and 11.62:1 on hover.
 Regression checks: 261 Node tests, 260 passed and one explicitly skipped;
 all 22 site tests passed. These stylesheet/mail edits do not alter the signed
 app candidate. Publication remains a separate recorded step.
+
+The website/mail source checkpoint `bd0a124` was then deployed from a clean Git
+archive to `dpl_FD2WzRmZSrJE5GgDaH3JYeyrodpT` and promoted only after the
+unpromoted deployment served the expected CTA stylesheet and availability false.
+The live `migrate.segeren.com` stylesheet now contains both new color tokens;
+its availability endpoint still returns false. Checkout was explicitly disabled
+on this deployment. Neither an invitation nor a provisioning/payment action ran
+during its build; no new app archive was created and no release was accepted.
+
+The sandbox test's fresh Stripe-email search found no owner payment notification
+in the approved mailbox; only an unrelated support response matched. Receipt
+delivery is not relabelled as an owner notification. The existing purchase and
+emailed recovery pages remain available for continuation; do not pay again to
+recover the download.
+
+Disposable sandbox upload input, Preview/website Git exports and local CTA
+screenshots were moved to uniquely named `codex-migrate-*20260907*` entries in
+the owner's Trash after their processes finished. They are recoverable. The
+Shared signed candidate, private stored artifacts and unrelated untracked design
+files were preserved. No manual worktree was created.
