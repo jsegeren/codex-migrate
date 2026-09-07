@@ -1,5 +1,38 @@
 # Search indexing and community discovery — September 5, 2026
 
+## September 6 evening visibility recheck
+
+An unauthenticated public read of the exact submitted Reddit permalink
+`https://www.reddit.com/r/codex/comments/1tqczl5/comment/p84or8q/`
+did not expose our reply text. It showed a deleted-author placeholder and
+“Comment removed by moderator” beneath the original Mac-specific question.
+Treat Reddit public visibility as unproven/removed, not successfully delivered
+outreach. The precise moderation reason was not available. No duplicate post,
+alternate account, unsolicited DM or evasion attempt was made. Any further
+participation should follow moderator guidance; the earlier logged-in submission
+receipt below remains historical evidence only.
+
+Public GitHub readback still shows our original maintainer disclosure and the
+contributor exchange at discussion comments 18311565, 18311704 and 18314228.
+A bounded authenticated GraphQL read independently confirmed the same authors,
+text and links. This is a verified visibility channel, not external acceptance
+of the migration build.
+
+Both helpful guide URLs returned HTTP 200 on this recheck. The production
+availability endpoint still returned `{"available":false}`. Their earlier
+Search Console indexing proof remains the indexing receipt; a successful HTTP
+fetch is not a new Google-indexing check. No indexing request, production
+deployment, customer charge or new social post was triggered.
+
+Suggested moderator inquiry, **not sent**:
+
+> Hi moderators — I'm Joshua Segeren, the maintainer of Codex Migrate. I posted
+> a reply to rgorbie's question about moving chats to a new Mac, and it appears
+> to have been removed. It was submitted with Codex assistance. I see the rule
+> against bots and won't repost it. Is a personally written, clearly disclosed
+> maintainer response appropriate here, or would you prefer no promotion?
+> Original reply: https://www.reddit.com/r/codex/comments/1tqczl5/comment/p84or8q/
+
 ## September 6 Founder-approved Reddit reply
 
 After reviewing the exact proposed text, the Founder explicitly requested its

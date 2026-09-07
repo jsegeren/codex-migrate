@@ -50,6 +50,24 @@ with no messages for unchanged state. Neither setting opens paid checkout.
 
 ## Historical evidence
 
+September 6 branch reconciliation: the acceptance branch now includes all
+three previously missing main commits through `a939a0e` in merge `0346b8a`.
+The documentation conflict retained both the current Apple/test checkpoint and
+the existing receipt-write recovery evidence. All 145 focused transaction,
+recovery, website, CLI-binding, staging and authentic-harness tests pass on the
+combined branch. No packaged runtime input changed relative to `d27a13d`
+(`src`, `desktop`, LICENSE and the bundled setup/recovery/security/support
+documents), so no redundant unsigned rebuild was performed. Final signing must
+still build from its exact clean, accepted source revision. Production and main
+were not advanced by this merge.
+
+The signing portal remains at the selected-CSR confirmation, with zero local
+valid signing identities. The authentic runner is still terminal at the prior
+staging conflict; no new source-account harness or isolated candidate process
+was found. These are user checkpoints, not live jobs to wait on. Public GitHub
+outreach is visible; Reddit visibility is not, as recorded in the
+[discovery follow-up](discovery-acceptance-2026-09-05.md).
+
 September 6 CLI resume review reproduced another safety gap: an existing staged
 state directory could be opened with newly supplied destination settings.
 The regression test failed against `8654a13` because `serve` constructed the
