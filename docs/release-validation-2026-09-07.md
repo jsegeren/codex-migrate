@@ -366,3 +366,27 @@ refresh, file-save and current-Mac quarantined-launch checks. It does not close
 receiving-Mac launch/VoiceOver, physical interruption/recovery, selective-repair
 acceptance, or actual owner-alert arrival. Live checkout stays closed until the
 remaining release acceptance is resolved.
+
+### Downloaded build 5 setup and Help checks
+
+The actual downloaded/translocated build 5, still on local port 51550, was
+exercised through Chrome's native accessibility and keyboard controls. Switching
+to receiving-Mac setup focused its heading. Submitting the harmless invalid text
+`not-a-valid-connection-card` via Tab/Return produced **Paste the complete
+connection card from your other Mac.** Approval remained available for correction;
+no valid card was submitted or connection created. The error container has
+`role="alert"` in the pinned source; speech announcement was not tested.
+
+Returning to source setup focused **Your new Mac**. Help opened the diagnostic
+section. Preparing a report focused its labelled review text area and displayed
+the explicit not-sent/manual-attachment notice and Save control. No report was
+saved, uploaded or emailed. Invalid input was cleared. This verifies these
+actual packaged setup/error/support controls, not native VoiceOver or a denied
+filesystem permission on the receiving Mac.
+
+The Shared authentic result remains terminal at automated acceptance passed /
+desktop visual check remaining. Noninteractive execution as the disposable
+source account still requires administrator authentication. There is no live
+acceptance worker being awaited and no authorization to bypass that account
+boundary. Do not rerun the completed build 4 continuation or old diagnostic
+launchers to address the remaining tests.
