@@ -13,6 +13,19 @@ refund/dispute checks and private delivery remain required, and historical
 Managed Payments purchases remain recoverable. No public sale or successful
 real-buyer delivery is claimed by this configuration change.
 
+Live ordinary-Checkout proof passed on deployment
+`dpl_AUhTDPYzm3z7pk3iW2F32e8CZQjV`, source `3ccd389`, using the existing
+Production account and exact one-time $50 price. Session
+`cs_live_a1NfaQydRj5jkgLCjAB96IbQGU1olgIbtWiBqxFgn7OSOqeXO8g7mmrqp4`
+was created without Managed Payments and immediately expired, unpaid. No
+payment details were submitted and no buyer received a checkout URL. The same
+build verified the live commerce database and private fixture transport.
+Production sensitive credentials were used only inside the authorized build;
+local environment export did not expose them. This candidate was deployed with
+`--skip-domain`; canonical-domain promotion and public sales have not occurred.
+All 238 Node tests pass, including provider selection, historical purchases,
+unpaid/refunded rejection and the create/expire proof's opt-in boundaries.
+
 Stripe clarification, September 6: the dashboard reports Managed Payments
 ready and the product eligible; the open support question is not a rejection.
 It concerns incidental bundled product support versus selling a separate

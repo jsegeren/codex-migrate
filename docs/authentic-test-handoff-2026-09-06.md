@@ -17,6 +17,14 @@ for that same account-local launch. See the [signing receipt](signing-candidate-
 
 ## Founder steps
 
+The Founder ran the shared diagnostic exporter. Its readable report confirms
+`failed` / `installing`, a `backup_verification` error signature, a recorded
+pending-backup path and no installation receipt. This narrows the failure but
+does not distinguish an incomplete comparison, detected differences or a
+missing verification receipt. It proves neither installation nor rollback.
+The existing 16 local APFS backup tests pass; they do not resolve the real
+second-Mac discrepancy. Source/target data and the live helper remain preserved.
+
 Latest live run after the signed-candidate update: runner 83988 confirmed both
 accounts ready and three genuine conversations, staged data and reached the
 installation phase. It then reported `failed` during `finalizing`, with
