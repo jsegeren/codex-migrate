@@ -1,11 +1,19 @@
 # Codex Migrate
 
-**Unofficial, privacy-first Mac-to-Mac migration for local Codex workspaces.**
+**Unofficial Mac-to-Mac migration for OpenAI Codex, including Codex in the ChatGPT desktop app.**
 
 Codex Migrate moves the local working state that does not magically appear when
 you sign into Codex on a new Mac: conversations, project organization,
 configuration, skills, automations, repositories, branches, worktrees, stashes,
 and unfinished files.
+
+### Using Codex in the ChatGPT app?
+
+This project is for the local Codex work you want to keep when changing Macs,
+whether you know it as OpenAI Codex, the Codex app, or Codex in the ChatGPT
+desktop app. It does not transfer ordinary ChatGPT cloud chats between accounts
+or migrate all ChatGPT modes. Support is limited to the local Codex data and
+selected workspace folders described below; compatibility testing is ongoing.
 
 ## Get the Mac app — $50 one time
 

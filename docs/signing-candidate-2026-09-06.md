@@ -33,13 +33,20 @@ submission acceptance, not a successful notarization verdict. Its ID is saved
 atomically in `build/desktop-u4d_z5m4/notary-submission.json`. The guarded
 `--resume-notarization` command is waiting on this same job, then will staple,
 validate, assess with Gatekeeper and create the final archive only if Accepted.
-Do not resubmit this job or replace the live build-2 test helper.
+Apple subsequently returned `Accepted`. The resume process exited successfully:
+stapling, staple validation and Gatekeeper assessment passed. Final artifact:
+`Codex-Migrate-0.1.0-build3-arm64.zip`, SHA-256
+`184de90bc3f453f27e647047acd42613e47638179ca803d2fd61882d33519df9`.
+The app, archive and receipts are preserved separately at
+`/Users/Shared/CodexMigrate-Authentic-20260906/accepted-build3`; the copied ZIP's
+checksum, strict signature verification and Gatekeeper assessment passed again.
+The live build-2 test helper and its failed migration state are unchanged.
 
 Retain this clean worktree and its signed app for reconciliation and completion;
 do not rebuild or discard the evidence solely because the command exited.
 Retirement deadline: September 13, 2026, or sooner once the artifact is safely
 preserved and notarization no longer depends on this worktree. The notarization
-resume process is now running for this build. Public checkout remains closed.
+resume process has finished successfully. Public checkout remains closed.
 
 ## Earlier build history
 

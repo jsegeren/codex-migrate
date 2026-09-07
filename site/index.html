@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Move your local Codex conversations, settings, skills, repositories, worktrees, and unfinished work to a new Mac—with a resumable, verifiable migration.">
+    <meta name="description" content="Move local OpenAI Codex work to a new Mac, including Codex in the ChatGPT desktop app: conversations, skills, repositories and unfinished files.">
     <meta name="theme-color" content="#f7f4ed">
     <meta property="og:title" content="Codex Migrate — Change the Mac. Keep the work.">
-    <meta property="og:description" content="An unofficial, privacy-first Mac-to-Mac migration tool for local Codex workspaces.">
+    <meta property="og:description" content="An unofficial Mac-to-Mac migration tool for local OpenAI Codex work, including Codex in the ChatGPT desktop app.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://migrate.segeren.com/">
     <meta property="og:image" content="https://migrate.segeren.com/og-dark-v1.png">
@@ -17,11 +17,11 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:site" content="@JoshuaSegeren">
     <meta name="twitter:title" content="Codex Migrate — Change the Mac. Keep the work.">
-    <meta name="twitter:description" content="Move local Codex chats, skills and selected workspaces between Macs. Free open-source beta; $50 Mac beta access by request.">
+    <meta name="twitter:description" content="Move local OpenAI Codex work between Macs, including Codex in the ChatGPT desktop app. Free CLI beta; $50 Mac beta access by request.">
     <meta name="twitter:image" content="https://migrate.segeren.com/og-dark-v1.png">
     <meta name="twitter:image:alt" content="Codex Migrate: Change the Mac. Keep the work. Codex product icon labelled For Codex. Independent tool, not affiliated with OpenAI.">
     <link rel="canonical" href="https://migrate.segeren.com/">
-    <title>Codex Migrate — Change the Mac. Keep the work.</title>
+    <title>Codex Migrate — Move OpenAI Codex to a new Mac</title>
     <link rel="icon" href="/assets/mark.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/styles.css?v=20260904-regional">
     <script src="/analytics.js?v=20260904-regional" defer></script>
@@ -51,7 +51,7 @@
           <div class="hero-heading">
             <div class="hero-message">
               <h1>Change the Mac.<br><span class="accent">Keep the work.</span></h1>
-              <p class="lede">Move local Codex conversations, settings, skills, repositories, branches, worktrees, and unfinished files—without handing your workspace to a cloud migration service.</p>
+              <p class="lede">Move local OpenAI Codex conversations, settings, skills, repositories, branches, worktrees, and unfinished files—without handing your workspace to a cloud migration service.</p>
               <div class="actions">
                 <a class="button button-primary" data-analytics-event="select_free_cli" href="https://github.com/jsegeren/codex-migrate">Get the free CLI</a>
                 <a class="button button-secondary" id="hero-paid-link" data-analytics-event="select_launch_email" href="#launch-email">Email me at launch</a>
@@ -206,6 +206,7 @@
       <section class="faq shell">
         <div class="section-intro"><p class="eyebrow">Straight answers</p><h2>Before you move anything.</h2></div>
         <div class="faq-grid">
+          <details><summary>Is this for Codex in the ChatGPT app?</summary><p>Yes—this is for local Codex work, including Codex in the ChatGPT desktop app. You may know it as OpenAI Codex or the Codex app. It does not transfer ordinary ChatGPT cloud chats between accounts or migrate all ChatGPT modes. Supported local data and compatibility limits are explained in the <a href="/moving-to-a-new-mac">Mac migration guide</a>.</p></details>
           <details><summary>Is this made by OpenAI?</summary><p>No. Codex Migrate is an independent compatibility project. It is not affiliated with, supported by, or endorsed by OpenAI.</p></details>
           <details><summary>Does it copy my Codex login?</summary><p>No. Authentication and installation identity are deliberately excluded. You sign in on the new Mac first; the migration preserves that new identity.</p></details>
           <details><summary>Can I transfer over Wi-Fi or a cable?</summary><p>Yes. Use Wi-Fi or a compatible USB-C/Thunderbolt network connection between your Macs; Ethernet works too. The transfer uses secure SSH in each case. After verifying the new Mac, Codex Migrate checks its reachable private network addresses and selects the faster verified route. USB-C cables vary in capability and speed, so the cable setup must provide a working network connection—not just charging. Enable Remote Login on the new Mac, then follow the <a href="/moving-to-a-new-mac">connection guide</a>.</p></details>

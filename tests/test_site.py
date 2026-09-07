@@ -26,6 +26,17 @@ class _DocumentParser(HTMLParser):
 
 
 class SiteTests(unittest.TestCase):
+    def test_openai_chatgpt_names_preserve_local_codex_scope(self):
+        for page in ("index.html", "moving-to-a-new-mac.html"):
+            source = (SITE / page).read_text()
+            self.assertIn("OpenAI Codex", source)
+            self.assertIn("ChatGPT desktop app", source)
+            self.assertIn("ordinary ChatGPT cloud chats", source)
+            self.assertIn("all ChatGPT modes", source)
+        readme = (ROOT / "README.md").read_text()
+        self.assertIn("Codex in the ChatGPT desktop app", readme)
+        self.assertIn("does not transfer ordinary ChatGPT cloud chats", readme)
+
     def test_indexed_pages_have_canonical_urls(self):
         for name in ("privacy", "terms", "refunds", "moving-to-a-new-mac", "backup-and-recovery"):
             self.assertIn('<link rel="canonical" href="https://migrate.segeren.com/' + name + '">',
