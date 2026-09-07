@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import json
 from pathlib import Path
 import sys
@@ -112,6 +113,25 @@ def _config(args: argparse.Namespace) -> MigrationConfig:
     ).validate()
 
 
+@contextmanager
+def _bound_state(config: MigrationConfig, components=None):
+    # No credential paths or contents. Apply/compression may change on resume;
+    # data scope and destination may not. SSH host verification remains separate.
+    binding = {"version": 1, "source_home": config.source_home,
+               "target": config.target, "target_home": config.target_home,
+               "workspace_roots": sorted(config.workspace_roots),
+               "staging_name": config.staging_name, "backup_prefix": config.backup_prefix,
+               "mode": "export" if components is not None else "full",
+               "components": sorted(set(components or []))}
+    state = StateStore(config.state_dir)
+    state.acquire_process_lock()
+    try:
+        state.bind_configuration(binding)
+        yield state
+    finally:
+        state.release_process_lock()
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     internal = argv if argv is not None else sys.argv[1:]
     if internal[:1] == ["_ssh-rsync"]:
@@ -160,12 +180,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.command == "export":
             with Cancellation().signals() as cancellation:
                 components = args.component or list(SUPPORTED_COMPONENTS)
-                state = StateStore(config.state_dir)
-                state.acquire_process_lock()
-                try:
+                with _bound_state(config, components):
                     result = ComponentExporter(config, components, cancellation).run()
-                finally:
-                    state.release_process_lock()
                 if args.json:
                     print(json.dumps(result, indent=2, sort_keys=True))
                 else:
@@ -183,11 +199,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                         print("Rollback backup: %s" % result["backup"])
                         print("Restart Codex if the updated skills do not appear automatically.")
                 return 0
-        state = StateStore(config.state_dir)
-        engine = MigrationEngine(config, state)
-        if args.command == "inspect":
-            state.acquire_process_lock()
-            try:
+        with _bound_state(config) as state:
+            engine = MigrationEngine(config, state)
+            if args.command == "inspect":
                 with Cancellation().signals():
                     result = engine.preflight()
                 if args.json:
@@ -197,11 +211,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                     print("Route: %s" % result["route"])
                     print("Estimated bytes: %d" % result["bytes_total"])
                 return 0
-            finally:
-                state.release_process_lock()
-        if args.command == "serve":
-            Dashboard(engine, state, port=args.port).serve(open_browser=not args.no_open)
-            return 0
+            if args.command == "serve":
+                Dashboard(engine, state, port=args.port).serve(open_browser=not args.no_open)
+                return 0
         return 2
     except KeyboardInterrupt:
         print("Operation interrupted. No completion is being claimed. Source data "

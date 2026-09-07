@@ -48,6 +48,19 @@ with no messages for unchanged state. Neither setting opens paid checkout.
 
 ## Historical evidence
 
+September 6 CLI resume review reproduced another safety gap: an existing staged
+state directory could be opened with newly supplied destination settings.
+The regression test failed against `8654a13` because `serve` constructed the
+engine/dashboard instead of rejecting the unbound record. The new source binds
+pristine CLI state to source/destination, scope, mode/components, staging and
+backup namespace under the existing process lock, before engine construction.
+Changed or malformed bindings and legacy non-pristine unbound records require
+review, with existing state preserved. Binding excludes credential paths and
+contents and is omitted from public state. Apply/compression can change on
+resume. Browser configuration-keyed records retain their existing behavior.
+The isolated Shared package at `9ae70b5` predates this change and is not the
+final release candidate; it must be refreshed before acceptance.
+
 September 6 production preflight passed on an initially unpromoted deployment of
 `28c898e`: fresh live Stripe account/catalog reads, the isolated live purchase
 schema, and verified private transport of the 451-byte harmless fixture, with

@@ -245,6 +245,17 @@ The dashboard binds only to `127.0.0.1`. Its controls require a random
 owner-only token carried in the URL fragment, which browsers do not send to the
 HTTP server or remote Mac.
 
+CLI `inspect`, `serve`, and component `export` save a configuration binding in
+their local state directory. Resume with the same source, destination, selected
+folders, migration mode, and staging name. Changing `--apply` or compression is
+allowed; changing data scope in that record is not. A separate migration needs
+a separate `--state-dir` and independently owned destination staging; advanced
+users can choose a safe folder name with `--staging-name`. Never delete old
+state, staging or backups to bypass a mismatch. Older in-progress CLI records
+without a configuration binding require support review before this version
+will open them. The browser workflow keeps its existing configuration-specific
+records; it does not import CLI records.
+
 ## Selective component export
 
 For a browser-guided repair, run `./codex-migrate launch` and choose **Custom

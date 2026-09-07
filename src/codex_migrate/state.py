@@ -34,7 +34,8 @@ INITIAL_STATE = {
 
 def public_state(state):
     """A response copy without private comparison evidence; persistence is unchanged."""
-    result = {key: value for key, value in state.items() if key != "git_baseline"}
+    result = {key: value for key, value in state.items()
+              if key not in ("git_baseline", "configuration_binding")}
     if isinstance(result.get("receipt"), dict):
         result["receipt"] = {key: value for key, value in result["receipt"].items()
                              if key != "git_baseline_id"}
@@ -78,6 +79,26 @@ class StateStore:
             except (OSError, ValueError) as error:
                 raise RuntimeError("Migration state is missing or unreadable. Keep staging and "
                                    "backups; contact joshua@segeren.com before restarting.") from error
+
+    def bind_configuration(self, binding: Dict[str, Any]) -> None:
+        """Bind pristine CLI state under its process lock; never adopt old work."""
+        with self._lock:
+            if self._process_lock is None:
+                raise RuntimeError("Configuration binding requires the migration process lock")
+            current = self.read()
+            if "configuration_binding" in current:
+                if current["configuration_binding"] != binding:
+                    raise RuntimeError(
+                        "Saved migration configuration does not match. Resume with the original "
+                        "destination, folders, mode and staging name. Keep existing state, staging "
+                        "and backups; use a separate state directory only for a separate migration.")
+                return
+            if current != INITIAL_STATE:
+                raise RuntimeError(
+                    "This older migration has no verified saved configuration. Keep its app, "
+                    "state, staging and backups; contact joshua@segeren.com before continuing. "
+                    "Nothing has been transferred or replaced.")
+            self.write({**current, "configuration_binding": binding})
 
     def write(self, state: Dict[str, Any]) -> Dict[str, Any]:
         with self._lock:
