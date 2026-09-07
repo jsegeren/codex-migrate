@@ -293,3 +293,35 @@ and harness checks pass on Python 3.9 and 3.12. The build branch was pushed,
 the single clean build worktree retired, and its duplicate output moved to
 Trash. Apple certificate confirmation and the real source-account launch remain
 external checkpoints; checkout remains closed.
+
+## Shared candidate permissions and signing identity follow-up
+
+The Founder launched the revised runner. The latest public result has
+`failed_phase: preparing`, `migration_started: false`, and a `codesign` exit 1;
+the runner has exited. The copied `isolated-candidate` parent directory was
+mode 700, preventing the separate source account from traversing it. This was
+an artifact-publication error, not a transfer failure or a wrong user password.
+Only that public artifact directory was changed to mode 755. All candidate
+directories are now traversable/readable and all files readable by the test
+account's permission class. Deep/strict app signature verification passes.
+No app contents, source-account secrets, staging, backups or migration state
+were changed. The correction still needs an actual source-account launch.
+Future Shared publication must set the enclosing public artifact directory to
+755 explicitly instead of retaining a private temporary build directory's mode.
+
+The downloaded Developer ID Application certificate matches the existing local
+private key and Team ID `P9J3JK79KQ`. The key was imported non-extractable with
+access granted specifically to `/usr/bin/codesign`; the certificate and Apple's
+official Developer ID G2 intermediate were imported into the login Keychain.
+No trust override was added. Apple-chain verification succeeds and macOS lists
+one valid code-signing identity. A disposable executable was actually signed
+with hardened runtime and an Apple timestamp, then strictly verified. No
+private key, password or credential content entered the repository or output.
+Notarization authentication, submission and the exact signed app remain open.
+
+Community feedback about interrupted/partly moved migrations is relevant.
+The local fault-injection evidence covers partial transaction receipts and
+explicit recovery preserving later destination work. It does not substitute
+for the remaining packaged two-Mac interrupted-copy and interrupted-install
+acceptance runs. Skills-only selection and recovery of an incomplete transfer
+are different acceptance cases.

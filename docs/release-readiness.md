@@ -8,9 +8,13 @@ informational website does not open checkout or certify a customer download.
 Apple membership is now active through September 6, 2027. The signed-in
 `joshua@segeren.com` account shows team `P9J3JK79KQ`. Apple Support's activation
 email explicitly identifies `WCCLSPWZ9Y` as the enrollment ID, not the Team ID;
-there is no conflicting signing team. A local private key and public CSR are
-prepared, with the CSR selected in the portal. Certificate creation and
-Keychain installation are not yet complete. Earlier Apple-Pending
+there is no conflicting signing team. The Developer ID Application certificate
+has now been downloaded, matched to the existing local key, and imported into
+the login Keychain with Apple's G2 intermediate. macOS reports one valid
+signing identity. A real disposable executable passed Developer ID signing,
+Apple timestamping, hardened-runtime signing and strict signature verification.
+This is signing-infrastructure evidence, not a signed/notarized app release.
+Notarization credentials and the actual release submission remain pending. Earlier Apple-Pending
 entries below are historical, not the current membership status.
 
 The authentic two-Mac run created three genuine conversations using the
@@ -21,7 +25,12 @@ destination staging belongs to another migration, with no pending recovery
 transaction. A revised acceptance harness uses separate staging and state;
 earlier staging and backups are not adopted, removed or relabelled. Its clean
 local-test candidate at revision `d27a13d` is now built and checked in the Shared
-isolated-candidate directory; real execution remains pending. This ad-hoc signed
+isolated-candidate directory. Its first new source-account launch stopped during
+preparation at `codesign`, before migration started: the copied enclosing build
+directory retained mode 700. That Shared artifact directory is now mode 755;
+all candidate directories/files pass other-user traversal/read checks and the
+app's deep/strict signature still verifies. Actual source-account execution
+after this permission correction remains pending. This ad-hoc signed
 test package is not a Developer ID signed/notarized public release. The latest
 full suite ran 660 tests: 648 passed, 12 skipped. A subsequent real CLI lifecycle
 test passed against both source and the actual packaged engine, including
