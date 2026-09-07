@@ -58,6 +58,10 @@ overrides stripped and system-only PATH for packaged invocations. Temporary
 fixture state was removed by test cleanup; no real workspace was transferred.
 The disposable framework signing proof was moved to Trash and is recoverable.
 
+The complete suite was then rerun from the exact clean build-2 source:
+670 tests ran in 143.6 seconds, with 658 passing and 12 skipped. The suite's
+mocked signing/notarization messages are not the real Apple job outcome.
+
 Pending: Apple's explicit Accepted result, staple/validation/Gatekeeper checks,
 final archive checksum, exact downloaded clean-Mac launch, and two-Mac
 migration/recovery acceptance. Nothing here opens paid checkout.
