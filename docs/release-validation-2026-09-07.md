@@ -634,3 +634,51 @@ Live readback confirmed the corrected paragraph, canonical URL and beta link.
 Availability remains `available:true`, `priceUSD:50`, `architecture:arm64`,
 `channel:beta`. The previous indexing receipt remains unchanged; no repeat
 indexing request was sent. Receiving-Mac/native/physical checks remain open.
+
+## Receiving-account Safari download and native first open
+
+September 7, approximately 15:59–16:03 Pacific: after the maintainer enabled
+Screen Sharing and authenticated the disposable receiving account, Finder
+confirmed that account's Downloads folder was empty. Standard Screen Sharing
+was used; no personal workspace or physical network interface was changed.
+
+The existing verified sandbox purchase supplied a fresh, entitlement-bound
+download for `Codex-Migrate-0.1.0-build5-arm64.zip`, under the exact build-5
+digest path recorded above. No new purchase, charge or email was generated.
+Receiving-account Safari prompted to allow the download, downloaded it and
+expanded the app in Downloads. Finder's normal double-click produced macOS's
+Internet-download confirmation, explicitly stating Apple had checked for
+malicious software and none was detected. Selecting Open launched the local
+browser setup and restored the receiving-account preparation view. No
+Gatekeeper override, quarantine modification, Terminal command, developer
+Python installation or repository checkout was used for this launch.
+Finder Get Info showed version 0.1.0, Apple silicon, 21,945,177 bytes, in the
+disposable receiving account's Downloads directory.
+
+This passes the observed receiving-account download/Gatekeeper/open UI path.
+It does not independently inventory all preinstalled tools or bind the displayed
+page's running helper PID to the freshly downloaded executable; the account
+already contains earlier migration-test state. Those limitations must not be
+presented as a pristine-machine environment certification.
+
+VoiceOver was originally off. It was enabled through System Settings and its
+native welcome dialog. Safari displayed visible keyboard focus moving from
+Back to the old Mac setup to Copy reply with Tab. The native caption panel was
+enabled but remained empty through Screen Sharing, so spoken labels, errors,
+and screen-reader navigation are **unverified**, not passed. VoiceOver was
+restored off, its panel disappeared, and Settings returned to General. No
+pairing card was copied or approved and no migration was started in this pass.
+
+Automation incident: remote synthetic typing lost modifier keys, turning one
+short-lived sandbox download URL into a malformed search. The input was cleared
+and the incident disclosed to the maintainer. Native Chrome Copy Link Address,
+Screen Sharing's explicit Send Clipboard and remote Safari's Paste menu fixed
+the transfer; the subsequent exact link produced the download above. No
+account credentials were involved. Do not publish bearer URLs or desktop
+screenshots containing the pre-existing connection card. Future remote tests
+must verify clipboard transfer with a harmless address before private links.
+
+Native folder/TCC denial, complete VoiceOver acceptance, physical cable/Wi-Fi
+interruption and the other explicitly unclosed clean-Mac checklist items remain
+open. This receipt does not change beta distribution approval or certify full
+release readiness.
