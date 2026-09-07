@@ -1,7 +1,8 @@
 // Explicit operator-only acceptance step; no public route and no real payment.
 // Invoke once with a recorded UUID. If mail acceptance is uncertain, inspect
 // the provider rather than rebuilding/retrying to obtain another message.
-const { commerceSite } = require('../commerce/config');
+const { commerceSite, validRelease } = require('../commerce/config');
+const releases = require('../commerce/releases.json');
 const ACCOUNT = 'acct_1Rkc6nQwGK6ZgBcK';
 const EMAIL = 'joshua@segeren.com';
 
@@ -14,9 +15,10 @@ async function invite(env = process.env, load = dependencies) {
   if (env.COMMERCE_SANDBOX_INVITE !== 'yes') return { skipped: true };
   let stage = 'configuration';
   try {
+    const release = releases[env.COMMERCE_RELEASE];
     if (env.VERCEL_ENV !== 'preview' || env.COMMERCE_MODE !== 'sandbox' ||
         env.COMMERCE_STRIPE_ACCOUNT !== ACCOUNT || env.COMMERCE_CHECKOUT_PROVIDER !== 'stripe' ||
-        env.COMMERCE_RELEASE !== 'sandbox-delivery-2026-09-05' ||
+        !validRelease(release, false) ||
         env.COMMERCE_CHECKOUT_OPEN !== 'yes' || env.COMMERCE_SANDBOX_EMAIL !== EMAIL ||
         env.LAUNCH_FROM_EMAIL !== EMAIL || !env.SENDGRID_API_KEY ||
         !/^(rk|sk)_test_[A-Za-z0-9]+$/.test(env.COMMERCE_STRIPE_KEY || '') ||
@@ -47,7 +49,10 @@ async function invite(env = process.env, load = dependencies) {
         subject: 'TEST ONLY — ordinary Stripe Checkout acceptance',
         content: [{ type: 'text/plain', value: [
           'Operator acceptance test only. This is Stripe test mode, not a real purchase.',
-          'Use synthetic test payment details only. The download is the harmless delivery fixture, not the app.',
+          release.testingOnly === true
+            ? 'Use synthetic test payment details only. This delivers the actual signed app candidate for operator acceptance, not a publicly released product.'
+            : 'Use synthetic test payment details only. The download is the harmless delivery fixture, not the app.',
+          `Artifact: ${release.filename}`,
           `Open test checkout: ${url.toString()}`,
           `Test reference: ${env.COMMERCE_SANDBOX_INVITE_ID}`,
           'This link was created by the current checkout handler. Hosted webhook, buyer-page and email delivery still need verification.',

@@ -59,3 +59,14 @@ test('uncertain mail is not retried and private provider errors are withheld', a
   error => error.message === 'sandbox_invite_failed' && error.stage === 'test-invite-mail');
   assert.equal(sends, 1);
 });
+test('actual app candidate invite accurately identifies test-only app delivery', async () => {
+  let mail;
+  await invite({ ...env, COMMERCE_RELEASE: 'sandbox-build4-arm64' }, async () => ({
+    handler: async (req, res) => { res.statusCode = 200; res.end(JSON.stringify({ url: checkoutUrl })); },
+    request: async (url, options) => { mail = JSON.parse(options.body); return { status: 202 }; },
+  }));
+  assert.match(mail.content[0].value, /actual signed app candidate/);
+  assert.match(mail.content[0].value, /Codex-Migrate-0.1.0-build4-arm64.zip/);
+  assert.doesNotMatch(mail.content[0].value, /harmless delivery fixture/);
+  assert.equal(mail.personalizations[0].to[0].email, 'joshua@segeren.com');
+});

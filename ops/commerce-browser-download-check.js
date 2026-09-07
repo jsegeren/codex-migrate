@@ -49,7 +49,7 @@ async function main() {
     releaseId: release.id, buyerFlowVerified: false }));
 }
 
-module.exports = { verifyBrowserDownload };
+module.exports = { verifyBrowserDownload, main };
 
 if (require.main === module) main().catch(() => {
   // Provider and browser errors may contain private signed URLs. Never emit them.
