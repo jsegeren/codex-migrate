@@ -3,7 +3,44 @@
 The downloadable paid app is **not released**. Publishing source and the
 informational website does not open checkout or certify a customer download.
 
-## Latest checkpoint — September 6 evening
+## Current release boundary — September 6 late evening
+
+Authoritative current receipts are [signing](signing-candidate-2026-09-06.md)
+and [migration/commerce follow-up](release-followup-2026-09-06.md). The dated
+entries below preserve history; they are not instructions to repeat completed
+Apple onboarding, signing, or payment provisioning.
+
+- Build 3 is Developer ID signed, Apple Accepted, stapled and independently
+  verified. Its exact ZIP is in private storage with matching size/hash and
+  anonymous access denied. It is not yet an accepted customer release.
+- Ordinary Stripe sandbox payment, webhook 200, Inbox fulfillment email,
+  emailed purchase recovery, exact fixture download, full refund and denial
+  of a fresh refunded download have passed. These are test-money/fixture
+  results, not a live sale or actual app delivery. Production checkout remains
+  closed and the live webhook disabled.
+- The real two-Mac build-2 test remains failed during backup verification.
+  Its owner-exported report specifically says comparison differences; it does
+  not expose the differing entries. The original helper and all test state are
+  preserved. Build 3's local FIFO fix is not a demonstrated diagnosis of this
+  failure.
+- Test-account access is the current device-acceptance blocker. The personal
+  account cannot read the source's private state, and its existing credentials
+  do not authenticate to the fingerprint-verified target. Repeating the same
+  summary exporter is not a remedy. Do not reset, retry, replace the running
+  helper, weaken backup verification or claim recovery from the summary alone.
+- Remaining acceptance requires the authenticated test-account workflow:
+  resolve the actual backup difference; complete migration and continue the
+  real Codex conversations; demonstrate physical interruption/recovery and
+  selective repair; validate quarantined first launch and native accessibility
+  on the destination; then verify delivery of the exact accepted artifact and
+  activate the reviewed live purchase flow. The detailed device checklist is
+  [clean-Mac acceptance](clean-mac-acceptance.md).
+
+The homepage and two helpful guides already have Search Console indexing
+evidence, and transparent GitHub community outreach is published. Neither
+ranking nor a customer-safe release follows from those marketing results.
+
+## Previous checkpoint — September 6 evening
 
 Latest signed-candidate two-Mac run: staging completed and finalization reached
 `installing`, then failed. Both accounts were ready and all three genuine
