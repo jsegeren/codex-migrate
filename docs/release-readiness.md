@@ -13,6 +13,10 @@ Apple onboarding, signing, or payment provisioning.
 - Build 3 is Developer ID signed, Apple Accepted, stapled and independently
   verified. Its exact ZIP is in private storage with matching size/hash and
   anonymous access denied. It is not yet an accepted customer release.
+- Build 4 adds the narrow runtime-socket correction. It is signed, Apple
+  Accepted, stapled and Gatekeeper-verified, with eight actual packaged-engine
+  checks passing and one skipped. It is saved separately in Shared; it has
+  not replaced the live test helper or passed the real two-Mac test.
 - Ordinary Stripe sandbox payment, webhook 200, Inbox fulfillment email,
   emailed purchase recovery, exact fixture download, full refund and denial
   of a fresh refunded download have passed. These are test-money/fixture
@@ -23,8 +27,8 @@ Apple onboarding, signing, or payment provisioning.
   missing from the clone; file/directory/link counts matched. Neither build 2
   nor build 3 accepted that comparison. The original helper and test state are
   preserved. Source now has a narrow destination-runtime-socket correction,
-  including the pre-transaction check, but it is not yet a refreshed packaged
-  candidate or proof this actual socket qualifies and migration succeeds.
+  including the pre-transaction check, packaged in build 4. This is not yet
+  proof this actual socket qualifies and migration succeeds.
 - Test-account access is the current device-acceptance blocker. The personal
   account cannot read the source's private state, and its existing credentials
   do not authenticate to the fingerprint-verified target. Repeating the same

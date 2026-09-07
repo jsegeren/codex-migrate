@@ -43,6 +43,30 @@ notarizing or preserving this candidate's evidence; retire at handoff or by
 September 14, 2026 if Apple processing prevents completion. It must not replace
 the still-live build-2 test helper without a reviewed handoff.
 
+### Build 4 signed, notarized and preserved
+
+Exact clean source `8d14dbf1877d1fc71a509d6eab86b18ec4014b52` was pushed on
+the task and signed-candidate branches. The real release builder used the
+existing Developer ID identity and Keychain notarization profile. Apple job
+`ede65a70-5dfc-4617-9dda-0dc8272a6d48` returned **Accepted**. Stapling, staple
+validation, strict signature verification and Gatekeeper assessment passed.
+The exact packaged engine ran nine desktop checks: eight passed, one skipped.
+
+The app, archive and receipts were copied without overwriting any earlier build
+to `/Users/Shared/CodexMigrate-Authentic-20260906/accepted-build4`. Independent
+signature and Gatekeeper checks passed on that saved copy. Artifact:
+
+- `Codex-Migrate-0.1.0-build4-arm64.zip`
+- SHA-256 `bba8b35f55b61389b0b36e65e50f45962975d7944d19293420e11a3f19a19d08`
+
+The clean build branch was verified on origin, no process retained the build
+worktree as its working directory, and generated build evidence was moved to
+`/Users/jsegeren/.Trash/codex-migrate-build4-evidence-20260907` (recoverable).
+The manual worktree was removed through Git and pruned; its retirement
+requirement above is satisfied. Shared `accepted-build4` remains usable. No
+Apple job is pending, no current test helper was replaced, and no live
+checkout/catalog setting was changed. Exact two-Mac acceptance remains open.
+
 ## Earlier investigation
 
 The refreshed owner-exported installation diagnostic at timestamp
