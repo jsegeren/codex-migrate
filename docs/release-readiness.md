@@ -6,16 +6,22 @@ informational website does not open checkout or certify a customer download.
 ## Latest checkpoint — September 6 evening
 
 Apple membership is now active through September 6, 2027. The signed-in
-`joshua@segeren.com` account shows team `P9J3JK79KQ`, while the Founder supplied
-`WCCLSPWZ9Y`; the intended signing team must be confirmed before certificate
-creation. No valid local signing identity is installed. Earlier Apple-Pending
+`joshua@segeren.com` account shows team `P9J3JK79KQ`. Apple Support's activation
+email explicitly identifies `WCCLSPWZ9Y` as the enrollment ID, not the Team ID;
+there is no conflicting signing team. A local private key and public CSR are
+prepared, with the CSR selected in the portal. Certificate creation and
+Keychain installation are not yet complete. Earlier Apple-Pending
 entries below are historical, not the current membership status.
 
 The authentic two-Mac run created three genuine conversations using the
 advertised supported model. Migration then failed after preflight, during
 staging preparation; it has no installation receipt. Its original helper and
-private state are retained. The read-only account-local diagnostic is prepared
-but has not run. See the [test handoff](authentic-test-handoff-2026-09-06.md).
+private state are retained. The Founder ran the read-only diagnostic: default
+destination staging belongs to another migration, with no pending recovery
+transaction. A revised acceptance harness uses separate staging and state;
+earlier staging and backups are not adopted, removed or relabelled. Its new
+packaged candidate and real execution remain pending.
+See the [test handoff](authentic-test-handoff-2026-09-06.md).
 
 Staging ownership checks had a separate reproducible usability defect: missing,
 linked, or mismatched staging markers failed with generic shell output. Source
@@ -24,7 +30,8 @@ cannot be verified or belongs to another migration, without exposing paths or
 marker values. Seven real local shell cases verify fresh/matching staging,
 foreign/missing markers and linked paths; failures preserve staged fixture data
 and unrelated files. The destination lock and ownership comparison are retained.
-This is a source change, not a rebuilt package or diagnosis of the live failure.
+This is a source change, not a rebuilt package. The separate account-local
+diagnostic has now confirmed the live staging-ownership conflict.
 Verification on this checkpoint: 71 focused tests pass on Python 3.9; the full
 Python 3.12 suite ran 640 tests, with 628 passing and 12 skipped. Release-builder
 messages emitted by mocked orchestration tests are not real Apple submissions

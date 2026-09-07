@@ -81,6 +81,8 @@ def _migration_arguments(command: argparse.ArgumentParser) -> None:
     command.add_argument("--source-home", default=str(Path.home()))
     command.add_argument("--workspace", action="append", default=[])
     command.add_argument("--state-dir", default=str(Path.home() / ".local/state/codex-migrate"))
+    command.add_argument("--staging-name", default="Codex-Migrate-Staging",
+                         help="Destination staging folder name; keep unchanged when resuming a migration")
     command.add_argument("--identity-file")
     command.add_argument("--known-hosts-file")
     command.add_argument("--host-key-alias")
@@ -99,6 +101,7 @@ def _config(args: argparse.Namespace) -> MigrationConfig:
         source_home=args.source_home,
         workspace_roots=args.workspace,
         state_dir=args.state_dir,
+        staging_name=args.staging_name,
         apply=args.apply,
         compress=not args.no_compress,
         ssh=SSHOptions(

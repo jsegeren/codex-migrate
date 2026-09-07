@@ -500,10 +500,11 @@ class HandoffTests(unittest.TestCase):
 
     def test_restart_does_not_open_codex_during_active_installation(self):
         root = handoff.root_for(self.home)
-        (root / 'migration').mkdir(mode=0o700)
-        (root / 'migration/control-token').write_text('disposable-test-token')
-        (root / 'migration/control-token').chmod(0o600)
-        handoff.save(root / 'runtime.json', {'pid': 321})
+        (root / handoff.MIGRATION_STATE).mkdir(mode=0o700)
+        token = root / handoff.MIGRATION_STATE / 'control-token'
+        token.write_text('disposable-test-token')
+        token.chmod(0o600)
+        handoff.save(root / handoff.RUNTIME_RECORD, {'pid': 321})
         with patch.object(handoff, 'SOURCE', self.home), \
                 patch.object(handoff, 'processes', return_value=[(321, str(handoff.ENGINE))]), \
                 patch.object(handoff, 'listener', return_value=12345), \
@@ -512,6 +513,107 @@ class HandoffTests(unittest.TestCase):
             with self.assertRaises(handoff.SafeError):
                 handoff.stop_old_helper()
             kill.assert_not_called()
+
+    def legacy_helper(self):
+        root = handoff.root_for(self.home)
+        state = root / 'migration'
+        state.mkdir(mode=0o700)
+        token = state / 'control-token'
+        token.write_text('disposable-test-token')
+        token.chmod(0o600)
+        handoff.save(root / 'runtime.json', {'pid': 321})
+        return {'status': 'failed', 'phase': 'preflight_complete',
+                'staging_complete': False, 'migration_id': 'a' * 32,
+                'config': {'source_home': str(self.home), 'target_home': str(handoff.TARGET),
+                           'target': 'fixture', 'staging_name': 'Codex-Migrate-Staging'}}
+
+    def retirement_context(self, statuses, process_result=None, diagnostic=None, stack=None):
+        if stack is None:
+            stack = contextlib.ExitStack()
+            self.addCleanup(stack.close)
+        stack.enter_context(patch.object(handoff, 'SOURCE', self.home))
+        process = [(321, str(handoff.LEGACY_ENGINE))]
+        stack.enter_context(patch.object(handoff, 'processes',
+                                        side_effect=process_result or [process, process, []]))
+        stack.enter_context(patch.object(handoff, 'listener', return_value=12345))
+        stack.enter_context(patch.object(handoff, 'api', side_effect=statuses))
+        remote = stack.enter_context(patch.object(handoff, 'remote', return_value=(
+            diagnostic if diagnostic is not None else
+            {'staging': 'different_owner', 'pending_recovery': False})))
+        kill = stack.enter_context(patch.object(handoff.os, 'kill'))
+        stack.enter_context(patch.object(handoff.time, 'sleep'))
+        return remote, kill
+
+    def test_retire_only_diagnosed_legacy_helper_preserves_state(self):
+        status = self.legacy_helper()
+        root = handoff.root_for(self.home)
+        before = {str(p.relative_to(root)): p.read_bytes() for p in root.rglob('*') if p.is_file()}
+        remote, kill = self.retirement_context([status, status])
+        handoff.retire_failed_staging_helper([], 'fixture')
+        remote.assert_called_once_with([], 'fixture', 'diagnose', 'a' * 32)
+        kill.assert_called_once_with(321, handoff.signal.SIGTERM)
+        after = {str(p.relative_to(root)): p.read_bytes() for p in root.rglob('*') if p.is_file()}
+        self.assertEqual(before, after)
+        self.assertFalse((root / handoff.MIGRATION_STATE).exists())
+
+    def test_retire_rejects_active_or_installed_states(self):
+        status = self.legacy_helper()
+        changes = [{'status': 'running'}, {'phase': 'installing'}, {'receipt': {'verified': True}},
+                   {'pending_backup': '/fixture/backup'}, {'staging_complete': True},
+                   {'recovery': {'status': 'checking'}}, {'recovery': None},
+                   {'config': {}}, {'config': {**status['config'], 'target': 'another'}}]
+        for changed in changes:
+            with self.subTest(changed=changed), self.retirement_context_scope(
+                    [{**status, **changed}]) as (remote, kill):
+                with self.assertRaises(handoff.SafeError):
+                    handoff.retire_failed_staging_helper([], 'fixture')
+                remote.assert_not_called()
+                kill.assert_not_called()
+
+    @contextlib.contextmanager
+    def retirement_context_scope(self, statuses, **kwargs):
+        with contextlib.ExitStack() as stack:
+            yield self.retirement_context(statuses, stack=stack, **kwargs)
+
+    def test_retire_rejects_changed_staging_or_pending_recovery(self):
+        status = self.legacy_helper()
+        for diagnostic in ({'staging': 'matching_owner', 'pending_recovery': False},
+                           {'staging': 'different_owner', 'pending_recovery': True}):
+            with self.retirement_context_scope([status], diagnostic=diagnostic) as (_, kill):
+                with self.assertRaises(handoff.SafeError):
+                    handoff.retire_failed_staging_helper([], 'fixture')
+                kill.assert_not_called()
+
+    def test_retire_rechecks_state_before_signal(self):
+        status = self.legacy_helper()
+        _, kill = self.retirement_context([status, {**status, 'status': 'running'}])
+        with self.assertRaises(handoff.SafeError):
+            handoff.retire_failed_staging_helper([], 'fixture')
+        kill.assert_not_called()
+
+    def test_retire_unknown_pid_and_multiple_helpers_are_not_signalled(self):
+        self.legacy_helper()
+        for processes in ([(999, str(handoff.LEGACY_ENGINE))],
+                          [(321, str(handoff.LEGACY_ENGINE)), (999, str(handoff.LEGACY_ENGINE))]):
+            with self.retirement_context_scope([], process_result=[processes]) as (remote, kill):
+                with self.assertRaises(handoff.SafeError):
+                    handoff.retire_failed_staging_helper([], 'fixture')
+                remote.assert_not_called()
+                kill.assert_not_called()
+
+    def test_retire_absent_helper_does_nothing(self):
+        remote, kill = self.retirement_context([], process_result=[[]])
+        handoff.retire_failed_staging_helper([], 'fixture')
+        remote.assert_not_called()
+        kill.assert_not_called()
+
+    def test_retire_timeout_never_escalates_to_kill(self):
+        status = self.legacy_helper()
+        process = [(321, str(handoff.LEGACY_ENGINE))]
+        _, kill = self.retirement_context([status, status], process_result=[process] * 102)
+        with self.assertRaises(handoff.SafeError):
+            handoff.retire_failed_staging_helper([], 'fixture')
+        kill.assert_called_once_with(321, handoff.signal.SIGTERM)
 
 
 if __name__ == '__main__':

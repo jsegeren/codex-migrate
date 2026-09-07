@@ -32,7 +32,11 @@ PUBLIC = Path('/Users/Shared/CodexMigrate-Authentic-Status-20260906')
 STATE_NAME = '.codex-migrate-authentic-test-20260906'
 WORKSPACE_NAME = 'Authentic-Migration-Test'
 HOST = 'SHA256:uWR56FSP0RUbcQX8a+t/rsClg4/oYC73zSoFz4Q8r5c'
-ENGINE = SHARED / 'Codex Migrate.app/Contents/Resources/engine/codex-migrate-engine'
+LEGACY_ENGINE = SHARED / 'Codex Migrate.app/Contents/Resources/engine/codex-migrate-engine'
+ENGINE = SHARED / 'isolated-candidate/Codex Migrate.app/Contents/Resources/engine/codex-migrate-engine'
+MIGRATION_STATE = 'migration-isolated'
+RUNTIME_RECORD = 'runtime-isolated.json'
+STAGING_NAME = 'Codex-Migrate-Authentic-Staging-20260906'
 
 
 class SafeError(RuntimeError):
@@ -605,8 +609,8 @@ def stop_old_helper():
     for pid, command in helpers:
         if command == str(ENGINE):
             state_root = root_for(SOURCE)
-            require(read(state_root / 'runtime.json').get('pid') == pid, 'Unknown test helper process')
-            token = checked(state_root / 'migration/control-token').read_text().strip()
+            require(read(state_root / RUNTIME_RECORD).get('pid') == pid, 'Unknown test helper process')
+            token = checked(state_root / MIGRATION_STATE / 'control-token').read_text().strip()
             current = api(listener(pid), token, '/api/status')
             require(current.get('status') in ('idle', 'ready', 'ready_to_finalize', 'complete', 'needs_attention')
                     and current.get('phase') not in ('restoring', 'restored', 'recovery_required')
@@ -631,6 +635,45 @@ def stop_old_helper():
         require((pid, command) not in processes(), 'Old helper did not stop')
 
 
+def retire_failed_staging_helper(options, target):
+    """Retire only the diagnosed pre-copy observer; preserve both migrations' data."""
+    legacy = [(pid, cmd) for pid, cmd in processes() if cmd == str(LEGACY_ENGINE)]
+    require(len(legacy) <= 1, 'Multiple old test helpers require review')
+    if not legacy:
+        return
+    pid, command = legacy[0]
+    root = checked(SOURCE / STATE_NAME, directory=True)
+    require(read(root / 'runtime.json').get('pid') == pid, 'Unknown old test helper process')
+    old_state = checked(root / 'migration', directory=True)
+    token = checked(old_state / 'control-token').read_text().strip()
+    port = listener(pid)
+    def safe(value):
+        config = value.get('config', {})
+        return (isinstance(config, dict) and config.get('source_home') == str(SOURCE)
+                and config.get('target_home') == str(TARGET) and config.get('target') == target
+                and config.get('staging_name') == 'Codex-Migrate-Staging'
+                and value.get('status') == 'failed' and value.get('phase') == 'preflight_complete'
+                and not value.get('receipt') and not value.get('pending_backup')
+                and value.get('staging_complete') is False
+                and all(isinstance(value.get(key, {}), dict)
+                        and value.get(key, {}).get('status') != 'checking'
+                        for key in ('recovery', 'path_compatibility', 'git_verification')))
+    before = api(port, token, '/api/status')
+    require(safe(before), 'Old test helper is not safely stopped before copying')
+    result = remote(options, target, 'diagnose', before.get('migration_id'))
+    require(result == {'staging': 'different_owner', 'pending_recovery': False},
+            'Old staging conflict changed; preserve both migrations for review')
+    after = api(port, token, '/api/status')
+    require(safe(after) and after.get('migration_id') == before.get('migration_id')
+            and (pid, command) in processes(), 'Old test helper changed during review')
+    os.kill(pid, signal.SIGTERM)
+    for _ in range(100):
+        if (pid, command) not in processes():
+            return
+        time.sleep(0.1)
+    raise SafeError('Old test helper did not stop; no replacement started')
+
+
 def driver():
     home = account('source')
     root = root_for(home)
@@ -653,7 +696,9 @@ def driver():
     try:
         reply, options, identity, known = connection()
         codex_binary()
-        run(['/usr/bin/codesign', '--verify', '--deep', '--strict', str(SHARED / 'Codex Migrate.app')])
+        run(['/usr/bin/codesign', '--verify', '--deep', '--strict',
+             str(SHARED / 'isolated-candidate/Codex Migrate.app')])
+        retire_failed_staging_helper(options, reply['target'])
         stop_old_helper()
         update('preparing_destination_test_account')
         deadline = time.monotonic() + 3 * 3600
@@ -692,23 +737,24 @@ def driver():
         update('creating_genuine_test_conversations')
         records = fixture_threads(home)
         update('three_genuine_conversations_created', conversations=3, test_model=records[0]['model']['model'])
-        state = root / 'migration'
+        state = root / MIGRATION_STATE
         command = [str(ENGINE), 'serve', '--apply', '--no-open', '--port', '0',
             '--source-home', str(home), '--target', reply['target'], '--target-home', str(TARGET),
             '--workspace', str(home / WORKSPACE_NAME), '--state-dir', str(state),
+            '--staging-name', STAGING_NAME,
             '--identity-file', str(identity), '--known-hosts-file', str(known),
             '--host-key-alias', 'codex-migrate-' + reply['id']]
         existing = [(pid, cmd) for pid, cmd in processes() if cmd == str(ENGINE)]
         require(len(existing) <= 1, 'Multiple test helpers require review')
         if existing:
-            runtime = read(root / 'runtime.json')
+            runtime = read(root / RUNTIME_RECORD)
             require(runtime.get('pid') == existing[0][0], 'Unknown test helper process')
             port = listener(existing[0][0])
             token = checked(state / 'control-token').read_text().strip()
         else:
             engine = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                       start_new_session=True)
-            save(root / 'runtime.json', {'pid': engine.pid})
+            save(root / RUNTIME_RECORD, {'pid': engine.pid})
             for _ in range(60):
                 time.sleep(0.5)
                 if engine.poll() is not None:

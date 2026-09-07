@@ -214,3 +214,33 @@ Apple membership was observed active through September 6, 2027 for
 `WCCLSPWZ9Y`; signing-team selection is awaiting clarification. The local
 Keychain reports no valid code-signing identities. No certificate was created,
 notarization submitted, checkout opened, or paid release published.
+
+## Follow-up: account verified and staging conflict confirmed
+
+The Founder executed the read-only diagnostic. Its public receipt reports
+`failed_before_copy: true`, `staging: different_owner`, and
+`pending_recovery: false`. This confirms the conflict; it does not authorize
+deleting or adopting another migration's staging.
+
+The next harness uses `migration-isolated`, `runtime-isolated.json`, and
+destination folder `Codex-Migrate-Authentic-Staging-20260906`. The CLI now
+accepts `--staging-name`, preserving its default and existing path validation.
+Keep this name and the state directory unchanged when resuming. A distinct
+packaged app under the Shared `isolated-candidate` directory prevents replacing
+the currently running binary. Existing conversations and model pin are reused.
+
+Before starting it, the source-account launcher can gracefully stop only the
+exact recorded legacy helper when its protected status still says failed
+before copying, with no receipt, staged completion or pending backup. It checks
+source/destination configuration, repeats the remote ownership/recovery probe,
+and rechecks status and PID before SIGTERM. Active, unknown, changed or installed
+operations stop the launcher without signalling. A timeout never escalates to
+SIGKILL. Original private state, destination staging and backups remain intact.
+
+Apple Support's activation email for case 102953437296 explicitly calls
+`WCCLSPWZ9Y` the enrollment ID. The signed-in `joshua@segeren.com` portal shows
+the active Individual membership with Team ID `P9J3JK79KQ`, renewing September
+6, 2027. The earlier apparent mismatch was an identifier-type mistake, not
+evidence Apple activated the old consumer account. A private local key and
+verified public CSR were prepared outside the repository. Certificate creation,
+Keychain installation and real notarization are not yet complete.
