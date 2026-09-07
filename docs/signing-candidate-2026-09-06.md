@@ -20,15 +20,26 @@ Notarization submission failed before a submission receipt was saved. Read-only
 history queries returned exit 69 with a missing-Keychain-profile-item error.
 The user login keychain remains the default and only user search-list keychain.
 The Mac is locked; the cause of profile unavailability is not established.
-No new Apple job or final release ZIP is confirmed, and no submission retry was
-attempted. Reconcile history/profile access before submitting again. Build 2,
-its accepted archive and the active failed-test helper are unchanged.
+At that checkpoint, no new Apple job or final release ZIP was confirmed, and no
+submission retry was attempted. Build 2, its accepted archive and the active
+failed-test helper were unchanged.
+
+After the user unlocked the Mac, the existing profile became accessible and an
+authenticated history query succeeded. It listed only the two earlier build
+submissions, not build 3. The saved clean build-3 app was reverified, including
+every embedded Mach-O, and archived without rebuilding or re-signing. Apple
+accepted the upload as submission `7987c431-b0d2-40e9-a186-86e6378f06b6`; this is
+submission acceptance, not a successful notarization verdict. Its ID is saved
+atomically in `build/desktop-u4d_z5m4/notary-submission.json`. The guarded
+`--resume-notarization` command is waiting on this same job, then will staple,
+validate, assess with Gatekeeper and create the final archive only if Accepted.
+Do not resubmit this job or replace the live build-2 test helper.
 
 Retain this clean worktree and its signed app for reconciliation and completion;
 do not rebuild or discard the evidence solely because the command exited.
 Retirement deadline: September 13, 2026, or sooner once the artifact is safely
-preserved and notarization no longer depends on this worktree. No process is
-still running for this build. Public checkout remains closed.
+preserved and notarization no longer depends on this worktree. The notarization
+resume process is now running for this build. Public checkout remains closed.
 
 ## Earlier build history
 
