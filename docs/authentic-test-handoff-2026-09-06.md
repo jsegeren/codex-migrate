@@ -2,6 +2,14 @@
 
 ## September 7: guarded build 4 continuation
 
+**Completed:** runner `56990` exported a passing automated acceptance receipt
+at `1788769370.431059`. The actual backup comparison, migration installation,
+Git verification, and all three app-server conversation continuations passed.
+Desktop visual checks remain unperformed. Do not rerun the launcher for this
+completed test; its guarded entry point intentionally requires the former
+failed build-2 state, which no longer exists. The following instructions record
+the completed handoff, not another Founder action.
+
 The current Founder action is **Continue Build 4 Test.command** in
 `/Users/Shared` on the old Mac, opened from the personal account. It requests
 administrator authentication once and launches the existing disposable source
@@ -19,8 +27,8 @@ Progress is exported to
 `/Users/Shared/CodexMigrate-Authentic-Status-20260906/build4-continuation.json`;
 the acceptance outcome remains in that directory's `result.json`. Launching
 the worker is not evidence of migration success. The harness, backup socket and
-handoff regression suites pass all 71 tests; real two-Mac acceptance remains
-pending. Historical notes below describe earlier attempts.
+handoff regression suites pass all 71 tests; real two-Mac automated acceptance
+subsequently passed as recorded above. Historical notes below describe earlier attempts.
 
 Prepared September 6, 2026. This is an engineering harness, not customer UI.
 Its latest live run passed both account sign-in checks and created three genuine

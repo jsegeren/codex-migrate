@@ -15,8 +15,11 @@ Apple onboarding, signing, or payment provisioning.
   anonymous access denied. It is not yet an accepted customer release.
 - Build 4 adds the narrow runtime-socket correction. It is signed, Apple
   Accepted, stapled and Gatekeeper-verified, with eight actual packaged-engine
-  checks passing and one skipped. It is saved separately in Shared; it has
-  not replaced the live test helper or passed the real two-Mac test.
+  checks passing and one skipped. Its guarded handoff replaced the idle build-2
+  test helper after the actual failed backup passed build 4's comparison.
+  The real two-Mac automated acceptance test now passes (receipt timestamp
+  `1788769370.431059`): installation, Git verification, and all three genuine
+  conversations reopened and continued through the destination Codex app server.
   Its private upload/readback and actual Chrome attachment download match the
   exact archive hash and filename; anonymous storage access returns 403.
 - Ordinary Stripe sandbox payment, webhook 200, Inbox fulfillment email,
@@ -24,23 +27,14 @@ Apple onboarding, signing, or payment provisioning.
   of a fresh refunded download have passed. These are test-money/fixture
   results, not a live sale or actual app delivery. Production checkout remains
   closed and the live webhook disabled.
-- The real two-Mac build-2 test remains failed during backup verification.
-  The authorized exact-backup probe completed successfully: one socket was
-  missing from the clone; file/directory/link counts matched. Neither build 2
-  nor build 3 accepted that comparison. The original helper and test state are
-  preserved. Source now has a narrow destination-runtime-socket correction,
-  including the pre-transaction check, packaged in build 4. This is not yet
-  proof this actual socket qualifies and migration succeeds.
-- Test-account access is the current device-acceptance blocker. The personal
-  account cannot read the source's private state, and its existing credentials
-  do not authenticate to the fingerprint-verified target. Repeating the same
-  summary exporter is not a remedy. The one-shot authorized diagnostic has
-  already completed; do not ask the Founder to rerun it without a new reason.
-  Do not reset, retry or replace the running helper without a reviewed handoff,
-  or claim recovery from the diagnostic alone.
-- Remaining acceptance requires the authenticated test-account workflow:
-  resolve the actual backup difference; complete migration and continue the
-  real Codex conversations; demonstrate physical interruption/recovery and
+- The build-2 backup blocker is resolved for this actual test. Its missing
+  socket qualifies for build 4's narrow runtime exception; the subsequent
+  migration completed without resetting state or deleting the earlier backup.
+  This successful retry is not proof of every interruption or rollback scenario.
+- The authorized source-account runner completed and exported readable results
+  to Shared. No further Founder action is needed for this completed run. Private
+  test-account access remains scoped; there is no persistent privileged service.
+- Remaining acceptance must demonstrate physical interruption/recovery and
   selective repair; validate quarantined first launch and native accessibility
   on the destination; then verify delivery of the exact accepted artifact and
   activate the reviewed live purchase flow. The detailed device checklist is

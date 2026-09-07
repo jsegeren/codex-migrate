@@ -1,5 +1,27 @@
 # Release follow-up: backup failure and owner notifications
 
+## September 7: real build 4 automated acceptance passed
+
+Shared result timestamp `1788769370.431059`, runner `56990`, records
+`automated_acceptance_passed_visual_check_remaining`, migration `complete` /
+`verified`, an installation receipt, and three genuine conversations reopened
+and continued through the destination Codex app server. The harness requires
+Git verification to pass before attempting those continuations. It checks the
+original markers, additional successful assistant turns, retained destination
+sign-in, and restores the archived test conversation's archived status.
+
+Before migration, the same worker verified the exact build 4 archive/signature
+and compared the actual failed backup with the pinned candidate verifier.
+That comparison passed; only then was the idle build-2 helper retired and the
+existing test state resumed. The earlier attempt stopped before this check
+because the Shared build directory had mode 700; changing that public-artifact
+directory to 755 resolved access without changing the signed app or test data.
+
+This proves the real two-Mac automated path for this candidate and fixture, not
+desktop visual acceptance, quarantined first launch, physical cable interruption,
+all rollback scenarios, or selective repair. Checkout remains closed. Historical
+entries below describe earlier states and do not supersede this receipt.
+
 ## September 7: exact backup diagnostic and source correction
 
 The Founder ran the one-shot administrator-authorized probe. It exited zero
