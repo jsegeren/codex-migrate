@@ -682,3 +682,27 @@ Native folder/TCC denial, complete VoiceOver acceptance, physical cable/Wi-Fi
 interruption and the other explicitly unclosed clean-Mac checklist items remain
 open. This receipt does not change beta distribution approval or certify full
 release readiness.
+
+## Receiving-account native folder picker
+
+September 7, approximately 16:34–16:38 Pacific, in the same disposable
+`codexmigratetarget` Screen Sharing session: the running local setup was advanced
+to folder selection using unsaved `pickertest@picker-test.invalid` fields.
+Code inspection confirmed that advancing to step 2 performs only client-side
+validation; no connection, configuration submission or migration was started.
+
+The actual macOS Choose Folder dialog opened with the prompt “Choose workspace
+folders for Codex Migrate.” Cancel returned to the browser, left no folders
+selected, and re-enabled the picker and Review controls. Reopening and choosing
+the test account's empty Documents folder returned exactly
+`/Users/codexmigratetarget/Documents` and displayed “1 project folder selected.”
+The folder-path disclosure was opened to verify that value. The page was then
+reloaded to discard these unsaved test fields.
+
+This passes observed native folder-open, cancel and single-selection behavior
+in that account. It does not establish fresh TCC permission/denial behavior,
+multi-selection, VoiceOver support or exact fresh-download/helper PID binding.
+Minor copy finding: Cancel shows the generic “Review the selected folders.
+Suggestions are not an exhaustive repository scan” message despite selecting
+nothing. The folder count itself remains accurate; this is a polish follow-up,
+not evidence of a transfer or data-safety failure.
