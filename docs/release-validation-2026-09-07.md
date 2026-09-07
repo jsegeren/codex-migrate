@@ -252,3 +252,34 @@ before claiming the diagnostic fix is shipped. Live checkout remains closed.
 The complete Python suite subsequently passed: 702 tests, 690 passed and 12
 explicit skips, in 181 seconds. Apple/build messages emitted by the suite are
 mocked fixture output, not a new signed artifact or notarization submission.
+
+## Build 5 signed candidate
+
+The duplicate-instance fix was packaged from clean, pushed source
+`48f5194cd008dddf59b35b1e2c78aff74d46720c` as version 0.1.0 build 5, arm64.
+The existing Developer ID identity and Keychain profile were used; no new
+credentials or Apple enrollment were required. Actual Apple submission
+`b8a32506-0c36-49c3-bdc1-e9ce31550e49` returned **Accepted**. Signature,
+stapling, staple validation and Gatekeeper checks passed.
+
+- Archive: `Codex-Migrate-0.1.0-build5-arm64.zip`, 8,305,628 bytes.
+- SHA-256: `adc126c92952e0031138b199bc2003c18ee08a6a419f2cfe91ea404b84483be7`.
+- Preserved app, archive and nonsecret receipts:
+  `/Users/Shared/CodexMigrate-Authentic-20260906/candidate-build5`.
+- Exact packaged-engine desktop tests: nine run, eight passed, one
+  filesystem-dependent skip. The actual duplicate-launch exit-75/original-helper
+  survival regression passed against this binary.
+- Independent hash, signature, Gatekeeper and staple verification also passed
+  on the Shared copy. Build 4 and its running idle setup were not replaced.
+
+The release task owns sibling worktree
+`/Users/jsegeren/Git/codex-migrate-release-build` on pushed branch
+`codex/signed-candidate-build5-2026-09-07` for this build only. It is retired
+after preserving evidence; no process retained its working directory.
+This artifact is not yet in the payment catalog and does not inherit build 4's
+buyer-download or physical-Mac acceptance. No live sales setting changed.
+
+Current access rechecks: noninteractive execution as the disposable source
+account requires authentication; the current personal account does not have a
+trusted host entry for the target account's Mac. No host-verification bypass,
+private-key copy or persistent administrator authorization was introduced.
