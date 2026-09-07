@@ -59,6 +59,17 @@ class HandoffTests(unittest.TestCase):
         processes.assert_not_called()
         launch.assert_not_called()
 
+    def test_backup_diagnostics_distinguish_the_three_failure_sites(self):
+        for message, hint in (
+            ('Backup verification could not complete. Installation blocked.', 'backup_comparison_incomplete'),
+            ('Backup verification found differences. Installation blocked.', 'backup_comparison_differences'),
+            ('Destination backup verification receipt is missing', 'backup_receipt_missing'),
+        ):
+            with self.subTest(hint=hint):
+                result = handoff.shared_diagnostic({'error': message + ' PRIVATE_SENTINEL'})
+                self.assertEqual(result['error_hints'], ['backup_verification', hint])
+                self.assertNotIn('PRIVATE_SENTINEL', json.dumps(result))
+
     def test_export_rejects_symlink_and_writable_shared_directory(self):
         state, public = self.diagnostic_fixture()
         with patch.object(handoff, 'account', return_value=self.home), \

@@ -60,8 +60,12 @@ verify_backup() {
   elif test -d "$1"; then
     test -d "$2" && test ! -L "$2" || return 73
     # Dry-run only: --delete detects unexpected backup entries, never deletes.
+    # Compare special-node types too. Without --specials rsync reports cloned
+    # FIFOs as skipped even when cp preserved them, falsely rejecting a backup.
+    # Socket nodes omitted by cp must still fail the missing-entry check.
+    # No socket is connected and no FIFO content is read; this stays dry-run.
     # Checksums, tree structure and link targets; no filenames/hashes are logged.
-    changes=$(/usr/bin/rsync -rlnc --delete --out-format='%i' "$1/" "$2/" 2>/dev/null) || {
+    changes=$(/usr/bin/rsync -rlnc --specials --delete --out-format='%i' "$1/" "$2/" 2>/dev/null) || {
       echo 'Backup verification could not complete. Installation blocked.' >&2; return 73;
     }
     test -z "$changes" || {

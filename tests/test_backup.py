@@ -2,6 +2,9 @@ import json
 import platform
 import shlex
 import shutil
+import socket
+import os
+import stat
 import subprocess
 import tempfile
 import unittest
@@ -179,6 +182,54 @@ class BackupTests(unittest.TestCase):
             capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn("private", result.stdout + result.stderr)
+
+    def test_verifier_compares_cloned_special_entries_without_false_differences(self):
+        # Closed applications can leave sockets or FIFOs behind. Exercise the
+        # actual macOS clone + verifier, not a mocked rsync/copy implementation.
+        temporary = tempfile.TemporaryDirectory(prefix='cm-backup-', dir='/tmp')
+        self.addCleanup(temporary.cleanup)  # Keep AF_UNIX paths below macOS's limit.
+        base = Path(temporary.name)
+        for kind in ('fifo', 'socket'):
+            with self.subTest(kind=kind):
+                original = base / ('special-' + kind)
+                copied = base / ('clone-' + kind)
+                original.mkdir()
+                entry = original / 'private-runtime-entry'
+                if kind == 'fifo':
+                    os.mkfifo(entry)
+                else:
+                    endpoint = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                    try:
+                        endpoint.bind(str(entry))
+                    finally:
+                        endpoint.close()
+                clone = subprocess.run(['/bin/cp', '-c', '-R', '-p', str(original), str(copied)],
+                                       capture_output=True, text=True, timeout=10)
+                self.assertEqual(clone.returncode, 0)
+                def verify(functions=BACKUP_FUNCTIONS):
+                    result = subprocess.run(['/bin/zsh', '-f', '-s'],
+                        input='set -eu\n' + functions + '\nverify_backup %s %s\n' % (
+                            shlex.quote(str(original)), shlex.quote(str(copied))),
+                        capture_output=True, text=True, timeout=10)
+                    self.assertNotIn('private-runtime-entry', result.stdout + result.stderr)
+                    return result.returncode
+                # Reproduce the prior false rejection using the same real clone.
+                self.assertNotEqual(verify(BACKUP_FUNCTIONS.replace(' --specials --delete', ' --delete')), 0)
+                backup_entry = copied / entry.name
+                if kind == 'socket':
+                    # macOS cp reports success but omits a socket endpoint.
+                    # This is a real missing backup node, not a false positive.
+                    self.assertFalse(backup_entry.exists())
+                    self.assertNotEqual(verify(), 0)
+                    continue
+                self.assertEqual(stat.S_IFMT(entry.lstat().st_mode),
+                                 stat.S_IFMT(backup_entry.lstat().st_mode))
+                self.assertEqual(verify(), 0)
+                backup_entry.unlink()
+                self.assertNotEqual(verify(), 0)  # Missing node is not ignored.
+                backup_entry.write_text('wrong node type')
+                self.assertNotEqual(verify(), 0)
+                self.assertTrue(entry.exists())
 
     def test_component_low_space_blocks_before_replacement(self):
         skill = self.source / ".agents/skills/example"

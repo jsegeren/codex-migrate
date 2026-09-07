@@ -25,6 +25,21 @@ missing verification receipt. It proves neither installation nor rollback.
 The existing 16 local APFS backup tests pass; they do not resolve the real
 second-Mac discrepancy. Source/target data and the live helper remain preserved.
 
+Follow-up reproduction: the actual macOS `cp -c -R -p` plus backup verifier
+falsely rejected a correctly copied FIFO because rsync lacked `--specials`.
+The verifier now compares special-node types rather than reporting FIFOs as
+skipped. A real local regression reproduces the old rejection, verifies the
+correct clone, and rejects missing nodes and replacement with a regular file.
+The same test proves that macOS cp can return success while omitting a socket;
+that incomplete backup continues to fail verification. All 17 APFS backup tests
+pass on Python 3.9 and 3.12. This is not yet the diagnosed cause on the new Mac.
+The Shared signed build 2 remains unchanged and does not contain this fix.
+The diagnostic exporter now distinguishes comparison execution failure,
+detected differences and missing receipt using fixed labels; its 57 tests pass.
+The complete Python suite then ran 679 tests: 667 passed and 12 were skipped.
+These are source/fixture results, not a new notarized archive or a successful
+two-Mac installation.
+
 Latest live run after the signed-candidate update: runner 83988 confirmed both
 accounts ready and three genuine conversations, staged data and reached the
 installation phase. It then reported `failed` during `finalizing`, with
