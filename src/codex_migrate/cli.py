@@ -17,7 +17,7 @@ from codex_migrate.dashboard import Dashboard
 from codex_migrate.inventory import collect
 from codex_migrate.migration import MigrationEngine
 from codex_migrate.security import redact
-from codex_migrate.state import StateStore
+from codex_migrate.state import StateStore, StateInUseError
 
 
 def _port(value: str) -> int:
@@ -215,6 +215,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                 Dashboard(engine, state, port=args.port).serve(open_browser=not args.no_open)
                 return 0
         return 2
+    except StateInUseError:
+        print("codex-migrate: another Codex Migrate process is already using this state directory", file=sys.stderr)
+        return 75
     except KeyboardInterrupt:
         print("Operation interrupted. No completion is being claimed. Source data "
               "was not changed. Review migration status and backup receipts "

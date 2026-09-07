@@ -1,9 +1,10 @@
 import os
+import errno
 import tempfile
 import unittest
 from unittest.mock import patch
 
-from codex_migrate.state import StateStore, public_state
+from codex_migrate.state import StateStore, StateInUseError, public_state
 
 
 class StateTests(unittest.TestCase):
@@ -45,12 +46,22 @@ class StateTests(unittest.TestCase):
             second = StateStore(temporary)
             first.acquire_process_lock()
             try:
-                with self.assertRaises(RuntimeError):
+                with self.assertRaises(StateInUseError):
                     second.acquire_process_lock()
             finally:
                 first.release_process_lock()
             second.acquire_process_lock()
             second.release_process_lock()
+
+    def test_lock_io_failure_is_not_reported_as_another_instance(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            store = StateStore(temporary)
+            with patch("codex_migrate.state.fcntl.flock", side_effect=OSError(errno.EIO, "fixture I/O failure")):
+                with self.assertRaises(OSError) as failure:
+                    store.acquire_process_lock()
+            self.assertEqual(failure.exception.errno, errno.EIO)
+            store.acquire_process_lock()
+            store.release_process_lock()
 
 
 if __name__ == "__main__":

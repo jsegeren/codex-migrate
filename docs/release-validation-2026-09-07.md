@@ -4,8 +4,9 @@ Candidate: version 0.1.0 build 4, arm64, source
 `8d14dbf1877d1fc71a509d6eab86b18ec4014b52`, archive SHA-256
 `bba8b35f55b61389b0b36e65e50f45962975d7944d19293420e11a3f19a19d08`.
 Harness/documentation branch checkpoint before this run: `28d5248`.
-No candidate code, public deployment, payment settings or personal workspace
-was changed by this validation. This is not release approval.
+The initial validation did not change candidate code, public deployment, payment
+settings or personal workspace. Later fixes and hosted checks are recorded in
+the dated sections below. This is not release approval.
 
 ## Completed checks
 
@@ -56,10 +57,11 @@ source revision; these checks do not silently substitute changed production code
    interrupted protected-phase recovery on synthetic data, and selective-skill
    repair with unrelated target state preserved. Local failure injection and
    the passing authentic migration are supporting evidence, not substitutes.
-3. Exact accepted app through the buyer entitlement/email/download path, owner
-   purchase notification, then reviewed release catalog, live webhook and
-   checkout activation. The existing test-money fixture flow and direct exact
-   archive transport already pass, but their combination has not been exercised.
+3. Owner purchase notification and exact-session refund/revocation, then reviewed
+   release catalog, live webhook and checkout activation. Build 4 has now passed
+   the actual sandbox entitlement → email → saved ZIP → quarantined-launch path
+   on the current Mac, as recorded below. A replacement build containing the
+   diagnostic fix needs its own signed-artifact and delivery checks.
 
 The completed authentic run needs no repeat. The old build-4 continuation
 launcher deliberately requires the former failed state and must not be used
@@ -193,3 +195,60 @@ provisioning operations. The temporary Git export was retired to the owner's
 Trash as `codex-migrate-refresh-20260907`, recoverable; the local fixture server
 and browser were stopped. Buyer file saving and clean-Mac acceptance remain
 separate open gates.
+
+## Actual buyer download and quarantined launch
+
+At approximately 13:00 Pacific the existing exact-candidate sandbox purchase
+saved through Chrome's native Save dialog to Downloads. No new purchase was
+created and no browser protection was disabled. The saved build4 ZIP is
+8,305,798 bytes, SHA-256
+`bba8b35f55b61389b0b36e65e50f45962975d7944d19293420e11a3f19a19d08`.
+It retained Chrome's quarantine attribute. This successful observation supersedes
+the earlier unsaved-download gate; it does not attribute the earlier browser error.
+
+Finder/Archive Utility extracted the app. Strict/deep signature verification
+passed and Gatekeeper returned accepted, Notarized Developer ID. The first
+launch waited behind macOS's normal Internet-download confirmation; a separate
+automation activation attempt produced a misleading not-responding dialog.
+After dismissing that dialog, the normal prompt explicitly said Apple had
+checked the app for malicious software. Open was selected; quarantine was not
+removed and Gatekeeper was not bypassed.
+
+The helper then exited because an older local-test engine (PID 25067, browser
+port 60809) already owned the default state lock. This was confirmed by the
+engine's bounded error output and the open lock descriptor. Its browser showed
+unconfigured setup, not a running migration. SIGINT requested graceful shutdown;
+the helper's active-operation guard and cleanup path remained in force. The
+new failed test launcher was stopped only after it had no helper child.
+
+With the idle helper closed, Launch Services `open -n` started the exact
+downloaded app, retaining AppTranslocation and quarantine. This avoided routing
+the launch to other old development copies with the same bundle ID. The new
+launcher PID 90307 started its packaged engine PID 90327, listening on loopback
+port 50105, and automatically opened the guided setup in Chrome. The browser
+showed the current connection-card flow, "I'm on the new Mac", and Step 1 of 3.
+No connection, transfer or customer-data mutation was initiated. The downloaded
+ZIP/app and local setup tab are retained for continuation.
+
+This proves actual sandbox delivery and approved quarantined launch on the
+current Mac. It does not prove a clean receiving-Mac Finder launch, desktop
+conversation verification, native VoiceOver, or real interrupted recovery.
+
+### Duplicate-instance diagnostic follow-up
+
+The lock correctly prevented concurrent ownership, but the native launcher
+reported only that the helper stopped. Source now gives lock contention its own
+exception and exit status 75; the launcher explains that an existing copy is
+running and how to stop it safely before reopening. Other lock I/O failures do
+not masquerade as contention. It never kills the existing helper or bypasses
+the lock. The real-process regression verifies that a duplicate exits 75 while
+the original remains running and serves its unchanged unconfigured setup.
+
+Swift typechecking and all five state tests passed. Desktop tests: nine run,
+eight passed and one filesystem-dependent skip. These source changes are not
+inside the signed build4 archive: a new signed/notarized candidate is required
+before claiming the diagnostic fix is shipped. Live checkout remains closed.
+
+The complete Python suite subsequently passed: 702 tests, 690 passed and 12
+explicit skips, in 181 seconds. Apple/build messages emitted by the suite are
+mocked fixture output, not a new signed artifact or notarization submission.

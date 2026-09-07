@@ -146,6 +146,15 @@ class DesktopTests(unittest.TestCase):
                     state = json.load(response)
                 self.assertFalse(state["attached"])
                 self.assertIsNone(state["saved"])
+                duplicate = subprocess.run(command + ["launch", "--port", "0", "--no-open",
+                                           "--source-home", temporary, "--state-dir", temporary + "/state"],
+                                           env=env, capture_output=True, text=True, timeout=15)
+                self.assertEqual(duplicate.returncode, 75)
+                self.assertEqual(duplicate.stdout, "")
+                self.assertIn("already using this state directory", duplicate.stderr)
+                self.assertIsNone(process.poll(), "Duplicate launch must not stop the original helper")
+                with urlopen(Request(base + "/api/setup", headers={"X-Codex-Migrate-Token": token}), timeout=3) as response:
+                    self.assertFalse(json.load(response)["attached"])
                 # Exercise the bundled selective-engine import and real HTTP
                 # configuration, without inspecting or contacting a remote Mac.
                 headers = {"X-Codex-Migrate-Token": token,

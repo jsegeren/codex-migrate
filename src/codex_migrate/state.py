@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import fcntl
+import errno
 import json
 import os
 from pathlib import Path
@@ -40,6 +41,10 @@ def public_state(state):
         result["receipt"] = {key: value for key, value in result["receipt"].items()
                              if key != "git_baseline_id"}
     return result
+
+
+class StateInUseError(RuntimeError):
+    """Another helper owns the state; do not stop it or bypass its lock."""
 
 
 class StateStore:
@@ -193,7 +198,9 @@ class StateStore:
                 fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
             except OSError as error:
                 handle.close()
-                raise RuntimeError(
+                if error.errno not in (errno.EAGAIN, errno.EACCES):
+                    raise
+                raise StateInUseError(
                     "another Codex Migrate process is already using this state directory"
                 ) from error
             os.chmod(self.lock_path, 0o600)
