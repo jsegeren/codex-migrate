@@ -2,6 +2,7 @@
 node_modules/
 ops/*
 !ops/commerce-preflight.js
+!ops/commerce-sandbox-invite.js
 .env*
 .venv/
 .git/
