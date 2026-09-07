@@ -123,3 +123,21 @@ connection refused; no authentication material or privilege settings were change
 Next account-local launch is diagnostic only for the existing failed fixture.
 It should not ask for sign-in again when both accounts remain authenticated.
 Review its actual error category before choosing any retry or account action.
+
+## Diagnostic rerun: launcher falsely reported failure to start
+
+Runner PID 62197 did start and wrote a new report: both sign-ins passed,
+`migration_started: false`, and `Codex turn failed: other` while inspecting the
+partial fixture. It then exited. The parent's one-second startup check treated
+any already-exited child as a failure to start, even when it had finished its
+diagnostic. That message was incorrect. The launcher now reports that the child
+has stopped and explicitly asks for report review, not another setup/launch.
+An early zero exit is not called successful migration either.
+
+The generic `other` category does not establish the original failure's cause.
+Repeating this same diagnostic would not add useful evidence. The next debugging
+step needs owner-local access to the exact test turn's error information through
+Codex, without publishing raw provider output or changing account credentials.
+There is no running background acceptance worker and no authentic migration
+receipt. All 28 deterministic harness tests pass on Python 3.9 and 3.12; this
+includes fast zero/nonzero/signal exits and a still-running child.

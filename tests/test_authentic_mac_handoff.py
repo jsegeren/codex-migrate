@@ -13,6 +13,34 @@ import authentic_mac_handoff as handoff
 
 
 class HandoffTests(unittest.TestCase):
+    def test_fast_background_exit_is_not_reported_as_start_failure_or_success(self):
+        for code in (0, 1, -15):
+            with self.subTest(code=code):
+                worker = Mock()
+                worker.poll.return_value = code
+                with patch('sys.argv', ['harness', '--background']), \
+                        patch.object(handoff, 'account'), \
+                        patch.object(handoff.subprocess, 'Popen', return_value=worker), \
+                        patch.object(handoff.time, 'sleep'), patch('builtins.print') as output:
+                    handoff.main()
+                messages = ' '.join(call.args[0] for call in output.call_args_list)
+                self.assertIn('already stopped', messages)
+                self.assertIn('Do not repeat setup', messages)
+                self.assertNotIn('could not start', messages)
+                self.assertNotIn('continues automatically', messages)
+
+    def test_live_background_worker_is_reported_as_running(self):
+        worker = Mock()
+        worker.poll.return_value = None
+        with patch('sys.argv', ['harness', '--background']), \
+                patch.object(handoff, 'account'), \
+                patch.object(handoff.subprocess, 'Popen', return_value=worker), \
+                patch.object(handoff.time, 'sleep'), patch('builtins.print') as output:
+            handoff.main()
+        messages = ' '.join(call.args[0] for call in output.call_args_list)
+        self.assertIn('running in the background', messages)
+        self.assertNotIn('already stopped', messages)
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)

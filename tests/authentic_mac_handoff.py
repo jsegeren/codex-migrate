@@ -632,7 +632,14 @@ def main():
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL, start_new_session=True)
         time.sleep(1)
-        require(worker.poll() is None, 'The runner could not start; tell the supervising Codex task')
+        exit_code = worker.poll()
+        if exit_code is not None:
+            # A read-only diagnostic can finish before this one-second check.
+            # Even exit 0 can mean driver() recorded needs_review, not success.
+            print('The runner has already stopped; it is not running in the background.')
+            print('Tell the supervising Codex task to check the latest status report.')
+            print('Do not repeat setup or launch again until that report is reviewed.')
+            return
         print('Test preparation is running in the background. This window can close.')
         print('Existing Codex sign-ins are retained. Keep Codex closed in both test accounts.')
         print('If a sign-in is still needed: sign in normally, then Command-Q.')
