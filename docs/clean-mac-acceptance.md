@@ -2,8 +2,10 @@
 
 Run this against an exact committed, packaged candidate. This is an execution
 checklist, not a completed receipt. Local unit tests and matching copied bytes
-cannot substitute for these observations. Keep checkout closed until the
-release gates in [release readiness](release-readiness.md) pass.
+cannot substitute for these observations. The September 7
+[paid-beta authorization](paid-beta-launch-2026-09-07.md) permits current beta
+sales while the disclosed checks continue; it does not waive these checks for
+full release acceptance.
 
 ## Access and isolation
 
@@ -92,12 +94,14 @@ After the intended Apple membership activates, build with the existing
 <keychain-profile-name>` workflow. Never put credential values in those arguments.
 Verify the exact artifact's signature, notarization/staple, version, checksum,
 and quarantined download/first launch on the clean Mac. An unsigned candidate
-does not satisfy this final gate. Payment/delivery/refund acceptance is separate
-and remains closed pending the selected Stripe route's account/tax setup,
-verified delivery, and an approved artifact.
+does not satisfy this final gate. Payment/delivery/refund acceptance is separate:
+the paid-beta record identifies the approved build, live checkout verification
+and completed sandbox purchase/delivery/refund evidence. Do not treat sandbox
+payments as real-sale inbox delivery or reopen completed account provisioning.
 
 For each numbered check record: candidate SHA and artifact checksum, environment,
 date/tester, action, observed result, pass/fail, and any redacted evidence location.
 Record skips and failures explicitly. Do not publish raw logs or workspace data.
-Any unresolved safety, usability, or accessibility failure blocks release; the
-maintainer decides how to resolve it before rerunning the affected checks.
+Any unresolved safety, usability, or accessibility failure blocks full release
+certification; the maintainer decides how to resolve it before rerunning the
+affected checks. Beta distribution approval is not a passed test.

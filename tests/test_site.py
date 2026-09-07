@@ -88,21 +88,26 @@ class SiteTests(unittest.TestCase):
                 self.assertTrue((SITE / "assets" / f"{stem}-720.avif").is_file())
                 self.assertTrue((SITE / "assets" / f"{stem}-1120.avif").is_file())
 
-    def test_checkout_closed_until_downloadable_edition_ready(self):
+    def test_paid_beta_offer_describes_current_download_and_price(self):
         text = " ".join(self.parse("index.html").text).lower()
-        self.assertIn("no pre-orders", text)
-        self.assertIn("not on sale yet", text)
+        self.assertIn("signed, notarized mac beta", text)
+        self.assertIn("apple silicon macs", text)
+        self.assertIn("30-day refund policy", text)
+        self.assertNotIn("not on sale yet", text)
         self.assertIn("$50", text)
         self.assertIn("no subscription", text)
         self.assertIn("free cli", text)
 
-    def test_beta_request_is_clear_without_claiming_checkout_is_open(self):
+    def test_beta_checkout_requires_readiness_and_preserves_limitations(self):
         source = (SITE / "index.html").read_text()
         text = " ".join(self.parse("index.html").text)
         self.assertIn("Request Mac beta access — $50", text)
-        self.assertIn("unsigned and unnotarized", text)
-        self.assertIn("No payment until a tested build is ready for your setup", text)
+        self.assertIn("If checkout is unavailable, email Josh", text)
+        self.assertIn("Native accessibility, permissions and physical network-interruption testing are ongoing", text)
+        self.assertIn("Keep your old Mac and an independent backup", text)
+        self.assertIn("it does not merge two active workspaces", text)
         self.assertIn('<div id="checkout-panel" hidden>', source)
+        self.assertIn('aria-describedby="checkout-platform beta-limits checkout-status"', source)
         self.assertIn('subject=Codex%20Migrate%20%2450%20beta%20access', source)
         for page in ("index.html", "moving-to-a-new-mac.html", "backup-and-recovery.html"):
             self.assertNotIn("alpha", (SITE / page).read_text().lower())
@@ -257,7 +262,7 @@ class SiteTests(unittest.TestCase):
         self.assertIn("color: #fff", primary)
         self.assertIn("outline-offset: 4px", styles)
 
-    def test_launch_interest_uses_consented_form_and_separate_early_build_email(self):
+    def test_launch_interest_preserves_consent_and_separate_beta_help_email(self):
         page = self.parse("index.html")
         emails = [href for href in page.hrefs if href.startswith(
             "mailto:joshua@segeren.com?subject=Codex%20Migrate%20%2450%20beta%20access&")]
@@ -265,7 +270,8 @@ class SiteTests(unittest.TestCase):
         text = " ".join(page.text)
         self.assertIn("Your request goes to Josh’s inbox via SendGrid", text)
         self.assertIn("case by case", text)
-        self.assertIn("unsigned and unnotarized", text)
+        self.assertIn("email Josh for help with the signed Mac beta", text)
+        self.assertIn("Don’t email credentials or workspace contents", text)
         source = (SITE / "index.html").read_text()
         self.assertIn('action="/api/signup" method="post"', source)
         self.assertIn('type="checkbox" value="yes" required', source)
@@ -283,8 +289,11 @@ class SiteTests(unittest.TestCase):
         terms = " ".join(self.parse("terms.html").text).lower()
         refunds = " ".join(self.parse("refunds.html").text).lower()
         privacy = " ".join(self.parse("privacy.html").text).lower()
-        self.assertIn("no pre-orders", terms)
-        self.assertIn("no specific release date", terms)
+        self.assertIn("purchase provides the current beta download", terms)
+        self.assertIn("not a promise that every configuration has been tested", terms)
+        self.assertIn("native accessibility, permissions and physical network-interruption testing are ongoing", terms)
+        self.assertIn("$50 usd one time", terms)
+        self.assertIn("no subscription", terms)
         self.assertIn("best-effort", terms)
         self.assertIn("no response time, fix, resolution deadline", terms)
         self.assertIn("30-day refund", refunds)

@@ -7,6 +7,25 @@ distribution decision; the dated entries below preserve their original status.
 
 ## Current release boundary — September 7
 
+The current distributed artifact is **signed and notarized build 5**, $50 USD,
+Apple silicon, beta channel. Production checkout is open and the live Stripe
+webhook is active. Exact source/artifact identifiers, private delivery readback
+and pre-payment disclosures are in the paid-beta launch record above. A fresh
+read of `/api/availability` returned `available:true`, `priceUSD:50`,
+`architecture:arm64`, `channel:beta` during the post-launch audit.
+
+Native VoiceOver, receiving-Mac quarantined launch/permissions and physical
+network interruption remain unpassed. Actual POSIX-denial tests passed on the
+packaged engine, but do not prove macOS TCC or screen-reader behavior. The latest
+dated validation receipt records the access limitations and regression checks.
+The two helpful guides still return HTTP 200; their September 5 Search Console
+inspection receipts, not HTTP availability, establish indexing at that time.
+Transparent GitHub outreach is published; the removed Reddit reply is not a
+verified visible channel. Merchant payment email is enabled in Stripe, but
+real-sale inbox arrival remains unverified.
+
+### Earlier September 7 checkpoints (historical, not current sales state)
+
 Latest additional validation: [September 7 release checks](release-validation-2026-09-07.md).
 The 68-test opt-in disk/recovery/skills set passes, as does browser-driven
 restore on disposable data. The full Python suite passes 690/702 with 12 skips;

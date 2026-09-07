@@ -581,3 +581,32 @@ Separately, live Stripe account `acct_1Rkc6eJfbWpcJIZb` communication preference
 were re-read: **Successful payment receipt — Email** remained checked. This is
 merchant-notification configuration evidence, not proof of an actual live-sale
 message arriving in Josh's mailbox. Buyer delivery email is a separate flow.
+
+## Post-launch complete regression recheck
+
+Source checkpoint before this pass: `0f1eb4387522f824f3550ba0913f3675e28e2276`.
+The first full Python run executed 718 tests and found four stale website-copy
+assertions expecting the former closed/unsigned offering. No migration-engine
+test failed. `tests/test_site.py` now checks the approved signed beta, current
+download, price/hardware/refund terms, server-readiness-hidden purchase panel,
+accessible association of the purchase button with ongoing-test disclosures,
+independent backup and replacement-not-merge warnings, and the support fallback.
+No product implementation or deployed copy changed in this pass.
+
+After repair, all 22 site tests passed; a fresh complete run with
+`PYTHONPATH=src .venv/bin/python -m unittest discover -s tests -q` executed
+718 tests in 160.799 seconds: **706 passed, 12 skipped, zero failures**.
+The Node 24 suite executed 277 tests: **276 passed, one skipped, zero failures**.
+The skipped Node test requires the opt-in sandbox database; it is not fresh
+live-database evidence. The Python default run does not enable the opt-in real
+disk-image suite; earlier explicit disk checks remain separately scoped.
+Builder-test notarization messages were mock fixtures, not new Apple uploads.
+
+Production availability still returned `available:true`, `priceUSD:50`,
+`architecture:arm64`, `channel:beta`. Both helpful guides returned HTTP 200.
+The September 5 Search Console inspections remain the indexing evidence;
+availability is not a new indexing check. The recovery guide's final paragraph
+still describes the paid app as in development and needs a focused copy update;
+this audit did not deploy a website change. Native/physical acceptance and
+real-sale inbox arrival remain unverified. The clean-Mac checklist and readiness
+overview now distinguish approved beta sales from full release certification.
