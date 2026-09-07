@@ -64,8 +64,9 @@ test('live releases require signed and accepted evidence fields, separate from s
   assert.equal(validRelease(live, true), false);
   assert.equal(validRelease({ ...live, accepted: true }, true), true);
 });
-test('real candidate sandbox delivery cannot be promoted by flipping live acceptance', () => {
-  const candidate = require('../commerce/releases.json')['sandbox-build4-arm64'];
+for (const id of ['sandbox-build4-arm64', 'sandbox-build5-arm64']) {
+test(`${id} cannot be promoted by flipping live acceptance`, () => {
+  const candidate = require('../commerce/releases.json')[id];
   assert.equal(validRelease(candidate, false), true);
   assert.equal(validRelease(candidate, true), false);
   const livePath = candidate.pathname.replace('sandbox/', 'live/');
@@ -75,6 +76,7 @@ test('real candidate sandbox delivery cannot be promoted by flipping live accept
     assert.equal(validRelease({ ...candidate, ...patch }, false), false);
   }
 });
+}
 for (const patch of [{ size: 1 }, { url: expected.replace('.private.', '.public.') },
   { pathname: 'other.zip' }, { contentType: 'text/html' }]) {
   test(`storage metadata mismatch blocks signing: ${Object.keys(patch)[0]}`, async () => {
