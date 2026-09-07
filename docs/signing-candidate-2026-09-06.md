@@ -42,11 +42,22 @@ The app, archive and receipts are preserved separately at
 checksum, strict signature verification and Gatekeeper assessment passed again.
 The live build-2 test helper and its failed migration state are unchanged.
 
-Retain this clean worktree and its signed app for reconciliation and completion;
-do not rebuild or discard the evidence solely because the command exited.
-Retirement deadline: September 13, 2026, or sooner once the artifact is safely
-preserved and notarization no longer depends on this worktree. The notarization
-resume process has finished successfully. Public checkout remains closed.
+The exact build-3 archive was uploaded without overwrite to the existing private
+download store. Independent authenticated readback verified all 8,304,411 bytes
+and the above SHA-256; an independent anonymous request returned HTTP 403.
+The release candidate remains `accepted: false`: this proves archive transport,
+not buyer checkout, clean-Mac launch or migration/recovery acceptance.
+
+After verifying the source branch on origin and confirming no process held the
+build checkout as its working directory, the clean manual worktree was retired
+with `git worktree remove` and `git worktree prune`. Original build evidence,
+bytecode cache and disposable uploader input were moved to exact named Trash
+directories and remain recoverable. The usable app/archive/receipts remain in
+the Shared `accepted-build3` directory above and the private archive remains in
+download storage. No Apple job is still pending for build 3.
+
+The earlier worktree-retention requirement is satisfied by the verified artifact
+preservation and retirement above. Public checkout remains closed.
 
 ## Earlier build history
 
