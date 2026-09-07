@@ -46,6 +46,36 @@ test('provider failure details and credentials never enter the report', async ()
   assert.equal(await main(env, () => deps, x => output.push(x)), 1);
   assert.deepEqual(output.map(JSON.parse), [{ configured: false, code: 'commerce_preflight_failed', stage: 'stripe-account' }]);
 });
+test('standard Checkout proof expires its session before continuing other checks', async () => {
+  const deps = factory(); let created = 0, expired = 0;
+  deps.account = async () => ({ id: EXPECTED.account, charges_enabled: true });
+  deps.createSession = async () => { created++; return { id: 'cs_live_proof', status: 'open',
+    livemode: true, mode: 'payment', amount_subtotal: 5000, currency: 'usd' }; };
+  deps.expireSession = async id => { expired++; assert.equal(id, 'cs_live_proof');
+    return { id, status: 'expired', payment_status: 'unpaid' }; };
+  const proof = { ...env, COMMERCE_CHECKOUT_PROVIDER: 'stripe', COMMERCE_PROVE_STANDARD_CHECKOUT: 'yes',
+    COMMERCE_CHECKOUT_PROOF_ID: 'b'.repeat(32) };
+  // Fixture transport is deliberately unavailable: session has already expired.
+  await assert.rejects(preflight(proof, () => deps));
+  assert.equal(created, 1); assert.equal(expired, 1);
+  for (const changed of [{ COMMERCE_CHECKOUT_PROVIDER: 'managed' }, { COMMERCE_CHECKOUT_PROOF_ID: '' }]) {
+    await assert.rejects(preflight({ ...proof, ...changed }, () => deps));
+  }
+  assert.equal(created, 1);
+  await assert.rejects(preflight(env, () => deps));
+  assert.equal(created, 1);
+});
+test('failed standard session creation is never retried and provider text is withheld', async () => {
+  const deps = factory(); let calls = 0;
+  deps.account = async () => ({ id: EXPECTED.account, charges_enabled: true });
+  deps.createSession = async () => { calls++; throw Error('rk_live_PRIVATE'); };
+  const output = [];
+  const code = await main({ ...env, COMMERCE_CHECKOUT_PROVIDER: 'stripe', COMMERCE_PROVE_STANDARD_CHECKOUT: 'yes',
+    COMMERCE_CHECKOUT_PROOF_ID: 'c'.repeat(32) }, () => deps, value => output.push(value));
+  assert.equal(code, 1); assert.equal(calls, 1);
+  assert.equal(JSON.parse(output[0]).stage, 'standard-checkout-create');
+  assert(!output[0].includes('PRIVATE'));
+});
 test('oversized fixture response fails without accepting a download', async () => {
   const deps = factory(); deps.signFixture = async () => ({ url: 'https://fixture.invalid/private?secret=value' });
   deps.request = async () => new Response(Buffer.alloc(452));

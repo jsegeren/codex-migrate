@@ -1,5 +1,6 @@
-// Opt-in deployment-time provisioning check. No public route, payment, email,
-// schema mutation or release-catalog bypass. Fixture transport is not app acceptance.
+// Opt-in deployment-time provisioning check. No public route, charge, email,
+// schema mutation or release-catalog bypass. A separate explicit flag can create
+// and expire one private Checkout session; never supplies payment details.
 const { createHash } = require('node:crypto');
 const EXPECTED = Object.freeze({
   account: 'acct_1Rkc6eJfbWpcJIZb', product: 'prod_VCxpogUxaT0OeT',
@@ -35,6 +36,13 @@ function dependencies(env) {
     account: () => stripe.accounts.retrieve(),
     product: () => stripe.products.retrieve(EXPECTED.product),
     price: () => stripe.prices.retrieve(EXPECTED.price),
+    createSession: () => stripe.checkout.sessions.create({
+      mode: 'payment', line_items: [{ price: EXPECTED.price, quantity: 1 }],
+      billing_address_collection: 'required', expires_at: Math.floor(Date.now() / 1000) + 1860,
+      metadata: { product: 'codex-migrate', purpose: 'operator-standard-checkout-verification', checkout_provider: 'stripe' },
+      success_url: 'https://migrate.segeren.com/purchase', cancel_url: 'https://migrate.segeren.com/',
+    }, { idempotencyKey: 'codex-migrate-standard-proof-' + env.COMMERCE_CHECKOUT_PROOF_ID }),
+    expireSession: id => stripe.checkout.sessions.expire(id),
     database: async () => {
       const db = database(env.COMMERCE_DATABASE_URL);
       return (await db.execute(sql`select name, mode from commerce_environment`)).rows;
@@ -61,12 +69,29 @@ async function preflight(env = process.env, makeDependencies = dependencies) {
     required(price.id === EXPECTED.price && price.product === EXPECTED.product &&
       price.livemode === true && price.active === true && price.unit_amount === 5000 &&
       price.currency === 'usd' && price.type === 'one_time' && price.recurring == null);
+    let standardCheckout;
+    if (env.COMMERCE_PROVE_STANDARD_CHECKOUT === 'yes') {
+      stage = 'standard-checkout-configuration';
+      required(env.COMMERCE_CHECKOUT_PROVIDER === 'stripe' && account.charges_enabled === true &&
+        /^[a-f0-9]{32}$/.test(env.COMMERCE_CHECKOUT_PROOF_ID || ''));
+      stage = 'standard-checkout-create';
+      const session = await deps.createSession();
+      required(/^cs_live_[A-Za-z0-9]+$/.test(session.id || ''));
+      stage = 'standard-checkout-expire';
+      const expired = session.status === 'expired' ? session : await deps.expireSession(session.id);
+      required(expired.id === session.id && expired.status === 'expired' && expired.payment_status === 'unpaid');
+      stage = 'standard-checkout-verify';
+      required(session.livemode === true && session.mode === 'payment' && session.amount_subtotal === 5000 &&
+        session.currency === 'usd' && session.managed_payments?.enabled !== true);
+      standardCheckout = { session: session.id, expired: true, charged: false };
+    }
     stage = 'database';
     const rows = await deps.database();
     required(rows.length === 1 && rows[0].name === 'codex-migrate-commerce' && rows[0].mode === 'live');
     stage = 'private-fixture';
     const size = await verifyFixture(deps);
     return { configured: true, stripeCatalog: true, liveDatabase: true,
+      ...(standardCheckout ? { standardCheckout } : {}),
       privateFixtureBytes: size, anonymousAccessDenied: true, checkoutOpen: false,
       note: 'Provisioning only; no live payment, email, signed-app or migration acceptance.' };
   } catch {

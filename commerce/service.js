@@ -20,11 +20,18 @@ function validatePurchase(session, config) {
   const item = session?.line_items?.data?.[0];
   const price = item?.price;
   const product = typeof price?.product === 'string' ? price.product : price?.product?.id;
+  // Preserve purchases from the previous Managed Payments flow. Standard
+  // Checkout must carry our server-created marker; changing the current
+  // configuration must not invalidate a buyer's historical download.
+  const provider = session?.metadata?.checkout_provider;
+  const verifiedProvider = session?.managed_payments?.enabled === true
+    ? provider == null || provider === 'managed'
+    : provider === 'stripe' && (session?.managed_payments == null || session.managed_payments.enabled === false);
   // Metadata alone is not payment authority. Match the paid Stripe line item,
   // environment, quantity, actual amount and the successful charge as well.
   if (!sessionId(session?.id, config.live) || session.livemode !== config.live ||
       session.mode !== 'payment' || session.status !== 'complete' ||
-      session.payment_status !== 'paid' || session.managed_payments?.enabled !== true ||
+      session.payment_status !== 'paid' || !verifiedProvider ||
       session.metadata?.product !== 'codex-migrate' ||
       session.metadata?.release !== config.release.id ||
       session.line_items?.has_more !== false || session.line_items.data.length !== 1 ||

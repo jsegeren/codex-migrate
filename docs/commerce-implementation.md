@@ -2,6 +2,17 @@
 
 Status: implementation and private-storage transport tested; **not a live checkout release**.
 
+September 6 standard-Checkout decision: the Founder explicitly selected ordinary
+Stripe Checkout in the existing account and accepted seller tax responsibility.
+Managed Payments support clarification is no longer a launch dependency.
+`COMMERCE_CHECKOUT_PROVIDER=stripe` is saved for this project's Production
+environment; code supports this explicit choice without automatic fallback.
+Standard sessions collect a billing address and do not enable Managed Payments
+or automatic tax. This does not resolve tax obligations. Paid-session validation,
+refund/dispute checks and private delivery remain required, and historical
+Managed Payments purchases remain recoverable. No public sale or successful
+real-buyer delivery is claimed by this configuration change.
+
 Stripe clarification, September 6: the dashboard reports Managed Payments
 ready and the product eligible; the open support question is not a rejection.
 It concerns incidental bundled product support versus selling a separate

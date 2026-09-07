@@ -46,6 +46,29 @@ test('commerce defaults closed and requires reviewed release, matching key mode 
 test('valid paid purchase verifies actual product, charge, and email', () => {
   assert.equal(validatePurchase(fixture().s, config).sessionId, 'cs_test_fixture');
 });
+test('standard Checkout verifies paid delivery without invalidating older managed purchases', () => {
+  const s = fixture().s;
+  delete s.managed_payments;
+  assert.throws(() => validatePurchase(s, config), /purchase_not_verified/);
+  s.metadata.checkout_provider = 'stripe';
+  assert.equal(validatePurchase(s, config).sessionId, s.id);
+  s.managed_payments = { enabled: false };
+  assert.equal(validatePurchase(s, config).sessionId, s.id);
+  s.managed_payments.enabled = true;
+  assert.throws(() => validatePurchase(s, config), /purchase_not_verified/);
+  assert.equal(validatePurchase(fixture().s, { ...config, checkoutProvider: 'stripe' }).sessionId, s.id);
+  for (const mutation of [s => s.payment_status = 'unpaid', s => s.line_items.data[0].price.id = 'price_wrong',
+    s => s.payment_intent.latest_charge.refunded = true]) {
+    const bad = fixture().s; delete bad.managed_payments; bad.metadata.checkout_provider = 'stripe';
+    mutation(bad); assert.throws(() => validatePurchase(bad, config));
+  }
+});
+test('Checkout provider selection is explicit and rejects typos', () => {
+  const catalog = { [release.id]: release };
+  assert.equal(configuration(env, catalog).checkoutProvider, 'managed');
+  assert.equal(configuration({ ...env, COMMERCE_CHECKOUT_PROVIDER: 'stripe' }, catalog).checkoutProvider, 'stripe');
+  assert.throws(() => configuration({ ...env, COMMERCE_CHECKOUT_PROVIDER: 'other' }, catalog), /invalid_checkout_provider/);
+});
 for (const [name, mutate] of [
   ['unpaid', s => s.payment_status = 'unpaid'], ['open', s => s.status = 'open'],
   ['live event', s => s.livemode = true], ['subscription', s => s.mode = 'subscription'],

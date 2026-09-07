@@ -25,6 +25,8 @@ function configuration(env = process.env, catalog = releases) {
   const mode = env.COMMERCE_MODE;
   if (!['sandbox', 'live'].includes(mode)) throw new CommerceError('checkout_closed');
   const live = mode === 'live';
+  const checkoutProvider = env.COMMERCE_CHECKOUT_PROVIDER || 'managed';
+  if (!['managed', 'stripe'].includes(checkoutProvider)) throw new CommerceError('invalid_checkout_provider');
   const prefix = live ? 'live' : 'test';
   const key = env.COMMERCE_STRIPE_KEY;
   const secret = env.COMMERCE_LINK_SECRET;
@@ -43,7 +45,7 @@ function configuration(env = process.env, catalog = releases) {
   if (!validRelease(release, live) || release.id !== env.COMMERCE_RELEASE) {
     throw new CommerceError('release_unavailable');
   }
-  return { mode, live, key, secret, release, catalog, site: commerceSite(env),
+  return { mode, live, checkoutProvider, key, secret, release, catalog, site: commerceSite(env),
     blobStore: env.COMMERCE_BLOB_STORE_ID,
     account: env.COMMERCE_STRIPE_ACCOUNT, product: env.COMMERCE_PRODUCT,
     price: env.COMMERCE_PRICE, webhookSecret: env.COMMERCE_WEBHOOK_SECRET };

@@ -83,3 +83,28 @@ test('preview purchase accepts its origin and uses the same server environment',
   await handler(request({ action: 'status', credential: 'cs_test_fixture' }, SITE), res);
   assert.equal(res.statusCode, 403); assert.equal(calls, 1);
 });
+test('standard checkout creates no managed payment and never silently falls back', async () => {
+  const configured = { live: false, mode: 'sandbox', site: origin, account: 'acct_fixture',
+    checkoutProvider: 'stripe', product: 'prod_fixture', price: 'price_fixture', release: { id: 'fixture' } };
+  let created, options, managed = undefined;
+  const stripe = { accounts: { retrieve: async () => ({ id: configured.account }) },
+    prices: { retrieve: async () => ({ livemode: false, active: true, unit_amount: 5000,
+      currency: 'usd', type: 'one_time', billing_scheme: 'per_unit',
+      product: { id: configured.product, livemode: false, active: true } }) },
+    checkout: { sessions: { create: async (value, opts) => { created = value; options = opts;
+      return { livemode: false, managed_payments: managed, url: 'https://checkout.stripe.com/fixture' };
+    } } } };
+  const req = request({ requestId }); req.headers.authorization = `Bearer ${'c'.repeat(64)}`;
+  const handler = checkout(async () => ({ stripe }), { ...env, COMMERCE_CHECKOUT_OPEN: 'yes',
+    COMMERCE_SANDBOX_OPERATOR_TOKEN: 'c'.repeat(64) }, () => configured);
+  const res = response(); await handler(req, res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(created.managed_payments, undefined);
+  assert.equal(created.metadata.checkout_provider, 'stripe');
+  assert.equal(created.billing_address_collection, 'required');
+  assert.match(options.idempotencyKey, /-stripe-/);
+  managed = { enabled: true };
+  const bad = response(); await handler(req, bad);
+  assert.equal(bad.statusCode, 503);
+  assert.equal(bad.body.error, 'checkout_not_verified');
+});

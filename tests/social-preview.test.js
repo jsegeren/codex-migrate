@@ -12,7 +12,7 @@ test('homepage declares an accessible large social card with a real PNG asset', 
   }
   assert.equal(meta['twitter:card'], 'summary_large_image');
   assert.equal(meta['og:image:type'], 'image/png');
-  assert.match(meta['twitter:description'], /alpha; paid Mac app in testing/);
+  assert.match(meta['twitter:description'], /Free open-source beta; \$50 Mac beta access by request/);
   for (const key of ['og:image:alt', 'twitter:image:alt']) {
     assert.match(meta[key], /Codex Migrate/);
     assert.match(meta[key], /not affiliated with OpenAI/);

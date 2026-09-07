@@ -28,13 +28,18 @@ function makeHandler(load = runtime, env = process.env, configure = configuratio
           price.type !== 'one_time' || price.recurring != null || price.billing_scheme !== 'per_unit' ||
           price.transform_quantity != null || price.product?.id !== config.product ||
           price.product.livemode !== config.live || !price.product.active) throw new CommerceError('catalog_mismatch');
+      const standard = config.checkoutProvider === 'stripe';
       const session = await stripe.checkout.sessions.create({
-        mode: 'payment', line_items: [{ price: config.price, quantity: 1 }], managed_payments: { enabled: true },
-        metadata: { product: 'codex-migrate', release: config.release.id },
+        mode: 'payment', line_items: [{ price: config.price, quantity: 1 }],
+        ...(standard ? { billing_address_collection: 'required' } : { managed_payments: { enabled: true } }),
+        metadata: { product: 'codex-migrate', release: config.release.id,
+          checkout_provider: standard ? 'stripe' : 'managed' },
         success_url: `${config.site}/purchase#session={CHECKOUT_SESSION_ID}`, cancel_url: `${config.site}/#founding-edition`,
-      }, { idempotencyKey: `codex-migrate-${config.mode}-${config.release.id}-${data.requestId}` });
+      }, { idempotencyKey: `codex-migrate-${config.mode}-${config.release.id}-${standard ? 'stripe-' : ''}${data.requestId}` });
       const url = new URL(session.url);
-      if (session.livemode !== config.live || session.managed_payments?.enabled !== true ||
+      if (session.livemode !== config.live || (standard
+          ? session.managed_payments != null && session.managed_payments.enabled !== false
+          : session.managed_payments?.enabled !== true) ||
           url.origin !== 'https://checkout.stripe.com' || url.username || url.password) throw new CommerceError('checkout_not_verified');
       return reply(res, 200, { url: url.toString() });
     } catch (error) { return failure(res, error); }
