@@ -22,7 +22,9 @@ payment details were submitted and no buyer received a checkout URL. The same
 build verified the live commerce database and private fixture transport.
 Production sensitive credentials were used only inside the authorized build;
 local environment export did not expose them. This candidate was deployed with
-`--skip-domain`; canonical-domain promotion and public sales have not occurred.
+`--skip-domain`, then promoted successfully to the canonical domains after the
+proof passed. The public availability endpoint still returns `available: false`:
+public sales have not opened and the failed app is not marked accepted.
 All 238 Node tests pass, including provider selection, historical purchases,
 unpaid/refunded rejection and the create/expire proof's opt-in boundaries.
 
