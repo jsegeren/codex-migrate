@@ -14,7 +14,16 @@ the login Keychain with Apple's G2 intermediate. macOS reports one valid
 signing identity. A real disposable executable passed Developer ID signing,
 Apple timestamping, hardened-runtime signing and strict signature verification.
 This is signing-infrastructure evidence, not a signed/notarized app release.
-Notarization credentials and the actual release submission remain pending. Earlier Apple-Pending
+Notarization credentials are now validated and saved in Keychain. The first
+real submission was rejected for the embedded Python framework signature; the
+builder fix seals framework resources and directly checks every embedded
+Mach-O signature. Clean version 0.1.0 build 2 from `1ee2e41` is submitted as
+`da35b4d5-c297-476c-9036-13be0ea4c910`; Apple last reports **In Progress**.
+Its real packaged-engine checks ran nine tests: eight passed and one skipped.
+This is not yet Accepted, stapled, or a publishable release ZIP. The builder
+remains live waiting on that exact submission; do not start another build or
+submit again just because processing takes time. See the
+[signing receipt](signing-candidate-2026-09-06.md). Earlier Apple-Pending
 entries below are historical, not the current membership status.
 
 The authentic two-Mac run created three genuine conversations using the

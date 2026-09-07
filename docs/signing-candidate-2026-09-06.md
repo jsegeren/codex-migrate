@@ -37,3 +37,27 @@ alone. Clean-Mac launch and real two-Mac migration/recovery remain required.
 
 Signing references: [Apple nested-code guidance](https://developer.apple.com/documentation/xcode/using-the-latest-code-signature-format)
 and [macOS Code Signing In Depth](https://developer.apple.com/library/archive/technotes/tn2206/).
+
+## Repaired build 2 submitted
+
+Exact clean source: `1ee2e41` on the pushed signed-candidate branch. The builder
+produced arm64 version 0.1.0 build 2 in
+`codex-migrate-release-build/build/desktop-bnuxiqz9`, directly verified the
+embedded binaries, then submitted job `da35b4d5-c297-476c-9036-13be0ea4c910`.
+Apple's authenticated job-info response reports `In Progress`. The existing
+builder is waiting on that same job and has not published a final archive.
+Retain this worktree/output while the process remains live. If it exits before
+completion, inspect its receipt and use the guarded resume path as appropriate;
+do not blindly resubmit. The rejected build 1 output remains separate at
+`build/desktop-_ddvfhfh`.
+
+All 13 builder regressions pass on Python 3.9 and 3.12. The actual signed
+build-2 engine passed eight checks with one case-sensitive-filesystem skip
+using `CODEX_MIGRATE_TEST_ENGINE` and `test_desktop`, with Python/DYLD environment
+overrides stripped and system-only PATH for packaged invocations. Temporary
+fixture state was removed by test cleanup; no real workspace was transferred.
+The disposable framework signing proof was moved to Trash and is recoverable.
+
+Pending: Apple's explicit Accepted result, staple/validation/Gatekeeper checks,
+final archive checksum, exact downloaded clean-Mac launch, and two-Mac
+migration/recovery acceptance. Nothing here opens paid checkout.
