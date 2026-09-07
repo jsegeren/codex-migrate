@@ -244,3 +244,21 @@ the active Individual membership with Team ID `P9J3JK79KQ`, renewing September
 evidence Apple activated the old consumer account. A private local key and
 verified public CSR were prepared outside the repository. Certificate creation,
 Keychain installation and real notarization are not yet complete.
+
+The clean local-test package is now prepared from pushed revision
+`9ae70b5750bafe8f9869644de46d6a57a49cca09`, arm64, version 0.1.0 build 1,
+Python 3.12.3 and PyInstaller 6.22.2. Its copied Shared app passes
+`codesign --verify --deep --strict`, exposes the new staging option, and has
+`source_dirty: false`. This is ad-hoc signed, not Developer ID signed or
+notarized. Archive SHA-256:
+`d173ccb5b80fc5a5b6f6dec02ed2d0e3634a76a86017b1dac9d70faa3e42ddcd`.
+The Shared harness and existing `Start Codex Test.command` byte-match source.
+An account-local launch is still required; no fresh transfer is claimed.
+
+Verification: 67 focused tests pass on both Python 3.9 and Python 3.12.
+The full Python 3.12 suite ran 650 tests: 638 passed, 12 skipped.
+Mocked release-test output does not constitute a real notarization submission.
+The single clean build worktree was owned by this acceptance task and retired
+after confirming its revision on origin and the copied artifact checksum.
+Its duplicate 29 MB build output was moved to Trash; the usable Shared package
+and receipt remain available.

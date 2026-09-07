@@ -19,8 +19,12 @@ staging preparation; it has no installation receipt. Its original helper and
 private state are retained. The Founder ran the read-only diagnostic: default
 destination staging belongs to another migration, with no pending recovery
 transaction. A revised acceptance harness uses separate staging and state;
-earlier staging and backups are not adopted, removed or relabelled. Its new
-packaged candidate and real execution remain pending.
+earlier staging and backups are not adopted, removed or relabelled. Its clean
+local-test candidate at revision `9ae70b5` is now built and checked in the Shared
+isolated-candidate directory; real execution remains pending. This ad-hoc signed
+test package is not a Developer ID signed/notarized public release. The latest
+full suite ran 650 tests: 638 passed, 12 skipped; 67 focused checks also passed
+on Python 3.9 and Python 3.12.
 See the [test handoff](authentic-test-handoff-2026-09-06.md).
 
 Staging ownership checks had a separate reproducible usability defect: missing,
