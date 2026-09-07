@@ -17,6 +17,8 @@ Apple onboarding, signing, or payment provisioning.
   Accepted, stapled and Gatekeeper-verified, with eight actual packaged-engine
   checks passing and one skipped. It is saved separately in Shared; it has
   not replaced the live test helper or passed the real two-Mac test.
+  Its private upload/readback and actual Chrome attachment download match the
+  exact archive hash and filename; anonymous storage access returns 403.
 - Ordinary Stripe sandbox payment, webhook 200, Inbox fulfillment email,
   emailed purchase recovery, exact fixture download, full refund and denial
   of a fresh refunded download have passed. These are test-money/fixture

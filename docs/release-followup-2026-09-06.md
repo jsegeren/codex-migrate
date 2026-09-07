@@ -67,6 +67,35 @@ requirement above is satisfied. Shared `accepted-build4` remains usable. No
 Apple job is pending, no current test helper was replaced, and no live
 checkout/catalog setting was changed. Exact two-Mac acceptance remains open.
 
+### Build 4 private-store and browser transport
+
+The receipt-bound uploader uploaded build 4 without overwrite to the existing
+private store, then independently streamed back and verified all 8,305,798
+bytes and the checksum above. An unauthenticated GET returned HTTP 403.
+
+The operator-only candidate-download check used a short-lived GET-only link,
+bound to that exact object, in stable Chrome. A browser click received a normal
+attachment with the correct filename, length and SHA-256. Private links and
+provider details were kept out of output. Its initial attempt stopped because
+Playwright was absent from this project's dependencies; the successful run
+used the already-installed adjacent Playwright runtime via explicit NODE_PATH,
+without installing packages or changing the adjacent project. The helper now
+checks runtime availability before requesting a private link. Chrome and its
+temporary downloads were closed/removed by the helper.
+
+This is actual signed-candidate browser transport, not a sandbox substitute,
+buyer purchase, quarantined Finder launch, or clean-Mac acceptance. It uses
+operator storage authority only; it does not weaken the buyer entitlement
+handler, change a release catalog, or enable checkout. The catalog still has
+no accepted live release. All 258 Node tests ran: 257 passed, one skipped.
+
+The disposable uploader input directory was moved to
+`/Users/jsegeren/.Trash/codex-migrate-build4-upload-input-20260907` and remains
+recoverable. The usable Shared app/archive and private stored archive remain.
+Device access was rechecked: old build-2 helper PID 84016 was live under UID
+502, while noninteractive execution as that source account required a password.
+No protected helper was killed, state reset, or diagnostic rerun.
+
 ## Earlier investigation
 
 The refreshed owner-exported installation diagnostic at timestamp
