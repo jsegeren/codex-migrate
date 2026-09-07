@@ -20,11 +20,13 @@ private state are retained. The Founder ran the read-only diagnostic: default
 destination staging belongs to another migration, with no pending recovery
 transaction. A revised acceptance harness uses separate staging and state;
 earlier staging and backups are not adopted, removed or relabelled. Its clean
-local-test candidate at revision `9ae70b5` is now built and checked in the Shared
+local-test candidate at revision `d27a13d` is now built and checked in the Shared
 isolated-candidate directory; real execution remains pending. This ad-hoc signed
 test package is not a Developer ID signed/notarized public release. The latest
-full suite ran 650 tests: 638 passed, 12 skipped; 67 focused checks also passed
-on Python 3.9 and Python 3.12.
+full suite ran 660 tests: 648 passed, 12 skipped. A subsequent real CLI lifecycle
+test passed against both source and the actual packaged engine, including
+same-configuration reopen and changed-destination rejection. The updated
+66-test focused set passed on Python 3.9 and Python 3.12.
 See the [test handoff](authentic-test-handoff-2026-09-06.md).
 
 Staging ownership checks had a separate reproducible usability defect: missing,
@@ -58,8 +60,9 @@ Changed or malformed bindings and legacy non-pristine unbound records require
 review, with existing state preserved. Binding excludes credential paths and
 contents and is omitted from public state. Apply/compression can change on
 resume. Browser configuration-keyed records retain their existing behavior.
-The isolated Shared package at `9ae70b5` predates this change and is not the
-final release candidate; it must be refreshed before acceptance.
+The isolated Shared package was refreshed from clean revision `d27a13d`; its
+source receipt, ad-hoc signature and archive checksum were checked. No real
+two-Mac installation or notarization is claimed by this source/package test.
 
 September 6 production preflight passed on an initially unpromoted deployment of
 `28c898e`: fresh live Stripe account/catalog reads, the isolated live purchase

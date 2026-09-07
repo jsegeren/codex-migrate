@@ -262,3 +262,34 @@ The single clean build worktree was owned by this acceptance task and retired
 after confirming its revision on origin and the copied artifact checksum.
 Its duplicate 29 MB build output was moved to Trash; the usable Shared package
 and receipt remain available.
+
+## Configuration-binding follow-up
+
+The Shared isolated candidate is now superseded by clean revision
+`d27a13d0c89c91534ffa1d9c280b11fa5ee2e406`. The default launcher and harness
+paths are unchanged. Source-account process inspection showed the legacy failed
+helper only, with no running authentic harness or isolated candidate, before
+replacement. The unused `9ae70b5` package was moved to Trash; no running app or
+migration data was replaced. The original failed helper still uses its original
+path, not this candidate.
+
+The new CLI prevents saved state from being rebound to a different source,
+destination, scope, mode or staging folder. The authentic run uses pristine
+`migration-isolated` state, so no legacy evidence is adopted. Repeated runs with
+the same configuration retain their binding. Existing non-pristine unbound CLI
+state requires review and is never reset automatically.
+
+The new archive SHA-256 is
+`82dbc7ec30e3c9a14661f7d1faa74034c0f79fbe161901105bbd23e61c63a91c`.
+The copied app passed deep/strict code-signature verification and the ZIP passed
+its checksum. A real CLI lifecycle test also passed against this packaged
+engine: start, graceful stop, same-configuration reopen, and rejection of a
+changed destination without changing state. It uses disposable local state and
+does not contact a remote Mac. No token is printed by the test.
+
+The full suite ran 660 tests (648 passed, 12 skipped); the subsequently added
+real CLI lifecycle test passed separately. All 66 focused binding, state, staging
+and harness checks pass on Python 3.9 and 3.12. The build branch was pushed,
+the single clean build worktree retired, and its duplicate output moved to
+Trash. Apple certificate confirmation and the real source-account launch remain
+external checkpoints; checkout remains closed.
