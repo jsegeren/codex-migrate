@@ -283,3 +283,31 @@ Current access rechecks: noninteractive execution as the disposable source
 account requires authentication; the current personal account does not have a
 trusted host entry for the target account's Mac. No host-verification bypass,
 private-key copy or persistent administrator authorization was introduced.
+
+## Exact sandbox purchase refund and owner preference
+
+Stripe sandbox account `acct_1Rkc6nQwGK6ZgBcK` showed the successful $50
+candidate payment `pi_3UD7UlQwGK6ZgBcK1PznPGLe`. Its completed Checkout event
+identified the previously recorded session
+`cs_test_a1R36ggecp8gHU0kth0UxqHackp7XNEe64Jv2SOj5fl2uZPnKGddAMOnky`
+and `sandbox-build4-arm64`, confirming the refund target rather than choosing
+an unrelated fixture. A full synthetic $50 refund was submitted with an internal
+acceptance-test note. Stripe then displayed **Refunded**. No real payment,
+customer refund, new checkout or replacement delivery email was created.
+
+The original private link from the 11:42 AM delivery email was reopened in
+Chrome. The actual hosted page displayed **This purchase needs review. Please
+email Josh for help.** and offered no Download for Mac button. Thus the same
+entitlement that delivered the verified ZIP no longer authorizes a fresh
+download after refund. The previously downloaded file was not removed; this
+test does not claim revocation of files already obtained or immediate expiry of
+previously issued short-lived artifact URLs.
+
+The live account `acct_1Rkc6eJfbWpcJIZb` communication-preferences page was
+also rechecked through the real Chrome UI. **Successful payment receipt —
+Email** was checked (value 1); SMS and Push were disabled/unchecked. This is
+configuration evidence, not proof of a new owner email arriving. Stripe's
+[account email-notification guidance](https://support.stripe.com/questions/set-up-account-email-notifications)
+describes successful-payment notifications. No payment was made merely to
+exercise live mail delivery, and the sandbox customer delivery email is not
+being substituted for an owner alert. Live checkout remains closed.
