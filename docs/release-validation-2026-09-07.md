@@ -390,3 +390,42 @@ source account still requires administrator authentication. There is no live
 acceptance worker being awaited and no authorization to bypass that account
 boundary. Do not rerun the completed build 4 continuation or old diagnostic
 launchers to address the remaining tests.
+
+## Build 5 real two-Mac staging and selective repair
+
+The Founder approved one macOS administrator authentication. The fixed program
+`tests/final_device_acceptance.py` from pushed source `5e629ac` ran as the existing
+non-root `codexmigratesource` account. It reused that account's pinned, strict-SSH
+connection to `codexmigratetarget`; it created no privileged service, password
+cache, credential copy or arbitrary-command queue. Six harness guard tests passed
+before dispatch. Both personal sessions remained available.
+
+The runner verified the exact signed build 5 artifact and created fresh,
+non-overwriting `Codex-Migrate-Final-20260907` fixture folders in the two test
+homes. Its full-migration staging selected that invented source project and the
+disposable source account's existing Codex state; it never finalized/replaced the
+full destination workspace. During staging, Pause and Stop were observed, and
+409,413,176 staged regular-file bytes were independently counted on the target.
+Resume retained the same migration identity and reached ready-to-finalize with
+no installation receipt. The owned idle engine then shut down normally.
+
+The same packaged binary's workspace-skills export subsequently updated exactly
+one fixture skill in the existing destination fixture project. Its backup
+verification receipt passed. A separate target-side check proved the expected
+new skill contents, unchanged unrelated project sentinel, and unchanged retained
+Codex-state digest. That private comparison never opens `auth.json` or
+`installation_id`, never follows file links, and exports no digest or contents.
+It is not an additional authentication-identity verification claim.
+
+Authoritative Shared receipt:
+`/Users/Shared/CodexMigrate-Authentic-Status-20260906/final-device-checks.json`,
+timestamp `1788814316.6339588`, phase
+`automated_device_checks_passed_remaining_manual_gates`. Runner 83027 and its
+owned staging helper exited; there is no pending observer to poll. Fixtures,
+staging and backups remain intact. Do not rerun this create-once test over them.
+
+This proves actual build 5 cross-Mac Pause/Stop/Resume and a CLI workspace-skill
+repair with preservation checks. It does not prove physical link loss, an
+interrupted protected replacement/restore, browser skills-flow acceptance,
+receiving-Mac quarantined Finder launch or native VoiceOver. Those distinctions
+remain explicit release gates, not reasons to repeat the completed tests.

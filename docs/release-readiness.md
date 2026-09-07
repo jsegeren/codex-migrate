@@ -49,10 +49,18 @@ Apple onboarding, signing, or payment provisioning.
   in the sandbox and correctly denied a fresh download. These are test-money
   checks, not live sales or receiving-Mac acceptance.
 - Remaining acceptance must demonstrate physical interruption/recovery and
-  selective repair; validate quarantined first launch and native accessibility
+  browser selective repair; validate quarantined first launch and native accessibility
   on the destination; then verify delivery of the exact accepted artifact and
   activate the reviewed live purchase flow. The detailed device checklist is
   [clean-Mac acceptance](clean-mac-acceptance.md).
+
+Build 5's subsequent fixed-scope run also passed real cross-Mac Pause, Stop and
+Resume with 409,413,176 bytes of staged data retained. Its packaged CLI then
+repaired one workspace skill with verified backup while independent target-side
+checks confirmed the new skill, unrelated project file and retained Codex state.
+This does not substitute for physical link-loss, protected-phase recovery or
+receiving-Mac/native accessibility checks. The create-once runner has exited;
+do not rerun its old launcher over the retained fixtures.
 
 The homepage and two helpful guides already have Search Console indexing
 evidence, and transparent GitHub community outreach is published. Neither
