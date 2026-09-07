@@ -72,6 +72,61 @@ def turn_failure(turn):
     return 'Codex turn failed; error category unavailable'
 
 
+def model_selection(app, pinned=None):
+    """Choose the advertised default once; never fall back after a failed turn."""
+    entries, cursor = [], None
+    for _ in range(5):
+        params = {'limit': 100, 'includeHidden': False}
+        if cursor is not None:
+            params['cursor'] = cursor
+        page = app.call('model/list', params)
+        require(isinstance(page, dict) and isinstance(page.get('data'), list), 'Invalid model catalog')
+        entries.extend(page['data'])
+        cursor = page.get('nextCursor')
+        if cursor is None:
+            break
+        require(isinstance(cursor, str) and len(cursor) <= 4096, 'Invalid model catalog cursor')
+    else:
+        raise SafeError('Model catalog pagination limit reached')
+    if pinned is not None:
+        require(isinstance(pinned, dict) and set(pinned) == {'model', 'effort'}, 'Invalid pinned test model')
+    candidates = [item for item in entries if isinstance(item, dict) and item.get('hidden') is not True
+                  and (item.get('model') == pinned['model'] if pinned else item.get('isDefault') is True)]
+    require(len(candidates) == 1, 'No unique available test model; no automatic fallback')
+    item = candidates[0]
+    model = item.get('model')
+    effort = pinned['effort'] if pinned else item.get('defaultReasoningEffort')
+    require(isinstance(model, str) and re.fullmatch(r'[a-zA-Z0-9_.-]{1,100}', model) is not None
+            and model != 'gpt-5', 'Unsupported default test model; no automatic fallback')
+    require(effort in ('none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra')
+            and any(isinstance(value, dict) and value.get('reasoningEffort') == effort
+                    for value in item.get('supportedReasoningEfforts', [])), 'Unsupported test reasoning effort')
+    return {'model': model, 'effort': effort}
+
+
+def unsupported_legacy_fixture(turn, marker):
+    """Only the observed, rejected pre-fix request is eligible for one repair."""
+    if not isinstance(turn, dict) or turn.get('status') != 'failed':
+        return False
+    error = turn.get('error')
+    if not isinstance(error, dict) or error.get('codexErrorInfo') != 'other':
+        return False
+    message = error.get('message')
+    try:
+        body = json.loads(message)
+        message = body.get('error', {}).get('message') if body.get('status') == 400 else None
+    except (TypeError, ValueError, AttributeError):
+        pass
+    expected = "The 'gpt-5' model is not supported when using Codex with a ChatGPT account."
+    if message != expected:
+        return False
+    items = turn.get('items')
+    prompt = 'Remember this test marker: ' + marker + '. Reply only with that marker.'
+    return (isinstance(items, list) and len(items) == 1 and isinstance(items[0], dict)
+            and items[0].get('type') == 'userMessage'
+            and items[0].get('content') == [{'type': 'text', 'text': prompt, 'text_elements': []}])
+
+
 def require(ok, message):
     if not ok:
         raise SafeError(message)
@@ -240,9 +295,12 @@ class AppServer:
         value = self.call('account/read', {'refreshToken': False}).get('account')
         return isinstance(value, dict) and value.get('type') == 'chatgpt'
 
-    def turn(self, identifier, prompt):
-        response = self.call('turn/start', {'threadId': identifier,
-            'input': [{'type': 'text', 'text': prompt, 'text_elements': []}]})
+    def turn(self, identifier, prompt, selection=None):
+        params = {'threadId': identifier,
+                  'input': [{'type': 'text', 'text': prompt, 'text_elements': []}]}
+        if selection is not None:
+            params.update(selection)
+        response = self.call('turn/start', params)
         turn_id = response['turn']['id']
         deadline = time.monotonic() + 180
         while time.monotonic() < deadline:
@@ -306,12 +364,20 @@ def fixture_threads(home):
     checked(workspace, directory=True)
     with server(home) as app:
         require(app.signed_in(), 'Sign into Codex with ChatGPT in the source test account')
+        selection = None
+        def selected_model():
+            nonlocal selection
+            if selection is None:
+                path = root / 'model.json'
+                selection = model_selection(app, read(path) if path.exists() else None)
+                save(path, selection)
+            return selection
         for index, kind in enumerate(('project', 'loose', 'archived')):
             if index < len(records):
                 if records[index].get('complete') is not True:
                     # Read only the exact fixture recorded before the failure.
-                    # Do not create another thread, retry a paid turn, or alter
-                    # Codex's session/database files to conceal the failed run.
+                    # The only retry is the exactly matched, rejected legacy
+                    # gpt-5 request below. Never edit Codex's storage directly.
                     record = records[index]
                     require(isinstance(record.get('id'), str)
                             and re.fullmatch(r'[a-zA-Z0-9_-]{1,100}', record['id']) is not None
@@ -324,21 +390,38 @@ def fixture_threads(home):
                     require(isinstance(thread, dict) and thread.get('id') == record['id'],
                             'Partial conversation response needs review')
                     turns = thread.get('turns')
+                    if (index == 0 and len(records) == 1 and isinstance(turns, list) and len(turns) == 1
+                            and 'model' not in record and 'model_repair_attempted' not in record
+                            and unsupported_legacy_fixture(turns[0], record['marker'])):
+                        chosen = selected_model()
+                        record.update(model=chosen, model_repair_attempted=True)
+                        save(manifest, records)  # Bound repair before any model request.
+                        resumed = app.call('thread/resume', {'threadId': record['id'], 'model': chosen['model'],
+                                           'approvalPolicy': 'never', 'sandbox': 'read-only'})
+                        require(resumed.get('model') == chosen['model'], 'Codex did not honor the test model pin')
+                        app.turn(record['id'], 'Remember this test marker: ' + record['marker']
+                                 + '. Reply only with that marker.', chosen)
+                        record['complete'] = True
+                        save(manifest, records)
+                        continue
                     if isinstance(turns, list) and turns and isinstance(turns[-1], dict):
                         if turns[-1].get('status') in ('failed', 'interrupted'):
                             raise SafeError(turn_failure(turns[-1]))
                     raise SafeError('Partial conversation needs review; no automatic model retry')
                 continue
             marker = 'migration-fixture-' + uuid.uuid4().hex
+            chosen = selected_model()
             response = app.call('thread/start', {'cwd': str(workspace if kind == 'project' else home),
+                'model': chosen['model'],
                 'approvalPolicy': 'never', 'sandbox': 'read-only', 'ephemeral': False,
                 'baseInstructions': 'This is a tiny migration test. Reply without using any tools.'})
+            require(response.get('model') == chosen['model'], 'Codex did not honor the test model pin')
             identifier = response['thread']['id']
-            record = {'id': identifier, 'kind': kind, 'marker': marker, 'complete': False}
+            record = {'id': identifier, 'kind': kind, 'marker': marker, 'complete': False, 'model': chosen}
             records.append(record)
             save(manifest, records)
             app.call('thread/name/set', {'threadId': identifier, 'name': 'Migration test: ' + kind})
-            app.turn(identifier, 'Remember this test marker: ' + marker + '. Reply only with that marker.')
+            app.turn(identifier, 'Remember this test marker: ' + marker + '. Reply only with that marker.', chosen)
             if kind == 'archived':
                 app.call('thread/archive', {'threadId': identifier})
             record['complete'] = True
@@ -350,6 +433,8 @@ def prove_threads(home, records):
     require(isinstance(records, list) and len(records) == 3, 'Expected three test conversations')
     with server(home) as app:
         require(app.signed_in(), 'Destination must retain its ChatGPT sign-in')
+        chosen = model_selection(app, records[0].get('model'))
+        require(all(item.get('model') == chosen for item in records), 'Test model pin mismatch')
         for item in records:
             require(re.fullmatch(r'[a-zA-Z0-9_-]{1,100}', item['id']) is not None,
                     'Invalid test thread ID')
@@ -360,9 +445,11 @@ def prove_threads(home, records):
             before_turns = len(history['thread']['turns'])
             if item['kind'] == 'archived':
                 app.call('thread/unarchive', {'threadId': item['id']})
-            app.call('thread/resume', {'threadId': item['id'],
-                                      'approvalPolicy': 'never', 'sandbox': 'read-only'})
-            app.turn(item['id'], 'What test marker did I ask you to remember? Reply only with it. No tools.')
+            resumed = app.call('thread/resume', {'threadId': item['id'],
+                                               'model': chosen['model'],
+                                               'approvalPolicy': 'never', 'sandbox': 'read-only'})
+            require(resumed.get('model') == chosen['model'], 'Codex did not honor the test model pin')
+            app.turn(item['id'], 'What test marker did I ask you to remember? Reply only with it. No tools.', chosen)
             updated = app.call('thread/read', {'threadId': item['id'], 'includeTurns': True})
             turns = updated['thread']['turns']
             require(len(turns) > before_turns and any(
@@ -542,7 +629,7 @@ def driver():
             raise SafeError('Sign-in wait expired; rerun the same launcher to resume')
         update('creating_genuine_test_conversations')
         records = fixture_threads(home)
-        update('three_genuine_conversations_created', conversations=3)
+        update('three_genuine_conversations_created', conversations=3, test_model=records[0]['model']['model'])
         state = root / 'migration'
         command = [str(ENGINE), 'serve', '--apply', '--no-open', '--port', '0',
             '--source-home', str(home), '--target', reply['target'], '--target-home', str(TARGET),

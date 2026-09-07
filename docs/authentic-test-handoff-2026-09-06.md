@@ -47,6 +47,8 @@ and attempts reopening/continuation through Codex's app-server on the new Mac.
   No session JSONL or SQLite schema is fabricated. The ChatGPT subscription login
   is checked through `account/read`; API-key login is not accepted for this test.
 - Partial conversation creation is held for review, never duplicated silently.
+  The precisely identified legacy unsupported-model failure has a one-attempt,
+  same-thread repair described below; other failures still stop.
   Continuation must produce a new assistant turn containing the original marker.
 - No arbitrary command queue, remote listener, sudoers edit or password caching.
   The model fixture requests no tools, uses read-only permissions and rejects
@@ -65,7 +67,7 @@ The package is the clean `28d5b10` unsigned arm64 candidate recorded in
 passed `codesign --verify --deep --strict` again in the handoff directory.
 
 `PYTHONPATH=tests .venv/bin/python -m unittest test_authentic_mac_handoff -q`
-passes 26 deterministic tests, without a real account login or model call.
+passes 36 deterministic tests, without a real account login or model call.
 Launcher shell syntax is checked. The installed local Codex CLI is 0.153.4;
 the protocol field names were checked against its generated schema.
 
@@ -141,3 +143,42 @@ Codex, without publishing raw provider output or changing account credentials.
 There is no running background acceptance worker and no authentic migration
 receipt. All 28 deterministic harness tests pass on Python 3.9 and 3.12; this
 includes fast zero/nonzero/signal exits and a still-running child.
+
+## Root cause found and fixed: unsupported implicit model
+
+The single September 6 fixture rollout was readable through its existing file
+permissions. A bounded inspection of only its terminal error—not a recursive
+session search—identified HTTP 400 `invalid_request_error`: the implicit `gpt-5`
+model is not supported with a ChatGPT account. The harness omitted an explicit
+model, and Codex used that unsupported default. This was not evidence of failed
+sign-in, incorrect passwords, quota exhaustion, or a migration failure.
+No credentials, private harness receipts, or account permissions were accessed
+or changed. The published error contains only the model rejection.
+
+The harness now discovers the account's advertised default with `model/list`,
+validates its default reasoning effort, and persists the selection in the
+owner-only `model.json`. It pins the model for thread start/resume and the model
+and effort for every turn. Target continuation requires the same model to be
+available, rather than selecting a different default. Missing, ambiguous,
+hidden, unsupported, or absent pinned models stop without a fallback. Start and
+resume responses must confirm the requested model. Catalog selection follows
+the official [model/list documentation](https://learn.chatgpt.com/docs/app-server#models)
+and the locally generated 0.153.4 protocol schema.
+
+Only the first incomplete, pre-pin project fixture with exactly one failed turn,
+the exact observed unsupported-`gpt-5` error, and its exact invented user prompt
+is eligible for repair. The harness records `model_repair_attempted` and the
+chosen model before resuming that same thread. The rejected request receives
+one new turn using the selected supported model; subsequent launches cannot
+repeat that repair if it fails. Other errors, extra turns/items, changed content,
+or already-pinned partial records remain review stops. Codex storage is never
+edited directly and the original failed turn remains in history.
+
+All 36 deterministic tests pass on Python 3.9 and Python 3.12, including catalog
+pagination/ambiguity, pinning, exact repair eligibility, no duplicate thread,
+repair failure persistence, and server rejection of the requested model pin.
+The shared executable script is updated and byte-compared against the reviewed
+source. This does not restart the exited source-account process: the corrected
+live acceptance run remains pending an account-local launch. Unlike the previous
+diagnostic-only update, this changes the identified cause and can proceed into
+migration if model generation and all existing safety checks pass.

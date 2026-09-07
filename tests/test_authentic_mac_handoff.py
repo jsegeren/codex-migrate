@@ -156,6 +156,132 @@ class HandoffTests(unittest.TestCase):
         app.send = Mock()
         return app
 
+    def catalog(self):
+        return {'data': [{'model': 'gpt-test-supported', 'isDefault': True, 'hidden': False,
+                          'defaultReasoningEffort': 'low',
+                          'supportedReasoningEfforts': [{'reasoningEffort': 'low'}]}], 'nextCursor': None}
+
+    def test_model_comes_from_catalog_and_pin_is_preserved(self):
+        app = Mock()
+        app.call.return_value = self.catalog()
+        chosen = handoff.model_selection(app)
+        self.assertEqual(chosen, {'model': 'gpt-test-supported', 'effort': 'low'})
+        app.call.return_value['data'][0]['isDefault'] = False
+        self.assertEqual(handoff.model_selection(app, chosen), chosen)
+
+    def test_model_catalog_pagination(self):
+        app = Mock()
+        app.call.side_effect = [{'data': [], 'nextCursor': 'page2'}, self.catalog()]
+        self.assertEqual(handoff.model_selection(app)['model'], 'gpt-test-supported')
+        self.assertEqual(app.call.call_args.args[1]['cursor'], 'page2')
+
+    def test_bad_catalogs_do_not_silently_select_another_model(self):
+        for variation in ('missing', 'duplicate', 'hidden', 'legacy', 'effort', 'unknown-pin', 'endless'):
+            app = Mock()
+            catalog = self.catalog()
+            pinned = None
+            if variation == 'missing': catalog['data'] = []
+            if variation == 'duplicate': catalog['data'] *= 2
+            if variation == 'hidden': catalog['data'][0]['hidden'] = True
+            if variation == 'legacy': catalog['data'][0]['model'] = 'gpt-5'
+            if variation == 'effort': catalog['data'][0]['defaultReasoningEffort'] = 'unsupported'
+            if variation == 'unknown-pin': pinned = {'model': 'gpt-absent', 'effort': 'low'}
+            if variation == 'endless': catalog['nextCursor'] = 'again'
+            app.call.return_value = catalog
+            with self.subTest(variation=variation), self.assertRaises(handoff.SafeError):
+                handoff.model_selection(app, pinned)
+            self.assertLessEqual(app.call.call_count, 5)
+
+    def legacy_turn(self, marker):
+        message = "The 'gpt-5' model is not supported when using Codex with a ChatGPT account."
+        return {'status': 'failed', 'error': {'codexErrorInfo': 'other', 'message': json.dumps({
+            'type': 'error', 'status': 400, 'error': {'type': 'invalid_request_error', 'message': message}})},
+            'items': [{'type': 'userMessage', 'content': [{'type': 'text', 'text_elements': [],
+                'text': 'Remember this test marker: ' + marker + '. Reply only with that marker.'}]}]}
+
+    def test_only_exact_rejected_fixture_is_eligible_for_model_repair(self):
+        marker = 'migration-fixture-' + 'a' * 32
+        self.assertTrue(handoff.unsupported_legacy_fixture(self.legacy_turn(marker), marker))
+        for variation in ('completed', 'quota', 'message', 'assistant', 'different-marker'):
+            turn = self.legacy_turn(marker)
+            if variation == 'completed': turn['status'] = 'completed'
+            if variation == 'quota': turn['error']['codexErrorInfo'] = 'usageLimitExceeded'
+            if variation == 'message': turn['error']['message'] = 'private unknown error'
+            if variation == 'assistant': turn['items'].append({'type': 'agentMessage', 'text': 'already answered'})
+            with self.subTest(variation=variation):
+                self.assertFalse(handoff.unsupported_legacy_fixture(turn,
+                    'migration-fixture-' + 'b' * 32 if variation == 'different-marker' else marker))
+
+    def test_repair_resumes_same_thread_and_pins_new_fixture_models(self):
+        manifest = self.partial_fixture()
+        app = Mock()
+        starts = []
+        def call(method, params):
+            if method == 'thread/read':
+                return {'thread': {'id': 'fixture', 'turns': [self.legacy_turn('migration-fixture-' + 'a' * 32)]}}
+            if method == 'model/list': return self.catalog()
+            if method == 'thread/start':
+                starts.append(params)
+                return {'thread': {'id': 'new-' + str(len(starts))}, 'model': 'gpt-test-supported'}
+            if method == 'thread/resume': return {'model': 'gpt-test-supported'}
+            return {}
+        app.call.side_effect = call
+        with patch.object(handoff, 'server', return_value=contextlib.nullcontext(app)):
+            records = handoff.fixture_threads(self.home)
+        self.assertEqual(records[0]['id'], 'fixture')
+        self.assertEqual(len(starts), 2)
+        self.assertTrue(all(item['complete'] for item in records))
+        self.assertTrue(records[0]['model_repair_attempted'])
+        self.assertEqual(app.turn.call_count, 3)
+        self.assertTrue(all(params['model'] == 'gpt-test-supported' for params in starts))
+        self.assertTrue(all(call.args[2] == records[0]['model'] for call in app.turn.call_args_list))
+        self.assertEqual(json.loads(manifest.read_text()), records)
+
+    def test_failed_model_repair_is_not_retried_on_next_launch(self):
+        manifest = self.partial_fixture()
+        app = Mock()
+        def call(method, params):
+            if method == 'thread/read':
+                return {'thread': {'id': 'fixture', 'turns': [self.legacy_turn('migration-fixture-' + 'a' * 32)]}}
+            if method == 'model/list': return self.catalog()
+            if method == 'thread/resume': return {'model': 'gpt-test-supported'}
+            return {}
+        app.call.side_effect = call
+        app.turn.side_effect = handoff.SafeError('fixture forced failure')
+        for _ in range(2):
+            with patch.object(handoff, 'server', return_value=contextlib.nullcontext(app)):
+                with self.assertRaises(handoff.SafeError):
+                    handoff.fixture_threads(self.home)
+        self.assertEqual(app.turn.call_count, 1)
+        record = json.loads(manifest.read_text())[0]
+        self.assertTrue(record['model_repair_attempted'])
+        self.assertFalse(record['complete'])
+
+    def test_turn_explicitly_sends_pinned_model_and_effort(self):
+        app = self.protocol()
+        app.events.put({'id': 1, 'result': {'turn': {'id': 'turn1'}}})
+        app.events.put({'method': 'turn/completed', 'params': {
+            'threadId': 'fixture', 'turn': {'id': 'turn1', 'status': 'completed'}}})
+        app.turn('fixture', 'fixture prompt', {'model': 'gpt-test-supported', 'effort': 'low'})
+        params = app.send.call_args.args[0]['params']
+        self.assertEqual(params['model'], 'gpt-test-supported')
+        self.assertEqual(params['effort'], 'low')
+
+    def test_model_repair_stops_if_server_ignores_pin(self):
+        self.partial_fixture()
+        app = Mock()
+        def call(method, params):
+            if method == 'thread/read':
+                return {'thread': {'id': 'fixture', 'turns': [self.legacy_turn('migration-fixture-' + 'a' * 32)]}}
+            if method == 'model/list': return self.catalog()
+            if method == 'thread/resume': return {'model': 'gpt-5'}
+            return {}
+        app.call.side_effect = call
+        with patch.object(handoff, 'server', return_value=contextlib.nullcontext(app)):
+            with self.assertRaisesRegex(handoff.SafeError, 'did not honor the test model pin'):
+                handoff.fixture_threads(self.home)
+        app.turn.assert_not_called()
+
     def test_early_turn_completion_is_not_lost(self):
         app = self.protocol()
         app.events.put({'method': 'turn/completed', 'params': {
