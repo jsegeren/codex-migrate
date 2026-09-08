@@ -2,13 +2,14 @@
 
 PYTHONPATH=src python3 tests/manual_folder_selection_browser.py
 No real folder picker, SSH, migration, credentials or filesystem writes.
-The first picker request fails; retry and suggestions return invented paths.
+The first picker request fails; the second returns an invented path; later
+picker requests simulate Cancel. Suggestions return the same invented path.
 """
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import time
 
-from codex_migrate.setup import SETUP_HTML
+from codex_migrate.setup import FOLDER_PICKER_ERROR, SETUP_HTML
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -40,7 +41,10 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/folders":
             Handler.picker_requests += 1
             if Handler.picker_requests == 1:
-                return self.reply(400, {"error": "Synthetic picker permission denied. Try again."})
+                return self.reply(400, {"error": FOLDER_PICKER_ERROR})
+            if Handler.picker_requests > 2:
+                return self.reply(200, {"paths": [],
+                    "message": "No folders added. Your existing selection is unchanged."})
         self.reply(200, {"paths": ["/Users/test/Example Project"],
             "message": "Review the selected folders. Synthetic fixture only."})
 

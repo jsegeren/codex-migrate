@@ -201,6 +201,37 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertEqual(result["paths"], [str(self.home / "Git")])
 
+    def test_cancelled_folder_picker_reports_no_addition_without_configuring(self):
+        before = self.helper.registry.read()
+        with patch.object(self.helper, "choose_folders", return_value=[]):
+            code, result = self.request("/api/folders", {})
+        self.assertEqual(code, 200)
+        self.assertEqual(result, {"paths": [], "message":
+                         "No folders added. Your existing selection is unchanged."})
+        self.assertEqual(self.helper.registry.read(), before)
+        self.assertIsNone(self.helper.engine)
+
+    def test_selected_folder_message_does_not_claim_suggestions_were_used(self):
+        with patch.object(self.helper, "choose_folders", return_value=[str(self.home / "Git")]):
+            code, result = self.request("/api/folders", {})
+        self.assertEqual(code, 200)
+        self.assertEqual(result["paths"], [str(self.home / "Git")])
+        self.assertEqual(result["message"], "Review the selected folder paths.")
+
+    def test_picker_failure_gives_recovery_without_private_exception_text(self):
+        before = self.helper.registry.read()
+        for failure in (PermissionError("private-fixture-path"), RuntimeError("private-native-stderr")):
+            with self.subTest(failure=type(failure).__name__), \
+                    patch.object(self.helper, "choose_folders", side_effect=failure):
+                code, result = self.request("/api/folders", {})
+            self.assertEqual(code, 400)
+            self.assertIn("Review or edit folder paths", result["error"])
+            self.assertIn("System Settings", result["error"])
+            self.assertIn("existing selection is unchanged", result["error"])
+            self.assertNotIn("private-", json.dumps(result))
+            self.assertEqual(self.helper.registry.read(), before)
+            self.assertIsNone(self.helper.engine)
+
     def test_stale_tab_cannot_open_picker_after_configuration(self):
         self.request("/api/setup", self.config())
         with patch.object(self.helper, "choose_folders", side_effect=AssertionError("Picker opened")):

@@ -706,3 +706,35 @@ Minor copy finding: Cancel shows the generic “Review the selected folders.
 Suggestions are not an exhaustive repository scan” message despite selecting
 nothing. The folder count itself remains accurate; this is a polish follow-up,
 not evidence of a transfer or data-safety failure.
+
+## Folder-feedback correction and local VoiceOver attempt
+
+The native picker check exposed two related feedback problems: cancellation
+used the generic selection message, and picker exceptions were replaced by a
+generic setup failure. Browser review also found that feedback above the whole
+wizard could be outside the viewport when the folder controls were visible.
+The source now distinguishes no-addition/selection results, gives static
+retry/manual-path/System Settings guidance without native exception details,
+and places folder status and alerts next to the picker controls. Empty live
+regions remain mounted; no new default wall of help text is added.
+
+Verification: all 31 `test_setup.py` tests passed, including three new endpoint
+regressions for cancellation, selection messages, private-error redaction and
+unchanged setup state. The isolated manual browser fixture exercised a delayed
+failure, successful retry, and cancellation with an existing selected folder.
+Chrome readback showed the previous invented path retained after cancellation,
+no error, re-enabled controls and focus restored to `folders`. Desktop and 390px
+rendering showed the actionable error beside the controls; at 390px, document
+width equalled viewport width. Temporary viewport overrides were reset. This is
+source/UI-fixture evidence, not a fresh macOS TCC denial or a new packaged build.
+The current public build 5 is unchanged; these corrections need inclusion in
+the next signed candidate before claiming they are shipped.
+
+A separate short local VoiceOver attempt confirmed its original setting was
+off, temporarily enabled it and inspected the native utility (caption panel
+already enabled). Access to VoiceOver timed out, and native capture of the
+dedicated browser test window failed. Browser keyboard focus was observable but
+spoken output was not; this remains **unverified**. VoiceOver was restored off,
+the utility closed and System Settings returned to General. Do not count this
+attempt as screen-reader acceptance or repeatedly toggle it without a new way
+to obtain meaningful speech/navigation evidence.
