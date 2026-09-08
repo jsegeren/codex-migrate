@@ -26,6 +26,16 @@ class _DocumentParser(HTMLParser):
 
 
 class SiteTests(unittest.TestCase):
+    def test_home_offer_and_migration_search_copy_are_current(self):
+        home = (SITE / "index.html").read_text()
+        self.assertIn("Free CLI · Signed Mac beta", home)
+        self.assertNotIn("Mac builds by request", home)
+        self.assertIn("How do I copy Codex to a different Mac?", home)
+        self.assertIn("Can I access Codex from another machine without moving it?", home)
+        guide = (SITE / "moving-to-a-new-mac.html").read_text()
+        self.assertIn("Transfer or move Codex to a new Mac", guide)
+        self.assertIn("Get the Mac beta — $50", guide)
+
     def test_openai_chatgpt_names_preserve_local_codex_scope(self):
         for page in ("index.html", "moving-to-a-new-mac.html"):
             source = (SITE / page).read_text()

@@ -47,6 +47,7 @@ test('beta availability preserves clear beta labels instead of announcing a fini
   assert.equal(f.get('checkout-panel').hidden, false);
   assert.match(f.get('checkout-button').textContent, /Buy the Mac beta.*50/);
   assert.match(f.get('edition-state').textContent, /beta/);
+  assert.equal(f.get('hero-availability').textContent, 'Free CLI · Signed Mac beta available');
 });
 test('delayed readiness preserves a focused or filled launch form', async () => {
   const focused = fixture(); focused.get('launch-email').focus(); await tick();

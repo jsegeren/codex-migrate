@@ -57,7 +57,7 @@
       // A slow readiness response must not remove a form someone is using.
       const launch = document.getElementById('launch-email');
       if (!launch.contains(document.activeElement) && !document.getElementById('launch-address').value) launch.hidden = true;
-      document.getElementById('hero-availability').textContent = beta ? 'Open-source beta · Signed Mac beta available' : 'Open source · Mac app available';
+      document.getElementById('hero-availability').textContent = beta ? 'Free CLI · Signed Mac beta available' : 'Free CLI · Mac app available';
       document.getElementById('purchase-faq').textContent = `Yes. The signed, notarized ${beta ? 'beta ' : ''}app is $50 USD for ${platform}, including best-effort support and a 30-day refund policy. ${beta ? 'Native accessibility, permissions and physical network-interruption testing are ongoing. Keep your old Mac and an independent backup. ' : ''}The CLI and source remain free.`;
       const hero = document.getElementById('hero-paid-link');
       hero.href = '#founding-edition'; hero.textContent = beta ? 'Get the Mac beta — $50' : 'Get the Mac app — $50'; hero.removeAttribute('data-analytics-event');
