@@ -7,7 +7,7 @@ test('homepage declares an accessible large social card with a real PNG asset', 
   const tags = [...html.matchAll(/<meta\s+(?:property|name)="([^"]+)"\s+content="([^"]*)"\s*\/?\s*>/g)];
   const meta = Object.fromEntries(tags.map(match => [match[1], match[2]]));
   for (const key of ['og:image', 'twitter:image']) {
-    assert.equal(meta[key], 'https://migrate.segeren.com/og-dark-v1.png');
+    assert.equal(meta[key], 'https://migrate.segeren.com/og-white-v1.png');
     assert.equal(tags.filter(match => match[1] === key).length, 1);
   }
   assert.equal(meta['twitter:card'], 'summary_large_image');
@@ -21,7 +21,7 @@ test('homepage declares an accessible large social card with a real PNG asset', 
     assert.match(meta[key], /Codex Migrate/);
     assert.match(meta[key], /not affiliated with OpenAI/);
   }
-  const png = readFileSync(new URL('../site/og-dark-v1.png', `file://${__filename}`));
+  const png = readFileSync(new URL('../site/og-white-v1.png', `file://${__filename}`));
   assert.equal(png.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
   assert.equal(png.readUInt32BE(16), Number(meta['og:image:width']));
   assert.equal(png.readUInt32BE(20), Number(meta['og:image:height']));
