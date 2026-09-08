@@ -20,6 +20,11 @@ from codex_migrate.state import StateStore
 from codex_migrate.support import with_support, SUPPORT_HTML
 from codex_migrate.pairing import Pairing
 
+FOLDER_PICKER_ERROR = (
+    "Folder selection could not finish. Close any open folder dialog and try again, "
+    "or use Review or edit folder paths. If macOS denied access, review this app's "
+    "permissions in System Settings. Your existing selection is unchanged."
+)
 
 SETUP_HTML = r'''<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -28,7 +33,7 @@ SETUP_HTML = r'''<!doctype html>
 *{box-sizing:border-box}body{margin:0;background:#080b10;color:#f7f8fa;font:500 17px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow-wrap:anywhere}
 main{width:min(800px,calc(100% - 32px));margin:40px auto}h1{font-size:clamp(32px,6vw,48px);line-height:1.1}h2{font-size:24px}p{color:#cbd2df}section,fieldset{background:#111722;border:1px solid #465268;border-radius:16px;padding:24px;margin:24px 0;min-width:0}
 label{display:block;margin:16px 0 6px}input,textarea,button,select{font:inherit}input:not([type=checkbox]),textarea,select{display:block;width:100%;padding:12px;border:1px solid #8996ad;border-radius:8px;color:#f7f8fa;background:#080b10}textarea{min-height:120px}button,a.button{display:inline-block;padding:12px 18px;border:1px solid #a08bd3;border-radius:9px;background:#6042a6;color:white;font-weight:700;cursor:pointer;text-decoration:none;max-width:100%;white-space:normal}button:disabled{opacity:.6;cursor:wait}.controls{display:flex;gap:12px;flex-wrap:wrap}.check{display:flex;gap:12px;align-items:flex-start}.check input{width:22px;height:22px;flex:none;margin-top:4px}a{color:#d9cdff}:focus-visible{outline:3px solid #d9cdff;outline-offset:4px}#error{color:#ffc3c8}#message{color:#cbd2df}footer{font-size:15px;color:#cbd2df}legend{font-weight:700;font-size:24px}[hidden]{display:none!important}@media(max-width:480px){section,fieldset{padding:16px}main{margin:24px auto}}
-.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.setup-step h2{margin-top:0}button.secondary{background:transparent;border-color:#8996ad}#step-progress{color:#d9cdff;font-weight:700}#review dt{font-size:15px;color:#cbd2df}#review dd{margin:0 0 16px;font-weight:700}details{margin:18px 0}summary{cursor:pointer;font-weight:650}#message:empty{display:none}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.setup-step h2{margin-top:0}button.secondary{background:transparent;border-color:#8996ad}#step-progress{color:#d9cdff;font-weight:700}#review dt{font-size:15px;color:#cbd2df}#review dd{margin:0 0 16px;font-weight:700}details{margin:18px 0}summary{cursor:pointer;font-weight:650}#message:empty{display:none}#folder-message:empty,#folder-error:empty{margin:0}#folder-error{color:#ffc3c8}#folder-message{color:#cbd2df}
 </style></head><body><main>
 <a class="support-link" href="#migration-help">Help / Email support</a>
 <h1>Let’s move your Codex.</h1><p>Your conversations, skills, and unfinished work. Directly from this Mac to your new one.</p>
@@ -70,6 +75,7 @@ label{display:block;margin:16px 0 6px}input,textarea,button,select{font:inherit}
 <fieldset id="skill-components" hidden><legend>Skills to include</legend><label class="check"><input type="checkbox" id="personal-skills" checked><span>Personal custom skills (.agents/skills and legacy .codex/skills)</span></label><label class="check"><input type="checkbox" id="workspace-skills"><span>Workspace skills inside the project folders selected below</span></label><p>Skills only: conversations, configuration and whole repositories are not copied. Other destination skills are kept. Inspect the list, stage it, then confirm Finalize separately.</p></fieldset>
 <p id="folder-summary" aria-live="polite">No project folders selected.</p>
 <div class="controls"><button type="button" id="folders">Choose folders on this Mac…</button><button type="button" id="suggest" class="secondary">Suggest common folders</button></div>
+<p id="folder-error" role="alert"></p><p id="folder-message" role="status" aria-live="polite"></p>
 <details><summary>Review or edit folder paths</summary><label for="workspaces" id="workspace-label">Workspace folders on this Mac, one per line</label><textarea id="workspaces" spellcheck="false" aria-describedby="scope-help"></textarea></details>
 <p id="scope-help">Selected folders include unfinished work and any secrets stored inside them. Full migration includes Codex state and personal skills; other folders are not automatically included.</p>
 <div class="controls"><button type="button" class="secondary" id="back-2">Back</button><button type="button" id="next-2">Review migration</button></div></div>
@@ -163,9 +169,10 @@ async function folders(path){
   const button=$(path==="/api/folders"?"folders":"suggest"),hadFocus=document.activeElement===button;
   for(const id of ["folders","suggest","next-2"])$(id).disabled=true;
   $("error").textContent="";
-  $("message").textContent=path==="/api/folders"?"Choose folders in the macOS dialog, then return here.":"Looking for common project folders…";
-  try{const r=await api(path,{});$("workspaces").value=[...new Set([...roots(),...r.paths])].join("\n");folderSummary();$("message").textContent=r.message}
-  catch(e){$("error").textContent=e.message;$("message").textContent=""}
+  $("message").textContent="";$("folder-error").textContent="";
+  $("folder-message").textContent=path==="/api/folders"?"Choose folders in the macOS dialog, then return here.":"Looking for common project folders…";
+  try{const r=await api(path,{});$("workspaces").value=[...new Set([...roots(),...r.paths])].join("\n");folderSummary();$("folder-message").textContent=r.message}
+  catch(e){$("folder-error").textContent=e.message;$("folder-message").textContent=""}
   finally{
     for(const id of ["folders","suggest","next-2"])$(id).disabled=false;
     if(hadFocus&&(document.activeElement===document.body||document.activeElement===button)&&button.getClientRects().length)button.focus();
@@ -422,10 +429,21 @@ JSON.stringify(app.chooseFolder({withPrompt: "Choose workspace folders for Codex
                                 raise MigrationError("Folder selection is closed after configuration")
                             if payload != {}:
                                 raise MigrationError("Folder selection accepts no arguments")
-                            paths = setup.choose_folders() if self.path == "/api/folders" else [
-                                str(Path(setup.source_home) / name) for name in ("Git", "Projects", "Developer")
-                                if (Path(setup.source_home) / name).is_dir()]
-                            self._json(200, {"paths": paths, "message": "Review the selected folders. Suggestions are not an exhaustive repository scan."})
+                            if self.path == "/api/folders":
+                                try:
+                                    paths = setup.choose_folders()
+                                except Exception:
+                                    # Never expose native stderr or exception text: it may contain private paths.
+                                    self._json(400, {"error": FOLDER_PICKER_ERROR})
+                                    return
+                                message = ("Review the selected folder paths." if paths else
+                                           "No folders added. Your existing selection is unchanged.")
+                            else:
+                                paths = [str(Path(setup.source_home) / name)
+                                         for name in ("Git", "Projects", "Developer")
+                                         if (Path(setup.source_home) / name).is_dir()]
+                                message = "Review the selected folders. Suggestions are not an exhaustive repository scan."
+                            self._json(200, {"paths": paths, "message": message})
                     except Exception:
                         # Do not return user-supplied key paths or exception reprs.
                         self._json(400, {"error": "Setup failed. Check the destination, absolute folder paths, permissions, and whether another migration or folder picker is already open."})

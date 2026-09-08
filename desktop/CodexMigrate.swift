@@ -75,6 +75,8 @@ import AppKit
                     NSApplication.shared.reply(toApplicationShouldTerminate: true)
                 } else if child.terminationStatus == 0 || child.terminationStatus == 130 {
                     NSApplication.shared.terminate(nil)
+                } else if child.terminationStatus == 75 {
+                    self.showFailure("Continue in the existing browser tab. To switch copies, finish or stop the current operation safely, then choose Quit Codex Migrate from its menu-bar icon and reopen this copy. This copy hasn’t changed your migration data.", title: "Codex Migrate is already running")
                 } else {
                     self.showFailure("The local helper stopped. Reopen Codex Migrate to resume. If this keeps happening, email joshua@segeren.com. Your saved migration remains on your Macs.")
                 }
@@ -142,9 +144,9 @@ import AppKit
         return .terminateLater
     }
 
-    private func showFailure(_ message: String) {
+    private func showFailure(_ message: String, title: String = "Codex Migrate couldn’t open") {
         let alert = NSAlert()
-        alert.messageText = "Codex Migrate couldn’t open"
+        alert.messageText = title
         alert.informativeText = message
         alert.addButton(withTitle: "OK")
         alert.runModal()

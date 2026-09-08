@@ -558,12 +558,21 @@ class MigrationEngine:
         marker = shlex.quote(str(Path(self.config.target_staging) / ".codex-migrate-owner"))
         script = (
             "set -eu\numask 077\n"
-            "if test -e {staging}; then\n"
-            "  test -d {staging}\n"
-            "  test ! -L {staging}\n"
-            "  test -f {marker}\n"
-            "  test ! -L {marker}\n"
-            "  test \"$(cat {marker})\" = {migration_id}\n"
+            "staging_unsafe() {{\n"
+            "  printf '%s\\n' 'The existing destination staging folder cannot be verified. "
+            "Keep it intact and contact support before retrying; do not delete staging or backups.' >&2\n"
+            "  exit 73\n"
+            "}}\n"
+            "if test -e {staging} || test -L {staging}; then\n"
+            "  test -d {staging} && test ! -L {staging} || staging_unsafe\n"
+            "  test -f {marker} && test ! -L {marker} || staging_unsafe\n"
+            "  owner=$(cat {marker} 2>/dev/null) || staging_unsafe\n"
+            "  if test \"$owner\" != {migration_id}; then\n"
+            "    printf '%s\\n' 'The destination staging folder belongs to a different migration. "
+            "Reopen that migration to resume it, or contact support before starting a new one. "
+            "Keep staging and backups intact.' >&2\n"
+            "    exit 73\n"
+            "  fi\n"
             "else\n"
             "  mkdir {staging}\n"
             "  printf '%s\\n' {migration_id} > {marker}\n"
@@ -1198,7 +1207,7 @@ backup_required=$({backup_size})
 backup_space {home} "$((backup_required + {reserve}))"
 mkdir -p {backup}
 cp -c -Rp {codex} {backup}/.codex
-verify_backup {codex} {backup}/.codex
+verify_codex_backup {codex} {backup}/.codex
 mkdir -p {backup}/home-relative
 {workspace_backups}
 backup_space {home} {reserve}

@@ -25,6 +25,35 @@ def run(*args):
     subprocess.run([str(arg) for arg in args], check=True, cwd=ROOT)
 
 
+def seal_embedded_frameworks(engine, identity):
+    # PyInstaller's onedir collection signs individual binaries, but rebuilding
+    # a framework directory also requires a resource seal for that bundle.
+    frameworks = sorted(engine.rglob("*.framework"), key=lambda path: len(path.parts), reverse=True)
+    for framework in frameworks:
+        if framework.is_symlink() or not framework.is_dir():
+            continue
+        command = ["codesign", "--force", "--sign", identity or "-"]
+        if identity:
+            command += ["--options", "runtime", "--timestamp"]
+        run(*command, framework)
+        run("codesign", "--verify", "--deep", "--strict", framework)
+
+
+def verify_embedded_code(engine):
+    # The outer app treats Resources as data: --deep alone does not verify every
+    # executable there. Check each real Mach-O, not just the Swift launcher.
+    magic = {bytes.fromhex(value) for value in
+             ("feedface", "cefaedfe", "feedfacf", "cffaedfe",
+              "cafebabe", "bebafeca", "cafebabf", "bfbafeca")}
+    for path in sorted(engine.rglob("*")):
+        if path.is_symlink() or not path.is_file():
+            continue
+        with path.open("rb") as stream:
+            is_code = stream.read(4) in magic
+        if is_code:
+            run("codesign", "--verify", "--strict", path)
+
+
 def source_receipt(release=False):
     revision = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True,
@@ -221,6 +250,7 @@ def resume_notarization(output, profile):
             or source_info.get("CFBundleVersion") != receipt["bundle_version"]):
         raise ValueError("saved release source and embedded app versions do not match")
     run("codesign", "--verify", "--deep", "--strict", app)
+    verify_embedded_code(app / "Contents/Resources/engine")
     receipt["notarization"] = wait_for_notarization(identifier, profile, notary_path)
     run("xcrun", "stapler", "staple", app)
     run("xcrun", "stapler", "validate", app)
@@ -283,6 +313,8 @@ def main():
         executable.parent.mkdir(parents=True)
         resources.mkdir()
         shutil.copytree(scratch / "dist/codex-migrate-engine", resources / "engine", symlinks=True)
+        seal_embedded_frameworks(resources / "engine", args.identity)
+        verify_embedded_code(resources / "engine")
         shutil.copy2(ROOT / "desktop/Info.plist", contents / "Info.plist")
         shutil.copy2(ROOT / "LICENSE", resources / "LICENSE.txt")
         shutil.copy2(ROOT / "docs/desktop-setup.md", resources / "Read me.md")

@@ -1,4 +1,5 @@
 import tempfile
+import os
 import subprocess
 import shutil
 import unittest
@@ -145,6 +146,58 @@ class MigrationTests(unittest.TestCase):
             self.assertIn(".codex-migrate-owner", scripts[0])
             self.assertIn("rm -f", scripts[0])
             self.assertIn(".codex/auth.json", scripts[0])
+
+    @unittest.skipUnless(Path('/bin/zsh').exists() and os.getuid() != 0,
+                         'requires non-root account and zsh')
+    def test_real_staging_guards_explain_conflicts_and_preserve_existing_data(self):
+        for kind in ('foreign', 'missing', 'marker_link', 'staging_link', 'broken_link', 'matching', 'new'):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                source, target = root / 'old person', root / 'new person'
+                source.mkdir()
+                target.mkdir()
+                config = MigrationConfig(target='person@fixture.invalid', source_home=str(source),
+                                         target_home=str(target), apply=True).validate()
+                state = StateStore(config.state_dir)
+                state.update(migration_id='a' * 32)
+                engine = MigrationEngine(config, state)
+                stage = Path(config.target_staging)
+                victim = target / 'unrelated'
+                victim.mkdir()
+                sentinel = victim / 'keep.txt'
+                sentinel.write_text('PRIVATE SENTINEL')
+                if kind in ('staging_link', 'broken_link'):
+                    stage.symlink_to(victim if kind == 'staging_link' else target / 'absent')
+                elif kind != 'new':
+                    (stage / '.codex').mkdir(parents=True)
+                    (stage / '.codex/auth.json').write_text('PRIVATE STAGED FIXTURE')
+                    marker = stage / '.codex-migrate-owner'
+                    if kind == 'marker_link':
+                        marker.symlink_to(sentinel)
+                    elif kind != 'missing':
+                        marker.write_text(('a' if kind == 'matching' else 'b') * 32 + '\n')
+                scripts = []
+                engine.transport = SimpleNamespace(run_remote=lambda script: scripts.append(script))
+                engine._prepare_staging()
+                result = subprocess.run(['/bin/zsh', '-f', '-s'], input=scripts[0], text=True,
+                                        capture_output=True, timeout=10)
+                self.assertEqual(result.stdout, '')
+                self.assertNotIn('PRIVATE', result.stderr)
+                self.assertNotIn(str(root), result.stderr)
+                self.assertEqual(sentinel.read_text(), 'PRIVATE SENTINEL')
+                if kind in ('matching', 'new'):
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual((stage / '.codex-migrate-owner').read_text().strip(), 'a' * 32)
+                    self.assertFalse((stage / '.codex/auth.json').exists())
+                else:
+                    self.assertEqual(result.returncode, 73, result.stderr)
+                    self.assertIn('different migration' if kind == 'foreign' else 'cannot be verified',
+                                  result.stderr)
+                    self.assertIn('support', result.stderr)
+                    if kind in ('foreign', 'missing', 'marker_link'):
+                        self.assertEqual((stage / '.codex/auth.json').read_text(), 'PRIVATE STAGED FIXTURE')
+                    else:
+                        self.assertTrue(stage.is_symlink())
 
     def test_compatibility_command_is_generated_only_for_different_homes(self):
         with tempfile.TemporaryDirectory() as temporary:

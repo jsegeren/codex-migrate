@@ -112,7 +112,7 @@ class RealDiskSpaceTests(unittest.TestCase):
         self.retry_after_reclaim()
 
     def pressure_after_backup(self, megabytes):
-        marker = "verify_backup " + shlex.quote(str(self.fixture.target / ".codex"))
+        marker = "verify_codex_backup " + shlex.quote(str(self.fixture.target / ".codex"))
         original = self.engine.transport.run_remote
         def with_pressure(script, timeout=60):
             self.assertEqual(script.count(marker), 1)
