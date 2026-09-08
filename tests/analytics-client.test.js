@@ -8,11 +8,14 @@ const source = fs.readFileSync(require.resolve('../site/analytics.js'), 'utf8');
 function page({ blockedStorage = false, hostname = 'migrate.segeren.com' } = {}) {
   let resolveRegion;
   let click;
+  let load;
   let notice;
+  let fetchCalls = 0;
   const scripts = [];
   const storage = new Map();
   const region = new Promise(resolve => { resolveRegion = resolve; });
   const document = {
+    readyState: 'loading',
     cookie: '',
     head: { appendChild(script) { scripts.push(script); } },
     body: { dataset: {}, appendChild(element) { notice = element; } },
@@ -34,25 +37,49 @@ function page({ blockedStorage = false, hostname = 'migrate.segeren.com' } = {})
   };
   const window = {
     location: { hostname },
+    addEventListener(type, handler) { if (type === 'load') load = handler; },
     localStorage: {
       getItem(key) { if (blockedStorage) throw Error('Storage unavailable'); return storage.get(key); },
       setItem(key, value) { if (blockedStorage) throw Error('Storage unavailable'); storage.set(key, value); },
     },
   };
-  vm.runInNewContext(source, { window, document, fetch: () => region });
+  vm.runInNewContext(source, { window, document, fetch: () => { fetchCalls++; return region; } });
   return {
     window, scripts,
+    get fetchCalls() { return fetchCalls; },
     get notice() { return notice; },
+    clickTarget(target) { click({ preventDefault() {}, target }); },
     choose(allow) {
       click({ preventDefault() {}, target: { closest: () => ({}) } });
       notice.querySelector(allow ? '[data-analytics-accept]' : '[data-analytics-decline]').activate();
     },
     async finish(mode) {
+      load();
       resolveRegion({ ok: true, json: async () => ({ mode }) });
       await new Promise(resolve => setImmediate(resolve));
     },
   };
 }
+
+test('analytics waits for page load instead of competing with the hero render', async () => {
+  const browser = page();
+  assert.equal(browser.fetchCalls, 0);
+  assert.equal(browser.scripts.length, 0);
+  await browser.finish('default');
+  assert.equal(browser.fetchCalls, 1);
+  assert.equal(browser.scripts.length, 1);
+});
+
+test('CTA events before page load are queued and flushed after analytics starts', async () => {
+  const browser = page();
+  // Exercise the installed document listener with a tracked-link-shaped target.
+  // The first closest() call is for preferences; the second is the CTA.
+  let calls = 0;
+  const target = { closest() { return ++calls === 1 ? null : { dataset: { analyticsEvent: 'select_paid_beta' } }; } };
+  browser.clickTarget(target);
+  await browser.finish('default');
+  assert.equal(browser.window.dataLayer.some(entry => entry[0] === 'event' && entry[1] === 'select_paid_beta'), true);
+});
 
 for (const blockedStorage of [false, true]) {
   for (const allow of [false, true]) {

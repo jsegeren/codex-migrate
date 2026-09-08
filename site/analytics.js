@@ -9,6 +9,7 @@
   let consentNotice = null;
   let analyticsMode = "consent";
   let currentChoice = null;
+  const pendingEvents = [];
 
   function readConsent() {
     try {
@@ -52,7 +53,11 @@
   }
 
   function sendEvent(name) {
-    if (typeof window.gtag !== "function") return;
+    if (typeof name !== "string" || !/^[a-z][a-z0-9_]{0,39}$/.test(name)) return;
+    if (typeof window.gtag !== "function") {
+      if (pendingEvents.length < 20) pendingEvents.push(name);
+      return;
+    }
     window.gtag("event", name, { transport_type: "beacon" });
   }
 
@@ -76,6 +81,7 @@
 
     const pageEvent = document.body.dataset.analyticsEvent;
     if (pageEvent) sendEvent(pageEvent);
+    for (const name of pendingEvents.splice(0)) sendEvent(name);
   }
 
   function hideConsentNotice() {
@@ -153,5 +159,9 @@
     }
   }
 
-  initialize();
+  // Keep Google Analytics out of the critical rendering path. Event handlers
+  // are already active, so an unusually fast CTA click is queued above and
+  // flushed after the page has painted and GA is ready.
+  if (document.readyState === "complete") initialize();
+  else window.addEventListener("load", initialize, { once: true });
 })();

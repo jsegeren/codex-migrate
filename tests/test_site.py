@@ -28,13 +28,18 @@ class _DocumentParser(HTMLParser):
 class SiteTests(unittest.TestCase):
     def test_home_offer_and_migration_search_copy_are_current(self):
         home = (SITE / "index.html").read_text()
-        self.assertIn("Free CLI · Signed Mac beta", home)
+        self.assertIn("Signed Mac beta available · Free open-source CLI", home)
         self.assertNotIn("Mac builds by request", home)
         self.assertIn("How do I copy Codex to a different Mac?", home)
         self.assertIn("Can I access Codex from another machine without moving it?", home)
         guide = (SITE / "moving-to-a-new-mac.html").read_text()
         self.assertIn("Transfer or move Codex to a new Mac", guide)
         self.assertIn("Get the Mac beta — $50", guide)
+        guide_actions = guide.split('<div class="actions">', 1)[1].split("</div>", 1)[0]
+        self.assertLess(guide_actions.index("Get the Mac beta — $50"), guide_actions.index("Read the free CLI setup"))
+        recovery = (SITE / "backup-and-recovery.html").read_text()
+        recovery_actions = recovery.split('<div class="actions">', 1)[1].split("</div>", 1)[0]
+        self.assertLess(recovery_actions.index("Get the Mac beta — $50"), recovery_actions.index("Explore the free source"))
 
     def test_openai_chatgpt_names_preserve_local_codex_scope(self):
         for page in ("index.html", "moving-to-a-new-mac.html"):
@@ -210,7 +215,7 @@ class SiteTests(unittest.TestCase):
                     self.assertNotIn("/analytics.js", page.read_text())
                     self.assertIn('name="referrer" content="no-referrer"', page.read_text())
                     continue
-                self.assertIn('src="/analytics.js?v=20260904-regional"', page.read_text())
+                self.assertIn('src="/analytics.js?v=20260907-deferred"', page.read_text())
         self.assertIn('const GRANTED = "granted"', analytics)
         self.assertIn('const PUBLIC_HOSTS = new Set(["migrate.segeren.com", "codex-migrate.vercel.app"]);', analytics)
         self.assertIn('!PUBLIC_HOSTS.has(window.location.hostname)', analytics)
@@ -276,12 +281,13 @@ class SiteTests(unittest.TestCase):
         source = (SITE / "index.html").read_text()
         hero = source.split('<div class="actions">', 1)[1].split("</div>", 1)[0]
         self.assertLess(hero.index("Get the Mac beta — $50"), hero.index("Get the free CLI"))
-        self.assertIn('class="button button-primary" id="hero-paid-link"', hero)
+        self.assertIn('class="button button-primary" id="hero-paid-link" data-analytics-event="select_paid_beta"', hero)
         self.assertIn('class="button button-secondary" data-analytics-event="select_free_cli"', hero)
+        self.assertIn('id="checkout-button" class="button button-primary full" data-analytics-event="begin_checkout"', source)
 
         closing = source.split('<section class="closing">', 1)[1].split("</section>", 1)[0]
         self.assertLess(closing.index("Get the Mac beta — $50"), closing.index("Use the free CLI"))
-        self.assertIn('class="button button-primary" href="#founding-edition"', closing)
+        self.assertIn('class="button button-primary" data-analytics-event="select_paid_beta" href="#founding-edition"', closing)
         self.assertIn('class="button button-secondary light" data-analytics-event="select_free_cli"', closing)
 
     def test_launch_interest_preserves_consent_and_separate_beta_help_email(self):
@@ -331,7 +337,11 @@ class SiteTests(unittest.TestCase):
         self.assertIn("no response time, fix, resolution deadline", terms)
         self.assertIn("30-day refund", refunds)
         self.assertIn("stripe", privacy)
+        self.assertNotIn("checkout is not open", privacy)
         self.assertIn("do not sell personal data", privacy)
+        success = " ".join(self.parse("success.html").text).lower()
+        self.assertIn("completed purchases receive a private delivery link by email", success)
+        self.assertNotIn("checkout is not open", success)
 
 
 if __name__ == "__main__":
