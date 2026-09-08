@@ -96,8 +96,15 @@ line breaks made the homepage H1 read as `Mac.Keep` and the migration-guide H1
 as `Codexto` to assistive technology. Literal spaces now precede those line
 breaks, with regression assertions for both headings. All 25 site checks and
 the complete 279-test Node suite pass; the latter has 278 passes and one
-database-dependent skip. This is production-browser and accessibility-tree
-evidence, not native VoiceOver certification for the packaged Mac app.
+database-dependent skip. Production deployment
+`dpl_3uuqCQCpXFQ38bhYspZL8rEzJ3Pt` reached READY and was aliased to the
+canonical domain without closing checkout. Fresh production snapshots expose
+the corrected names `Change the Mac. Keep the work.` and
+`Transfer Codex to a new Mac.`; availability remains open at $50. The rendered
+screenshots and accessibility snapshots are preserved in
+`/Users/Shared/CodexMigrate-Authentic-20260906/production-site-a11y-20260908/`.
+This is production-browser and accessibility-tree evidence, not native
+VoiceOver certification for the packaged Mac app.
 
 ### Earlier September 7 checkpoints (historical, not current sales state)
 
