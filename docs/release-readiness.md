@@ -81,6 +81,24 @@ remained open at $50 on the beta channel. A live checkout request returned a
 Stripe-hosted URL; no payment information was supplied and no charge was made.
 Builds 5 and 7 remain private and catalogued for existing purchase recovery.
 
+### Production headline accessibility review — September 8
+
+A fresh Chromium review exercised all six canonical production pages at
+1440×900 and 320×900. Every page exposed one main landmark, one visible H1, its
+expected canonical URL and a nonempty description. There was no horizontal
+overflow, missing image alternative or unnamed interactive control after the
+pages settled. The homepage had no console warnings, and independent desktop
+and narrow-mobile screenshots retained readable hierarchy, wrapping and a
+primary paid CTA ahead of the free CLI.
+
+The accessibility snapshot did expose a real word-boundary defect: the visual
+line breaks made the homepage H1 read as `Mac.Keep` and the migration-guide H1
+as `Codexto` to assistive technology. Literal spaces now precede those line
+breaks, with regression assertions for both headings. All 25 site checks and
+the complete 279-test Node suite pass; the latter has 278 passes and one
+database-dependent skip. This is production-browser and accessibility-tree
+evidence, not native VoiceOver certification for the packaged Mac app.
+
 ### Earlier September 7 checkpoints (historical, not current sales state)
 
 Latest additional validation: [September 7 release checks](release-validation-2026-09-07.md).
@@ -450,11 +468,11 @@ release certification remains open while the named native/hardware gates remain.
 | Full and selective migration, pause/resume and recovery | Real packaged cross-Mac full installation, browser-driven skills-only repair, Pause/Stop/Resume after 409,413,176 staged bytes, unexpected SSH-child loss and helper restart with 677,848,813 staged bytes retained, and protected-phase restore all passed. Verified backups, newer files and out-of-scope files were preserved. | Physically remove and restore Wi-Fi and a working cable route during disposable staging. A truly space-constrained destination and broader installer interruption timing remain useful hardware coverage. Never use Josh's active workspace. |
 | Git and old-home paths remain usable | Different-user packaged two-Mac acceptance verified the direct old-home compatibility path and the selected Git baseline before reopening the real project conversation. Local linked-worktree, stash, alternate-storage, uncommitted and untracked cases have deterministic coverage. | Run representative destination development commands with the source Mac disconnected. Existing checks do not prove every project-specific toolchain or absolute path. |
 | Browser-first local-data experience and clear status/help | Loopback-only helper, SSH transfer, one guided browser setup, saved setup, contextual Help, bounded private diagnostic events, operation-specific controls, strict host verification and multi-address speed selection are implemented. Desktop and 1440/390/320px keyboard/reflow checks passed. | Complete native VoiceOver and real TCC denial checks, plus physical Wi-Fi/direct-link selection and interruption acceptance. Automatic updating is not implemented. |
-| Public website, useful guides, screenshots, price and launch intake | Canonical site is live with paid signed Mac beta as the primary CTA, exact $50 checkout, sample-labelled real UI screenshots, two informative indexed guides, launch intake and personal-support disclosures. Build 7 availability and the live Stripe webhook are active. | Watch actual buyer behavior and support load; preserve rate limiting, accurate beta limits and the free-source path. A real-sale buyer/owner inbox receipt remains unverified until the first sale. |
+| Public website, useful guides, screenshots, price and launch intake | Canonical site is live with paid signed Mac beta as the primary CTA, exact $50 checkout, sample-labelled real UI screenshots, two informative indexed guides, launch intake and personal-support disclosures. Build 8 availability and the live Stripe webhook are active. | Watch actual buyer behavior and support load; preserve rate limiting, accurate beta limits and the free-source path. A real-sale buyer/owner inbox receipt remains unverified until the first sale. |
 | Website accessibility and performance | Fresh production Lighthouse: mobile 97 performance and 100 accessibility/best practices/SEO; desktop 98 performance and 100 in the other categories. Keyboard, narrow-width reflow, text enlargement, contrast and semantics have automated/browser evidence. | Native app VoiceOver remains open; no blanket WCAG conformance claim is made. Field Core Web Vitals require real traffic. |
 | Domain, search discovery, analytics and cross-promotion | Live canonical domain/robots/sitemap; recorded Search Console ownership, successful sitemap submission and accepted homepage request; separate GA4 property with region-aware default/full measurement, consent-mode handling for the EEA/UK/Switzerland, 14-month retention, returning-user continuity, aggregate Google Signals reporting, granular location/device reporting, ads personalization and user-provided data disabled, launch-request key event and Search Console link; live U.S. edge returned default mode with no banner and both host-only GA cookies; browser-forced consent mode showed the compact control, set no cookies before choice, produced a denied cookieless measurement, and correctly allowed or declined; You.one link on the live homepage; fresh HTTP 200 check of segeren.com confirms its “Explore Codex Migrate” link to the canonical domain | Watch native reports after real visits. A request originating from an actual EEA/UK/Swiss edge remains useful additional confirmation, but endpoint unit tests and browser-boundary simulation cover the branch. Actual demographics depend on consent, Google eligibility and reporting thresholds; indexing, ranking and traffic are not guaranteed. No repeated indexing request needed. |
-| Reproducible identifiable packaged app | Build 7 is produced from pushed source `67a92bb5d8383b542a3962be7868a87f927a871b`, Developer ID signed, Apple Accepted, stapled and Gatekeeper accepted. The private archive is 8,307,584 bytes with SHA-256 `f244a02c956d2a460d1002caec17d214c78379ba8b09e9b0840b367ab5986fb1`. A receiving test account completed Safari download, macOS Internet-download confirmation and native open on an earlier signed build; build 7's exact archive has independent signature/staple checks. | A pristine receiving Mac without prior test state or developer tooling remains stronger installation evidence. Native VoiceOver/TCC checks must use the exact distributed build before full certification. |
-| Paid purchase, delivery, support and refunds | Production checkout and webhook are live for build 7. Ordinary Stripe sandbox payment, signed-app delivery, email recovery, refreshed private download, refund and post-refund denial passed. Private links remain entitlement-bound and short lived; merchant successful-payment email is enabled. | Confirm buyer delivery and merchant notification from the first real sale. This is an operational observation for the live beta, not a reason to close the revenue path. |
+| Reproducible identifiable packaged app | Build 8 is produced from pushed source `f429bf6c234d7b9f925c61f389d6d0513de301fb`, Developer ID signed, Apple Accepted, stapled and Gatekeeper accepted. The private archive is 8,308,390 bytes with SHA-256 `74a7fc5e2da91901f4a5d3f74969cd03d34549ef6f06d83151825d7727262270`. A receiving test account completed Safari download, macOS Internet-download confirmation and native open on an earlier signed build; build 8's exact archive has independent signature, staple, Gatekeeper and packaged-browser Help checks. | A pristine receiving Mac without prior test state or developer tooling remains stronger installation evidence. Native VoiceOver/TCC checks must use the exact distributed build before full certification. |
+| Paid purchase, delivery, support and refunds | Production checkout and webhook are live for build 8. Ordinary Stripe sandbox payment, signed-app delivery, email recovery, refreshed private download, refund and post-refund denial passed. Private links remain entitlement-bound and short lived; merchant successful-payment email is enabled. | Confirm buyer delivery and merchant notification from the first real sale. This is an operational observation for the live beta, not a reason to close the revenue path. |
 
 ### Earlier device chronology (historical evidence)
 
@@ -1577,7 +1595,7 @@ cross-Mac migration. Failure tests use disposable fixtures, not user data.
   SSH-child kill/restart check remains separate evidence and must not be relabelled
   as a physical disconnect.
 - On a destination without prior test state or developer-installed Python/Xcode,
-  repeat quarantined download, native open and guided preparation for build 7.
+  repeat quarantined download, native open and guided preparation for build 8.
   The receiving test account already passed the normal Safari/Gatekeeper/open path
   on an earlier signed build but was not a pristine machine.
 - Extend the authentic three-conversation result with a recognizable setting,
