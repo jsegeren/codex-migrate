@@ -818,3 +818,16 @@ with retirement due September 8, 2026. Remove its temporary dependency symlink
 without deleting the canonical dependencies, preserve the pushed integration
 commit, verify main integration, and retire the worktree after the running CI
 result is handled. Do not restart that run because a watch call times out.
+
+### Integration completed September 7
+
+Hosted macOS CI run `34173916093` completed successfully for exact commit
+`f91c9710727bbe3797e61dfe7d8b088f9fe95535`. Main was re-fetched and remained at
+the reviewed base `5a1cdde`; the focused commit was then fast-forwarded to
+`origin/main`. `git ls-remote` verified both main and the integration branch at
+that exact SHA. Runtime-source parity was rechecked before the push.
+
+The CI watch exited successfully. The clean temporary worktree had no active
+process working directories and was retired with `git worktree remove`, followed
+by prune. Its source remains on origin. This source sync does not replace the
+paid build-5 archive or certify the remaining native acceptance checks.

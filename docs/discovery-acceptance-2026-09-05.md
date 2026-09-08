@@ -208,6 +208,53 @@ Draft for that Mac-specific request only, not posted:
 
 ## Release boundary
 
+### September 7 Reddit discovery and founder-account submission
+
+The Founder authorized further relevant outreach as `u/JoshuaSegeren`.
+The signed-in profile was verified before submission; it showed one post karma,
+zero comment karma, and only the earlier Codex reply. No reputation-building,
+voting, alternate-account activity, unsolicited customer DMs or paid ads were used.
+
+- **r/OpenaiCodex:** read its current two sidebar rules and used the
+  Showcase / Highlight flair plus Brand Affiliate disclosure. Submitted
+  [the maintainer showcase](https://www.reddit.com/r/OpenaiCodex/comments/1wa9uuq/changing_macs_without_losing_local_codex_work_i/)
+  with free MIT source, the $50 signed Apple silicon beta, support/refund details,
+  and explicit non-affiliation, no-sync/no-merge and ongoing-testing limits.
+  It appeared in the signed-in feed, but an independent logged-out read showed
+  **“removed by Reddit's filters.” This is not a public visibility win.**
+  Sent one moderator review request and verified it in Reddit's Mod mail chat.
+  The request disclosed Codex-assisted preparation/submission and promised no
+  reposting or filter evasion. No moderator response yet.
+- **r/macapps:** current rules require 10 local karma for promotional comments,
+  main-feed qualification, and no more than one developer promotion per 30 days,
+  including removed posts. The
+  [September App Pile](https://www.reddit.com/r/macapps/comments/1w4brkd/megathread_the_app_pile_september_2026/)
+  requires Problem / Comparison / Pricing format, with no direct archive links.
+  Its invitation to newer developers does not clearly resolve the comment-karma
+  requirement. Sent and verified one Mod mail asking whether the threshold applies
+  inside that thread, before posting. No promotion submitted there.
+- **r/mac:** current sidebar explicitly prohibits promotion/advertising and
+  generative-AI content. No post or comment submitted.
+- **r/codex:** retained the existing removed-comment/no-bots boundary; no new
+  automated reply or replacement posted.
+
+Additional demand leads found, not contacted:
+
+- [How are people migrating their Codex setup?](https://www.reddit.com/r/codex/comments/1udbz2y/how_are_people_migrating_their_codex_setup_from/)
+  is June 23 but has a fresh September 6 Mac-migration guide reply. The original
+  asker mentions Windows/SharePoint; do not pitch our Mac-only tool as solving
+  their entire setup.
+- [Why doesn't Codex remember my setup across computers?](https://www.reddit.com/r/codex/comments/1uirpdp/why_doesnt_codex_remember_my_setup_across/)
+  is June 29 and principally asks for ongoing continuity/sync, not just migration.
+- [Local chats visible on another computer?](https://www.reddit.com/r/codex/comments/1vskik3/are_local_codex_desktop_chats_visible_on_another/)
+  is August 19 and asks about privacy boundaries, not a buying request.
+- [Windows to Mac migration](https://www.reddit.com/r/codex/comments/1v0zq59/need_help_moving_codex_from_windows_to_mac/)
+  is outside our supported platform scope. Do not advertise compatibility.
+
+Next Reddit action is to read moderator responses, then use the approved format
+and channel. Do not duplicate filtered posts, disguise commercial affiliation,
+claim approval from a sent message, or manufacture karma to bypass thresholds.
+
 Search indexing is now proved for the requested core pages. The overall product
 goal remains open: authentic disposable-account Codex acceptance, remaining
 device/failure-mode and assistive-technology checks, Apple activation and exact
