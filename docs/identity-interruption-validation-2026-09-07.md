@@ -44,3 +44,24 @@ Native accessibility, TCC and remaining physical-device checks remain open.
 Build number 7 identifies the next candidate containing this correction.
 This source checkpoint does not change the public paid download (build 5),
 approve the candidate, or claim the overarching release goal is complete.
+
+## Signed build 7 candidate
+
+Clean, pushed source: `67a92bb5d8383b542a3962be7868a87f927a871b`.
+Apple accepted submission `990bb452-7072-41a4-9d5e-c743b62368de`.
+The completed builder exited successfully at approximately 19:52 Pacific.
+
+- Archive: `Codex-Migrate-0.1.0-build7-arm64.zip`, 8,307,584 bytes.
+- SHA-256: `f244a02c956d2a460d1002caec17d214c78379ba8b09e9b0840b367ab5986fb1`.
+- Artifact, app and receipts preserved in
+  `/Users/Shared/CodexMigrate-Authentic-20260906/candidate-build7`.
+- Independent preserved-copy checksum, strict/deep signature, staple validation
+  and Gatekeeper checks passed (Notarized Developer ID).
+- Exact packaged executable: nine desktop tests, eight passed and one
+  case-sensitive-filesystem skip; both unprivileged filesystem-denial tests pass.
+  These denial checks are not native TCC acceptance.
+
+The task-owned sibling build worktree is retired after checking it is clean,
+its source is pushed, its builder is terminal, and no process holds it as cwd.
+The Shared candidate remains available. No catalog entry or public download was
+changed; main-branch integration and candidate delivery promotion remain next.
