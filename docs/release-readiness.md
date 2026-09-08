@@ -51,6 +51,26 @@ production Lighthouse results were: mobile 97 performance and 100 accessibility,
 best practices and SEO; desktop 98 performance and 100 in the other three
 categories. The measurements are lab results, not field Core Web Vitals.
 
+### Paid-first edition hierarchy — September 8
+
+Production deployment `dpl_Hzn1uUSdyv12QmhqSsLjpEarUgKs`, from pushed source
+`0860f5d`, makes the packaged Mac app the first edition in document and visual
+order, names it as the easy path, and keeps the source/CLI as the secondary
+technical option. The hero and closing calls to action already use the same
+paid-first hierarchy. At 320px and 1440px, the revised edition section retained
+readable hierarchy and zero horizontal overflow. Focused site checks passed
+25/25 and the complete Node suite passed 278/279 with its one expected
+database-dependent skip.
+
+A new production browser session reached Stripe Checkout from the visible
+`Buy the Mac beta — $50` button. Stripe displayed the correct product, $50
+one-time price, beta limitations, support and refund terms; no payment details
+were entered and no charge was made. After deployment, canonical availability
+remained open for Apple silicon on the beta channel and the settled page had no
+browser-console errors. This verifies the buyer can reach the payment form; the
+first real sale is still required to prove merchant and buyer email arrival in
+production.
+
 ### Build 8 customer-copy correction and distribution — September 8
 
 The build 7 archive bundled an obsolete offline sentence saying paid downloads
