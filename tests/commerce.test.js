@@ -43,15 +43,21 @@ test('commerce defaults closed and requires reviewed release, matching key mode 
   }
   assert.throws(() => configuration({ ...env, COMMERCE_MODE: 'live', COMMERCE_STRIPE_KEY: 'rk_live_fixture' }, { [release.id]: release }), /release_unavailable/);
 });
-test('only the explicitly approved signed beta manifest is eligible for live distribution', () => {
+test('only explicitly approved signed beta manifests are eligible for live distribution', () => {
   const { validRelease } = require('../commerce/config');
-  const beta = require('../commerce/releases.json')['beta-build5-arm64'];
-  assert.equal(validRelease(beta, true), true);
-  for (const patch of [{ accepted: false }, { acceptance: undefined }, { channel: 'unknown' },
-    { kind: 'unsigned' }, { testingOnly: true }, { pathname: beta.pathname.replace('live/', 'sandbox/') }]) {
-    assert.equal(validRelease({ ...beta, ...patch }, true), false);
+  const releases = require('../commerce/releases.json');
+  const betas = ['beta-build5-arm64', 'beta-build7-arm64'].map(id => releases[id]);
+  for (const beta of betas) {
+    assert.equal(validRelease(beta, true), true);
+    for (const patch of [{ accepted: false }, { acceptance: undefined }, { channel: 'unknown' },
+      { kind: 'unsigned' }, { testingOnly: true }, { pathname: beta.pathname.replace('live/', 'sandbox/') }]) {
+      assert.equal(validRelease({ ...beta, ...patch }, true), false);
+    }
+    assert.equal(validRelease(beta, false), false);
   }
-  assert.equal(validRelease(beta, false), false);
+  assert.equal(releases['beta-build7-arm64'].sha256,
+    'f244a02c956d2a460d1002caec17d214c78379ba8b09e9b0840b367ab5986fb1');
+  assert.equal(releases['beta-build7-arm64'].source, '67a92bb5d8383b542a3962be7868a87f927a871b');
 });
 test('beta delivery email includes the remaining checks without adding tracking', async () => {
   let mail;
