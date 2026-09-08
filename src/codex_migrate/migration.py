@@ -1214,6 +1214,13 @@ backup_space {home} {reserve}
 {backup_receipt}
 auth_before=$(shasum -a 256 {codex}/auth.json | awk '{{print $1}}')
 installation_before=$(shasum -a 256 {codex}/installation_id | awk '{{print $1}}')
+# Prepare both destination identity files before the replacement directory is
+# made visible. Recovery must not mistake an installer-created identity gap
+# for an intentional logout if the shell dies immediately after the move.
+cp -p {backup}/.codex/auth.json {staging}/.codex/auth.json
+cp -p {backup}/.codex/installation_id {staging}/.codex/installation_id
+cmp -s {backup}/.codex/auth.json {staging}/.codex/auth.json
+cmp -s {backup}/.codex/installation_id {staging}/.codex/installation_id
 {codex_process_guard}
 {begin_transaction}
 {codex_process_guard}
@@ -1246,8 +1253,6 @@ rollback() {{
 trap rollback EXIT
 rm -rf {codex}
 mv {staging}/.codex {codex}
-cp -p {backup}/.codex/auth.json {codex}/auth.json
-cp -p {backup}/.codex/installation_id {codex}/installation_id
 {workspace_installs}
 {workspace_installed_checks}
 {skill_installed_checks}
