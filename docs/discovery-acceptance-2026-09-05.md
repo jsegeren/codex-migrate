@@ -314,6 +314,18 @@ links the project. No duplicate comment was added. Issue 37853 concerns a
 sidebar/indexing failure even though rollouts and database rows remain present;
 do not advertise Codex Migrate as a fix without direct evidence.
 
+An additional transparent maintainer response is now public on
+[OpenAI Codex issue 33830](https://github.com/openai/codex/issues/33830#issuecomment-5591913000),
+which independently documents Migration Assistant cloning `installation_id`
+and breaking Remote Control identity. The response explains that Codex Migrate
+preserves the destination Mac's existing authentication and installation
+identity, stages only selected state and workspaces, verifies a destination
+backup, and does not modify the source. It also states that the product does not
+repair an already-cloned installation or provide ongoing sync, discloses the
+maintainer relationship, and identifies both the MIT engine and signed $50
+beta. This is a directly relevant technical response rather than a general
+announcement; do not duplicate it across adjacent issues.
+
 Search indexing is now proved for the requested core pages. The overall product
 goal remains open: authentic disposable-account Codex acceptance, remaining
 device/failure-mode and assistive-technology checks, Apple activation and exact

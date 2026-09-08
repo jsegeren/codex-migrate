@@ -71,6 +71,29 @@ browser-console errors. This verifies the buyer can reach the payment form; the
 first real sale is still required to prove merchant and buyer email arrival in
 production.
 
+### Final regression refresh and identity-risk outreach — September 8
+
+The complete Python suite was rerun from the current branch with the required
+`src` import path and produced a captured zero exit status: 729 tests passed
+with 12 expected platform/environment skips. The production website and
+commerce suite remains 278/279 with its one expected database-dependent skip,
+and focused site checks remain 25/25. The bounded suite log is preserved at
+`/Users/Shared/CodexMigrate-Authentic-20260906/release-suite-20260908.log`
+(2,654 bytes, SHA-256
+`308d004a84adfadecd5c0a42d8f9857e275b297a8efdca06f5037bf069010f46`,
+owner-only mode 0600). The first incorrectly invoked discovery command lacked
+the project import path and produced loader errors; it is not a product result
+and is superseded by the correctly configured passing run.
+
+The receiving Mac at `192.168.1.114` answered ICMP during this refresh, but TCP
+port 22 explicitly refused the connection and no Thunderbolt interface was
+active on the source Mac. Therefore no physical-disconnect or direct-link result
+is claimed. A new public maintainer response on OpenAI Codex issue 33830
+documents the exact destination-identity protection supplied by Codex Migrate,
+the limits of that protection, the free engine and the paid beta without
+misrepresenting repair or sync support. See the discovery acceptance record for
+the permalink and disclosure review.
+
 ### Build 8 customer-copy correction and distribution — September 8
 
 The build 7 archive bundled an obsolete offline sentence saying paid downloads
