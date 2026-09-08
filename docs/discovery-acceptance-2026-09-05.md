@@ -255,6 +255,37 @@ Next Reddit action is to read moderator responses, then use the approved format
 and channel. Do not duplicate filtered posts, disguise commercial affiliation,
 claim approval from a sent message, or manufacture karma to bypass thresholds.
 
+### September 7 evening: publicly visible weekly-thread comment
+
+The Founder explicitly authorized useful replies, suitable community posts and
+joining relevant communities, subject to their rules and account requirements.
+Read all seven current r/ChatGPTCoding rules and its pinned weekly promotion
+thread. The sidebar reports 98K weekly visitors (not a subscriber count).
+Promotion, including FOSS, belongs in the weekly thread; standalone technical
+project write-ups have separate Problem / Comparison / What you did rules.
+No raw AI output or low-value walls of text; AI assistance for clarity is allowed.
+
+Submitted one concise, reviewed maintainer introduction as `u/JoshuaSegeren`:
+[weekly-thread comment](https://www.reddit.com/r/ChatGPTCoding/comments/1w9lsay/comment/p8h67bo/).
+It covers the Mac-migration problem, local SSH/browser architecture, free MIT
+source, the $50 signed Apple silicon beta, support/refund terms, current testing
+limits, no Windows/sync/merge support, and a concrete request for migration/setup
+feedback. Ownership, non-affiliation and AI assistance are explicit. There was
+no prior comment from this account in the thread before submission.
+
+Signed-in readback confirmed the exact author, body and permalink. An independent
+logged-out web read then displayed the complete comment at that permalink:
+**publicly visible at verification**, unlike the earlier filtered showcase.
+The community Join action was submitted; membership was not separately verified.
+No votes, unsolicited DMs, filler participation or duplicate announcements.
+
+The existing r/OpenaiCodex and r/macapps moderator conversations were read in
+Reddit chat after reconnecting through a separate task tab. Their most recent
+messages remain our requests; no moderator replies or approvals are visible.
+The earlier tab's connection was unavailable, so no actions were sent through
+it. Native Chrome was left alone after the user's window changed; the successful
+submission used an independently controlled new task tab.
+
 Search indexing is now proved for the requested core pages. The overall product
 goal remains open: authentic disposable-account Codex acceptance, remaining
 device/failure-mode and assistive-technology checks, Apple activation and exact
