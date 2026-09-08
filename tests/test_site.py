@@ -272,6 +272,18 @@ class SiteTests(unittest.TestCase):
         self.assertIn("color: #fff", primary)
         self.assertIn("outline-offset: 4px", styles)
 
+    def test_paid_mac_beta_is_primary_but_free_cli_remains_prominent(self):
+        source = (SITE / "index.html").read_text()
+        hero = source.split('<div class="actions">', 1)[1].split("</div>", 1)[0]
+        self.assertLess(hero.index("Get the Mac beta — $50"), hero.index("Get the free CLI"))
+        self.assertIn('class="button button-primary" id="hero-paid-link"', hero)
+        self.assertIn('class="button button-secondary" data-analytics-event="select_free_cli"', hero)
+
+        closing = source.split('<section class="closing">', 1)[1].split("</section>", 1)[0]
+        self.assertLess(closing.index("Get the Mac beta — $50"), closing.index("Use the free CLI"))
+        self.assertIn('class="button button-primary" href="#founding-edition"', closing)
+        self.assertIn('class="button button-secondary light" data-analytics-event="select_free_cli"', closing)
+
     def test_launch_interest_preserves_consent_and_separate_beta_help_email(self):
         page = self.parse("index.html")
         emails = [href for href in page.hrefs if href.startswith(
