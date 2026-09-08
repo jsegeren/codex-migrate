@@ -100,6 +100,13 @@ class TransactionWriteFailureTests(unittest.TestCase):
         self.assertEqual(partials[0].stat().st_size, 8)
         old_backup = Path(self.fixture.state.read()["pending_backup"])
         self.assert_originals_and_backup(old_backup)
+        # Finalize/resume prepares staging again before installation. A failed
+        # journal write may leave destination identity prepared in staging;
+        # remove that transient copy through the real retry path, not by
+        # bypassing the installer's identity-free staging precondition.
+        self.engine._prepare_staging()
+        self.assertFalse((self.fixture.stage / ".codex/auth.json").exists())
+        self.assertFalse((self.fixture.stage / ".codex/installation_id").exists())
         receipt = self.engine._install_and_verify()
         self.assertTrue(receipt["backup_verified"])
         self.assertNotEqual(Path(receipt["backup"]), old_backup)

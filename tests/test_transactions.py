@@ -14,6 +14,10 @@ from codex_migrate.components import ComponentExporter, SkillExport
 from codex_migrate.destination_lock import locked_destination_script, locked_receiver_command
 from codex_migrate.transaction import TRANSACTION_NAME, TRANSACTION_RUNNER, pending_check_script, recovery_preflight_script
 from codex_migrate.workspaces import freeze_tree
+from codex_migrate.recovery import inspect_recovery
+from codex_migrate.restore import restore_recovery
+from codex_migrate.processes import require_codex_closed_script
+from process_fixtures import closed_codex_script
 
 
 class TransactionTests(unittest.TestCase):
@@ -112,6 +116,81 @@ class TransactionTests(unittest.TestCase):
         record = json.loads(self.journal.read_text())
         self.assertEqual((Path(record["backup"]) / "items/0/SKILL.md").read_text(), "old skill")
         self.assert_pending_blocks_writes()
+
+    def interrupted_installer_restores(self, boundary):
+        """Kill the installer shell, not just a separate journal fixture writer."""
+        original = self.engine.transport.run_remote
+        def fault(script, timeout=60):
+            self.assertEqual(script.count(boundary), 1)
+            return original(script.replace(boundary, boundary + "\nkill -KILL $$\n"), timeout)
+        self.engine.transport.run_remote = fault
+        with self.assertRaises(RuntimeError):
+            self.engine._install_and_verify()
+        self.engine.transport.run_remote = original
+        self.engine.transport.run_remote_cancellable = lambda script, timeout, cancelled: original(script, timeout)
+        record = json.loads(self.journal.read_text())
+        backup = Path(record["backup"])
+        frozen = {item["backup"]: freeze_tree(item["backup"]) for item in record["scope"]}
+        self.assert_pending_blocks_writes()
+        inspection = inspect_recovery(self.fixture.config, self.engine.transport)
+        self.assertEqual(inspection["status"], "backup_verified")
+        guard = closed_codex_script(require_codex_closed_script(str(self.fixture.target)))
+        with patch("codex_migrate.restore.require_codex_closed_script", return_value=guard):
+            result = restore_recovery(self.fixture.config, self.engine.transport, inspection)
+        self.assertEqual(result["status"], "restored")
+        self.assertFalse(self.journal.exists())
+        self.assertEqual((self.fixture.target / ".codex/old.txt").read_text(), "original")
+        self.assertEqual((self.fixture.target / "Git/old.txt").read_text(), "original-work")
+        # Synthetic identity must survive every installation cut point.
+        self.assertTrue((self.fixture.target / ".codex/auth.json").exists())
+        self.assertTrue((self.fixture.target / ".codex/installation_id").exists())
+        self.assertTrue((self.fixture.target / ".codex/auth.json").read_text() == "fixture-auth")
+        self.assertTrue((self.fixture.target / ".codex/installation_id").read_text() == "fixture-id")
+        for path, expected in frozen.items():
+            self.assertEqual(freeze_tree(path), expected)
+        preserved = backup / ("recovery-" + record["id"]) / "current/0/sessions/chat.jsonl"
+        self.assertEqual(preserved.read_text(), "{}\n")
+        self.assertEqual((self.fixture.source / "Git/new.txt").read_text(), "new-work")
+        return backup, record
+
+    def test_sigkill_after_codex_move_restores_originals_and_identity(self):
+        boundary = "mv " + shlex.quote(str(self.fixture.stage)) + "/.codex " + shlex.quote(str(self.fixture.target / ".codex"))
+        self.interrupted_installer_restores(boundary)
+
+    def test_sigkill_after_workspace_move_preserves_partial_install(self):
+        boundary = "mv " + shlex.quote(str(self.fixture.stage / "home-relative/Git")) + " " + shlex.quote(str(self.fixture.target / "Git"))
+        backup, record = self.interrupted_installer_restores(boundary)
+        self.assertEqual((backup / ("recovery-" + record["id"]) / "current/1/new.txt").read_text(), "new-work")
+
+    def identity_preparation_failure(self, corruption=False):
+        original = self.engine.transport.run_remote
+        staged = shlex.quote(str(self.fixture.stage)) + "/.codex/installation_id"
+        def fault(script, timeout=60):
+            backup = shlex.quote(self.fixture.state.read()["pending_backup"])
+            copy = "cp -p " + backup + "/.codex/installation_id " + staged
+            self.assertEqual(script.count(copy), 1)
+            replacement = "printf 'invalid-fixture-id' > " + staged if corruption else "false"
+            return original(script.replace(copy, replacement), timeout)
+        self.engine.transport.run_remote = fault
+        with self.assertRaises(RuntimeError):
+            self.engine._install_and_verify()
+        self.engine.transport.run_remote = original
+        self.assertFalse(self.journal.exists())
+        self.fixture.assert_originals_untouched()
+        self.assertTrue((self.fixture.target / ".codex/auth.json").read_text() == "fixture-auth")
+        self.assertTrue((self.fixture.target / ".codex/installation_id").read_text() == "fixture-id")
+        # A normal retry strips transient destination identity from staging and
+        # prepares it afresh. No source identity is ever transferred.
+        self.engine._prepare_staging()
+        self.assertFalse((self.fixture.stage / ".codex/auth.json").exists())
+        self.assertFalse((self.fixture.stage / ".codex/installation_id").exists())
+        self.assertTrue(self.engine._install_and_verify()["auth_preserved"])
+
+    def test_identity_preparation_copy_failure_leaves_originals_and_can_retry(self):
+        self.identity_preparation_failure()
+
+    def test_identity_preparation_corruption_stops_before_replacement(self):
+        self.identity_preparation_failure(corruption=True)
 
     def corrupt_installed(self, script):
         codex = shlex.quote(str(self.fixture.target / ".codex"))
