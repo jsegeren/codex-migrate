@@ -88,10 +88,14 @@ def artifact_name(receipt):
             + "-" + receipt["architecture"] + suffix + ".zip")
 
 
-def notary_request(profile, *arguments):
+def notary_request(profile, *arguments, keychain=None):
+    command = ["xcrun", "notarytool", *map(str, arguments),
+               "--keychain-profile", profile]
+    if keychain:
+        command += ["--keychain", str(keychain)]
+    command += ["--output-format", "json"]
     result = subprocess.run(
-        ["xcrun", "notarytool", *map(str, arguments), "--keychain-profile", profile,
-         "--output-format", "json"], cwd=ROOT, capture_output=True, text=True,
+        command, cwd=ROOT, capture_output=True, text=True,
     )
     if result.returncode:
         raise ValueError("notarization command failed; inspect the saved submission before retrying")
@@ -119,8 +123,8 @@ def save_notary_receipt(path, record):
         temporary.unlink(missing_ok=True)
 
 
-def wait_for_notarization(identifier, profile, receipt_path):
-    response, waited_id = notary_request(profile, "wait", identifier)
+def wait_for_notarization(identifier, profile, receipt_path, keychain=None):
+    response, waited_id = notary_request(profile, "wait", identifier, keychain=keychain)
     if waited_id != identifier:
         raise ValueError("notarization submission ID changed; release stopped")
     status = response.get("status")
@@ -134,15 +138,16 @@ def wait_for_notarization(identifier, profile, receipt_path):
     return record
 
 
-def notarize(submission, profile, output):
+def notarize(submission, profile, output, keychain=None):
     """Save the submission ID before waiting; never print credential diagnostics."""
 
-    _, identifier = notary_request(profile, "submit", submission, "--no-wait")
+    _, identifier = notary_request(profile, "submit", submission, "--no-wait",
+                                   keychain=keychain)
     record = {"id": identifier, "status": "Submitted"}
     receipt_path = output / "notary-submission.json"
     save_notary_receipt(receipt_path, record)
     print("Notarization submission saved:", receipt_path, flush=True)
-    return wait_for_notarization(identifier, profile, receipt_path)
+    return wait_for_notarization(identifier, profile, receipt_path, keychain=keychain)
 
 
 def publish_artifact(app, output, receipt, scratch):
@@ -233,7 +238,7 @@ def resume_state(output):
     return output, app, receipt, notary_path, identifier
 
 
-def resume_notarization(output, profile):
+def resume_notarization(output, profile, keychain=None):
     output, app, receipt, notary_path, identifier = resume_state(output)
     source = subprocess.run(
         ["git", "show", receipt["source_revision"] + ":desktop/Info.plist"],
@@ -251,7 +256,8 @@ def resume_notarization(output, profile):
         raise ValueError("saved release source and embedded app versions do not match")
     run("codesign", "--verify", "--deep", "--strict", app)
     verify_embedded_code(app / "Contents/Resources/engine")
-    receipt["notarization"] = wait_for_notarization(identifier, profile, notary_path)
+    receipt["notarization"] = wait_for_notarization(
+        identifier, profile, notary_path, keychain=keychain)
     run("xcrun", "stapler", "staple", app)
     run("xcrun", "stapler", "validate", app)
     run("spctl", "--assess", "--type", "execute", "--verbose=2", app)
@@ -267,6 +273,8 @@ def main():
     parser.add_argument("--release", action="store_true")
     parser.add_argument("--identity", help="Developer ID Application identity already in Keychain")
     parser.add_argument("--notary-profile", help="Existing notarytool Keychain profile")
+    parser.add_argument("--notary-keychain",
+                        help="Optional explicit Keychain file containing the notary profile")
     parser.add_argument("--resume-notarization", metavar="BUILD_DIRECTORY",
                         help="finish the saved Apple submission in a partial release build")
     args = parser.parse_args()
@@ -278,7 +286,8 @@ def main():
         if not args.notary_profile:
             parser.error("resume-notarization requires --notary-profile")
         try:
-            resume_notarization(args.resume_notarization, args.notary_profile)
+            resume_notarization(args.resume_notarization, args.notary_profile,
+                                 args.notary_keychain)
         except ValueError as error:
             parser.error(str(error))
         return
@@ -339,7 +348,8 @@ def main():
                 raise ValueError("source revision changed during build; release stopped")
             submission = scratch / "submission.zip"
             run("ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", app, submission)
-            receipt["notarization"] = notarize(submission, args.notary_profile, output)
+            receipt["notarization"] = notarize(
+                submission, args.notary_profile, output, args.notary_keychain)
             run("xcrun", "stapler", "staple", app)
             run("xcrun", "stapler", "validate", app)
             run("spctl", "--assess", "--type", "execute", "--verbose=2", app)

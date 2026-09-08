@@ -274,6 +274,11 @@ notarytool Keychain profile. Never put signing credentials in Git or command out
   --notary-profile your-existing-keychain-profile
 ```
 
+For a dedicated unlocked build Keychain, add
+`--notary-keychain /absolute/path/to/build.keychain-db`. The path is passed to
+`notarytool` for both submission and status checks and is never written into the
+build receipt.
+
 The script stops if signing, notarization, stapling, or Gatekeeper assessment
 fails. There is no unsigned fallback. It saves Apple's submission ID in
 `notary-submission.json` beside the app before waiting for processing. Only an
@@ -287,7 +292,8 @@ Resume the existing build directory with the same Keychain profile:
 ```sh
 .venv/bin/python desktop/build.py \
   --resume-notarization build/desktop-EXISTING \
-  --notary-profile your-existing-keychain-profile
+  --notary-profile your-existing-keychain-profile \
+  --notary-keychain /absolute/path/to/build.keychain-db
 ```
 
 The resume path accepts only a direct `build/desktop-*` directory containing a

@@ -114,6 +114,7 @@ class ReleaseBuildTests(unittest.TestCase):
     def test_notary_submission_saved_before_wait_and_only_accepted_passes(self):
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary)
+            keychain = output / "build.keychain-db"
             calls = []
 
             def invoke(command, **kwargs):
@@ -126,12 +127,16 @@ class ReleaseBuildTests(unittest.TestCase):
                 return response()
 
             with patch.object(build.subprocess, "run", side_effect=invoke):
-                self.assertEqual(build.notarize(output / "app.zip", "private-profile", output),
+                self.assertEqual(build.notarize(output / "app.zip", "private-profile", output,
+                                                keychain),
                                  {"id": SUBMISSION, "status": "Accepted"})
             self.assertEqual([command[2] for command in calls], ["submit", "wait"])
             self.assertIn("--no-wait", calls[0])
+            for command in calls:
+                self.assertEqual(command[command.index("--keychain") + 1], str(keychain))
             saved = (output / "notary-submission.json").read_text()
             self.assertNotIn("private-profile", saved)
+            self.assertNotIn(str(keychain), saved)
             self.assertNotIn("diagnostic", saved)
 
     def test_notary_rejection_ambiguity_and_failure_never_pass(self):
