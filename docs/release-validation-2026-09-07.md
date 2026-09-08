@@ -788,3 +788,33 @@ The release task owns sibling worktree
 `codex/signed-candidate-build6-2026-09-07`. After preserving and independently
 verifying the Shared artifact, the clean worktree and its duplicate generated
 build output are retired; the source commit remains on origin.
+
+## Public CLI/source parity integration
+
+The September 7 post-build audit fetched `origin/main` at `5a1cdde` and found
+that its paid-beta README update did not include the release-work branch's
+engine fixes. This is branch lag in one repository, not a separate paid engine.
+The live archive remains build 5 (`48f5194`); candidate build 6 is `0097eb5`.
+
+Focused integration branch `codex/public-cli-parity-2026-09-07`, pushed commit
+`f91c9710727bbe3797e61dfe7d8b088f9fe95535`, brings `src/` and `desktop/` byte-for-byte
+to the tested candidate, plus their focused regression tests and CLI binding
+documentation. It preserves main's paid offer and adds an explanation of shared
+source/build provenance. It does not import commerce configuration, site changes,
+account-specific acceptance runners or unrelated release operations. One
+pre-existing social-card test still expected alpha copy despite main already
+advertising beta; its expectation now matches the existing beta metadata.
+
+This integration tree passed 639 Python tests (627 passed, 12 skips), 233 Node
+24 tests (232 passed, one opt-in database skip), Swift type-checking, diff checks
+and exact runtime-source parity. Dependencies were reused through a temporary
+node_modules symlink rather than installed again. Hosted macOS CI is run
+`34173916093` for this exact commit; at this checkpoint it is still running, so
+main has **not** been updated and no hosted CI pass is claimed.
+
+Release task retains its clean sibling worktree
+`/Users/jsegeren/Git/codex-migrate-public-release` only for CI review/integration,
+with retirement due September 8, 2026. Remove its temporary dependency symlink
+without deleting the canonical dependencies, preserve the pushed integration
+commit, verify main integration, and retire the worktree after the running CI
+result is handled. Do not restart that run because a watch call times out.
