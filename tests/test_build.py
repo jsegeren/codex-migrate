@@ -22,6 +22,13 @@ def response(status="Accepted", identifier=SUBMISSION, returncode=0):
 
 
 class ReleaseBuildTests(unittest.TestCase):
+    def test_bundled_customer_setup_copy_matches_live_paid_beta(self):
+        setup = (Path(__file__).resolve().parents[1] / "docs/desktop-setup.md").read_text()
+        self.assertIn("signed, notarized Mac beta is available", setup)
+        self.assertIn("$50 USD", setup)
+        self.assertIn("MIT-licensed CLI and source remain free", setup)
+        self.assertNotIn("No paid downloads or pre-orders are available", setup)
+
     def test_framework_bundles_sealed_inside_out_before_verification(self):
         with tempfile.TemporaryDirectory() as temporary:
             engine = Path(temporary)

@@ -1,7 +1,11 @@
 # Mac edition setup and recovery
 
-The Mac edition is under development. No paid downloads or pre-orders are
-available yet. Local unsigned builds are engineering artifacts, not releases.
+The signed, notarized Mac beta is available for Apple silicon Macs for $50 USD
+one time, including best-effort maintainer support and a 30-day refund window.
+The complete MIT-licensed CLI and source remain free. Local unsigned builds are
+engineering artifacts, not releases. See
+[migrate.segeren.com](https://migrate.segeren.com/#founding-edition) for the
+current download, beta limitations, support terms, and refund policy.
 
 ## Before starting
 
