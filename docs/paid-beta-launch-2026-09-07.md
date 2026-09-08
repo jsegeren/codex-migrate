@@ -1,4 +1,4 @@
-# Paid beta distribution — September 7, 2026
+# Paid beta distribution — September 8, 2026
 
 ## Authorization and boundary
 
@@ -16,18 +16,19 @@ must retain their old Mac and an independent backup.
 
 ## Current exact artifact
 
-- Release ID: `beta-build7-arm64`, explicit `beta` channel.
-- Filename: `Codex-Migrate-0.1.0-build7-arm64.zip`; 8,307,584 bytes.
-- Source: `67a92bb5d8383b542a3962be7868a87f927a871b`.
-- SHA-256: `f244a02c956d2a460d1002caec17d214c78379ba8b09e9b0840b367ab5986fb1`.
-- Notarization: `990bb452-7072-41a4-9d5e-c743b62368de`, Accepted.
+- Release ID: `beta-build8-arm64`, explicit `beta` channel.
+- Filename: `Codex-Migrate-0.1.0-build8-arm64.zip`; 8,308,390 bytes.
+- Source: `f429bf6c234d7b9f925c61f389d6d0513de301fb`.
+- SHA-256: `74a7fc5e2da91901f4a5d3f74969cd03d34549ef6f06d83151825d7727262270`.
+- Notarization: `0992a488-b7fb-415d-a5c2-768bf3707f1c`, Accepted.
 - Private live-store upload and full readback matched exact size and digest.
 
 The catalog's `accepted: true` records this specific distribution approval, not
 full clean-Mac or WCAG certification. Sandbox entries remain ineligible for live
-sale. Build 7 adds atomic destination Codex identity preservation across an
-installer interruption. Its fault-injection, complete-suite, exact packaged
-executable, signature, staple and Gatekeeper evidence is recorded in
+sale. Build 8 retains build 7's atomic destination Codex identity preservation
+across an installer interruption and corrects the packaged offline guide to
+describe the available paid beta accurately. Its fault-injection,
+complete-suite, exact packaged executable, signature, staple and Gatekeeper evidence is recorded in
 [installer interruption validation](identity-interruption-validation-2026-09-07.md).
 
 ## Remaining validation
@@ -94,6 +95,37 @@ for a live-mode session; no payment details were supplied and no charge or
 fulfillment was created. The prior build 5 catalog entry and private object are
 retained so existing entitlements continue to recover their originally purchased
 artifact.
+
+## Build 8 customer-copy correction and promotion
+
+The distributed build 7 archive contained an obsolete offline sentence saying
+paid downloads were unavailable even though checkout was live. Build 8 removes
+that contradiction and adds a regression test requiring the packaged guide to
+name the signed $50 beta, the complete free MIT-licensed CLI/source, best-effort
+support and the 30-day refund policy. The migration engine and native launcher
+source are unchanged from build 7.
+
+Build 8 was signed, notarized, stapled and Gatekeeper accepted. Eight exact
+packaged-engine desktop checks passed; the ninth, a case-sensitive-filesystem
+fixture, was skipped as expected on this Mac. A real Chromium test against the
+packaged helper opened Help, prepared a bounded local diagnostic report,
+displayed it for review and downloaded it without exposing private paths,
+tokens or passwords and without uploading or emailing anything automatically.
+Focused build and desktop tests passed 23 checks with one expected
+case-sensitive-filesystem skip. The full Python suite passed 729 checks with 12
+skips before packaging; the build 8 migration engine is unchanged from that
+tested source. Catalog-focused Node tests passed 87 of 87, following the prior
+full 279-test Node pass with one database-dependent skip.
+
+The exact build 8 archive was uploaded to a new private object path and streamed
+back independently with matching 8,308,390-byte size and SHA-256. Production
+deployment `dpl_ELKgxYbJgSnBxQMRwQzL4EME5mZ2` reached READY and was aliased to
+the canonical domain with `COMMERCE_RELEASE=beta-build8-arm64`. Availability
+remained open at $50 for Apple silicon on the beta channel. A production
+Checkout probe returned a valid Stripe-hosted URL; no payment details were
+supplied and no charge was made. Build 5 and build 7 remain private and
+catalogued so existing entitlements continue to recover the artifacts they
+originally purchased.
 
 Rollback: set `COMMERCE_CHECKOUT_OPEN=no` and redeploy the validated source.
 Keep the release catalog and private artifact available for existing buyers;

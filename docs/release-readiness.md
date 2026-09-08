@@ -5,15 +5,16 @@ remaining acceptance checks continue. This is not full release certification.
 The [paid-beta launch record](paid-beta-launch-2026-09-07.md) controls the current
 distribution decision; the dated entries below preserve their original status.
 
-## Current release boundary — September 7
+## Current release boundary — September 8
 
-The current distributed artifact is **signed and notarized build 7**, $50 USD,
+The current distributed artifact is **signed and notarized build 8**, $50 USD,
 Apple silicon, beta channel. Production checkout is open and the live Stripe
 webhook is active. Exact source/artifact identifiers, private delivery readback
-and pre-payment disclosures are in the paid-beta launch record above. Build 7
-adds atomic preservation of the destination Mac's Codex authentication and
-installation identity across installer interruption. Existing build 5 purchases
-remain bound to build 5; new purchases receive build 7. A fresh
+and pre-payment disclosures are in the paid-beta launch record above. Build 8
+keeps build 7's migration engine and corrects the offline customer guide so it
+accurately describes the available paid beta. Existing build 5 and build 7
+purchases remain bound to their original artifacts; new purchases receive build
+8. A fresh
 read of `/api/availability` returned `available:true`, `priceUSD:50`,
 `architecture:arm64`, `channel:beta` during the post-launch audit.
 
@@ -49,6 +50,36 @@ intentional database skip; focused public-site tests passed 25/25. Fresh
 production Lighthouse results were: mobile 97 performance and 100 accessibility,
 best practices and SEO; desktop 98 performance and 100 in the other three
 categories. The measurements are lab results, not field Core Web Vitals.
+
+### Build 8 customer-copy correction and distribution — September 8
+
+The build 7 archive bundled an obsolete offline sentence saying paid downloads
+were unavailable even though checkout was live. Build 8 removes that
+contradiction and adds a regression check that the packaged setup guide names
+the signed $50 beta, free MIT-licensed source, support and refund terms. The
+migration engine and native launcher are byte-for-source unchanged from build 7;
+the only release-runtime changes are the build number and bundled guide.
+
+Build 8 comes from pushed source
+`f429bf6c234d7b9f925c61f389d6d0513de301fb`. Its Apple notarization submission
+`0992a488-b7fb-415d-a5c2-768bf3707f1c` is Accepted; the app is Developer ID
+signed, stapled and Gatekeeper accepted. The 8,308,390-byte archive is
+`Codex-Migrate-0.1.0-build8-arm64.zip`, SHA-256
+`74a7fc5e2da91901f4a5d3f74969cd03d34549ef6f06d83151825d7727262270`.
+It passed eight exact packaged-engine desktop checks; the ninth, a
+case-sensitive-filesystem fixture, was skipped as expected on this Mac. A real
+Chromium pass against the packaged helper opened Help, generated a
+release-identified local diagnostic report, showed it for review, and
+downloaded the same bounded JSON without a private path, token, password, or
+automatic upload.
+
+The private production object was streamed back and matched the full size and
+digest before catalog acceptance. Deployment
+`dpl_ELKgxYbJgSnBxQMRwQzL4EME5mZ2` reached READY and the canonical domain was
+aliased to it with `COMMERCE_RELEASE=beta-build8-arm64`; canonical availability
+remained open at $50 on the beta channel. A live checkout request returned a
+Stripe-hosted URL; no payment information was supplied and no charge was made.
+Builds 5 and 7 remain private and catalogued for existing purchase recovery.
 
 ### Earlier September 7 checkpoints (historical, not current sales state)
 
