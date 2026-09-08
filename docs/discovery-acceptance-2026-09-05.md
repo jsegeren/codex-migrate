@@ -286,6 +286,34 @@ The earlier tab's connection was unavailable, so no actions were sent through
 it. Native Chrome was left alone after the user's window changed; the successful
 submission used an independently controlled new task tab.
 
+### September 8 public r/OpenaiCodex post and organic question
+
+The Founder published a new, transparent maintainer post in r/OpenaiCodex:
+[I changed Macs and my local Codex work didn’t follow my account, so I built a
+safer Mac-to-Mac migrator](https://www.reddit.com/r/OpenaiCodex/comments/1wadhpa/i_changed_macs_and_my_local_codex_work_didnt/).
+An independent logged-out read displayed the full post, `u/JoshuaSegeren`
+attribution, Brand Affiliate disclosure, Showcase / Highlight flair, free MIT
+source link, signed $50 beta link, refund/support terms, current limitations,
+non-affiliation and AI-assistance disclosure. This supersedes the earlier
+filtered r/OpenaiCodex attempt as the verified public result; do not repost it.
+
+The first organic comment asks whether the product copies `~/.codex` plus
+project folders and `.git` data. The useful answer is: it inventories local
+Codex state and only the workspace roots the user selects; selected roots move
+with their Git data and unfinished files, while destination authentication and
+installation identity are preserved rather than copied from the old Mac. Data
+is staged over SSH, then a verified destination backup is required before
+replacement. The source Mac is not modified. Reply transparently as the
+maintainer when the authenticated Reddit session is available; do not turn the
+answer into another sales pitch or imply ongoing sync.
+
+A current public read also confirmed the existing maintainer comment on
+[OpenAI Codex issue 37106](https://github.com/openai/codex/issues/37106). It
+explains the same destination-identity safety boundary, discloses ownership and
+links the project. No duplicate comment was added. Issue 37853 concerns a
+sidebar/indexing failure even though rollouts and database rows remain present;
+do not advertise Codex Migrate as a fix without direct evidence.
+
 Search indexing is now proved for the requested core pages. The overall product
 goal remains open: authentic disposable-account Codex acceptance, remaining
 device/failure-mode and assistive-technology checks, Apple activation and exact

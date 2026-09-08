@@ -106,6 +106,16 @@ screenshots and accessibility snapshots are preserved in
 This is production-browser and accessibility-tree evidence, not native
 VoiceOver certification for the packaged Mac app.
 
+The exact preserved build 8 app also launched in the maintainer account from
+its signed bundle while no other Codex Migrate helper was active. Its bundled
+engine bound a loopback listener and returned `Configure a migration first`,
+confirming that no migration was configured or running; the normal local
+shutdown endpoint then stopped both processes cleanly. A native accessibility
+tree read was attempted but macOS denied the shell assistive access, and the
+locked desktop prevented the separately authorized UI automation surface from
+observing it. No VoiceOver, native label or focus result is claimed from this
+launch.
+
 ### Earlier September 7 checkpoints (historical, not current sales state)
 
 Latest additional validation: [September 7 release checks](release-validation-2026-09-07.md).
