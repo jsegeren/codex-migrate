@@ -738,3 +738,53 @@ spoken output was not; this remains **unverified**. VoiceOver was restored off,
 the utility closed and System Settings returned to General. Do not count this
 attempt as screen-reader acceptance or repeatedly toggle it without a new way
 to obtain meaningful speech/navigation evidence.
+
+## Build 6: contextual folder feedback, signed and verified
+
+September 7, approximately 17:20–17:27 Pacific. The preceding goal turn made
+concrete progress: availability/search copy was deployed from `335b2fd` to
+`dpl_9a2ACjnQHhRzPdPxFTphFGVfSCLQ`; Chrome confirmed the live paid-beta CTA and
+the revised free-CLI/signed-beta label at desktop and 390px. No commerce behavior
+or public app artifact changed in that website deployment.
+
+Build 6 packages the folder-feedback correction from clean, pushed source
+`0097eb5b7eaf0d3644471f26812d9f6e4afb4d4d`. Compared with the public build 5,
+the only application-code delta is the reviewed setup feedback change; the
+bundle number increases to 6. The existing Developer ID and Keychain profile
+were used without new credentials or account setup.
+
+- Artifact: `Codex-Migrate-0.1.0-build6-arm64.zip`, 8,307,815 bytes.
+- SHA-256: `cbe66f84bc3b920e5ea22f7e2248b728dcd8bb10ffbca01b1d6dfa6d822a710e`.
+- Actual Apple submission: `30096c5b-86f1-4068-aadc-c1e2042a4cf8`, **Accepted**.
+- Preserved artifact, app and receipts:
+  `/Users/Shared/CodexMigrate-Authentic-20260906/candidate-build6`.
+- Independent checks on that preserved copy: matching SHA-256, strict/deep
+  codesign verification, staple validation and Gatekeeper acceptance passed.
+- Complete Python suite: 723 tests, 711 passed, 12 skipped, zero failures.
+  An initial invocation without `PYTHONPATH=src` failed to import the package;
+  the correctly configured complete run supplied the result above. Mock-builder
+  messages in unit-test output are not additional real Apple submissions.
+- Complete Node 24.19.0 suite: 277 tests, 276 passed, one opt-in database skip.
+  The first run caught two stale global-error assertions after the inline-error
+  change. Updated tests verify inline errors/status, clearing stale global
+  feedback, retained selection and focus, including cancellation. No product
+  change was needed after packaging.
+- Exact build-6 executable: nine desktop tests, eight passed and one
+  case-sensitive-filesystem skip. Added assertions read the bundled setup HTML
+  and prove the new inline alert/status code is present in the binary, not just
+  the checkout. Startup/shutdown and duplicate-instance checks passed.
+- Exact build-6 executable: both real unprivileged filesystem-permission-denial
+  tests passed. These are `chmod` denial tests, **not macOS TCC acceptance**.
+
+Current Screen Sharing observation identifies the receiving disposable account's
+Mac as locked. No unlock attempt, password request, network disruption, personal
+workspace action or migration was performed. Native VoiceOver/TCC, physical
+disconnects, and the unclosed application-level clean-Mac checklist items remain
+unverified. Build 6 is a verified signed candidate, not a full-release certificate
+and not yet the public download. Build 5 remains the approved paid beta.
+
+The release task owns sibling worktree
+`/Users/jsegeren/Git/codex-migrate-release-build` on pushed branch
+`codex/signed-candidate-build6-2026-09-07`. After preserving and independently
+verifying the Shared artifact, the clean worktree and its duplicate generated
+build output are retired; the source commit remains on origin.

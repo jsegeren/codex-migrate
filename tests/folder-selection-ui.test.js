@@ -49,6 +49,8 @@ for (const path of ['/api/folders', '/api/suggestions']) {
     await pending;
     assert.equal(f.element('workspaces').value, '/fixture/existing\n/fixture/new');
     assert.equal(f.summaries(), 1);
+    assert.equal(f.element('folder-message').textContent, 'Review folders');
+    assert.equal(f.element('folder-error').textContent, '');
     for (const id of ['folders', 'suggest', 'next-2']) assert.equal(f.element(id).disabled, false);
   });
 }
@@ -57,17 +59,22 @@ for (const fails of [false, true]) for (const moved of [false, true]) {
   test(`folder selection restores useful focus: failure=${fails}, moved=${moved}`, async () => {
     const f = fixture(), button = f.element('folders'), help = f.element('help');
     f.element('error').textContent = 'Previous error';
+    f.element('message').textContent = 'Previous global status';
+    f.element('folder-error').textContent = 'Previous picker error';
     f.element('workspaces').value = '/fixture/keep';
     button.focus();
     const pending = f.run('/api/folders');
     if (moved) help.focus();
-    if (fails) f.reject(Error('Picker unavailable')); else f.resolve({paths: [], message: 'Review folders'});
+    const cancellation = 'No folders added. Your existing selection is unchanged.';
+    if (fails) f.reject(Error('Picker unavailable')); else f.resolve({paths: [], message: cancellation});
     await pending;
     assert.equal(f.document.activeElement, moved ? help : button);
     assert.equal(f.element('workspaces').value, '/fixture/keep');
-    assert.equal(f.element('error').textContent, fails ? 'Picker unavailable' : '');
+    assert.equal(f.element('error').textContent, '');
+    assert.equal(f.element('message').textContent, '');
+    assert.equal(f.element('folder-error').textContent, fails ? 'Picker unavailable' : '');
+    assert.equal(f.element('folder-message').textContent, fails ? '' : cancellation);
     assert.equal(f.element('next-2').disabled, false);
-    if (fails) assert.equal(f.element('message').textContent, '');
   });
 }
 

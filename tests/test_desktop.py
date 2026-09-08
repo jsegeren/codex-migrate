@@ -141,6 +141,9 @@ class DesktopTests(unittest.TestCase):
                 self.assertIn('<option value="full">Full Codex migration</option>', html)
                 self.assertIn('for(const id of ["folders","suggest","next-2"])$(id).disabled=true;', html)
                 self.assertIn('button.getClientRects().length)button.focus()', html)
+                self.assertIn('<p id="folder-error" role="alert"></p>', html)
+                self.assertIn('<p id="folder-message" role="status" aria-live="polite"></p>', html)
+                self.assertIn('$("folder-message").textContent=r.message', html)
                 request = Request(base + "/api/setup", headers={"X-Codex-Migrate-Token": token})
                 with urlopen(request, timeout=3) as response:
                     state = json.load(response)
