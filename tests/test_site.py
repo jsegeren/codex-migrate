@@ -292,6 +292,11 @@ class SiteTests(unittest.TestCase):
         self.assertIn('class="button button-primary" data-analytics-event="select_paid_beta" href="#founding-edition"', closing)
         self.assertIn('class="button button-secondary light" data-analytics-event="select_free_cli"', closing)
 
+        editions = source.split('<section class="editions shell"', 1)[1].split("</section>", 1)[0]
+        self.assertIn("The Mac app is the easy way.", editions)
+        self.assertLess(editions.index('id="founding-edition"'), editions.index("Open source CLI"))
+        self.assertLess(editions.index("Buy the Mac beta — $50"), editions.index("View the source and CLI"))
+
     def test_launch_interest_preserves_consent_and_separate_beta_help_email(self):
         page = self.parse("index.html")
         emails = [href for href in page.hrefs if href.startswith(
