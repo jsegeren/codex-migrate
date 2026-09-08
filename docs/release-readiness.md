@@ -407,23 +407,25 @@ conversations open; those are separate acceptance runs.
 
 ## Current gate map
 
-Updated September 5 against the source checkpoints and acceptance evidence below. Historical
+Updated September 8 against the source checkpoints and acceptance evidence below. Historical
 checkpoints below are evidence, not separate promises that their then-pending
-work is still missing. Neither the full release nor the release-candidate
-handoff is complete while the engineering acceptance gates remain open.
+work is still missing. The paid beta release candidate is distributed; full
+release certification remains open while the named native/hardware gates remain.
 
 | Requirement | Evidence now | Next proof / owner |
 | --- | --- | --- |
-| Supported conversations, organization, settings, skills and complete selected workspaces | Frozen content/tree checks, retained destination identity, Git dependency discovery and bound Git baseline; local installation/rollback fixtures | Codex must reopen representative restored chats, settings and projects on the separate Mac. Codex leads; Josh provides disposable accounts. |
-| Scope is explicit, not “everything on the Mac” | Selected roots and dependency issues are reported; unsupported visible storage overrides, source project configuration, retained destination ancestor configuration, fixed system defaults, visible managed-preference keys, filenames and cloud-only flags stop early | Real configuration/version/provider matrix; managed preference visibility across launch contexts, cloud-managed policy, arbitrary role references and unflagged cloud storage remain unverified. Codex owns testing and any resulting fixes. |
-| Full and selective migration, pause/resume and recovery | Real packaged cross-Mac synthetic full installation, personal-skills CLI export, browser-API workspace-skills pause/stop/restart/resume/finalization, and scoped interrupted-transaction recovery passed; verified backups and displaced work were preserved | Rendered buyer flow, physical disconnect/reconnect, real low-space and complete-installer interruption cases, plus authentic Codex data acceptance remain open. Never use Josh's active migrated workspace. |
-| Git and old-home paths remain usable | Local linked-worktree/alternate-storage checks with source home offline; different-user packaged two-Mac synthetic check now verifies the direct home-path alias and both discovered Git locations against the frozen source baseline after a receiving-Mac reboot, preserving the installation receipt | Authentic Codex workspace reopening and representative development commands. The synthetic baseline check does not prove every future command works. |
-| Browser-first local-data experience and clear status/help | Loopback helper, SSH transfer, saved setup, collapsed optional Help, bounded private-free diagnostic events, operation-specific controls, and strict-host-key multi-address speed testing with fastest-route selection | Native permission/VoiceOver checks and real Wi-Fi/direct-link selection and interruption acceptance. Automatic updating is not implemented. |
-| Public website, useful guides, screenshots, price and launch intake | Six live pages; two informative guides; sample-labelled real UI screenshots; $50 planned edition with checkout closed; prior controlled SendGrid inbox receipt and signup tests | Preserve the existing rate-limit and launch-only consent. No new email was sent in the latest read-only audit. |
-| Website accessibility and performance | Prior Lighthouse/axe results plus fresh desktop/320px rendering, six-page text-spacing and 200% text-size overflow checks | Manual assistive-technology and broader keyboard acceptance remain open; no WCAG-conformance claim. See the audit for exact scope. |
+| Supported conversations, organization, settings, skills and complete selected workspaces | A real different-user, two-Mac migration completed and verified. Three genuine Codex conversations (project, loose and archived) reopened and continued through the destination app server; the archived state and destination sign-in were preserved. Separate packaged skills-only repair and source/Git/content verification passed. | Verify a recognizable real setting, project organization and custom skill through the destination UI, plus a representative development command with the old Mac disconnected. Broader Codex-version coverage remains open. |
+| Scope is explicit, not “everything on the Mac” | Selected roots and dependency issues are reported; unsupported visible storage overrides, source project configuration, retained destination ancestor configuration, fixed system defaults, visible managed-preference keys, filenames and cloud-only flags stop early. The real fixture used an explicitly selected disposable workspace. | Extend the real configuration/version/provider matrix. Managed-policy visibility, arbitrary role references and unflagged cloud-provider placeholders remain known limits. |
+| Full and selective migration, pause/resume and recovery | Real packaged cross-Mac full installation, browser-driven skills-only repair, Pause/Stop/Resume after 409,413,176 staged bytes, unexpected SSH-child loss and helper restart with 677,848,813 staged bytes retained, and protected-phase restore all passed. Verified backups, newer files and out-of-scope files were preserved. | Physically remove and restore Wi-Fi and a working cable route during disposable staging. A truly space-constrained destination and broader installer interruption timing remain useful hardware coverage. Never use Josh's active workspace. |
+| Git and old-home paths remain usable | Different-user packaged two-Mac acceptance verified the direct old-home compatibility path and the selected Git baseline before reopening the real project conversation. Local linked-worktree, stash, alternate-storage, uncommitted and untracked cases have deterministic coverage. | Run representative destination development commands with the source Mac disconnected. Existing checks do not prove every project-specific toolchain or absolute path. |
+| Browser-first local-data experience and clear status/help | Loopback-only helper, SSH transfer, one guided browser setup, saved setup, contextual Help, bounded private diagnostic events, operation-specific controls, strict host verification and multi-address speed selection are implemented. Desktop and 1440/390/320px keyboard/reflow checks passed. | Complete native VoiceOver and real TCC denial checks, plus physical Wi-Fi/direct-link selection and interruption acceptance. Automatic updating is not implemented. |
+| Public website, useful guides, screenshots, price and launch intake | Canonical site is live with paid signed Mac beta as the primary CTA, exact $50 checkout, sample-labelled real UI screenshots, two informative indexed guides, launch intake and personal-support disclosures. Build 7 availability and the live Stripe webhook are active. | Watch actual buyer behavior and support load; preserve rate limiting, accurate beta limits and the free-source path. A real-sale buyer/owner inbox receipt remains unverified until the first sale. |
+| Website accessibility and performance | Fresh production Lighthouse: mobile 97 performance and 100 accessibility/best practices/SEO; desktop 98 performance and 100 in the other categories. Keyboard, narrow-width reflow, text enlargement, contrast and semantics have automated/browser evidence. | Native app VoiceOver remains open; no blanket WCAG conformance claim is made. Field Core Web Vitals require real traffic. |
 | Domain, search discovery, analytics and cross-promotion | Live canonical domain/robots/sitemap; recorded Search Console ownership, successful sitemap submission and accepted homepage request; separate GA4 property with region-aware default/full measurement, consent-mode handling for the EEA/UK/Switzerland, 14-month retention, returning-user continuity, aggregate Google Signals reporting, granular location/device reporting, ads personalization and user-provided data disabled, launch-request key event and Search Console link; live U.S. edge returned default mode with no banner and both host-only GA cookies; browser-forced consent mode showed the compact control, set no cookies before choice, produced a denied cookieless measurement, and correctly allowed or declined; You.one link on the live homepage; fresh HTTP 200 check of segeren.com confirms its “Explore Codex Migrate” link to the canonical domain | Watch native reports after real visits. A request originating from an actual EEA/UK/Swiss edge remains useful additional confirmation, but endpoint unit tests and browser-boundary simulation cover the branch. Actual demographics depend on consent, Google eligibility and reporting thresholds; indexing, ranking and traffic are not guaranteed. No repeated indexing request needed. |
-| Reproducible identifiable packaged app | Clean-source unsigned arm64 bundle, checksum and eight passing actual engine checks (one filesystem skip); signing/notarization pipeline has mocked tests. On September 5 the maintainer submitted the requested identity document and Apple's confirmation said the documents were processing. Activation is not confirmed, and no Developer ID identity or notary profile has been verified on this Mac. | After Apple activates the existing purchase, confirm its team, install signing credentials securely, then notarize/staple and test the exact quarantined download on a clean Mac. Do not purchase again or resubmit identity documents unless Apple requests it. |
-| Paid purchase, delivery, support and refunds | Stripe Managed Payments sandbox purchase, guarded persistent fulfillment, branded purchase email in Inbox, actual email recovery and exact private fixture download through native Chrome, and refund denial passed. Expired-link refresh has unit, rendered keyboard/mobile and hosted authorization evidence. | Live seller/account readiness and purchase/download of the exact approved signed artifact before opening checkout. One mailbox's Inbox delivery and a sandbox fixture are not a signed app release or broad deliverability proof. |
+| Reproducible identifiable packaged app | Build 7 is produced from pushed source `67a92bb5d8383b542a3962be7868a87f927a871b`, Developer ID signed, Apple Accepted, stapled and Gatekeeper accepted. The private archive is 8,307,584 bytes with SHA-256 `f244a02c956d2a460d1002caec17d214c78379ba8b09e9b0840b367ab5986fb1`. A receiving test account completed Safari download, macOS Internet-download confirmation and native open on an earlier signed build; build 7's exact archive has independent signature/staple checks. | A pristine receiving Mac without prior test state or developer tooling remains stronger installation evidence. Native VoiceOver/TCC checks must use the exact distributed build before full certification. |
+| Paid purchase, delivery, support and refunds | Production checkout and webhook are live for build 7. Ordinary Stripe sandbox payment, signed-app delivery, email recovery, refreshed private download, refund and post-refund denial passed. Private links remain entitlement-bound and short lived; merchant successful-payment email is enabled. | Confirm buyer delivery and merchant notification from the first real sale. This is an operational observation for the live beta, not a reason to close the revenue path. |
+
+### Earlier device chronology (historical evidence)
 
 September 5 account and connection check: both standard disposable accounts,
 `codexmigratesource` and `codexmigratetarget`, now exist on their respective
@@ -1532,39 +1534,34 @@ This does not close signing, native first-launch or real cross-Mac acceptance.
 These are local checks, not proof of clean-Mac installation or a complete
 cross-Mac migration. Failure tests use disposable fixtures, not user data.
 
-## Remaining paid-release gates
+## Remaining full-release certification gates
 
-- Complete the remaining safety/configuration acceptance in the
-  [failure-mode matrix](failure-mode-matrix.md). Wrong-machine rejection,
-  destination locking, guided recovery and home-path conflict guards now have
-  local implementation evidence, but real cross-Mac/hardware failure acceptance
-  and unsupported-configuration detection remain engineering gates, not merely
-  Apple/account dependencies.
-
-- Extend the completed synthetic different-user Git/path checks with authentic
-  restored projects and representative development commands. Workspace
-  content verification fixes the corruption-acceptance defect reproduced against
-  `04e3ffa`, but matching bytes alone do not establish usable destination paths.
-- Open representative restored chats and verify settings/project organization
-  through Codex on the separate Mac. Frozen retained-state checks fix the
-  configuration-copy corruption defect reproduced against `ddd598d`; matching
-  files do not establish application-level compatibility.
-- Apple membership, signing credentials, notarization access, and the exact
-  signed/stapled build 5 artifact are complete. Do not repeat enrollment,
-  certificate creation, or notarization for this unchanged candidate.
-- Verify quarantined download and first launch on a separate clean Mac without
-  developer-installed Python or Xcode.
-- Full different-user migration, packaged CLI skills repair, Pause/Stop/Resume,
-  unexpected SSH-client loss plus helper restart, and controlled pending-transaction
-  recovery have real cross-Mac evidence. Browser selective repair also passed.
-  Complete the remaining native permissions and physical Wi-Fi/direct-link cases from the
-  clean-Mac checklist without rerunning the completed create-once fixtures.
-- Finish native UI/accessibility review against the exact release build.
-- Sandbox payment, actual signed build 5 email/download/recovery delivery, and
-  refund denial are complete. Final artifact acceptance and reviewed live
-  checkout/webhook activation remain; no live sale is claimed.
+- On the exact distributed build, complete VoiceOver navigation/announcement
+  checks and an actual macOS TCC permission denial. Browser semantics, keyboard
+  use and POSIX permission failures are useful evidence but do not replace these
+  native observations.
+- During disposable staging, physically remove and restore Wi-Fi and a working
+  USB-C/Thunderbolt network route. Confirm the UI explains the loss, retains the
+  same staging scope and resumes without destination finalization. The completed
+  SSH-child kill/restart check remains separate evidence and must not be relabelled
+  as a physical disconnect.
+- On a destination without prior test state or developer-installed Python/Xcode,
+  repeat quarantined download, native open and guided preparation for build 7.
+  The receiving test account already passed the normal Safari/Gatekeeper/open path
+  on an earlier signed build but was not a pristine machine.
+- Extend the authentic three-conversation result with a recognizable setting,
+  project organization and custom skill, then run a representative command from
+  the restored project while the old Mac is disconnected. The existing Git and
+  content checks remain valid and do not need to be rerun merely to repeat them.
+- Confirm the buyer delivery email and Josh's Stripe successful-payment notice
+  from the first live sale. Production checkout/webhook activation, sandbox
+  purchase, private signed-app delivery, recovery, refund and denial are already
+  complete; do not close sales while waiting for this observation.
+- Continue the configuration matrix across materially different Codex versions,
+  managed policies, cloud-placeholder states and filesystem configurations.
+  Publish any discovered limitation instead of expanding the supported claim.
 
 No unsigned engineering ZIP is advertised or sold as a release. Route
-selection is implemented but not yet hardware-certified; exhaustive discovery
-and automatic updating are not claimed as delivered. See [the desktop setup
-guide](desktop-setup.md).
+selection is implemented but physical failover is not yet hardware-certified;
+exhaustive discovery and automatic updating are not claimed as delivered. See
+[the desktop setup guide](desktop-setup.md).
