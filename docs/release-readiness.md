@@ -23,9 +23,32 @@ packaged engine, but do not prove macOS TCC or screen-reader behavior. The lates
 dated validation receipt records the access limitations and regression checks.
 The two helpful guides still return HTTP 200; their September 5 Search Console
 inspection receipts, not HTTP availability, establish indexing at that time.
-Transparent GitHub outreach is published; the removed Reddit reply is not a
-verified visible channel. Merchant payment email is enabled in Stripe, but
-real-sale inbox arrival remains unverified.
+Transparent Reddit and GitHub outreach is published, including a September 8
+maintainer disclosure on OpenAI Codex issue 37106 explaining the destination-
+identity failure this tool avoids. Merchant payment email is enabled in Stripe,
+but real-sale inbox arrival remains unverified.
+
+### Commercial funnel and public-site audit — September 8
+
+Production deployment `dpl_56ynxAFZGFFpGmcn7gtnA1TEHd1Y`, from pushed source
+`1b743398e25083c80869a9b16d93b8cb5c7d3e25`, keeps the signed Mac beta as the
+primary call to action while retaining the free CLI/source as a clearly visible
+secondary path. The same hierarchy is present on the homepage, migration guide,
+backup guide and closing call to action. Live availability returned
+`available:true`, `priceUSD:50`, `architecture:arm64`, `channel:beta` after the
+deployment. Stale sales-closed copy was removed from the privacy and standalone
+status pages.
+
+GA4 now initializes after page load rather than competing with the hero paint.
+Paid-beta interest and checkout start are separate events
+(`select_paid_beta`, `begin_checkout`), and early clicks are bounded and queued
+until the tag is ready. A production browser check observed the configured GA4
+tag and both events; the checkout-start check intercepted the API request and
+did not create a Stripe session. The complete Node suite passed 278/279 with one
+intentional database skip; focused public-site tests passed 25/25. Fresh
+production Lighthouse results were: mobile 97 performance and 100 accessibility,
+best practices and SEO; desktop 98 performance and 100 in the other three
+categories. The measurements are lab results, not field Core Web Vitals.
 
 ### Earlier September 7 checkpoints (historical, not current sales state)
 
