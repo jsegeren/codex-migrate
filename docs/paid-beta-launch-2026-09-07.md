@@ -14,18 +14,21 @@ private entitlement-bound delivery remain enforced. Finalization replaces
 selected data; it does not merge two independently active workspaces. Buyers
 must retain their old Mac and an independent backup.
 
-## Exact artifact
+## Current exact artifact
 
-- Release ID: `beta-build5-arm64`, explicit `beta` channel.
-- Filename: `Codex-Migrate-0.1.0-build5-arm64.zip`; 8,305,628 bytes.
-- Source: `48f5194cd008dddf59b35b1e2c78aff74d46720c`.
-- SHA-256: `adc126c92952e0031138b199bc2003c18ee08a6a419f2cfe91ea404b84483be7`.
-- Notarization: `b8a32506-0c36-49c3-bdc1-e9ce31550e49`, Accepted.
+- Release ID: `beta-build7-arm64`, explicit `beta` channel.
+- Filename: `Codex-Migrate-0.1.0-build7-arm64.zip`; 8,307,584 bytes.
+- Source: `67a92bb5d8383b542a3962be7868a87f927a871b`.
+- SHA-256: `f244a02c956d2a460d1002caec17d214c78379ba8b09e9b0840b367ab5986fb1`.
+- Notarization: `990bb452-7072-41a4-9d5e-c743b62368de`, Accepted.
 - Private live-store upload and full readback matched exact size and digest.
 
 The catalog's `accepted: true` records this specific distribution approval, not
 full clean-Mac or WCAG certification. Sandbox entries remain ineligible for live
-sale. The migration engine is unchanged by this commerce release.
+sale. Build 7 adds atomic destination Codex identity preservation across an
+installer interruption. Its fault-injection, complete-suite, exact packaged
+executable, signature, staple and Gatekeeper evidence is recorded in
+[installer interruption validation](identity-interruption-validation-2026-09-07.md).
 
 ## Remaining validation
 
@@ -73,6 +76,24 @@ This is live checkout and exact private artifact verification, not a completed
 real-money purchase. Earlier successful sandbox purchase, webhook, email,
 download and refund receipts remain test-money evidence. Native clean-Mac and
 accessibility checks listed above remain open.
+
+## Build 7 paid-beta promotion
+
+The original paid-beta launch distributed build 5. After build 7's interruption
+fix passed its recorded acceptance checks, the exact build 7 archive was uploaded
+to the live private store without overwriting build 5 and independently streamed
+back with matching 8,307,584-byte size and SHA-256. Public source commit
+`dd6715e151270970f580d9bd8960f09ca5baf63b` contains the same focused engine
+change on `main`; hosted CI run `34188310627` passed on Python 3.9 and 3.12.
+
+Production deployment `dpl_EcGdL2LMtG4SNdMsZtB586rgCnRd` reached READY and was
+aliased to the canonical domain with `COMMERCE_RELEASE=beta-build7-arm64`.
+Canonical availability remained open at $50 for Apple silicon on the beta
+channel. A new production Checkout probe returned an HTTPS Stripe Checkout URL
+for a live-mode session; no payment details were supplied and no charge or
+fulfillment was created. The prior build 5 catalog entry and private object are
+retained so existing entitlements continue to recover their originally purchased
+artifact.
 
 Rollback: set `COMMERCE_CHECKOUT_OPEN=no` and redeploy the validated source.
 Keep the release catalog and private artifact available for existing buyers;

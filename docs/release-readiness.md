@@ -7,10 +7,13 @@ distribution decision; the dated entries below preserve their original status.
 
 ## Current release boundary — September 7
 
-The current distributed artifact is **signed and notarized build 5**, $50 USD,
+The current distributed artifact is **signed and notarized build 7**, $50 USD,
 Apple silicon, beta channel. Production checkout is open and the live Stripe
 webhook is active. Exact source/artifact identifiers, private delivery readback
-and pre-payment disclosures are in the paid-beta launch record above. A fresh
+and pre-payment disclosures are in the paid-beta launch record above. Build 7
+adds atomic preservation of the destination Mac's Codex authentication and
+installation identity across installer interruption. Existing build 5 purchases
+remain bound to build 5; new purchases receive build 7. A fresh
 read of `/api/availability` returned `available:true`, `priceUSD:50`,
 `architecture:arm64`, `channel:beta` during the post-launch audit.
 
