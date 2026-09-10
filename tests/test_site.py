@@ -44,6 +44,7 @@ class SiteTests(unittest.TestCase):
         self.assertIn("Codex history is missing. What now?", missing)
         self.assertIn("Do not blindly replace the new Mac’s Codex folder", missing)
         self.assertIn('href="/codex-history-missing-new-mac"', home)
+        self.assertIn('href="/compare-codex-migration-tools"', home)
         guide_actions = guide.split('<div class="actions">', 1)[1].split("</div>", 1)[0]
         self.assertLess(guide_actions.index("Get the Mac beta — $50"), guide_actions.index("Read the free CLI setup"))
         recovery = (SITE / "backup-and-recovery.html").read_text()
@@ -62,7 +63,7 @@ class SiteTests(unittest.TestCase):
         self.assertIn("does not transfer ordinary ChatGPT cloud chats", readme)
 
     def test_indexed_pages_have_canonical_urls(self):
-        for name in ("privacy", "terms", "refunds", "moving-to-a-new-mac", "codex-history-missing-new-mac", "backup-and-recovery"):
+        for name in ("privacy", "terms", "refunds", "moving-to-a-new-mac", "codex-history-missing-new-mac", "backup-and-recovery", "compare-codex-migration-tools"):
             self.assertIn('<link rel="canonical" href="https://migrate.segeren.com/' + name + '">',
                           (SITE / (name + ".html")).read_text())
 
@@ -325,10 +326,25 @@ class SiteTests(unittest.TestCase):
     def test_guides_are_discoverable_and_do_not_promise_unsafe_backup_bypass(self):
         home = (SITE / "index.html").read_text()
         sitemap = (SITE / "sitemap.xml").read_text()
-        for path in ("moving-to-a-new-mac", "codex-history-missing-new-mac", "backup-and-recovery"):
+        for path in ("moving-to-a-new-mac", "codex-history-missing-new-mac", "backup-and-recovery", "compare-codex-migration-tools"):
             self.assertIn('href="/' + path + '"', home)
             self.assertIn("https://migrate.segeren.com/" + path, sitemap)
         self.assertIn("no skip-backup switch", (SITE / "backup-and-recovery.html").read_text())
+
+    def test_comparison_guide_is_disclosed_and_fair(self):
+        source = (SITE / "compare-codex-migration-tools.html").read_text()
+        text = " ".join(self.parse("compare-codex-migration-tools.html").text)
+        self.assertIn("Disclosure:", text)
+        self.assertIn("published by Joshua Segeren, the developer of Codex Migrate", text)
+        self.assertIn("Migration is not synchronization", text)
+        self.assertIn("Manual copy or rsync", text)
+        self.assertIn("https://github.com/ChenglongLi777/codex-migrate", source)
+        self.assertIn("https://github.com/ademozsayin/codex-history-migrator", source)
+        self.assertIn("https://codexsync.org/", source)
+        self.assertIn("https://github.com/ToussaintKnight/codex-sync", source)
+        self.assertIn("https://github.com/Se1ker/better-codex-rehome", source)
+        self.assertIn("current releases are not commercially signed or Apple-notarized", text)
+        self.assertIn("Keep the old computer intact", text)
 
     def test_recovery_guide_matches_live_beta_without_waiving_safety_limits(self):
         source = (SITE / "backup-and-recovery.html").read_text()
