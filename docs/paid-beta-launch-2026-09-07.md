@@ -16,29 +16,32 @@ must retain their old Mac and an independent backup.
 
 ## Current exact artifact
 
-- Release ID: `beta-build8-arm64`, explicit `beta` channel.
-- Filename: `Codex-Migrate-0.1.0-build8-arm64.zip`; 8,308,390 bytes.
-- Source: `f429bf6c234d7b9f925c61f389d6d0513de301fb`.
-- SHA-256: `74a7fc5e2da91901f4a5d3f74969cd03d34549ef6f06d83151825d7727262270`.
-- Notarization: `0992a488-b7fb-415d-a5c2-768bf3707f1c`, Accepted.
+- Release ID: `beta-build9-arm64`, explicit `beta` channel.
+- Filename: `Codex-Migrate-0.1.0-build9-arm64.zip`; 8,307,597 bytes.
+- Source: `8f1e0225a6babcb1be1be0a876da11edd73732d8`.
+- SHA-256: `7aadccacec63b09fe637cd61c506f4730f2de62163687ec56a2cc63ad8306133`.
+- Notarization: `9ddf03b5-c947-4d97-a598-d71519e179d9`, Accepted.
 - Private live-store upload and full readback matched exact size and digest.
 
 The catalog's `accepted: true` records this specific distribution approval, not
 full clean-Mac or WCAG certification. Sandbox entries remain ineligible for live
-sale. Build 8 retains build 7's atomic destination Codex identity preservation
-across an installer interruption and corrects the packaged offline guide to
-describe the available paid beta accurately. Its fault-injection,
-complete-suite, exact packaged executable, signature, staple and Gatekeeper evidence is recorded in
+sale. Build 9 retains build 8's migration behavior and atomic destination Codex
+identity preservation while correcting the observed IPv6 hardware-route label.
+Its fault-injection, complete-suite, exact packaged executable, signature,
+staple and Gatekeeper evidence is recorded in
 [installer interruption validation](identity-interruption-validation-2026-09-07.md).
 
 ## Remaining validation
 
 Native VoiceOver, receiving-Mac quarantined first launch/permissions, physical
 cable removal/Wi-Fi interruption and broader hardware/provider compatibility
-remain open. The website and hosted Checkout disclose ongoing native
-accessibility, permissions and physical network-interruption testing before
-payment. Existing real-device automated recovery, unexpected SSH loss/restart,
-pause/stop/resume and browser skills-repair receipts remain separately scoped.
+remain open. The exact build 9 engine has now failed closed on a real
+TCC-protected workspace selection without printing protected content; the
+guided permission-recovery walkthrough remains open. The website and hosted
+Checkout disclose ongoing native accessibility, permissions and physical
+network-interruption testing before payment. Existing real-device automated
+recovery, unexpected SSH loss/restart, pause/stop/resume and browser
+skills-repair receipts remain separately scoped.
 
 ## Activation record
 

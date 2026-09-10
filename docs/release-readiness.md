@@ -54,8 +54,13 @@ notice. Seven consecutive keyboard Tab presses followed the visible workflow:
 Help, receiver mode, create connection card, existing SSH, fresh connection,
 Continue and recovery options. The native wrapper intentionally owns no lasting
 workflow window; the browser is the customer interface. This is direct
-accessibility-tree and keyboard evidence, not a completed VoiceOver speech or
-macOS TCC-denial observation.
+accessibility-tree and keyboard evidence, not a completed VoiceOver speech
+observation. The exact distributed build 9 engine was also asked to inventory
+a workspace inside macOS-protected Mail storage. macOS denied the read and the
+engine failed closed with exit 2 and its bounded permissions guidance; it did
+not enumerate or print protected content. That is an actual TCC-denial
+observation for the packaged engine, not a full guided-UI or
+permission-recovery walkthrough.
 
 The receiving Mac was rediscovered on the current Wi-Fi as
 `Joshuas-MacBook-Pro-128.local`; its ED25519 fingerprint exactly matched the
@@ -71,8 +76,8 @@ was open. The run used a real 93 Mbps Wi-Fi/Bonjour route, not a simulated SSH
 transport or a cable-disconnect test. Its private receipt is
 `/Users/Shared/CodexMigrate-Hardware-20260910/hardware-wifi-20260910.json`.
 Disposable source, state, remote destination and staging folders were moved to
-each account's Trash after verification. Native TCC, VoiceOver, an actual
-physical network cut and a destination development command remain unclaimed.
+each account's Trash after verification. VoiceOver, an actual physical network
+cut and a destination development command remain unclaimed.
 
 That hardware run also exposed an IPv6 route-label defect: macOS requires the
 explicit `-inet6` address family for `route get`, so a real Wi-Fi path had been
@@ -94,9 +99,12 @@ read of `/api/availability` returned `available:true`, `priceUSD:50`,
 `architecture:arm64`, `channel:beta` during the post-launch audit.
 
 Native VoiceOver, receiving-Mac quarantined launch/permissions and physical
-network interruption remain unpassed. Actual POSIX-denial tests passed on the
-packaged engine, but do not prove macOS TCC or screen-reader behavior. The latest
-dated validation receipt records the access limitations and regression checks.
+network interruption remain unpassed. The exact build 9 packaged engine now
+has both POSIX-denial coverage and a real macOS TCC-protected workspace denial;
+the latter failed closed with bounded guidance and no protected-content output.
+This does not prove the guided permission-recovery UX or screen-reader behavior.
+The latest dated validation receipt records the access limitations and
+regression checks.
 The two helpful guides still return HTTP 200; their September 5 Search Console
 inspection receipts, not HTTP availability, establish indexing at that time.
 Transparent Reddit and GitHub outreach is published, including a September 8
@@ -1750,9 +1758,11 @@ cross-Mac migration. Failure tests use disposable fixtures, not user data.
 ## Remaining full-release certification gates
 
 - On the exact distributed build, complete VoiceOver navigation/announcement
-  checks and an actual macOS TCC permission denial. Browser semantics, keyboard
-  use and POSIX permission failures are useful evidence but do not replace these
-  native observations.
+  checks and a guided permission-recovery walkthrough. Build 9's packaged
+  engine now has a real TCC-protected workspace denial: it failed closed with
+  bounded guidance and no protected-content output. Browser semantics,
+  keyboard use and that engine-level denial do not replace a spoken VoiceOver
+  pass or the complete guided recovery experience.
 - During disposable staging, physically remove and restore Wi-Fi and a working
   USB-C/Thunderbolt network route. Confirm the UI explains the loss, retains the
   same staging scope and resumes without destination finalization. The completed
