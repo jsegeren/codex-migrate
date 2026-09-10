@@ -52,6 +52,12 @@ measurement behavior locally; a real production purchase remains necessary to
 observe the first purchase conversion, buyer delivery email and merchant
 payment notification end to end.
 
+Production deployment `dpl_DLmnWTNh6VTsxF5CjzEu6PxWLS9m`, from pushed source
+`fbdcc27`, reached READY and was aliased to `migrate.segeren.com`. A subsequent
+read confirmed the purchase page loads the conversion-aware analytics client,
+retains its `no-referrer` policy and security headers, and keeps the signed Mac
+beta available at $50 for Apple silicon.
+
 ### Commercial funnel and public-site audit — September 8
 
 Production deployment `dpl_56ynxAFZGFFpGmcn7gtnA1TEHd1Y`, from pushed source

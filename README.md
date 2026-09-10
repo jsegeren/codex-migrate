@@ -41,6 +41,12 @@ and maintainer support—not stronger data protection. Support aims for an initi
 reply within a few business days; response times and fixes are not guaranteed.
 See [edition and support details](docs/commercial-edition.md).
 
+The Mac app and free CLI use the same engine from this repository, not separate
+paid and free implementations. Each packaged build records its exact source
+commit in `Contents/Resources/build-info.json`; the release receipt also records
+the archive checksum and notarization result. The default branch may be newer
+than an already-downloaded package.
+
 ## How migration works
 
 It stages a resumable copy over SSH, preserves the new Mac's authentication,
