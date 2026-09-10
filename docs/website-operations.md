@@ -39,6 +39,19 @@ honor opt-outs, and remove launch requests after the requested notice. The form
 does not authorize unrelated marketing. Early-build requests remain individual
 email conversations and never automatically deliver an unsigned app.
 
+Paid fulfillment uses the same authenticated SendGrid sender but remains a
+separate transactional path. One accepted Mail Send request contains the
+buyer's private download message and separate purchase
+alerts to `segerej@gmail.com` and `joshua@segeren.com`. The operator copies
+include the buyer email, total paid, release ID, Stripe Checkout Session and
+PaymentIntent references, and a Stripe dashboard link; they do not include the
+private download URL. A unique database claim for the Stripe session prevents
+webhook replays from sending duplicate buyer or operator messages. Sandbox
+fulfillment continues to send only to its explicitly configured test sink. If
+the buyer uses an operator address, that inbox receives the buyer delivery in
+place of a duplicate operator copy because SendGrid requires recipient
+addresses to be unique within one request.
+
 ## Checks and deployment
 
 Run `node --test tests/signup.test.js` and the Python test suite. Check desktop

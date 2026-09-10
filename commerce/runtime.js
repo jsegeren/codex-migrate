@@ -6,11 +6,57 @@ const { purchaseStore } = require('./store');
 const { service } = require('./service');
 const { privateDownloads } = require('./artifacts');
 
-async function deliveryMail({ to, link, release, live }, env = process.env, request = fetch) {
+const PURCHASE_NOTIFY_EMAILS = ['segerej@gmail.com', 'joshua@segeren.com'];
+
+function usd(cents) {
+  return Number.isSafeInteger(cents) ? `$${(cents / 100).toFixed(2)} USD` : '$50.00 USD';
+}
+
+async function deliveryMail({ to, link, release, live, sessionId, paymentIntent, amountTotal }, env = process.env, request = fetch) {
   const from = env.LAUNCH_FROM_EMAIL;
   if (!env.SENDGRID_API_KEY || !/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(from || '')) return 'rejected';
   // An explicitly configured sink prevents sandbox fixtures mailing customers.
   if (!live && to !== env.COMMERCE_SANDBOX_EMAIL) return 'rejected';
+  const buyer = {
+    to: [{ email: to }],
+    subject: live ? 'Your Codex Migrate download' : 'TEST ONLY — Codex Migrate delivery check',
+    substitutions: {
+      '%intro%': live ? 'Thank you for purchasing Codex Migrate.' :
+        release.testingOnly === true && release.kind === 'signed-notarized'
+          ? 'Sandbox test only. No real payment was charged. This delivers the signed app candidate for operator testing, not a publicly released product.'
+          : 'Sandbox test only. No real purchase or app is delivered.',
+      '%details%': `Open your download: ${link}`,
+      '%closing%': 'Keep this email to recover your download. Treat this link as private.\n\nNeed help? Reply to joshua@segeren.com. Please do not send credentials or workspace contents.\n\nThis is a purchase-delivery message, not a marketing subscription.',
+    },
+  };
+  // One accepted SendGrid request delivers the buyer copy and both operator
+  // alerts. The store's unique purchase claim therefore suppresses duplicate
+  // alerts when Stripe retries the same webhook.
+  const personalizations = [buyer];
+  if (live) {
+    const operatorDetails = [
+      `Buyer: ${to}`,
+      `Amount: ${usd(amountTotal)}`,
+      `Stripe session: ${sessionId || 'unavailable'}`,
+      `Payment intent: ${paymentIntent || 'unavailable'}`,
+    ].join('\n');
+    // SendGrid rejects a recipient repeated anywhere in one Mail Send request.
+    // If the buyer uses one of the operator addresses, that inbox already gets
+    // the buyer delivery, while the other operator still receives its alert.
+    for (const email of PURCHASE_NOTIFY_EMAILS.filter(email => email.toLowerCase() !== to.toLowerCase())) {
+      personalizations.push({
+        to: [{ email }],
+        subject: `[Codex Migrate] New purchase — ${usd(amountTotal)}`,
+        substitutions: {
+          '%intro%': 'A live Codex Migrate purchase was verified and fulfilled.',
+          '%details%': operatorDetails,
+          '%closing%': paymentIntent
+            ? `Open in Stripe: https://dashboard.stripe.com/payments/${paymentIntent}`
+            : 'Open the Stripe Dashboard to review the purchase.',
+        },
+      });
+    }
+  }
   try {
     const response = await request('https://api.sendgrid.com/v3/mail/send', {
       method: 'POST', redirect: 'error', signal: AbortSignal.timeout(8000),
@@ -18,19 +64,13 @@ async function deliveryMail({ to, link, release, live }, env = process.env, requ
       body: JSON.stringify({
         from: { email: from, name: 'Codex Migrate' },
         reply_to: { email: 'joshua@segeren.com', name: 'Joshua Segeren' },
-        personalizations: [{ to: [{ email: to }] }],
-        subject: live ? 'Your Codex Migrate download' : 'TEST ONLY — Codex Migrate delivery check',
+        personalizations,
         content: [{ type: 'text/plain', value: [
-          live ? 'Thank you for purchasing Codex Migrate.' :
-            release.testingOnly === true && release.kind === 'signed-notarized'
-              ? 'Sandbox test only. No real payment was charged. This delivers the signed app candidate for operator testing, not a publicly released product.'
-              : 'Sandbox test only. No real purchase or app is delivered.',
-          `Open your download: ${link}`,
+          '%intro%',
+          '%details%',
           `Release: ${release.id}`, `Archive SHA-256: ${release.sha256}`,
           ...(release.channel === 'beta' ? ['This is the signed, notarized beta for Apple silicon Macs. Native accessibility, permissions and physical network-interruption testing are ongoing. Keep your old Mac and an independent backup. Details: https://migrate.segeren.com/#founding-edition'] : []),
-          'Keep this email to recover your download. Treat this link as private.',
-          'Need help? Reply to joshua@segeren.com. Please do not send credentials or workspace contents.',
-          'This is a purchase-delivery message, not a marketing subscription.',
+          '%closing%',
         ].join('\n\n') }],
         tracking_settings: { click_tracking: { enable: false, enable_text: false }, open_tracking: { enable: false } },
       }),
@@ -55,4 +95,4 @@ async function runtime(env = process.env) {
   return { config, stripe, service: service({ config, stripe, store,
     signDownload: privateDownloads(config, env), sendMail: value => deliveryMail(value, env) }) };
 }
-module.exports = { runtime, deliveryMail };
+module.exports = { runtime, deliveryMail, PURCHASE_NOTIFY_EMAILS };

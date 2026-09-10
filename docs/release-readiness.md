@@ -1699,6 +1699,19 @@ cross-Mac migration. Failure tests use disposable fixtures, not user data.
   managed policies, cloud-placeholder states and filesystem configurations.
   Publish any discovered limitation instead of expanding the supported claim.
 
+## September 9 purchase-alert delivery update
+
+Live fulfillment now sends the buyer delivery message and independent purchase
+alerts to both operator inboxes in one SendGrid request after full Stripe
+verification. The operator alerts include the buyer email, actual total paid,
+release and Stripe references, but no private download link. The existing
+unique session claim keeps Stripe webhook retries from duplicating any of the
+messages. If an operator address is also the buyer, its buyer delivery replaces
+the otherwise duplicate alert. Sandbox delivery remains isolated to its approved sink. Focused
+commerce and site-policy tests pass; receipt in both real operator inboxes
+remains an observation for the first live purchase, not a reason to close the
+revenue path.
+
 No unsigned engineering ZIP is advertised or sold as a release. Route
 selection is implemented but physical failover is not yet hardware-certified;
 exhaustive discovery and automatic updating are not claimed as delivered. See

@@ -59,7 +59,7 @@ function validatePurchase(session, config) {
     throw new CommerceError('purchase_requires_support', 409);
   }
   return { sessionId: session.id, mode: config.mode, releaseId: config.release.id,
-    paymentIntent: intent.id, email };
+    paymentIntent: intent.id, amountTotal: session.amount_total, email };
 }
 
 function service({ config, stripe, store, sendMail, signDownload }) {
@@ -85,7 +85,8 @@ function service({ config, stripe, store, sendMail, signDownload }) {
     if (!claim) return { status: 'recorded' };
     const link = `${config.site}/purchase#${tokenFor(id, config)}`;
     let result;
-    try { result = await sendMail({ to: purchase.email, link, release: purchase.release, live: config.live }); }
+    try { result = await sendMail({ to: purchase.email, link, release: purchase.release, live: config.live,
+      sessionId: purchase.sessionId, paymentIntent: purchase.paymentIntent, amountTotal: purchase.amountTotal }); }
     catch { result = 'uncertain'; }
     // The provider and database cannot share a transaction. Never blindly resend
     // after a timeout/crash: retain an explicit uncertain delivery for review.

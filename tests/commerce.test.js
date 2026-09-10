@@ -4,7 +4,7 @@ const { Readable } = require('node:stream');
 const Stripe = require('stripe');
 const { configuration, SITE } = require('../commerce/config');
 const { service, validatePurchase, tokenFor, tokenSession } = require('../commerce/service');
-const { deliveryMail } = require('../commerce/runtime');
+const { deliveryMail, PURCHASE_NOTIFY_EMAILS } = require('../commerce/runtime');
 const { makeHandler: webhook } = require('../api/stripe-webhook');
 const { makeHandler: checkout } = require('../api/checkout');
 const { makeHandler: purchase } = require('../api/purchase');
@@ -63,13 +63,25 @@ test('only explicitly approved signed beta manifests are eligible for live distr
     '74a7fc5e2da91901f4a5d3f74969cd03d34549ef6f06d83151825d7727262270');
   assert.equal(releases['beta-build8-arm64'].source, 'f429bf6c234d7b9f925c61f389d6d0513de301fb');
 });
-test('beta delivery email includes the remaining checks without adding tracking', async () => {
+test('beta delivery email includes the remaining checks and both operator alerts without adding tracking', async () => {
   let mail;
   assert.equal(await deliveryMail({ to: 'buyer@example.invalid', live: true, link: 'https://example.invalid/private',
-    release: { ...release, channel: 'beta' } }, { LAUNCH_FROM_EMAIL: 'sender@example.invalid', SENDGRID_API_KEY: 'fixture' },
+    release: { ...release, channel: 'beta' }, sessionId: 'cs_live_fixture', paymentIntent: 'pi_fixture', amountTotal: 5400 },
+  { LAUNCH_FROM_EMAIL: 'sender@example.invalid', SENDGRID_API_KEY: 'fixture' },
   async (url, options) => { mail = JSON.parse(options.body); return { status: 202 }; }), 'accepted');
   assert.match(mail.content[0].value, /signed, notarized beta/);
   assert.match(mail.content[0].value, /testing are ongoing/);
+  assert.equal(mail.personalizations.length, 3);
+  assert.deepEqual(mail.personalizations.slice(1).map(item => item.to[0].email), PURCHASE_NOTIFY_EMAILS);
+  assert.equal(mail.personalizations[0].subject, 'Your Codex Migrate download');
+  assert.match(mail.personalizations[0].substitutions['%details%'], /private/);
+  for (const alert of mail.personalizations.slice(1)) {
+    assert.equal(alert.subject, '[Codex Migrate] New purchase — $54.00 USD');
+    assert.match(alert.substitutions['%details%'], /buyer@example\.invalid/);
+    assert.match(alert.substitutions['%details%'], /cs_live_fixture/);
+    assert.match(alert.substitutions['%closing%'], /dashboard\.stripe\.com\/payments\/pi_fixture/);
+    assert.doesNotMatch(alert.substitutions['%details%'] + alert.substitutions['%closing%'], /private/);
+  }
   assert.equal(mail.tracking_settings.open_tracking.enable, false);
 });
 test('valid paid purchase verifies actual product, charge, and email', () => {
@@ -207,15 +219,16 @@ test('delivery mail disables tracking and limits sandbox to its approved sink', 
   const value = { to: 'other@example.invalid', link: 'https://example.invalid/private', release, live: false };
   assert.equal(await deliveryMail(value, mailEnv, request), 'rejected'); assert.equal(count, 0);
   assert.equal(await deliveryMail({ ...value, to: mailEnv.COMMERCE_SANDBOX_EMAIL }, mailEnv, request), 'accepted');
+  assert.equal(sent.personalizations.length, 1);
   assert.equal(sent.tracking_settings.click_tracking.enable, false); assert.equal(sent.tracking_settings.open_tracking.enable, false);
   assert.deepEqual(sent.reply_to, { email: 'joshua@segeren.com', name: 'Joshua Segeren' });
-  assert.match(sent.subject, /TEST ONLY/);
-  assert.match(sent.content[0].value, /No real purchase or app is delivered/);
+  assert.match(sent.personalizations[0].subject, /TEST ONLY/);
+  assert.match(sent.personalizations[0].substitutions['%intro%'], /No real purchase or app is delivered/);
   assert.equal(await deliveryMail({ ...value, to: mailEnv.COMMERCE_SANDBOX_EMAIL,
     release: { ...release, kind: 'signed-notarized', testingOnly: true } }, mailEnv, request), 'accepted');
-  assert.match(sent.content[0].value, /signed app candidate for operator testing/);
-  assert.match(sent.content[0].value, /No real payment was charged/);
-  assert.doesNotMatch(sent.content[0].value, /No real purchase or app is delivered/);
+  assert.match(sent.personalizations[0].substitutions['%intro%'], /signed app candidate for operator testing/);
+  assert.match(sent.personalizations[0].substitutions['%intro%'], /No real payment was charged/);
+  assert.doesNotMatch(sent.personalizations[0].substitutions['%intro%'], /No real purchase or app is delivered/);
   assert.equal(await deliveryMail({ ...value, live: true }, mailEnv, request), 'accepted');
   assert.deepEqual(sent.reply_to, { email: 'joshua@segeren.com', name: 'Joshua Segeren' });
 });
@@ -225,4 +238,13 @@ test('mail explicit rejection and uncertain network outcomes remain distinct', a
   assert.equal(await deliveryMail(value, e, async () => ({ status: 429 })), 'rejected');
   assert.equal(await deliveryMail(value, e, async () => ({ status: 500 })), 'uncertain');
   assert.equal(await deliveryMail(value, e, async () => { throw Error('secret'); }), 'uncertain');
+});
+test('operator-buyer address is included once so SendGrid accepts the atomic message', async () => {
+  let sent;
+  const value = { to: 'joshua@segeren.com', link: 'https://example.invalid/private', release,
+    live: true, sessionId: 'cs_live_fixture', paymentIntent: 'pi_fixture', amountTotal: 5000 };
+  assert.equal(await deliveryMail(value, { SENDGRID_API_KEY: 'fixture', LAUNCH_FROM_EMAIL: 'sender@example.invalid' },
+    async (url, options) => { sent = JSON.parse(options.body); return { status: 202 }; }), 'accepted');
+  assert.deepEqual(sent.personalizations.map(item => item.to[0].email),
+    ['joshua@segeren.com', 'segerej@gmail.com']);
 });
