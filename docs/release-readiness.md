@@ -46,21 +46,27 @@ heading to the accessibility tree and placed the paid beta action before the
 free CLI action in keyboard order. These are web results, not native VoiceOver
 certification for the packaged app.
 
-The exact distributed build 8 launcher also opened its local setup UI in an
-ordinary Chrome session. Its accessibility tree exposed a level-one heading,
-described Help link, receiver-mode and connection-card buttons, grouped
-migration setup, collapsed advanced sections and the independent-software
-notice. Seven consecutive keyboard Tab presses followed the visible workflow:
-Help, receiver mode, create connection card, existing SSH, fresh connection,
-Continue and recovery options. The native wrapper intentionally owns no lasting
-workflow window; the browser is the customer interface. This is direct
-accessibility-tree and keyboard evidence, not a completed VoiceOver speech
-observation. The exact distributed build 9 engine was also asked to inventory
-a workspace inside macOS-protected Mail storage. macOS denied the read and the
+The exact distributed build 9 launcher opened its local setup UI in an ordinary
+Chrome session. Its accessibility tree exposed a level-one heading, described
+Help link, receiver-mode and connection-card buttons, grouped migration setup,
+collapsed advanced sections and the independent-software notice. With macOS
+VoiceOver running and its caption panel enabled, keyboard navigation produced
+the expected spoken labels and roles for Help / Email support, receiver mode,
+Create connection card, existing SSH, fresh connection, Continue, recovery
+options, the support email and Prepare diagnostic report. VoiceOver also
+announced collapsed disclosure state and group/region context. The native
+wrapper intentionally owns no lasting workflow window; the browser is the
+customer interface. This is a real spoken screen-reader walkthrough of the key
+setup and recovery controls, not a claim that every migration state or assistive
+technology combination has been certified. The exact distributed build 9 engine
+was also asked to inventory a workspace inside macOS-protected Mail storage.
+macOS denied the read and the
 engine failed closed with exit 2 and its bounded permissions guidance; it did
 not enumerate or print protected content. That is an actual TCC-denial
 observation for the packaged engine, not a full guided-UI or
 permission-recovery walkthrough.
+The private VoiceOver observation receipt is
+`/Users/Shared/CodexMigrate-VoiceOver-20260910.md`.
 
 The receiving Mac was rediscovered on the current Wi-Fi as
 `Joshuas-MacBook-Pro-128.local`; its ED25519 fingerprint exactly matched the
@@ -76,8 +82,23 @@ was open. The run used a real 93 Mbps Wi-Fi/Bonjour route, not a simulated SSH
 transport or a cable-disconnect test. Its private receipt is
 `/Users/Shared/CodexMigrate-Hardware-20260910/hardware-wifi-20260910.json`.
 Disposable source, state, remote destination and staging folders were moved to
-each account's Trash after verification. VoiceOver, an actual physical network
-cut and a destination development command remain unclaimed.
+each account's Trash after verification. A destination development command and
+physical direct-cable interruption remained unclaimed at that point.
+
+A second isolated hardware run then staged a unique 256 MiB workspace skill
+with the current build 9 source. While the transfer was active over the real
+Wi-Fi route to `192.168.1.228`, the destination Mac's Wi-Fi radio was powered
+off for 18 seconds. The SSH control connection failed as expected, the browser
+workflow remained safely in staging, and no installation or finalization began.
+After Wi-Fi returned, staged bytes advanced within the same scope. An explicit
+Pause preserved 19,996,672 bytes; reopening the same durable migration and
+rerunning preflight completed staging at 268,541,952 bytes. The staged payload's
+SHA-256 exactly matched the source
+`91f82081150ad7417f06b75e857020347ab575e5a884b43ed48f3abef93b59fd`,
+and status reached `ready_to_finalize`. Finalization was intentionally not
+attempted and no personal workspace was selected. The private receipt is
+`/Users/Shared/CodexMigrate-PhysicalDrop-20260910-0422.json`; disposable local
+and remote data were moved to each account's Trash after verification.
 
 That hardware run also exposed an IPv6 route-label defect: macOS requires the
 explicit `-inet6` address family for `route get`, so a real Wi-Fi path had been
@@ -98,11 +119,13 @@ purchases remain bound to their original artifacts; new purchases receive build
 read of `/api/availability` returned `available:true`, `priceUSD:50`,
 `architecture:arm64`, `channel:beta` during the post-launch audit.
 
-Native VoiceOver, receiving-Mac quarantined launch/permissions and physical
-network interruption remain unpassed. The exact build 9 packaged engine now
-has both POSIX-denial coverage and a real macOS TCC-protected workspace denial;
-the latter failed closed with bounded guidance and no protected-content output.
-This does not prove the guided permission-recovery UX or screen-reader behavior.
+The exact build 9 setup now has a spoken VoiceOver walkthrough of its key setup,
+connection, recovery and diagnostic controls, and a real physical Wi-Fi
+interruption/resume result. Receiving-Mac quarantined launch/permissions, the
+guided permission-recovery journey and physical direct-cable interruption remain
+open. The exact build 9 packaged engine has both POSIX-denial coverage and a real
+macOS TCC-protected workspace denial; the latter failed closed with bounded
+guidance and no protected-content output.
 The latest dated validation receipt records the access limitations and
 regression checks.
 The two helpful guides still return HTTP 200; their September 5 Search Console
@@ -637,14 +660,14 @@ release certification remains open while the named native/hardware gates remain.
 | --- | --- | --- |
 | Supported conversations, organization, settings, skills and complete selected workspaces | A real different-user, two-Mac migration completed and verified. Three genuine Codex conversations (project, loose and archived) reopened and continued through the destination app server; the archived state and destination sign-in were preserved. Separate packaged skills-only repair and source/Git/content verification passed. | Verify a recognizable real setting, project organization and custom skill through the destination UI, plus a representative development command with the old Mac disconnected. Broader Codex-version coverage remains open. |
 | Scope is explicit, not “everything on the Mac” | Selected roots and dependency issues are reported; unsupported visible storage overrides, source project configuration, retained destination ancestor configuration, fixed system defaults, visible managed-preference keys, filenames and cloud-only flags stop early. The real fixture used an explicitly selected disposable workspace. | Extend the real configuration/version/provider matrix. Managed-policy visibility, arbitrary role references and unflagged cloud-provider placeholders remain known limits. |
-| Full and selective migration, pause/resume and recovery | Real packaged cross-Mac full installation, browser-driven skills-only repair, Pause/Stop/Resume after 409,413,176 staged bytes, unexpected SSH-child loss and helper restart with 677,848,813 staged bytes retained, and protected-phase restore all passed. Verified backups, newer files and out-of-scope files were preserved. | Physically remove and restore Wi-Fi and a working cable route during disposable staging. A truly space-constrained destination and broader installer interruption timing remain useful hardware coverage. Never use Josh's active workspace. |
+| Full and selective migration, pause/resume and recovery | Real packaged cross-Mac full installation, browser-driven skills-only repair, Pause/Stop/Resume after 409,413,176 staged bytes, unexpected SSH-child loss and helper restart with 677,848,813 staged bytes retained, protected-phase restore, and a physical destination-Wi-Fi interruption/resume with an exact 256 MiB hash match all passed. Verified backups, newer files and out-of-scope files were preserved. | Physically interrupt a working USB-C/Thunderbolt network route during disposable staging. A truly space-constrained destination and broader installer interruption timing remain useful hardware coverage. Never use Josh's active workspace. |
 | Git and old-home paths remain usable | Different-user packaged two-Mac acceptance verified the direct old-home compatibility path and the selected Git baseline before reopening the real project conversation. Local linked-worktree, stash, alternate-storage, uncommitted and untracked cases have deterministic coverage. | Run representative destination development commands with the source Mac disconnected. Existing checks do not prove every project-specific toolchain or absolute path. |
-| Browser-first local-data experience and clear status/help | Loopback-only helper, SSH transfer, one guided browser setup, saved setup, contextual Help, bounded private diagnostic events, operation-specific controls, strict host verification and multi-address speed selection are implemented. Desktop and 1440/390/320px keyboard/reflow checks passed. | Complete native VoiceOver and real TCC denial checks, plus physical Wi-Fi/direct-link selection and interruption acceptance. Automatic updating is not implemented. |
-| Public website, useful guides, screenshots, price and launch intake | Canonical site is live with paid signed Mac beta as the primary CTA, exact $50 checkout, sample-labelled real UI screenshots, two informative indexed guides, launch intake and personal-support disclosures. Build 8 availability and the live Stripe webhook are active. | Watch actual buyer behavior and support load; preserve rate limiting, accurate beta limits and the free-source path. A real-sale buyer/owner inbox receipt remains unverified until the first sale. |
-| Website accessibility and performance | Fresh production Lighthouse: mobile 97 performance and 100 accessibility/best practices/SEO; desktop 98 performance and 100 in the other categories. Keyboard, narrow-width reflow, text enlargement, contrast and semantics have automated/browser evidence. | Native app VoiceOver remains open; no blanket WCAG conformance claim is made. Field Core Web Vitals require real traffic. |
+| Browser-first local-data experience and clear status/help | Loopback-only helper, SSH transfer, one guided browser setup, saved setup, contextual Help, bounded private diagnostic events, operation-specific controls, strict host verification and multi-address speed selection are implemented. Desktop and 1440/390/320px keyboard/reflow checks passed. Exact build 9 key setup/recovery controls produced correct spoken VoiceOver labels and roles; its engine failed closed on a real TCC-protected workspace; physical Wi-Fi interruption/resume passed. | Complete the guided permission-recovery journey and direct-cable route acceptance. Automatic updating is not implemented. |
+| Public website, useful guides, screenshots, price and launch intake | Canonical site is live with paid signed Mac beta as the primary CTA, exact $50 checkout, sample-labelled real UI screenshots, two informative indexed guides, launch intake and personal-support disclosures. Build 9 availability and the live Stripe webhook are active. | Watch actual buyer behavior and support load; preserve rate limiting, accurate beta limits and the free-source path. A real-sale buyer/owner inbox receipt remains unverified until the first sale. |
+| Website accessibility and performance | Fresh production Lighthouse: mobile 97 performance and 100 accessibility/best practices/SEO; desktop 98 performance and 100 in the other categories. Keyboard, narrow-width reflow, text enlargement, contrast and semantics have automated/browser evidence. Exact build 9's browser-first setup passed a spoken VoiceOver walkthrough of key controls. | Broader screen-reader/state coverage remains useful; no blanket WCAG conformance claim is made. Field Core Web Vitals require real traffic. |
 | Domain, search discovery, analytics and cross-promotion | Live canonical domain/robots/sitemap; recorded Search Console ownership, successful sitemap submission and accepted homepage request; separate GA4 property with region-aware default/full measurement, consent-mode handling for the EEA/UK/Switzerland, 14-month retention, returning-user continuity, aggregate Google Signals reporting, granular location/device reporting, ads personalization and user-provided data disabled, launch-request key event and Search Console link; live U.S. edge returned default mode with no banner and both host-only GA cookies; browser-forced consent mode showed the compact control, set no cookies before choice, produced a denied cookieless measurement, and correctly allowed or declined; You.one link on the live homepage; fresh HTTP 200 check of segeren.com confirms its “Explore Codex Migrate” link to the canonical domain | Watch native reports after real visits. A request originating from an actual EEA/UK/Swiss edge remains useful additional confirmation, but endpoint unit tests and browser-boundary simulation cover the branch. Actual demographics depend on consent, Google eligibility and reporting thresholds; indexing, ranking and traffic are not guaranteed. No repeated indexing request needed. |
-| Reproducible identifiable packaged app | Build 8 is produced from pushed source `f429bf6c234d7b9f925c61f389d6d0513de301fb`, Developer ID signed, Apple Accepted, stapled and Gatekeeper accepted. The private archive is 8,308,390 bytes with SHA-256 `74a7fc5e2da91901f4a5d3f74969cd03d34549ef6f06d83151825d7727262270`. A receiving test account completed Safari download, macOS Internet-download confirmation and native open on an earlier signed build; build 8's exact archive has independent signature, staple, Gatekeeper and packaged-browser Help checks. | A pristine receiving Mac without prior test state or developer tooling remains stronger installation evidence. Native VoiceOver/TCC checks must use the exact distributed build before full certification. |
-| Paid purchase, delivery, support and refunds | Production checkout and webhook are live for build 8. Ordinary Stripe sandbox payment, signed-app delivery, email recovery, refreshed private download, refund and post-refund denial passed. Private links remain entitlement-bound and short lived; merchant successful-payment email is enabled. | Confirm buyer delivery and merchant notification from the first real sale. This is an operational observation for the live beta, not a reason to close the revenue path. |
+| Reproducible identifiable packaged app | Build 9 is produced from pushed source `8f1e0225a6babcb1be1be0a876da11edd73732d8`, Developer ID signed, Apple Accepted, stapled and Gatekeeper accepted. The private archive is 8,307,597 bytes with SHA-256 `7aadccacec63b09fe637cd61c506f4730f2de62163687ec56a2cc63ad8306133`. A receiving test account completed Safari download, macOS Internet-download confirmation and native open on an earlier signed build; build 9's exact archive has independent signature, staple, Gatekeeper, packaged-browser Help, spoken VoiceOver and packaged-engine TCC-denial checks. | A pristine receiving Mac without prior test state or developer tooling remains stronger installation evidence. The complete guided permission-recovery journey remains open. |
+| Paid purchase, delivery, support and refunds | Production checkout and webhook are live for build 9. Ordinary Stripe sandbox payment, signed-app delivery, email recovery, refreshed private download, refund and post-refund denial passed. Private links remain entitlement-bound and short lived; merchant successful-payment email is enabled. | Confirm buyer delivery and merchant notification from the first real sale. This is an operational observation for the live beta, not a reason to close the revenue path. |
 
 ### Earlier device chronology (historical evidence)
 
@@ -1757,19 +1780,18 @@ cross-Mac migration. Failure tests use disposable fixtures, not user data.
 
 ## Remaining full-release certification gates
 
-- On the exact distributed build, complete VoiceOver navigation/announcement
-  checks and a guided permission-recovery walkthrough. Build 9's packaged
-  engine now has a real TCC-protected workspace denial: it failed closed with
-  bounded guidance and no protected-content output. Browser semantics,
-  keyboard use and that engine-level denial do not replace a spoken VoiceOver
-  pass or the complete guided recovery experience.
-- During disposable staging, physically remove and restore Wi-Fi and a working
-  USB-C/Thunderbolt network route. Confirm the UI explains the loss, retains the
-  same staging scope and resumes without destination finalization. The completed
-  SSH-child kill/restart check remains separate evidence and must not be relabelled
-  as a physical disconnect.
+- Complete the exact-build guided permission-recovery walkthrough. Build 9's
+  packaged engine has a real TCC-protected workspace denial and its key setup,
+  connection, recovery and diagnostic controls passed a spoken VoiceOver
+  walkthrough; neither result proves every permission state or screen-reader
+  path.
+- During disposable staging, physically interrupt and restore a working
+  USB-C/Thunderbolt network route. The destination-Wi-Fi radio interruption now
+  has separate passing evidence: the same staging scope resumed, explicit Pause
+  persisted across helper restart, the 256 MiB payload matched exactly, and no
+  destination finalization occurred.
 - On a destination without prior test state or developer-installed Python/Xcode,
-  repeat quarantined download, native open and guided preparation for build 8.
+  repeat quarantined download, native open and guided preparation for build 9.
   The receiving test account already passed the normal Safari/Gatekeeper/open path
   on an earlier signed build but was not a pristine machine.
 - Extend the authentic three-conversation result with a recognizable setting,

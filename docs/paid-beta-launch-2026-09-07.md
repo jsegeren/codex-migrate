@@ -33,15 +33,17 @@ staple and Gatekeeper evidence is recorded in
 
 ## Remaining validation
 
-Native VoiceOver, receiving-Mac quarantined first launch/permissions, physical
-cable removal/Wi-Fi interruption and broader hardware/provider compatibility
-remain open. The exact build 9 engine has now failed closed on a real
-TCC-protected workspace selection without printing protected content; the
-guided permission-recovery walkthrough remains open. The website and hosted
-Checkout disclose ongoing native accessibility, permissions and physical
-network-interruption testing before payment. Existing real-device automated
-recovery, unexpected SSH loss/restart, pause/stop/resume and browser
-skills-repair receipts remain separately scoped.
+Receiving-Mac quarantined first launch/permissions, the guided permission-
+recovery journey, physical USB-C/Thunderbolt interruption and broader
+hardware/provider compatibility remain open. The exact build 9 engine has
+failed closed on a real TCC-protected workspace selection without printing
+protected content. Its key setup, connection, recovery and diagnostic controls
+also passed a spoken VoiceOver walkthrough, and an isolated 256 MiB transfer
+resumed after the destination Wi-Fi radio was physically powered off and back
+on, then matched the source hash exactly without finalization. The website and
+hosted Checkout continue to disclose the beta boundary before payment. Existing
+real-device automated recovery, unexpected SSH loss/restart, pause/stop/resume
+and browser skills-repair receipts remain separately scoped.
 
 ## Activation record
 
@@ -157,3 +159,29 @@ existing entitlements. Production deployment
 `dpl_2cwsjH18CyecqkKjsxmvwSdZaoUn` reached READY and was aliased to
 `migrate.segeren.com` with `COMMERCE_RELEASE=beta-build9-arm64`; a subsequent
 availability read remained open at $50 for Apple silicon on the beta channel.
+
+## Build 9 physical interruption and VoiceOver observations
+
+On September 10, an isolated 256 MiB workspace-skill transfer used the current
+build 9 source and a real Wi-Fi route to the receiving Mac. The destination
+Wi-Fi radio was powered off for 18 seconds during active staging. The control
+SSH connection failed, no installation or finalization began, and the browser
+workflow remained safely in staging. After Wi-Fi returned, staged bytes
+advanced within the same scope. An explicit Pause retained 19,996,672 bytes;
+reopening the same durable migration and rerunning preflight completed staging
+at 268,541,952 bytes. The staged payload matched source SHA-256
+`91f82081150ad7417f06b75e857020347ab575e5a884b43ed48f3abef93b59fd`.
+The private receipt is
+`/Users/Shared/CodexMigrate-PhysicalDrop-20260910-0422.json`. Finalization was
+not attempted, no personal workspace was selected, and disposable local and
+remote test data were moved to Trash after verification.
+
+The exact distributed build 9 launcher was then opened with macOS VoiceOver and
+the VoiceOver caption panel enabled. Keyboard navigation produced the expected
+spoken labels and roles for Help / Email support, receiver mode, Create
+connection card, existing SSH, fresh connection, Continue, recovery options,
+the support email and Prepare diagnostic report. Collapsed state and group or
+region context were announced where applicable. This is direct spoken
+screen-reader evidence for the key setup and recovery controls, not a claim of
+complete assistive-technology or every-state certification. The private
+observation receipt is `/Users/Shared/CodexMigrate-VoiceOver-20260910.md`.
