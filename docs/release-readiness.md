@@ -5,6 +5,51 @@ remaining acceptance checks continue. This is not full release certification.
 The [paid-beta launch record](paid-beta-launch-2026-09-07.md) controls the current
 distribution decision; the dated entries below preserve their original status.
 
+## September 10 launch and funnel refresh
+
+The current `main` release state was refreshed without changing Production.
+Both latest GitHub Actions runs for commit `6d68707` passed. The complete Python
+migration suite passed all 729 checks with 12 expected environment/platform
+skips. The complete website and commerce suite passed 281 of 282 checks with
+the one intentional database-dependent skip. Exact distributed build 8 still
+passes strict deep code-signature verification, staple validation and
+Gatekeeper assessment as a notarized Developer ID application; its native
+executable is arm64 and its 8,308,390-byte archive still matches SHA-256
+`74a7fc5e2da91901f4a5d3f74969cd03d34549ef6f06d83151825d7727262270`.
+Eight exact packaged-engine desktop checks passed and the case-sensitive
+filesystem fixture remained the one expected skip.
+
+A fresh ordinary-browser buyer journey reached the live Stripe-hosted Checkout
+from the first paid homepage call to action. Checkout displayed the correct
+Codex Migrate Mac beta, $50 one-time price, signed/notarized Apple-silicon
+scope, best-effort support, 30-day refund and ongoing-test disclosure. No
+payment information was entered and no charge was attempted. The authenticated
+live Stripe Transactions view remained empty, so there is still no evidence of
+a completed real purchase. Production availability remained open with
+`available:true`, `priceUSD:50`, `architecture:arm64` and `channel:beta`.
+
+The authenticated GA4 property reported 35 active users, 41 sessions, 45 page
+views, three `begin_checkout` events and no purchase event for the preceding
+seven days. It attributed 37 sessions to direct, two to Stripe referral, one to
+organic search and one to organic social. The authenticated Search Console URL
+property reported one indexed page, five discovered pages still awaiting
+indexing, validation **Started**, and one web-search click. This confirms the
+analytics and indexing pipelines are operating; first-sale delivery and both
+operator purchase-alert inbox receipts remain necessarily unobserved until a
+customer completes a real payment.
+
+Fresh production Lighthouse runs scored 100 for performance, accessibility,
+best practices and SEO on both mobile and desktop. The 320-pixel buyer path had
+no horizontal overflow, exposed the complete `Change the Mac. Keep the work.`
+heading to the accessibility tree and placed the paid beta action before the
+free CLI action in keyboard order. These are web results, not native VoiceOver
+certification for the packaged app.
+
+The previously pinned receiving Mac was rediscovered on the current Wi-Fi at
+`192.168.68.71`; its ED25519 fingerprint exactly matched the accepted pairing.
+It then slept before a new hardware run could start. No new physical-link,
+native TCC or destination-development result is claimed from this refresh.
+
 ## Current release boundary — September 8
 
 The current distributed artifact is **signed and notarized build 8**, $50 USD,
