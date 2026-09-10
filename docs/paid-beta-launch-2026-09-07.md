@@ -150,4 +150,7 @@ has SHA-256 `7aadccacec63b09fe637cd61c506f4730f2de62163687ec56a2cc63ad8306133`.
 The private live-store upload was independently read back with the same size
 and digest. The existing paid-beta authorization applies to this narrowly
 corrected build; older catalog entries and objects remain available for their
-existing entitlements.
+existing entitlements. Production deployment
+`dpl_2cwsjH18CyecqkKjsxmvwSdZaoUn` reached READY and was aliased to
+`migrate.segeren.com` with `COMMERCE_RELEASE=beta-build9-arm64`; a subsequent
+availability read remained open at $50 for Apple silicon on the beta channel.

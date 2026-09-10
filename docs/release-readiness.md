@@ -12,12 +12,12 @@ Both latest GitHub Actions runs for commit `6d68707` passed. After the hardware
 route-label correction, the complete Python migration suite passed all 730
 checks with 12 expected environment/platform skips. The complete website and
 commerce suite passed 281 of 282 checks with
-the one intentional database-dependent skip. Exact distributed build 8 still
+the one intentional database-dependent skip. Exact distributed build 9
 passes strict deep code-signature verification, staple validation and
 Gatekeeper assessment as a notarized Developer ID application; its native
-executable is arm64 and its 8,308,390-byte archive still matches SHA-256
-`74a7fc5e2da91901f4a5d3f74969cd03d34549ef6f06d83151825d7727262270`.
-Eight exact packaged-engine desktop checks passed and the case-sensitive
+executable is arm64 and its 8,307,597-byte archive matches SHA-256
+`7aadccacec63b09fe637cd61c506f4730f2de62163687ec56a2cc63ad8306133`.
+Eleven exact packaged-engine desktop checks passed and the case-sensitive
 filesystem fixture remained the one expected skip.
 
 A fresh ordinary-browser buyer journey reached the live Stripe-hosted Checkout
@@ -80,16 +80,16 @@ shown as `unknown`. The route probe now selects the address family before
 looking up the hardware port, with regression coverage for the observed ULA
 IPv6 path.
 
-## Current release boundary — September 8
+## Current release boundary — September 10
 
-The current distributed artifact is **signed and notarized build 8**, $50 USD,
+The current distributed artifact is **signed and notarized build 9**, $50 USD,
 Apple silicon, beta channel. Production checkout is open and the live Stripe
 webhook is active. Exact source/artifact identifiers, private delivery readback
-and pre-payment disclosures are in the paid-beta launch record above. Build 8
-keeps build 7's migration engine and corrects the offline customer guide so it
-accurately describes the available paid beta. Existing build 5 and build 7
+and pre-payment disclosures are in the paid-beta launch record above. Build 9
+keeps build 8's migration behavior and corrects hardware-port labeling for
+working IPv6 Wi-Fi routes. Existing build 5, build 7 and build 8
 purchases remain bound to their original artifacts; new purchases receive build
-8. A fresh
+9. A fresh
 read of `/api/availability` returned `available:true`, `priceUSD:50`,
 `architecture:arm64`, `channel:beta` during the post-launch audit.
 
