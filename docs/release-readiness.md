@@ -8,9 +8,10 @@ distribution decision; the dated entries below preserve their original status.
 ## September 10 launch and funnel refresh
 
 The current `main` release state was refreshed without changing Production.
-Both latest GitHub Actions runs for commit `6d68707` passed. The complete Python
-migration suite passed all 729 checks with 12 expected environment/platform
-skips. The complete website and commerce suite passed 281 of 282 checks with
+Both latest GitHub Actions runs for commit `6d68707` passed. After the hardware
+route-label correction, the complete Python migration suite passed all 730
+checks with 12 expected environment/platform skips. The complete website and
+commerce suite passed 281 of 282 checks with
 the one intentional database-dependent skip. Exact distributed build 8 still
 passes strict deep code-signature verification, staple validation and
 Gatekeeper assessment as a notarized Developer ID application; its native
@@ -44,6 +45,17 @@ no horizontal overflow, exposed the complete `Change the Mac. Keep the work.`
 heading to the accessibility tree and placed the paid beta action before the
 free CLI action in keyboard order. These are web results, not native VoiceOver
 certification for the packaged app.
+
+The exact distributed build 8 launcher also opened its local setup UI in an
+ordinary Chrome session. Its accessibility tree exposed a level-one heading,
+described Help link, receiver-mode and connection-card buttons, grouped
+migration setup, collapsed advanced sections and the independent-software
+notice. Seven consecutive keyboard Tab presses followed the visible workflow:
+Help, receiver mode, create connection card, existing SSH, fresh connection,
+Continue and recovery options. The native wrapper intentionally owns no lasting
+workflow window; the browser is the customer interface. This is direct
+accessibility-tree and keyboard evidence, not a completed VoiceOver speech or
+macOS TCC-denial observation.
 
 The receiving Mac was rediscovered on the current Wi-Fi as
 `Joshuas-MacBook-Pro-128.local`; its ED25519 fingerprint exactly matched the
