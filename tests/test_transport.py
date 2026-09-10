@@ -337,6 +337,23 @@ class TransportTests(unittest.TestCase):
                 "Thunderbolt Bridge (bridge0 → 169.254.4.2)",
             )
 
+    def test_ipv6_route_lookup_selects_the_ipv6_address_family(self):
+        transport = SSHTransport(
+            MigrationConfig(target="user@new-mac.local", target_home="/Users/user").validate()
+        )
+        route = SimpleNamespace(stdout="   interface: en0\n")
+        ports = SimpleNamespace(stdout="Hardware Port: Wi-Fi\nDevice: en0\n")
+        address = "fd00:be96:e544:6241::8"
+        with patch("codex_migrate.transport.subprocess.run", side_effect=[route, ports]) as run:
+            self.assertEqual(
+                transport._route_for_address(address),
+                "Wi-Fi (en0 → %s)" % address,
+            )
+        self.assertEqual(
+            run.call_args_list[0].args[0],
+            ["/sbin/route", "-n", "get", "-inet6", address],
+        )
+
     def test_benchmark_is_guarded_registered_and_disables_compression(self):
         transport = SSHTransport(
             MigrationConfig(target="user@new-mac.local", target_home="/Users/user").validate()

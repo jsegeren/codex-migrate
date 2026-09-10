@@ -45,10 +45,28 @@ heading to the accessibility tree and placed the paid beta action before the
 free CLI action in keyboard order. These are web results, not native VoiceOver
 certification for the packaged app.
 
-The previously pinned receiving Mac was rediscovered on the current Wi-Fi at
-`192.168.68.71`; its ED25519 fingerprint exactly matched the accepted pairing.
-It then slept before a new hardware run could start. No new physical-link,
-native TCC or destination-development result is claimed from this refresh.
+The receiving Mac was rediscovered on the current Wi-Fi as
+`Joshuas-MacBook-Pro-128.local`; its ED25519 fingerprint exactly matched the
+accepted pairing. A new isolated skills-only hardware run used the current
+migration engine, whose `src` tree exactly matches distributed build 8 source
+`f429bf6`. It staged one unique 512 MiB workspace skill to the receiving Mac,
+paused after 4 KiB, resumed the same migration and reached
+`ready_to_finalize`. The staged 536,870,912-byte payload matched the source
+SHA-256 `0a94f6179aa742e0d71719ace154f8d9f88c466df72a42a1d7bf2ce695a0adb2`.
+The destination's existing fixture and an outside sentinel remained unchanged;
+finalization was intentionally not attempted while the owner's real Codex app
+was open. The run used a real 93 Mbps Wi-Fi/Bonjour route, not a simulated SSH
+transport or a cable-disconnect test. Its private receipt is
+`/Users/Shared/CodexMigrate-Hardware-20260910/hardware-wifi-20260910.json`.
+Disposable source, state, remote destination and staging folders were moved to
+each account's Trash after verification. Native TCC, VoiceOver, an actual
+physical network cut and a destination development command remain unclaimed.
+
+That hardware run also exposed an IPv6 route-label defect: macOS requires the
+explicit `-inet6` address family for `route get`, so a real Wi-Fi path had been
+shown as `unknown`. The route probe now selects the address family before
+looking up the hardware port, with regression coverage for the observed ULA
+IPv6 path.
 
 ## Current release boundary — September 8
 

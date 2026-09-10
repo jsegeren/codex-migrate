@@ -415,8 +415,13 @@ class SSHTransport:
 
     def _route_for_address(self, address: str) -> str:
         try:
+            parsed = ipaddress.ip_address(address.split("%", 1)[0])
+            route_command = ["/sbin/route", "-n", "get"]
+            if parsed.version == 6:
+                route_command.append("-inet6")
+            route_command.append(address)
             result = subprocess.run(
-                ["/sbin/route", "-n", "get", address],
+                route_command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
                 text=True,
@@ -429,7 +434,6 @@ class SSHTransport:
                     interface = line.split(":", 1)[1].strip()
                     break
             port = self._hardware_port(interface)
-            parsed = ipaddress.ip_address(address.split("%", 1)[0])
             if port:
                 return "%s (%s → %s)" % (port, interface, address)
             if parsed.is_link_local:
