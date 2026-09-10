@@ -3,6 +3,11 @@
   "outputDirectory": "site",
   "cleanUrls": true,
   "trailingSlash": false,
+  "redirects": [
+    { "source": "/transfer-codex-to-new-mac", "destination": "/moving-to-a-new-mac", "permanent": true },
+    { "source": "/move-codex-to-new-mac", "destination": "/moving-to-a-new-mac", "permanent": true },
+    { "source": "/migrate-codex-to-new-mac", "destination": "/moving-to-a-new-mac", "permanent": true }
+  ],
   "headers": [
     {
       "source": "/(.*)",

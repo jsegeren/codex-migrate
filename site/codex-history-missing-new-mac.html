@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Codex history missing on a new Mac? — Codex Migrate</title>
+    <meta name="description" content="What to check when Codex conversations or local work are missing after switching Macs, and how to transfer them without replacing the new Mac’s login.">
+    <link rel="canonical" href="https://migrate.segeren.com/codex-history-missing-new-mac">
+    <meta property="og:title" content="Codex history missing on your new Mac?"><meta property="og:description" content="A practical checklist for finding and safely transferring local OpenAI Codex work."><meta property="og:type" content="article"><meta property="og:url" content="https://migrate.segeren.com/codex-history-missing-new-mac"><meta property="og:image" content="https://migrate.segeren.com/og-white-v1.png">
+    <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Codex history missing on your new Mac?"><meta name="twitter:description" content="Find the local work that did not follow your account, then move it safely."><meta name="twitter:image" content="https://migrate.segeren.com/og-white-v1.png">
+    <link rel="icon" href="/assets/mark.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css?v=20260904-regional"><script src="/analytics.js?v=20260907-deferred" defer></script>
+  </head>
+  <body>
+    <header class="site-header"><a class="brand" href="/"><span class="brand-mark" aria-hidden="true">CM</span><span>Codex Migrate</span></a><nav aria-label="Primary navigation"><a href="/moving-to-a-new-mac">Migration guide</a><a href="/backup-and-recovery">Backup &amp; recovery</a><a href="/#founding-edition">Mac beta</a></nav></header>
+    <main class="legal shell">
+      <p class="eyebrow">New Mac troubleshooting</p><h1>Codex history is missing. What now?</h1>
+      <p class="lede">You signed into Codex on a new Mac and the local work you expected is not there. Keep the old Mac intact: the missing conversations, configuration, skills, or unfinished project files may still exist locally on it.</p>
+
+      <h2>Start with the boundary: account data versus local data</h2>
+      <p>Codex can be used through the ChatGPT desktop app, but that does not mean every piece of Codex working state behaves like an ordinary cloud-synced ChatGPT conversation. Your account grants access. Local Codex state and workspace files may remain on the Mac where the work happened.</p>
+      <p>This guide is about OpenAI Codex work on macOS. It does not transfer ordinary ChatGPT cloud chats, migrate all ChatGPT modes, move data between OpenAI accounts, or provide continuous synchronization between two actively changing Macs.</p>
+
+      <h2>Before changing anything</h2>
+      <ol>
+        <li>Do not erase, trade in, or repurpose the old Mac.</li>
+        <li>Keep an independent backup of both machines.</li>
+        <li>On the old Mac, confirm that the conversations and project folders you need still open.</li>
+        <li>On the new Mac, install Codex, open it, and sign in once so it has its own valid authentication and installation identity.</li>
+        <li>Close Codex before any final replacement of local state.</li>
+      </ol>
+
+      <h2>Work out what is actually missing</h2>
+      <p>A complete working environment can span several kinds of local content:</p>
+      <ul>
+        <li>active and archived Codex conversations;</li>
+        <li>configuration, project organization, rules, memories, skills, and automations;</li>
+        <li>repositories and their complete Git metadata;</li>
+        <li>local branches, worktrees, stashes, uncommitted changes, and untracked files;</li>
+        <li>workspace folders that live outside the Codex data directory.</li>
+      </ul>
+      <p>A fresh Git clone restores only what reached the remote. It cannot recreate an unpushed branch, a local stash, an untracked file, or a local Codex conversation.</p>
+
+      <h2>Do not blindly replace the new Mac’s Codex folder</h2>
+      <p>A direct folder copy sounds simple, but the source can contain machine-specific authentication, installation identity, locks, sockets, logs, and caches that should not replace the destination’s corresponding state. Project folders may also live somewhere else entirely.</p>
+      <p>Codex Migrate excludes the old Mac’s Codex authentication and installation identity, preserves the destination values, discovers selected workspace dependencies, stages a resumable transfer, verifies a destination backup, and checks the installed result.</p>
+
+      <h2>Pick the smallest safe recovery path</h2>
+      <ul>
+        <li>If only committed code is missing, clone or pull it from your Git remote.</li>
+        <li>If you intended to move the entire Mac account, Apple Migration Assistant may be the appropriate tool.</li>
+        <li>If local Codex history and selected unfinished work are missing, follow the <a href="/moving-to-a-new-mac">Codex Mac-to-Mac migration guide</a>.</li>
+        <li>If both Macs have changed independently, do not treat migration as a merge. Reconcile those changes separately before replacing local state.</li>
+      </ul>
+
+      <h2>Transfer over Wi-Fi or a compatible cable</h2>
+      <p>The Macs connect over SSH. Wi-Fi and Ethernet work. A compatible USB-C or Thunderbolt network connection may be faster, but plugging in a cable does not guarantee that macOS has created a usable network route. Cable capabilities and speeds vary.</p>
+
+      <h2>Verify the result before trusting it</h2>
+      <p>Check important conversation counts and open representative conversations. Inspect Git status, branches, worktrees, stashes, remotes, and unfinished files. Confirm custom skills and configuration. Keep the old Mac until the new environment has survived real work.</p>
+      <p class="notice"><strong>The old Mac is your strongest recovery option.</strong> A same-disk destination backup helps with rollback but does not protect against disk failure. No migration tool can guarantee compatibility with every Codex or macOS version.</p>
+
+      <h2>Use the guided app or inspect the source</h2>
+      <p>The signed and Apple-notarized Mac beta is $50 once for Apple silicon Macs and includes best-effort support from Josh plus a 30-day refund policy. The same migration engine and safety checks are available in the free MIT-licensed CLI. The current beta has passed VoiceOver, a real macOS permission-denial check, and physical Wi-Fi interruption/resume testing. Guided permission recovery, direct-cable interruption, pristine-Mac installation, and broader hardware coverage remain ongoing.</p>
+      <div class="actions"><a class="button button-primary" data-analytics-event="select_paid_beta" href="/#founding-edition">Get the Mac beta — $50</a><a class="button button-secondary" data-analytics-event="select_free_cli" href="https://github.com/jsegeren/codex-migrate#quick-start">Read the free CLI setup</a></div>
+    </main>
+    <footer><div class="shell"><p>Independent software by Joshua Segeren. Not affiliated with or endorsed by OpenAI.</p><div class="footer-bottom"><a href="/">Codex Migrate</a><a href="/privacy">Privacy</a><a href="/privacy#website-analytics" data-analytics-preferences>Analytics choices</a><a href="/terms">Terms</a></div></div></footer>
+  </body>
+</html>

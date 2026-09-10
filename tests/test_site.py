@@ -37,6 +37,13 @@ class SiteTests(unittest.TestCase):
         self.assertIn("Transfer or move Codex to a new Mac", guide)
         self.assertIn("<h1>Transfer Codex <br>to a new Mac.</h1>", guide)
         self.assertIn("Get the Mac beta — $50", guide)
+        self.assertIn("Why signing in on the new Mac is not enough", guide)
+        self.assertIn("New-Mac migration checklist", guide)
+        missing = (SITE / "codex-history-missing-new-mac.html").read_text()
+        self.assertIn("Codex history missing on a new Mac?", missing)
+        self.assertIn("Codex history is missing. What now?", missing)
+        self.assertIn("Do not blindly replace the new Mac’s Codex folder", missing)
+        self.assertIn('href="/codex-history-missing-new-mac"', home)
         guide_actions = guide.split('<div class="actions">', 1)[1].split("</div>", 1)[0]
         self.assertLess(guide_actions.index("Get the Mac beta — $50"), guide_actions.index("Read the free CLI setup"))
         recovery = (SITE / "backup-and-recovery.html").read_text()
@@ -44,7 +51,7 @@ class SiteTests(unittest.TestCase):
         self.assertLess(recovery_actions.index("Get the Mac beta — $50"), recovery_actions.index("Explore the free source"))
 
     def test_openai_chatgpt_names_preserve_local_codex_scope(self):
-        for page in ("index.html", "moving-to-a-new-mac.html"):
+        for page in ("index.html", "moving-to-a-new-mac.html", "codex-history-missing-new-mac.html"):
             source = (SITE / page).read_text()
             self.assertIn("OpenAI Codex", source)
             self.assertIn("ChatGPT desktop app", source)
@@ -55,7 +62,7 @@ class SiteTests(unittest.TestCase):
         self.assertIn("does not transfer ordinary ChatGPT cloud chats", readme)
 
     def test_indexed_pages_have_canonical_urls(self):
-        for name in ("privacy", "terms", "refunds", "moving-to-a-new-mac", "backup-and-recovery"):
+        for name in ("privacy", "terms", "refunds", "moving-to-a-new-mac", "codex-history-missing-new-mac", "backup-and-recovery"):
             self.assertIn('<link rel="canonical" href="https://migrate.segeren.com/' + name + '">',
                           (SITE / (name + ".html")).read_text())
 
@@ -127,7 +134,7 @@ class SiteTests(unittest.TestCase):
         self.assertIn('<div id="checkout-panel" hidden>', source)
         self.assertIn('aria-describedby="checkout-platform beta-limits checkout-status"', source)
         self.assertIn('subject=Codex%20Migrate%20%2450%20beta%20access', source)
-        for page in ("index.html", "moving-to-a-new-mac.html", "backup-and-recovery.html"):
+        for page in ("index.html", "moving-to-a-new-mac.html", "codex-history-missing-new-mac.html", "backup-and-recovery.html"):
             self.assertNotIn("alpha", (SITE / page).read_text().lower())
 
     def test_transfer_copy_explains_network_choices_and_cable_limit(self):
@@ -318,7 +325,7 @@ class SiteTests(unittest.TestCase):
     def test_guides_are_discoverable_and_do_not_promise_unsafe_backup_bypass(self):
         home = (SITE / "index.html").read_text()
         sitemap = (SITE / "sitemap.xml").read_text()
-        for path in ("moving-to-a-new-mac", "backup-and-recovery"):
+        for path in ("moving-to-a-new-mac", "codex-history-missing-new-mac", "backup-and-recovery"):
             self.assertIn('href="/' + path + '"', home)
             self.assertIn("https://migrate.segeren.com/" + path, sitemap)
         self.assertIn("no skip-backup switch", (SITE / "backup-and-recovery.html").read_text())

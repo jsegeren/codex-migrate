@@ -5,7 +5,8 @@
     <title>Transfer or move Codex to a new Mac — Codex Migrate</title>
     <meta name="description" content="How to move OpenAI Codex to a different Mac: copy local chats, skills and project files, preserve the new login, verify backups and check the migrated work.">
     <link rel="canonical" href="https://migrate.segeren.com/moving-to-a-new-mac">
-    <meta property="og:title" content="Your new Mac. Your existing Codex workspace."><meta property="og:description" content="What to select, what stays behind, and what to verify before retiring your old Mac."><meta property="og:type" content="article">
+    <meta property="og:title" content="How to transfer Codex to a new Mac"><meta property="og:description" content="Move local Codex conversations, skills, repositories, branches and unfinished work without replacing the new Mac’s login."><meta property="og:type" content="article"><meta property="og:url" content="https://migrate.segeren.com/moving-to-a-new-mac"><meta property="og:image" content="https://migrate.segeren.com/og-white-v1.png">
+    <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="How to transfer Codex to a new Mac"><meta name="twitter:description" content="A practical guide to moving local OpenAI Codex work between Macs."><meta name="twitter:image" content="https://migrate.segeren.com/og-white-v1.png">
     <link rel="icon" href="/assets/mark.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css?v=20260904-regional"><script src="/analytics.js?v=20260907-deferred" defer></script>
   </head>
   <body>
@@ -14,6 +15,16 @@
       <p class="eyebrow">Mac-to-Mac migration guide</p><h1>Transfer Codex <br>to a new Mac.</h1>
       <p class="lede">Moving Codex to a different Mac means copying more than a GitHub repository. Keep the local conversation you want to resume, the branch you have not pushed, and the custom skill your project depends on.</p>
       <p>Codex Migrate is an independent, open-source tool for moving local Codex workspaces between Macs over SSH. The free CLI is in beta. Prefer a packaged app and personal, best-effort support? <a href="/#founding-edition">Get the signed $50 Mac beta</a> for Apple silicon Macs. Review the beta limitations before buying, and keep your old Mac and an independent backup.</p>
+      <h2>Why signing in on the new Mac is not enough</h2>
+      <p>Your OpenAI account handles access to Codex, but some of the environment you use while working is stored locally on your Mac. Signing into the same account on another Mac may not reproduce local conversations, custom configuration, skills, worktrees, unpushed branches, stashes, or files that never reached a remote.</p>
+      <p>If Codex history appears missing after changing Macs, do not erase or repurpose the old Mac yet. First identify which work exists only there. Follow the <a href="/codex-history-missing-new-mac">missing Codex history checklist</a> before copying anything.</p>
+      <h2>Choose the right way to move</h2>
+      <ul>
+        <li><strong>Git clone or pull:</strong> best when everything important is committed and pushed. It does not recover unpushed branches, untracked files, local Codex conversations, or machine-specific configuration.</li>
+        <li><strong>Apple Migration Assistant:</strong> appropriate for moving a broad Mac user account when it completes successfully. It is broader than a Codex-only transfer and may not suit a selectively configured new Mac.</li>
+        <li><strong>Manual copy or rsync:</strong> workable for experts who already know the exact paths, exclusions, ownership, linked-worktree dependencies, backup plan, and verification procedure.</li>
+        <li><strong>Codex Migrate:</strong> focused on inspecting, staging, backing up, transferring, and verifying local Codex work while preserving the new Mac’s authentication and installation identity.</li>
+      </ul>
       <h2>Select the work, not just the repository</h2>
       <p>Using Codex in the ChatGPT desktop app? This guide covers local OpenAI Codex conversations and workspace files, not ordinary ChatGPT cloud chats, account-to-account history transfers, or all ChatGPT modes. The same local-data distinction matters if you still call it the Codex app. Compatibility varies by version; review the migration plan before changing destination files.</p>
       <p>The migration includes active and archived local conversations, configuration, project organization, skills, rules, memories, automations, and relevant Codex state. You explicitly select the workspace folders to copy.</p>
@@ -24,6 +35,24 @@
       <p>Enable Remote Login for the destination user, verify the SSH host fingerprint, and inspect both Macs before enabling changes. Staging is resumable: after an interruption, rerun with the same destination and scope to reuse completed data. Wi-Fi, Ethernet, and working Thunderbolt networking can all carry SSH; plugging in a USB-C cable alone does not establish a network connection. After verifying the configured Mac, inspection checks its reachable private network addresses and selects the fastest verified route.</p>
       <h2>Verify before you retire the old Mac</h2>
       <p>Final installation requires Codex closed on both Macs and a verified destination backup. If the usernames differ, old absolute paths may need a reviewed compatibility alias. Open important conversations, check custom skills, and inspect your repositories on the new machine. Do not erase the old Mac just because a progress bar reached 100%.</p>
+      <h2>New-Mac migration checklist</h2>
+      <ol>
+        <li>Keep the old Mac unchanged and maintain an independent backup.</li>
+        <li>Install Codex on the new Mac, open it, and sign in once.</li>
+        <li>Enable Remote Login only for the destination account you intend to use.</li>
+        <li>Connect the Macs over Wi-Fi, Ethernet, or a working USB-C/Thunderbolt network route.</li>
+        <li>Inspect the proposed Codex data and workspace folders before enabling changes.</li>
+        <li>Stage the transfer, then allow finalization only after the destination backup verifies.</li>
+        <li>Open important conversations and inspect Git status, branches, worktrees, skills, and unfinished files on the new Mac.</li>
+        <li>Retain the old Mac until you have worked successfully from the new one.</li>
+      </ol>
+      <h2>Common questions</h2>
+      <h3>Can I just copy the .codex folder?</h3>
+      <p>A blanket copy can also replace machine-specific authentication or installation identity, and it still does not include project folders stored elsewhere. Codex Migrate deliberately preserves the new Mac’s authentication and excludes disposable runtime state.</p>
+      <h3>Does this copy repositories too?</h3>
+      <p>Yes, when you explicitly select their workspace roots. Selected folders include complete Git directories, branches, worktrees, stashes, uncommitted changes, and untracked files. Dependencies outside the selection are reported rather than silently omitted.</p>
+      <h3>Does a USB-C or Thunderbolt cable make it faster?</h3>
+      <p>It can, but only when the cable and Mac configuration provide a working network connection. A charging-only or limited USB-C cable may be slower than Thunderbolt or may not create a usable route at all. The transfer still runs over SSH.</p>
       <p class="notice">The source Mac is left intact. Backups and verification reduce risk; they do not replace an independent backup or guarantee compatibility with every Codex version.</p>
       <div class="actions"><a class="button button-primary" data-analytics-event="select_paid_beta" href="/#founding-edition">Get the Mac beta — $50</a><a class="button button-secondary" data-analytics-event="select_free_cli" href="https://github.com/jsegeren/codex-migrate#quick-start">Read the free CLI setup</a></div>
     </main>
