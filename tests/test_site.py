@@ -214,7 +214,7 @@ class SiteTests(unittest.TestCase):
         for page in SITE.glob("*.html"):
             with self.subTest(page=page.name):
                 if page.name == "purchase.html":
-                    self.assertNotIn("/analytics.js", page.read_text())
+                    self.assertIn('src="/analytics.js?v=20260909-purchase"', page.read_text())
                     self.assertIn('name="referrer" content="no-referrer"', page.read_text())
                     continue
                 self.assertIn('src="/analytics.js?v=20260907-deferred"', page.read_text())
@@ -228,6 +228,8 @@ class SiteTests(unittest.TestCase):
         self.assertIn(">Allow</button>", analytics)
         self.assertIn(">Decline</button>", analytics)
         self.assertIn("clearAnalyticsCookies();", analytics)
+        self.assertIn('sendEvent(event.detail);', analytics)
+        self.assertIn("records a generic purchase event", privacy)
         self.assertIn('window.gtag("consent", "default", consentValues(granted));', analytics)
         self.assertIn('window.gtag("consent", "update", consentValues(true));', analytics)
         self.assertIn('cookie_domain: "none"', analytics)

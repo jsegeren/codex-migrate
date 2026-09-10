@@ -10,6 +10,8 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
 const privateToken = 'cs_test_fixture.' + 'b'.repeat(64);
 function fixture(options = {}) {
   const document = { body: {}, activeElement: null }; document.activeElement = document.body;
+  const analyticsEvents = [];
+  document.dispatchEvent = event => analyticsEvents.push(event.detail);
   const elements = new Map();
   document.getElementById = id => {
     if (!elements.has(id)) {
@@ -32,6 +34,7 @@ function fixture(options = {}) {
   const storage = options.storage || new Map();
   const location = { hash: options.hash ?? '#' + privateToken, pathname: '/purchase' };
   vm.runInNewContext(source, { document, location, URL, AbortSignal,
+    CustomEvent: class CustomEvent { constructor(type, init) { this.type = type; this.detail = init.detail; } },
     sessionStorage: { getItem: key => { if (options.storageBlocked) throw Error('blocked'); return storage.get(key) ?? null; },
       setItem: (key, value) => { if (options.storageBlocked) throw Error('blocked'); storage.set(key, value); },
       removeItem: key => { if (options.storageBlocked) throw Error('blocked'); storage.delete(key); } },
@@ -42,7 +45,7 @@ function fixture(options = {}) {
   const finish = async (data = good, ok = true, status = ok ? 200 : 503) => {
     pending.shift()({ ok, status, json: async () => { if (data instanceof Error) throw data; return data; } }); await tick();
   };
-  return { document, get: document.getElementById, location, calls, finish, storage,
+  return { document, get: document.getElementById, location, calls, finish, storage, analyticsEvents,
     advance(ms, monotonicMs = ms) { wall += ms; monotonic += monotonicMs; } };
 }
 test('reload rechecks a tab-scoped token and never reuses the old signed file URL', async () => {
@@ -54,6 +57,18 @@ test('reload rechecks a tab-scoped token and never reuses the old signed file UR
   assert.equal(JSON.parse(refreshed.calls[0].options.body).credential, privateToken);
   await refreshed.finish({ ...good, url: good.url + 'fresh' });
   assert.equal(refreshed.get('purchase-download').getAttribute('href'), good.url + 'fresh');
+});
+test('verified purchases emit one conversion across checks and reloads', async () => {
+  const first = fixture();
+  await first.finish();
+  assert.deepEqual(first.analyticsEvents, ['purchase']);
+  first.get('purchase-retry').events.click();
+  await first.finish({ ...good, url: good.url + 'refresh' });
+  assert.deepEqual(first.analyticsEvents, ['purchase']);
+
+  const refreshed = fixture({ hash: '', storage: first.storage });
+  await refreshed.finish({ ...good, url: good.url + 'reload' });
+  assert.deepEqual(refreshed.analyticsEvents, []);
 });
 test('checkout session exchange becomes a reloadable token only after verified download response', async () => {
   const f = fixture({ hash: '#session=cs_test_fixture' });

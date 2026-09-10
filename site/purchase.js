@@ -30,6 +30,21 @@
   let token = credential.startsWith('session=') ? null : credential;
   let busy = false;
   let linkLifetime = 0, requestWallTime = 0, requestMonotonicTime = 0;
+  function trackVerifiedPurchase() {
+    let alreadyTracked = false;
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(storageKey));
+      alreadyTracked = saved?.token === token && saved?.analyticsTracked === true;
+      if (!alreadyTracked && validToken(token)) {
+        sessionStorage.setItem(storageKey, JSON.stringify({ token, savedAt, analyticsTracked: true }));
+      }
+    } catch {
+      // Analytics must never block a buyer whose browser disables storage.
+    }
+    if (!alreadyTracked) {
+      document.dispatchEvent(new CustomEvent('codex-migrate:analytics-event', { detail: 'purchase' }));
+    }
+  }
   async function call(action, value) {
     // Keep same-origin hosting authentication on protected previews. Purchase
     // authority still comes from the explicit credential and fresh Stripe read.
@@ -65,12 +80,17 @@
       }
       linkLifetime = result.expiresInMs;
       if (validToken(token)) {
-        try { sessionStorage.setItem(storageKey, JSON.stringify({ token, savedAt })); } catch {}
+        try {
+          const saved = JSON.parse(sessionStorage.getItem(storageKey));
+          const analyticsTracked = saved?.token === token && saved?.analyticsTracked === true;
+          sessionStorage.setItem(storageKey, JSON.stringify({ token, savedAt, analyticsTracked }));
+        } catch {}
       }
       status.textContent = 'Your purchase is verified. Select Download for Mac to save the file.';
       checksum.textContent = `Archive SHA-256: ${result.sha256}`; integrity.hidden = false;
       download.setAttribute('href', url.toString()); download.removeAttribute('aria-disabled');
       download.hidden = false; retry.hidden = true;
+      trackVerifiedPurchase();
     } catch (error) {
       if (['invalid_link', 'purchase_requires_support', 'purchase_not_verified'].includes(error.message)) forget();
       const messages = {

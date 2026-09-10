@@ -29,6 +29,29 @@ maintainer disclosure on OpenAI Codex issue 37106 explaining the destination-
 identity failure this tool avoids. Merchant payment email is enabled in Stripe,
 but real-sale inbox arrival remains unverified.
 
+### Conversion measurement correction — September 9
+
+The authenticated GA4 property reported 35 active users, 41 sessions, 45 page
+views and three `begin_checkout` events for the preceding seven days. Traffic
+was mostly direct; GA4 also attributed one session each to organic search and
+organic social. The authenticated live Stripe account showed no completed
+payments, so there is no evidence of a real purchase or customer download yet.
+
+`begin_checkout` is now a GA4 key event. The purchase page now uses the same
+region-aware analytics controls as the public site and emits GA4's `purchase`
+event only after the server has verified the payment and issued a valid private
+download. Tab-scoped suppression prevents retries and reloads from counting the
+same verified purchase twice. No email address, payment detail, download
+credential or private file URL is sent to Analytics. The privacy disclosure
+now describes this behavior.
+
+The complete website/commerce suite passes 280 tests with one intentional
+database-dependent skip. The complete Python migration suite passes all 729
+tests with 12 expected environment/platform skips. These checks verify the
+measurement behavior locally; a real production purchase remains necessary to
+observe the first purchase conversion, buyer delivery email and merchant
+payment notification end to end.
+
 ### Commercial funnel and public-site audit — September 8
 
 Production deployment `dpl_56ynxAFZGFFpGmcn7gtnA1TEHd1Y`, from pushed source

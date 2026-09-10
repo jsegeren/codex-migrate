@@ -137,6 +137,13 @@
     if (trackedLink) sendEvent(trackedLink.dataset.analyticsEvent);
   });
 
+  // Purchase verification happens asynchronously after the page loads. Keep
+  // that signal on the same validated, consent-aware path as ordinary CTA
+  // events instead of exposing gtag as a global application API.
+  document.addEventListener("codex-migrate:analytics-event", (event) => {
+    sendEvent(event.detail);
+  });
+
   async function initialize() {
     if (!PUBLIC_HOSTS.has(window.location.hostname)) return;
     try {

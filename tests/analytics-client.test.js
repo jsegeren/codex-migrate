@@ -8,6 +8,7 @@ const source = fs.readFileSync(require.resolve('../site/analytics.js'), 'utf8');
 function page({ blockedStorage = false, hostname = 'migrate.segeren.com' } = {}) {
   let resolveRegion;
   let click;
+  let applicationEvent;
   let load;
   let notice;
   let fetchCalls = 0;
@@ -19,7 +20,10 @@ function page({ blockedStorage = false, hostname = 'migrate.segeren.com' } = {})
     cookie: '',
     head: { appendChild(script) { scripts.push(script); } },
     body: { dataset: {}, appendChild(element) { notice = element; } },
-    addEventListener(type, handler) { if (type === 'click') click = handler; },
+    addEventListener(type, handler) {
+      if (type === 'click') click = handler;
+      if (type === 'codex-migrate:analytics-event') applicationEvent = handler;
+    },
     createElement(tag) {
       const buttons = new Map();
       return {
@@ -49,6 +53,7 @@ function page({ blockedStorage = false, hostname = 'migrate.segeren.com' } = {})
     get fetchCalls() { return fetchCalls; },
     get notice() { return notice; },
     clickTarget(target) { click({ preventDefault() {}, target }); },
+    applicationEvent(name) { applicationEvent({ detail: name }); },
     choose(allow) {
       click({ preventDefault() {}, target: { closest: () => ({}) } });
       notice.querySelector(allow ? '[data-analytics-accept]' : '[data-analytics-decline]').activate();
@@ -79,6 +84,15 @@ test('CTA events before page load are queued and flushed after analytics starts'
   browser.clickTarget(target);
   await browser.finish('default');
   assert.equal(browser.window.dataLayer.some(entry => entry[0] === 'event' && entry[1] === 'select_paid_beta'), true);
+});
+
+test('verified application events use the same validated analytics queue', async () => {
+  const browser = page();
+  browser.applicationEvent('purchase');
+  browser.applicationEvent('Invalid event name');
+  await browser.finish('default');
+  assert.equal(browser.window.dataLayer.some(entry => entry[0] === 'event' && entry[1] === 'purchase'), true);
+  assert.equal(browser.window.dataLayer.some(entry => entry[0] === 'event' && entry[1] === 'Invalid event name'), false);
 });
 
 for (const blockedStorage of [false, true]) {
