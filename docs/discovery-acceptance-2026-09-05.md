@@ -26,6 +26,16 @@ cloned by Migration Assistant, and is a one-time Mac move rather than
 continuous sync. The reply discloses maintainer status and non-affiliation with
 OpenAI.
 
+The same scan found an unanswered, exact-fit request for a
+[portable Codex profile across Macs](https://github.com/openai/codex/issues/31130).
+A [scoped maintainer reply](https://github.com/openai/codex/issues/31130#issuecomment-5619646507)
+was published and verified as `jsegeren`. It distinguishes the requested small
+archive/export workflow from Codex Migrate's direct full Mac transfer and
+selective skills transfer, links both editions, and includes the same
+non-affiliation disclosure. An unanswered r/codex question about whether local
+history follows a user to another Mac was also found; a transparent response is
+prepared in the authenticated browser but was not submitted automatically.
+
 The scan did not duplicate the already-public
 [r/ChatGPTCoding weekly-thread comment](https://www.reddit.com/r/ChatGPTCoding/comments/1w9lsay/comment/p8h67bo/).
 Current r/macapps guidance requires at least 10 community-karma points and a
