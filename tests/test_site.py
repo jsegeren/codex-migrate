@@ -346,6 +346,11 @@ class SiteTests(unittest.TestCase):
         self.assertIn("current releases are not commercially signed or Apple-notarized", text)
         self.assertIn("Keep the old computer intact", text)
 
+    def test_guide_footers_link_the_founder_name_to_x(self):
+        founder_link = '<a href="https://x.com/JoshuaSegeren">Joshua Segeren</a>'
+        for name in ("moving-to-a-new-mac", "codex-history-missing-new-mac", "backup-and-recovery", "compare-codex-migration-tools"):
+            self.assertIn(founder_link, (SITE / (name + ".html")).read_text())
+
     def test_recovery_guide_matches_live_beta_without_waiving_safety_limits(self):
         source = (SITE / "backup-and-recovery.html").read_text()
         text = " ".join(self.parse("backup-and-recovery.html").text)
