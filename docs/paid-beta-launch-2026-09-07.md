@@ -130,3 +130,24 @@ originally purchased.
 Rollback: set `COMMERCE_CHECKOUT_OPEN=no` and redeploy the validated source.
 Keep the release catalog and private artifact available for existing buyers;
 closing new sales must not invalidate already-paid download entitlements.
+
+## Build 9 hardware-route correction and promotion
+
+A September 10 isolated two-Mac hardware run staged a unique 512 MiB skill over
+the real Wi-Fi/Bonjour route, paused after 4 KiB, resumed the same migration and
+matched the staged payload byte-for-byte. The run did not finalize or touch the
+owner's active destination Codex workspace. It exposed one cosmetic defect:
+macOS IPv6 route inspection requires an explicit address family, so the working
+Wi-Fi path was displayed as `unknown`. Source `8f1e0225a6babcb1be1be0a876da11edd73732d8`
+corrects that label and adds regression coverage without changing transfer,
+backup, installation or verification behavior.
+
+Build 9 was produced from that clean pushed source, signed with Developer ID,
+accepted by Apple notarization submission `9ddf03b5-c947-4d97-a598-d71519e179d9`,
+stapled and accepted by Gatekeeper. Eleven exact packaged-engine checks passed
+with one expected case-sensitive-filesystem skip. Its 8,307,597-byte archive
+has SHA-256 `7aadccacec63b09fe637cd61c506f4730f2de62163687ec56a2cc63ad8306133`.
+The private live-store upload was independently read back with the same size
+and digest. The existing paid-beta authorization applies to this narrowly
+corrected build; older catalog entries and objects remain available for their
+existing entitlements.
