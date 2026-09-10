@@ -58,7 +58,7 @@
       const launch = document.getElementById('launch-email');
       if (!launch.contains(document.activeElement) && !document.getElementById('launch-address').value) launch.hidden = true;
       document.getElementById('hero-availability').textContent = beta ? 'Signed Mac beta available · Free open-source CLI' : 'Mac app available · Free open-source CLI';
-      document.getElementById('purchase-faq').textContent = `Yes. The signed, notarized ${beta ? 'beta ' : ''}app is $50 USD for ${platform}, including best-effort support and a 30-day refund policy. ${beta ? 'Native accessibility, permissions and physical network-interruption testing are ongoing. Keep your old Mac and an independent backup. ' : ''}The CLI and source remain free.`;
+      document.getElementById('purchase-faq').textContent = `Yes. The signed, notarized ${beta ? 'beta ' : ''}app is $50 USD for ${platform}, including best-effort support and a 30-day refund policy. ${beta ? 'The current build has passed VoiceOver, a real macOS permission-denial check, and physical Wi-Fi interruption/resume testing. Guided permission recovery, direct-cable interruption, pristine-Mac installation, and broader hardware coverage remain ongoing. Keep your old Mac and an independent backup. ' : ''}The CLI and source remain free.`;
       const hero = document.getElementById('hero-paid-link');
       hero.href = '#founding-edition'; hero.textContent = beta ? 'Get the Mac beta — $50' : 'Get the Mac app — $50';
       button.textContent = beta ? 'Buy the Mac beta — $50' : 'Buy the Mac app — $50';

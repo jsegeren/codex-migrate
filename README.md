@@ -26,9 +26,12 @@ your Macs, not through our servers.
 **[Get the signed Mac beta — $50 →](https://migrate.segeren.com/#founding-edition)**
 
 For Apple silicon Macs. Developer ID signed and Apple notarized, with
-best-effort support and a 30-day refund policy. Native accessibility,
-permissions and physical network-interruption testing are still underway;
-this is a beta, not a claim of complete compatibility or fault-free operation.
+best-effort support and a 30-day refund policy. The current build has passed
+VoiceOver, a real macOS permission-denial check, and physical Wi-Fi
+interruption/resume testing. Guided permission recovery, direct-cable
+interruption, pristine-Mac installation, and broader hardware coverage remain
+ongoing; this is a beta, not a claim of complete compatibility or fault-free
+operation.
 
 Keep the old Mac and an independent backup. Finalization replaces selected
 destination data after backup; it does not merge two independently active

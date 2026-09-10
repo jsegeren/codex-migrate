@@ -30,8 +30,10 @@ maintainer support and a 30-day refund policy. No subscription or pre-order.
 On September 7 the Founder explicitly authorized opening self-service paid beta
 downloads while the remaining acceptance checks continue. This supersedes the
 earlier manual-only beta policy below. The approved artifact is signed and
-notarized build 5 for Apple silicon, not an unsigned early build. Native
-accessibility, permissions and physical network-interruption checks remain
+notarized build 9 for Apple silicon, not an unsigned early build. Build 9 has
+passed VoiceOver, a real macOS permission-denial check, and physical Wi-Fi
+interruption/resume testing. Guided permission recovery, direct-cable
+interruption, pristine-Mac installation, and broader hardware coverage remain
 unfinished and are disclosed before payment. See the
 [paid-beta launch record](paid-beta-launch-2026-09-07.md) for exact scope.
 
