@@ -18,11 +18,13 @@ or seller-delivery observation is claimed.
 A fresh channel scan found one strong, non-duplicate customer/problem report:
 [OpenAI Codex issue 36295](https://github.com/openai/codex/issues/36295), where
 Migration Assistant copied `~/.codex/installation_id` between two Macs and
-caused Remote Control conflicts. A transparent maintainer reply was staged in
-the authenticated GitHub form but not submitted. It explains that Codex Migrate
-preserves destination authentication and installation identity, does not repair
-an identity already cloned by Migration Assistant, and is a one-time Mac move
-rather than continuous sync. Submission remains a separate public action.
+caused Remote Control conflicts. A transparent maintainer reply was
+[published and verified](https://github.com/openai/codex/issues/36295#issuecomment-5619430746)
+as `jsegeren`. It explains that Codex Migrate preserves destination
+authentication and installation identity, does not repair an identity already
+cloned by Migration Assistant, and is a one-time Mac move rather than
+continuous sync. The reply discloses maintainer status and non-affiliation with
+OpenAI.
 
 The scan did not duplicate the already-public
 [r/ChatGPTCoding weekly-thread comment](https://www.reddit.com/r/ChatGPTCoding/comments/1w9lsay/comment/p8h67bo/).
