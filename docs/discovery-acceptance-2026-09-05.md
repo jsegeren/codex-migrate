@@ -1,5 +1,37 @@
 # Search indexing and community discovery — September 5, 2026
 
+## September 10 release and demand recheck
+
+The live homepage and availability endpoint returned HTTP 200. Production
+reported the signed Apple-silicon beta available at $50, and the homepage's
+Open Graph and X metadata referenced the Founder-selected white social image at
+`https://migrate.segeren.com/og-white-v1.png` with the independent-tool notice.
+
+The authenticated GA4 property reported 40 active users, 48 sessions, 52 page
+views, three `begin_checkout` events and zero key events for the preceding seven
+days. Traffic included two Organic Search sessions, one Organic Social session
+and one session each initially attributed to Google, Bing and `t.co`; most
+traffic remained direct. The live Stripe account still displayed no payments.
+One view of the private purchase page is not proof of a purchase, and no buyer
+or seller-delivery observation is claimed.
+
+A fresh channel scan found one strong, non-duplicate customer/problem report:
+[OpenAI Codex issue 36295](https://github.com/openai/codex/issues/36295), where
+Migration Assistant copied `~/.codex/installation_id` between two Macs and
+caused Remote Control conflicts. A transparent maintainer reply was staged in
+the authenticated GitHub form but not submitted. It explains that Codex Migrate
+preserves destination authentication and installation identity, does not repair
+an identity already cloned by Migration Assistant, and is a one-time Mac move
+rather than continuous sync. Submission remains a separate public action.
+
+The scan did not duplicate the already-public
+[r/ChatGPTCoding weekly-thread comment](https://www.reddit.com/r/ChatGPTCoding/comments/1w9lsay/comment/p8h67bo/).
+Current r/macapps guidance requires at least 10 community-karma points and a
+specific transparency/promotion format; this new account is not yet eligible.
+DEV's AI-comment restriction still excludes an agent-written reply to its exact
+Mac-migration article. Competitor launch threads, Windows-only requests and
+continuous-sync requests were not used as disguised sales opportunities.
+
 ## September 7 signed-beta launch and channel review
 
 Published from the Founder's `JoshuaSegeren` X account and verified by opening
