@@ -33,7 +33,7 @@ function makeHandler(load = runtime, env = process.env, configure = configuratio
         mode: 'payment', line_items: [{ price: config.price, quantity: 1 }],
         ...(standard ? { billing_address_collection: 'required' } : { managed_payments: { enabled: true } }),
         ...(config.release.channel === 'beta' ? { custom_text: { submit: { message:
-          'Paid beta for Apple silicon Macs. Native accessibility, permissions and physical network-interruption testing are ongoing. Keep your old Mac and an independent backup. Includes best-effort support and a 30-day refund policy.' } } } : {}),
+          'Beta software for Apple silicon Macs. Keep your old Mac and an independent backup until you verify the move. A 30-day refund policy applies.' } } } : {}),
         metadata: { product: 'codex-migrate', release: config.release.id,
           ...(config.release.channel === 'beta' ? { release_channel: 'beta' } : {}),
           checkout_provider: standard ? 'stripe' : 'managed' },

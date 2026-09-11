@@ -62,9 +62,10 @@ test('paid beta checkout discloses limits before payment and records the beta ch
   assert.equal(data.metadata.release_channel, 'beta');
   assert.equal(data.metadata.checkout_provider, 'stripe');
   assert.equal(data.managed_payments, undefined);
-  for (const text of ['Paid beta', 'Apple silicon', 'testing are ongoing', 'independent backup', '30-day refund']) {
+  for (const text of ['Beta software', 'Apple silicon', 'independent backup', 'verify the move', '30-day refund']) {
     assert(data.custom_text.submit.message.includes(text));
   }
+  assert(!data.custom_text.submit.message.includes('testing are ongoing'));
 });
 test('wrong account stops before looking up or creating a purchase', async () => {
   const f = fixture(); f.setAccount('acct_other');
