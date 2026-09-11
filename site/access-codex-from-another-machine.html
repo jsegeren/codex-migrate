@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Access Codex from another machine — remote access or migration?</title>
+    <meta name="description" content="How to access OpenAI Codex from another Mac, phone, or remote computer—and when to use Remote Control, Remote SSH, or a one-time Codex migration instead.">
+    <link rel="canonical" href="https://migrate.segeren.com/access-codex-from-another-machine">
+    <meta property="og:title" content="Access Codex from another machine"><meta property="og:description" content="Choose between Codex Remote Control, Remote SSH, and a one-time Mac-to-Mac migration without confusing remote access with synchronization."><meta property="og:type" content="article"><meta property="og:url" content="https://migrate.segeren.com/access-codex-from-another-machine"><meta property="og:image" content="https://migrate.segeren.com/og-white-v1.png">
+    <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Access Codex from another machine"><meta name="twitter:description" content="Remote Control, Remote SSH, migration, and sync solve different Codex workflows."><meta name="twitter:image" content="https://migrate.segeren.com/og-white-v1.png">
+    <link rel="icon" href="/assets/mark.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css?v=20260904-regional"><script src="/analytics.js?v=20260907-deferred" defer></script>
+  </head>
+  <body>
+    <header class="site-header"><a class="brand" href="/"><span class="brand-mark" aria-hidden="true">CM</span><span>Codex Migrate</span></a><nav aria-label="Primary navigation"><a href="/moving-to-a-new-mac">Migration guide</a><a href="/compare-codex-migration-tools">Compare options</a><a href="/#founding-edition">Mac beta</a></nav></header>
+    <main class="legal comparison-guide shell">
+      <p class="eyebrow">Remote access or migration?</p>
+      <h1>Access Codex from another machine.</h1>
+      <p class="lede">Keeping work on one computer and controlling it remotely is different from moving that work to a new Mac. Choose the path that matches where you want the files, permissions, and active Codex environment to live.</p>
+
+      <h2>Short answer</h2>
+      <div class="decision-grid">
+        <section><h3>Checking Codex from your phone?</h3><p>Use OpenAI’s Remote experience. The host computer keeps the local files, credentials, permissions, and running environment, so it must remain awake, online, and available for control.</p></section>
+        <section><h3>Running work on another computer?</h3><p>Use Codex with Remote SSH when you want the remote computer to remain the execution environment. You connect to its projects rather than copying them onto the computer in front of you.</p></section>
+        <section><h3>Replacing an old Mac?</h3><p>Use a one-time migration when the new Mac should own the local Codex conversations, configuration, skills, repositories, worktrees, and unfinished files.</p></section>
+        <section><h3>Keeping two active Macs synchronized?</h3><p>Use a synchronization system designed for conflicting changes. Codex Migrate is not continuous sync and does not merge two independently changing workspaces.</p></section>
+      </div>
+
+      <h2>Remote access keeps the work on the host</h2>
+      <p>OpenAI describes Codex Remote as a way to connect to a machine where Codex is already running. The phone or other authorized client can show live threads, approvals, terminal output, diffs, and screenshots, while the files and local setup remain on the host. See OpenAI’s current <a href="https://openai.com/index/work-with-codex-from-anywhere/">Codex remote-access overview</a> and <a href="https://help.openai.com/en/articles/11369540">Codex plan and permission guidance</a>.</p>
+      <p>This is useful for an always-on Mac mini, laptop, devbox, or remote environment. It does not turn the host’s local Codex state into ordinary ChatGPT cloud history. If the host sleeps, disconnects, loses permission, or stops running the required service, the remote client cannot keep operating that local environment by itself.</p>
+
+      <h2>Remote SSH runs Codex where the project already lives</h2>
+      <p>For desktop-to-remote-machine work, Remote SSH lets Codex use projects on a remote host. The remote machine remains the source of its filesystem, credentials, tools, and permissions. This can be the right choice when you intend to keep a Mac mini or development server as the permanent host.</p>
+      <p>Remote SSH is not a backup or a Mac replacement. If you later retire that host, you still need to account for local Codex state, project folders, unpushed Git work, and anything else that exists only on that machine.</p>
+
+      <h2>Migration makes the new Mac the working machine</h2>
+      <p>A one-time migration is appropriate when the old Mac is being replaced and the new Mac should continue the local work. Signing into the same ChatGPT account gives the new Mac access to Codex, but it may not recreate local Codex conversations, configuration, skills, worktrees, unpushed branches, stashes, or unfinished files.</p>
+      <p>Codex Migrate inventories the transferable local state and the workspace folders you select, stages them over SSH, verifies a destination backup before replacement, preserves the new Mac’s authentication and installation identity, and checks the installed result. Follow the <a href="/moving-to-a-new-mac">step-by-step Mac migration guide</a>.</p>
+
+      <h2>Do not clone an installation to fake synchronization</h2>
+      <p>Copying all of <code>~/.codex</code> back and forth is not safe synchronization. That directory can include machine-specific authentication, installation identity, live databases, locks, sockets, logs, or caches. Users have documented cloned installation identities causing two Macs to collide in Remote Control or appear as one host in OpenAI Codex <a href="https://github.com/openai/codex/issues/33830">issue #33830</a> and <a href="https://github.com/openai/codex/issues/37106">issue #37106</a>.</p>
+      <p>Two active machines can also change the same conversation, Git branch, worktree, database, or untracked file independently. A trustworthy synchronization product needs a conflict model; a repeated file copy does not provide one.</p>
+
+      <h2>Choose based on the outcome you want</h2>
+      <ul>
+        <li><strong>Use Remote</strong> when the original host should keep running the work and you want to steer it from a phone.</li>
+        <li><strong>Use Remote SSH</strong> when a remote machine should remain the development environment you connect to.</li>
+        <li><strong>Use Codex Migrate</strong> when changing Macs and the destination should receive the portable local Codex state plus selected complete workspaces.</li>
+        <li><strong>Use a real sync design</strong> when multiple computers will keep editing the same work. Review the <a href="/compare-codex-migration-tools">migration and synchronization comparison</a>.</li>
+      </ul>
+
+      <h2>Common questions</h2>
+      <h3>Can I close the host Mac after connecting remotely?</h3>
+      <p>No, not if the work is still running on that host. Keep it awake, online, powered, and configured to allow the relevant Codex connection. If you want to retire it, migrate the work first and verify the new Mac.</p>
+      <h3>Does Remote Control copy my project to the phone?</h3>
+      <p>No. The project, credentials, permissions, and local setup remain on the host computer. The authorized client presents and controls the live remote environment.</p>
+      <h3>Can Codex Migrate keep my laptop and Mac mini continuously identical?</h3>
+      <p>No. It performs a deliberate one-time Mac-to-Mac transfer. It does not continuously synchronize or merge two active workspaces.</p>
+
+      <p class="notice"><strong>Codex Migrate is independent software, not an OpenAI product.</strong> OpenAI’s Remote and Remote SSH behavior, availability, and permissions can change; check the linked official documentation before relying on them.</p>
+      <div class="actions"><a class="button button-primary" data-analytics-event="select_paid_beta" href="/#founding-edition">Move to a new Mac — $50</a><a class="button button-secondary" data-analytics-event="select_free_cli" href="https://github.com/jsegeren/codex-migrate#quick-start">Inspect the free CLI</a></div>
+    </main>
+    <footer><div class="shell"><p>Independent software by <a href="https://x.com/JoshuaSegeren">Joshua Segeren</a>. Not affiliated with or endorsed by OpenAI.</p><div class="footer-bottom"><a href="/">Codex Migrate</a><a href="/privacy">Privacy</a><a href="/privacy#website-analytics" data-analytics-preferences>Analytics choices</a><a href="/terms">Terms</a></div></div></footer>
+  </body>
+</html>

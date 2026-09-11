@@ -45,6 +45,7 @@ class SiteTests(unittest.TestCase):
         self.assertIn("Do not blindly replace the new Mac’s Codex folder", missing)
         self.assertIn('href="/codex-history-missing-new-mac"', home)
         self.assertIn('href="/compare-codex-migration-tools"', home)
+        self.assertIn('href="/access-codex-from-another-machine"', home)
         guide_actions = guide.split('<div class="actions">', 1)[1].split("</div>", 1)[0]
         self.assertLess(guide_actions.index("Get the Mac beta — $50"), guide_actions.index("Read the free CLI setup"))
         recovery = (SITE / "backup-and-recovery.html").read_text()
@@ -63,7 +64,7 @@ class SiteTests(unittest.TestCase):
         self.assertIn("does not transfer ordinary ChatGPT cloud chats", readme)
 
     def test_indexed_pages_have_canonical_urls(self):
-        for name in ("privacy", "terms", "refunds", "moving-to-a-new-mac", "codex-history-missing-new-mac", "backup-and-recovery", "compare-codex-migration-tools"):
+        for name in ("privacy", "terms", "refunds", "moving-to-a-new-mac", "codex-history-missing-new-mac", "backup-and-recovery", "compare-codex-migration-tools", "access-codex-from-another-machine"):
             self.assertIn('<link rel="canonical" href="https://migrate.segeren.com/' + name + '">',
                           (SITE / (name + ".html")).read_text())
         self.assertIn('<link rel="canonical" href="https://migrate.segeren.com/ja/codex-new-mac">',
@@ -346,7 +347,7 @@ class SiteTests(unittest.TestCase):
     def test_guides_are_discoverable_and_do_not_promise_unsafe_backup_bypass(self):
         home = (SITE / "index.html").read_text()
         sitemap = (SITE / "sitemap.xml").read_text()
-        for path in ("moving-to-a-new-mac", "codex-history-missing-new-mac", "backup-and-recovery", "compare-codex-migration-tools"):
+        for path in ("moving-to-a-new-mac", "codex-history-missing-new-mac", "backup-and-recovery", "compare-codex-migration-tools", "access-codex-from-another-machine"):
             self.assertIn('href="/' + path + '"', home)
             self.assertIn("https://migrate.segeren.com/" + path, sitemap)
         self.assertIn("no skip-backup switch", (SITE / "backup-and-recovery.html").read_text())
@@ -366,9 +367,25 @@ class SiteTests(unittest.TestCase):
         self.assertIn("current releases are not commercially signed or Apple-notarized", text)
         self.assertIn("Keep the old computer intact", text)
 
+    def test_remote_access_guide_distinguishes_control_ssh_migration_and_sync(self):
+        source = (SITE / "access-codex-from-another-machine.html").read_text()
+        text = " ".join(self.parse("access-codex-from-another-machine.html").text)
+        self.assertIn("Access Codex from another machine", text)
+        self.assertIn("Use OpenAI’s Remote experience", text)
+        self.assertIn("Use Codex with Remote SSH", text)
+        self.assertIn("Use a one-time migration", text)
+        self.assertIn("Codex Migrate is not continuous sync", text)
+        self.assertIn("ordinary ChatGPT cloud history", text)
+        self.assertIn("https://openai.com/index/work-with-codex-from-anywhere/", source)
+        self.assertIn("https://help.openai.com/en/articles/11369540", source)
+        self.assertIn("https://github.com/openai/codex/issues/33830", source)
+        self.assertIn("https://github.com/openai/codex/issues/37106", source)
+        self.assertIn('href="/#founding-edition">Move to a new Mac — $50', source)
+        self.assertIn("Codex Migrate is independent software, not an OpenAI product", text)
+
     def test_guide_footers_link_the_founder_name_to_x(self):
         founder_link = '<a href="https://x.com/JoshuaSegeren">Joshua Segeren</a>'
-        for name in ("moving-to-a-new-mac", "codex-history-missing-new-mac", "backup-and-recovery", "compare-codex-migration-tools"):
+        for name in ("moving-to-a-new-mac", "codex-history-missing-new-mac", "backup-and-recovery", "compare-codex-migration-tools", "access-codex-from-another-machine"):
             self.assertIn(founder_link, (SITE / (name + ".html")).read_text())
 
     def test_recovery_guide_matches_live_beta_without_waiving_safety_limits(self):
