@@ -101,7 +101,7 @@ test('standard checkout creates no managed payment and never silently falls back
   assert.equal(res.statusCode, 200);
   assert.equal(created.managed_payments, undefined);
   assert.equal(created.metadata.checkout_provider, 'stripe');
-  assert.equal(created.billing_address_collection, 'required');
+  assert.equal(created.billing_address_collection, undefined);
   assert.match(options.idempotencyKey, /-stripe-/);
   managed = { enabled: true };
   const bad = response(); await handler(req, bad);

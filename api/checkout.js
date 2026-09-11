@@ -31,7 +31,7 @@ function makeHandler(load = runtime, env = process.env, configure = configuratio
       const standard = config.checkoutProvider === 'stripe';
       const session = await stripe.checkout.sessions.create({
         mode: 'payment', line_items: [{ price: config.price, quantity: 1 }],
-        ...(standard ? { billing_address_collection: 'required' } : { managed_payments: { enabled: true } }),
+        ...(standard ? {} : { managed_payments: { enabled: true } }),
         ...(config.release.channel === 'beta' ? { custom_text: { submit: { message:
           'Beta software for Apple silicon Macs. Keep your old Mac and an independent backup until you verify the move. A 30-day refund policy applies.' } } } : {}),
         metadata: { product: 'codex-migrate', release: config.release.id,

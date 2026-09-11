@@ -7,8 +7,9 @@ Stripe Checkout in the existing account and accepted seller tax responsibility.
 Managed Payments support clarification is no longer a launch dependency.
 `COMMERCE_CHECKOUT_PROVIDER=stripe` is saved for this project's Production
 environment; code supports this explicit choice without automatic fallback.
-Standard sessions collect a billing address and do not enable Managed Payments
-or automatic tax. This does not resolve tax obligations. Paid-session validation,
+Standard sessions let Stripe collect the billing details required by the chosen
+payment method; they do not force a full address, enable Managed Payments, or
+enable automatic tax. This does not resolve tax obligations. Paid-session validation,
 refund/dispute checks and private delivery remain required, and historical
 Managed Payments purchases remain recoverable. No public sale or successful
 real-buyer delivery is claimed by this configuration change.
