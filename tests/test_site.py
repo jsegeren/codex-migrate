@@ -87,6 +87,8 @@ class SiteTests(unittest.TestCase):
         self.assertIn("通常のChatGPTクラウド会話", japanese)
         self.assertIn("リアルタイムに統合する製品ではありません", japanese)
         self.assertIn("Macベータ版を購入 — $49", japanese)
+        self.assertIn("49米ドルの買い切り", japanese)
+        self.assertNotIn("50米ドル", japanese)
         self.assertIn("アプリ画面とサポートは現在英語です", japanese)
 
     def test_closing_actions_can_wrap_when_text_is_enlarged(self):
