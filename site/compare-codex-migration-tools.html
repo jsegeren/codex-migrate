@@ -2,8 +2,8 @@
 <html lang="en">
   <head>
     <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Compare Codex migration and sync tools — Mac, Windows, and history</title>
-    <meta name="description" content="Compare ways to move OpenAI Codex to another Mac or computer: full Mac migration, selective history repair, manual copying, and ongoing cross-device sync.">
+    <title>Codex Migrate vs Codex Sync and other migration tools</title>
+    <meta name="description" content="Compare Codex Migrate, Codex Sync at codexsync.org, history repair tools, manual copying, and cross-device sync for moving OpenAI Codex to another Mac.">
     <link rel="canonical" href="https://migrate.segeren.com/compare-codex-migration-tools">
     <meta property="og:title" content="Which Codex migration tool fits your move?"><meta property="og:description" content="A practical comparison of Mac migration, selective history repair, cross-platform tools, and ongoing Codex sync."><meta property="og:type" content="article"><meta property="og:url" content="https://migrate.segeren.com/compare-codex-migration-tools"><meta property="og:image" content="https://migrate.segeren.com/og-white-v1.png">
     <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Compare Codex migration and sync tools"><meta name="twitter:description" content="Choose the right approach for a new Mac, missing Codex history, or ongoing cross-device continuity."><meta name="twitter:image" content="https://migrate.segeren.com/og-white-v1.png">
@@ -41,6 +41,13 @@
           </tbody>
         </table>
       </div>
+
+      <section id="codex-sync-vs-codex-migrate">
+        <h2>Codex Sync vs Codex Migrate</h2>
+        <p><a href="https://codexsync.org/">Codex Sync at codexsync.org</a> is the simpler option when you only want to package Codex conversations, titles, project records, and indexes into a <code>.codexsync</code> file and send it to another Apple-silicon Mac with AirDrop. Its documentation explicitly says it does not transfer source repositories, arbitrary documents, generated files, or other Codex outputs.</p>
+        <p><strong>Codex Migrate is for a broader new-Mac move.</strong> It transfers portable Codex state plus the workspace folders you select, including complete Git repositories, local branches, worktrees, stashes, and unfinished files. It stages a resumable copy directly over SSH, preserves the new Mac's authentication and installation identity, verifies a destination backup before replacement, and performs post-transfer checks.</p>
+        <p>Both are independent, local-first Apple-silicon Mac tools. Choose Codex Sync for a small AirDrop record bundle. Choose Codex Migrate when the project files and Git state behind those conversations need to arrive too.</p>
+      </section>
 
       <h2>Why “just copy the folder” is incomplete</h2>
       <p>Local Codex work can span conversations, configuration, skills, memories, automations, project folders, Git metadata, worktrees, unpushed branches, stashes, and unfinished files. Some runtime state is machine-specific. A blanket copy can also carry authentication, installation identity, live databases, locks, sockets, logs, or caches that should not replace the destination computer’s state.</p>
