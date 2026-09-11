@@ -18,8 +18,9 @@ selected workspace folders described below; compatibility testing is ongoing.
 ## Get the Mac app — $50 one time
 
 Prefer a packaged app to cloning and running the source? **The paid Mac Founding
-Edition includes the downloadable Mac app and best-effort support directly from
-Josh.** It opens the guided local browser workflow for setup, transfer progress,
+Edition includes the downloadable Mac app and personal, best-effort migration
+help directly from Josh.** It opens the guided local browser workflow for
+setup, transfer progress,
 pause/resume, verification, and recovery. Your workspace moves directly between
 your Macs, not through our servers.
 
