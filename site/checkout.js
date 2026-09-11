@@ -3,6 +3,7 @@
   const button = document.getElementById('checkout-button');
   const status = document.getElementById('checkout-status');
   const panel = document.getElementById('checkout-panel');
+  const disclosure = document.getElementById('edition-disclosure');
   if (!button || !status || !panel) return;
   let busy = false;
   // Reuse the same request ID on uncertain retries, including a reload in this
@@ -33,6 +34,7 @@
       if (url.origin !== 'https://checkout.stripe.com' || url.username || url.password) throw Error('unavailable');
       location.assign(url.toString());
     } catch (error) {
+      if (disclosure) disclosure.hidden = false;
       status.textContent = error.message === 'rate_limited'
         ? 'Too many checkout attempts. Wait a minute, then try again. If you already paid, use your delivery email—do not pay again.'
         : error.message === 'checkout_closed'
@@ -47,13 +49,17 @@
     .then(async response => {
       if (!response.ok) return;
       const data = await response.json();
-      if (data.available !== true || data.priceUSD !== 50 || !['arm64', 'x86_64'].includes(data.architecture)) return;
+      if (data.available !== true || data.priceUSD !== 50 || !['arm64', 'x86_64'].includes(data.architecture)) {
+        panel.hidden = true;
+        if (disclosure) disclosure.hidden = false;
+        return;
+      }
       const platform = data.architecture === 'arm64' ? 'Apple silicon Macs' : 'Intel Macs';
       const beta = data.channel === 'beta';
       document.getElementById('checkout-platform').textContent = `For ${platform}. $50 USD plus applicable tax. Secure checkout through Stripe.`;
       document.getElementById('edition-state').textContent = beta ? 'Paid beta · available now' : 'Available now';
       document.getElementById('edition-signed').textContent = 'Signed and notarized Mac app';
-      document.getElementById('edition-disclosure').hidden = true;
+      if (disclosure) disclosure.hidden = true;
       // A slow readiness response must not remove a form someone is using.
       const launch = document.getElementById('launch-email');
       if (!launch.contains(document.activeElement) && !document.getElementById('launch-address').value) launch.hidden = true;

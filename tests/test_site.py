@@ -146,7 +146,7 @@ class SiteTests(unittest.TestCase):
         self.assertIn("no subscription", text)
         self.assertIn("free cli", text)
 
-    def test_beta_checkout_requires_readiness_and_preserves_limitations(self):
+    def test_beta_checkout_is_immediately_visible_and_preserves_limitations(self):
         source = (SITE / "index.html").read_text()
         text = " ".join(self.parse("index.html").text)
         self.assertIn("Request Mac beta access — $50", text)
@@ -155,7 +155,8 @@ class SiteTests(unittest.TestCase):
         self.assertIn("Guided permission recovery, direct-cable interruption, pristine-Mac installation, and broader hardware coverage remain ongoing", text)
         self.assertIn("Keep your old Mac and an independent backup", text)
         self.assertIn("it does not merge two active workspaces", text)
-        self.assertIn('<div id="checkout-panel" hidden>', source)
+        self.assertIn('<div id="checkout-panel">', source)
+        self.assertIn('<div id="edition-disclosure" hidden>', source)
         self.assertIn('aria-describedby="checkout-platform beta-limits checkout-status"', source)
         self.assertIn('subject=Codex%20Migrate%20%2450%20beta%20access', source)
         for page in ("index.html", "moving-to-a-new-mac.html", "codex-history-missing-new-mac.html", "backup-and-recovery.html"):
@@ -320,6 +321,8 @@ class SiteTests(unittest.TestCase):
         self.assertIn('class="button button-primary" id="hero-paid-link" data-analytics-event="select_paid_beta"', hero)
         self.assertIn('class="button button-secondary" data-analytics-event="select_free_cli"', hero)
         self.assertIn('id="checkout-button" class="button button-primary full" data-analytics-event="begin_checkout"', source)
+        self.assertIn('<div id="checkout-panel">', source)
+        self.assertIn('<div id="edition-disclosure" hidden>', source)
 
         closing = source.split('<section class="closing">', 1)[1].split("</section>", 1)[0]
         self.assertLess(closing.index("Get the Mac beta — $50"), closing.index("Use the free CLI"))

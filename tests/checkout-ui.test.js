@@ -10,7 +10,7 @@ function fixture(data = { available: true, priceUSD: 50, architecture: 'arm64' }
   const elements = new Map(); const calls = []; const pending = []; const navigations = []; let stored;
   document.getElementById = id => {
     if (!elements.has(id)) {
-      const e = { hidden: id === 'checkout-panel', textContent: '', events: {}, removeAttribute() {}, contains(other) { return other === this; },
+      const e = { hidden: id === 'edition-disclosure', textContent: '', events: {}, removeAttribute() {}, contains(other) { return other === this; },
         addEventListener(name, fn) { this.events[name] = fn; }, focus() { document.activeElement = this; } };
       let disabled;
       Object.defineProperty(e, 'disabled', { get: () => disabled, set(v) { disabled = v; if (v && document.activeElement === e) document.activeElement = document.body; } });
@@ -32,11 +32,13 @@ function fixture(data = { available: true, priceUSD: 50, architecture: 'arm64' }
     } };
 }
 for (const data of [{ available: false }, { available: true, priceUSD: 49, architecture: 'arm64' },
-  { available: true, priceUSD: 50, architecture: 'other' }]) test('non-ready response preserves launch-only UI', async () => {
-  const f = fixture(data); await tick(); assert.equal(f.get('checkout-panel').hidden, true); assert.equal(f.get('launch-email').hidden, false);
+  { available: true, priceUSD: 50, architecture: 'other' }]) test('explicitly non-ready response replaces checkout with the email fallback', async () => {
+  const f = fixture(data); await tick(); assert.equal(f.get('checkout-panel').hidden, true);
+  assert.equal(f.get('edition-disclosure').hidden, false); assert.equal(f.get('launch-email').hidden, false);
 });
 test('ready release displays hardware and honest $50 price without starting checkout', async () => {
   const f = fixture(); await tick(); assert.equal(f.get('checkout-panel').hidden, false);
+  assert.equal(f.get('edition-disclosure').hidden, true);
   assert.match(f.get('checkout-platform').textContent, /Apple silicon Macs.*50 USD/);
   assert.equal(f.get('launch-email').hidden, true); assert.equal(f.calls.length, 1); assert.equal(f.navigations.length, 0);
   assert.equal(f.calls[0].options.credentials, 'same-origin');
@@ -60,6 +62,7 @@ test('delayed readiness preserves a focused or filled launch form', async () => 
 test('explicit click suppresses duplicates, preserves idempotency on retry and restores focus', async () => {
   const f = fixture(); await tick(); const b = f.get('checkout-button'); b.focus(); b.events.click(); b.events.click();
   assert.equal(f.calls.length, 2); await f.finish({ error: 'temporarily_unavailable' }, false);
+  assert.equal(f.get('edition-disclosure').hidden, false);
   assert.equal(f.calls[1].options.credentials, 'same-origin');
   assert.equal(f.document.activeElement, b); assert.match(f.get('checkout-status').textContent, /do not pay again/);
   b.events.click(); assert.equal(f.calls[1].options.body, f.calls[2].options.body);
