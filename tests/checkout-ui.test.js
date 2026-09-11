@@ -43,11 +43,11 @@ test('ready release displays hardware and honest $49 price without starting chec
   assert.equal(f.get('launch-email').hidden, true); assert.equal(f.calls.length, 1); assert.equal(f.navigations.length, 0);
   assert.equal(f.calls[0].options.credentials, 'same-origin');
 });
-test('beta availability preserves clear beta labels instead of announcing a finished release', async () => {
+test('beta availability keeps the beta state visible while the CTA leads with the outcome', async () => {
   const f = fixture({ available: true, priceUSD: 49, architecture: 'arm64', channel: 'beta' });
   await tick();
   assert.equal(f.get('checkout-panel').hidden, false);
-  assert.match(f.get('checkout-button').textContent, /Buy the Mac beta.*49/);
+  assert.equal(f.get('checkout-button').textContent, 'Move my Codex work + help — $49');
   assert.match(f.get('edition-state').textContent, /beta/);
   assert.equal(f.get('hero-availability').textContent, 'Signed Mac beta available · Free open-source CLI');
 });

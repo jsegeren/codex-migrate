@@ -335,7 +335,7 @@ class SiteTests(unittest.TestCase):
     def test_paid_mac_beta_is_primary_but_free_cli_remains_prominent(self):
         source = (SITE / "index.html").read_text()
         hero = source.split('<div class="actions">', 1)[1].split("</div>", 1)[0]
-        self.assertLess(hero.index("Get the Mac beta — $49"), hero.index("Get the free CLI"))
+        self.assertLess(hero.index("Move my Codex work — $49"), hero.index("Get the free CLI"))
         self.assertIn('class="button button-primary" id="hero-paid-link" data-analytics-event="select_paid_beta"', hero)
         self.assertIn('class="button button-secondary" data-analytics-event="select_free_cli"', hero)
         self.assertIn('id="checkout-button" class="button button-primary full" data-analytics-event="begin_checkout"', source)
@@ -350,7 +350,7 @@ class SiteTests(unittest.TestCase):
         editions = source.split('<section class="editions shell"', 1)[1].split("</section>", 1)[0]
         self.assertIn("The Mac app is the easy way.", editions)
         self.assertLess(editions.index('id="founding-edition"'), editions.index("Open source CLI"))
-        self.assertLess(editions.index("Get the Mac beta + help — $49"), editions.index("View the source and CLI"))
+        self.assertLess(editions.index("Move my Codex work + help — $49"), editions.index("View the source and CLI"))
 
     def test_launch_interest_preserves_consent_and_separate_beta_help_email(self):
         page = self.parse("index.html")
