@@ -11,7 +11,7 @@ function factory() {
   return { account: async () => ({ id: EXPECTED.account }),
     product: async () => ({ id: EXPECTED.product, active: true, livemode: true }),
     price: async () => ({ id: EXPECTED.price, product: EXPECTED.product, active: true,
-      livemode: true, unit_amount: 5000, currency: 'usd', type: 'one_time', recurring: null }),
+      livemode: true, unit_amount: 4900, currency: 'usd', type: 'one_time', recurring: null }),
     database: async () => [{ name: 'codex-migrate-commerce', mode: 'live' }],
     signFixture: async () => { throw Error('fixture transport not supplied'); } };
 }
@@ -37,7 +37,7 @@ for (const [name, value] of Object.entries({ VERCEL_ENV: 'preview', COMMERCE_MOD
 for (const [stage, result] of [['account', { id: 'acct_other' }],
   ['product', { id: EXPECTED.product, active: false, livemode: true }],
   ['price', { id: EXPECTED.price, product: EXPECTED.product, active: true, livemode: true,
-    unit_amount: 4900, currency: 'usd', type: 'one_time' }],
+    unit_amount: 5000, currency: 'usd', type: 'one_time' }],
   ['database', [{ name: 'codex-migrate-commerce', mode: 'sandbox' }]]]) {
   test(`${stage} mismatch never signs a fixture`, async () => {
     let signed = 0; const deps = factory(); deps[stage] = async () => result;
@@ -55,7 +55,7 @@ test('standard Checkout proof expires its session before continuing other checks
   const deps = factory(); let created = 0, expired = 0;
   deps.account = async () => ({ id: EXPECTED.account, charges_enabled: true });
   deps.createSession = async () => { created++; return { id: 'cs_live_proof', status: 'open',
-    livemode: true, mode: 'payment', amount_subtotal: 5000, currency: 'usd' }; };
+    livemode: true, mode: 'payment', amount_subtotal: 4900, currency: 'usd' }; };
   deps.expireSession = async id => { expired++; assert.equal(id, 'cs_live_proof');
     return { id, status: 'expired', payment_status: 'unpaid' }; };
   const proof = { ...env, COMMERCE_CHECKOUT_PROVIDER: 'stripe', COMMERCE_PROVE_STANDARD_CHECKOUT: 'yes',

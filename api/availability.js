@@ -1,4 +1,4 @@
-const { configuration } = require('../commerce/config');
+const { configuration, PRICE_USD } = require('../commerce/config');
 const { reply } = require('../commerce/http');
 function makeHandler(configure = configuration, env = process.env) {
   return (req, res) => {
@@ -8,7 +8,7 @@ function makeHandler(configure = configuration, env = process.env) {
       if (env.COMMERCE_CHECKOUT_OPEN === 'yes' && env.COMMERCE_MODE === 'live') {
         const config = configure(env);
         const architecture = config.release.filename.match(/-(arm64|x86_64)\.zip$/)?.[1];
-        if (config.live && architecture) result = { available: true, priceUSD: 50, architecture,
+        if (config.live && architecture) result = { available: true, priceUSD: PRICE_USD, architecture,
           ...(config.release.channel === 'beta' ? { channel: 'beta' } : {}) };
       }
     } catch { /* Missing or unreviewed release stays closed; expose no configuration. */ }

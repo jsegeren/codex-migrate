@@ -17,7 +17,7 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:site" content="@JoshuaSegeren">
     <meta name="twitter:title" content="Codex Migrate — Change the Mac. Keep the work.">
-    <meta name="twitter:description" content="Move local OpenAI Codex work between Macs, including Codex in the ChatGPT desktop app. Free CLI; signed Mac beta with best-effort support for $50.">
+    <meta name="twitter:description" content="Move local OpenAI Codex work between Macs, including Codex in the ChatGPT desktop app. Free CLI; signed Mac beta with best-effort support for $49.">
     <meta name="twitter:image" content="https://migrate.segeren.com/og-white-v1.png">
     <meta name="twitter:image:alt" content="Codex Migrate: Change the Mac. Keep the work. Codex product icon labelled For Codex. Independent tool, not affiliated with OpenAI.">
     <link rel="canonical" href="https://migrate.segeren.com/">
@@ -25,7 +25,7 @@
     <link rel="icon" href="/assets/mark.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/styles.css?v=20260904-regional">
     <script src="/analytics.js?v=20260907-deferred" defer></script>
-    <script src="/checkout.js?v=20260907-funnel" defer></script>
+    <script src="/checkout.js?v=20260910-price" defer></script>
   </head>
   <body>
     <header class="site-header">
@@ -53,7 +53,7 @@
               <h1>Change the Mac. <br><span class="accent">Keep the work.</span></h1>
               <p class="lede">Safely move your local OpenAI Codex setup and selected workspaces to another Mac, then pick up exactly where you left off—conversations, settings, skills, automations, repositories, branches, worktrees, and unfinished files. Setup takes minutes; transfer time depends on how much data you move and the connection between your Macs.</p>
               <div class="actions">
-                <a class="button button-primary" id="hero-paid-link" data-analytics-event="select_paid_beta" href="#founding-edition">Get the Mac beta — $50</a>
+                <a class="button button-primary" id="hero-paid-link" data-analytics-event="select_paid_beta" href="#founding-edition">Get the Mac beta — $49</a>
                 <a class="button button-secondary" data-analytics-event="select_free_cli" href="https://github.com/jsegeren/codex-migrate">Get the free CLI</a>
               </div>
             </div>
@@ -135,7 +135,7 @@
           <article class="price-card featured" id="founding-edition">
             <div class="badge" id="edition-state">Mac beta</div>
             <p class="plan-name">Mac app + personal migration help</p>
-            <p class="price"><span>$</span>50</p>
+            <p class="price"><span>$</span>49</p>
             <p class="price-note">One payment · no subscription</p>
             <ul class="check-list compact">
               <li id="edition-signed">Signed and notarized Mac beta</li>
@@ -145,14 +145,14 @@
               <li>Personal setup, migration, and recovery help</li>
             </ul>
             <div id="edition-disclosure" hidden>
-              <a class="button button-secondary full" href="mailto:joshua@segeren.com?subject=Codex%20Migrate%20%2450%20beta%20access&amp;body=My%20Mac%20models%20and%20macOS%20versions%3A%0AWhat%20I%20want%20to%20migrate%3A%0A">Request Mac beta access — $50</a>
+              <a class="button button-secondary full" href="mailto:joshua@segeren.com?subject=Codex%20Migrate%20%2449%20beta%20access&amp;body=My%20Mac%20models%20and%20macOS%20versions%3A%0AWhat%20I%20want%20to%20migrate%3A%0A">Request Mac beta access — $49</a>
               <p class="disclosure">If checkout is unavailable, email Josh for help with the signed Mac beta. Don’t email credentials or workspace contents.</p>
               <p class="disclosure">Prefer to wait? Request a launch email below.</p>
             </div>
             <div id="checkout-panel">
-              <p id="checkout-platform" class="disclosure">For Apple silicon Macs. $50 USD plus applicable tax. Secure checkout through Stripe.</p>
+              <p id="checkout-platform" class="disclosure">For Apple silicon Macs. $49 USD plus applicable tax. Secure checkout through Stripe.</p>
               <p id="beta-limits" class="disclosure"><strong>Beta:</strong> The current build has passed VoiceOver, a real macOS permission-denial check, and physical Wi-Fi interruption/resume testing. Guided permission recovery, direct-cable interruption, pristine-Mac installation, and broader hardware coverage remain ongoing. Keep your old Mac and an independent backup. This replaces selected destination data; it does not merge two active workspaces.</p>
-              <button id="checkout-button" class="button button-primary full" data-analytics-event="begin_checkout" type="button" aria-describedby="checkout-platform beta-limits checkout-status">Get the Mac beta + help — $50</button>
+              <button id="checkout-button" class="button button-primary full" data-analytics-event="begin_checkout" type="button" aria-describedby="checkout-platform beta-limits checkout-status">Get the Mac beta + help — $49</button>
               <p id="checkout-status" role="status"></p>
               <p class="disclosure"><a href="/terms.html">Terms</a> · <a href="/refunds.html">30-day refund policy</a> · <a href="mailto:joshua@segeren.com?subject=Codex%20Migrate%20purchase%20help">Email Josh</a></p>
             </div>
@@ -216,7 +216,7 @@
           <details><summary>How do I copy Codex to a different Mac?</summary><p>Install and sign in to Codex on the new Mac, then use Codex Migrate to inspect and transfer the local Codex data and project folders you select. It preserves the new Mac’s login instead of copying your old credentials. Destination data is backed up before replacement; separate active workspaces are not merged. Follow the <a href="/moving-to-a-new-mac">step-by-step Mac migration guide</a>.</p></details>
           <details><summary>Can I access Codex from another machine without moving it?</summary><p>Yes, but that is a different task. OpenAI’s Remote experience can let an authorized phone control work that remains on an awake, online host; Remote SSH can use projects on a remote computer. Codex Migrate moves local work from one Mac to another and is not continuous sync. <a href="/access-codex-from-another-machine">Compare the remote-access and migration paths</a>.</p></details>
           <details><summary>Can I transfer over Wi-Fi or a cable?</summary><p>Yes. Use Wi-Fi or a compatible USB-C/Thunderbolt network connection between your Macs; Ethernet works too. The transfer uses secure SSH in each case. After verifying the new Mac, Codex Migrate checks its reachable private network addresses and selects the faster verified route. USB-C cables vary in capability and speed, so the cable setup must provide a working network connection—not just charging. Enable Remote Login on the new Mac, then follow the <a href="/moving-to-a-new-mac">connection guide</a>.</p></details>
-          <details><summary>Can I try the Mac beta?</summary><p id="purchase-faq">The signed, notarized Mac beta is $50 one time for Apple silicon Macs, with best-effort support and a 30-day refund policy. See the Mac edition above for checkout availability and the remaining testing limitations. The complete open-source CLI stays free.</p></details>
+          <details><summary>Can I try the Mac beta?</summary><p id="purchase-faq">The signed, notarized Mac beta is $49 one time for Apple silicon Macs, with best-effort support and a 30-day refund policy. See the Mac edition above for checkout availability and the remaining testing limitations. The complete open-source CLI stays free.</p></details>
           <details><summary>Does it work on Windows?</summary><p>Not yet. Codex Migrate currently supports Mac-to-Mac migration only, including the open-source CLI. A Windows version is feasible, but it needs its own work on file locations, permissions, backups, packaging, and recovery testing. Windows and cross-platform transfers are not supported today, and there is no announced release date.</p></details>
           <details><summary>What if the transfer is interrupted?</summary><p>Rerun it. Staging uses resumable transfer semantics, so completed data is reused. The source Mac is never deleted or modified.</p></details>
           <details><summary>Can I migrate only one thing?</summary><p>Yes. Personal and repository-scoped skills can already be exported independently; more selective components will use the same guarded workflow.</p></details>
@@ -227,7 +227,7 @@
       <section class="closing">
         <div class="shell closing-inner">
           <div><p class="eyebrow">Keep your source. Verify the move.</p><h2>Make the move deliberate.</h2></div>
-          <div class="actions"><a class="button button-primary" data-analytics-event="select_paid_beta" href="#founding-edition">Get the Mac beta — $50</a><a class="button button-secondary light" data-analytics-event="select_free_cli" href="https://github.com/jsegeren/codex-migrate">Use the free CLI</a></div>
+          <div class="actions"><a class="button button-primary" data-analytics-event="select_paid_beta" href="#founding-edition">Get the Mac beta — $49</a><a class="button button-secondary light" data-analytics-event="select_free_cli" href="https://github.com/jsegeren/codex-migrate">Use the free CLI</a></div>
         </div>
       </section>
     </main>

@@ -1,6 +1,6 @@
 # Mac edition setup and recovery
 
-The signed, notarized Mac beta is available for Apple silicon Macs for $50 USD
+The signed, notarized Mac beta is available for Apple silicon Macs for $49 USD
 one time, including best-effort maintainer support and a 30-day refund window.
 The complete MIT-licensed CLI and source remain free. Local unsigned builds are
 engineering artifacts, not releases. See

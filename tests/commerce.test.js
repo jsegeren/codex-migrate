@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { Readable } = require('node:stream');
 const Stripe = require('stripe');
 const { configuration, SITE } = require('../commerce/config');
-const { service, validatePurchase, tokenFor, tokenSession } = require('../commerce/service');
+const { service, validatePurchase, purchasePriceCents, tokenFor, tokenSession } = require('../commerce/service');
 const { deliveryMail, PURCHASE_NOTIFY_EMAILS } = require('../commerce/runtime');
 const { makeHandler: webhook } = require('../api/stripe-webhook');
 const { makeHandler: checkout } = require('../api/checkout');
@@ -89,6 +89,13 @@ test('beta delivery email includes the remaining checks and both operator alerts
 });
 test('valid paid purchase verifies actual product, charge, and email', () => {
   assert.equal(validatePurchase(fixture().s, config).sessionId, 'cs_test_fixture');
+});
+test('current and legacy live prices retain their exact purchase amounts', () => {
+  const live = { ...config, live: true, price: 'price_1UEMgFJfbWpcJIZbPsmXjF2J' };
+  assert.equal(purchasePriceCents(live.price, live), 4900);
+  assert.equal(purchasePriceCents('price_1UCXtaJfbWpcJIZbp9W60sIv', live), 5000);
+  assert.equal(purchasePriceCents('price_unrelated', live), undefined);
+  assert.equal(purchasePriceCents('price_1UCXtaJfbWpcJIZbp9W60sIv', config), undefined);
 });
 test('standard Checkout verifies paid delivery without invalidating older managed purchases', () => {
   const s = fixture().s;

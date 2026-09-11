@@ -1,6 +1,10 @@
 const releases = require('./releases.json');
 
 const SITE = 'https://migrate.segeren.com';
+const PRICE_USD = 49;
+const PRICE_CENTS = 4900;
+const SANDBOX_PRICE_CENTS = 5000;
+function currentPriceCents(live) { return live ? PRICE_CENTS : SANDBOX_PRICE_CENTS; }
 class CommerceError extends Error {
   constructor(code, status = 503) { super(code); this.code = code; this.status = status; }
 }
@@ -55,4 +59,5 @@ function configuration(env = process.env, catalog = releases) {
     account: env.COMMERCE_STRIPE_ACCOUNT, product: env.COMMERCE_PRODUCT,
     price: env.COMMERCE_PRICE, webhookSecret: env.COMMERCE_WEBHOOK_SECRET };
 }
-module.exports = { configuration, CommerceError, SITE, validRelease, commerceSite };
+module.exports = { configuration, CommerceError, SITE, PRICE_USD, PRICE_CENTS, SANDBOX_PRICE_CENTS,
+  currentPriceCents, validRelease, commerceSite };

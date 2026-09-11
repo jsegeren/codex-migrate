@@ -28,7 +28,7 @@ it early and give a safe, actionable explanation.
 | Connector credentials and external dependencies | Destination Codex identity is retained; source SSH keys are excluded. Other configuration can reference uncopied dependencies. | Explicit reauthentication/reinstallation guidance. Do not equate copied configuration with working integrations. |
 | User gets stuck and needs support | Visible Help, email draft, reviewed local diagnostic report, and bounded event history are implemented. [September 6 browser acceptance](support-browser-acceptance-2026-09-06.md) verifies keyboard preparation/download, exact reviewed bytes, 320px/1280px layout, helper-error recovery and token rejection; 38 focused tests pass. | Repeat on the exact packaged release; native VoiceOver, actual email-client attachment and other setup/pairing surfaces remain separate. Never require private content just to request help. |
 
-No known safety gap is waived because the product costs $50. Unimplemented
+No known safety gap is waived because the product costs $49. Unimplemented
 guards above remain engineering work, separate from Apple approval, commerce,
 and clean cross-Mac acceptance gates in [release readiness](release-readiness.md).
 

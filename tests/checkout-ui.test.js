@@ -5,7 +5,7 @@ const { readFileSync } = require('node:fs');
 const { makeHandler } = require('../api/availability');
 const script = readFileSync(require.resolve('../site/checkout.js'), 'utf8');
 const tick = () => new Promise(resolve => setImmediate(resolve));
-function fixture(data = { available: true, priceUSD: 50, architecture: 'arm64' }, saved = null) {
+function fixture(data = { available: true, priceUSD: 49, architecture: 'arm64' }, saved = null) {
   const document = { body: {}, activeElement: null }; document.activeElement = document.body;
   const elements = new Map(); const calls = []; const pending = []; const navigations = []; let stored;
   document.getElementById = id => {
@@ -31,23 +31,23 @@ function fixture(data = { available: true, priceUSD: 50, architecture: 'arm64' }
       pending.shift()({ ok, status, json: async () => { if (value instanceof Error) throw value; return value; } }); await tick();
     } };
 }
-for (const data of [{ available: false }, { available: true, priceUSD: 49, architecture: 'arm64' },
-  { available: true, priceUSD: 50, architecture: 'other' }]) test('explicitly non-ready response replaces checkout with the email fallback', async () => {
+for (const data of [{ available: false }, { available: true, priceUSD: 50, architecture: 'arm64' },
+  { available: true, priceUSD: 49, architecture: 'other' }]) test('explicitly non-ready response replaces checkout with the email fallback', async () => {
   const f = fixture(data); await tick(); assert.equal(f.get('checkout-panel').hidden, true);
   assert.equal(f.get('edition-disclosure').hidden, false); assert.equal(f.get('launch-email').hidden, false);
 });
-test('ready release displays hardware and honest $50 price without starting checkout', async () => {
+test('ready release displays hardware and honest $49 price without starting checkout', async () => {
   const f = fixture(); await tick(); assert.equal(f.get('checkout-panel').hidden, false);
   assert.equal(f.get('edition-disclosure').hidden, true);
-  assert.match(f.get('checkout-platform').textContent, /Apple silicon Macs.*50 USD/);
+  assert.match(f.get('checkout-platform').textContent, /Apple silicon Macs.*49 USD/);
   assert.equal(f.get('launch-email').hidden, true); assert.equal(f.calls.length, 1); assert.equal(f.navigations.length, 0);
   assert.equal(f.calls[0].options.credentials, 'same-origin');
 });
 test('beta availability preserves clear beta labels instead of announcing a finished release', async () => {
-  const f = fixture({ available: true, priceUSD: 50, architecture: 'arm64', channel: 'beta' });
+  const f = fixture({ available: true, priceUSD: 49, architecture: 'arm64', channel: 'beta' });
   await tick();
   assert.equal(f.get('checkout-panel').hidden, false);
-  assert.match(f.get('checkout-button').textContent, /Buy the Mac beta.*50/);
+  assert.match(f.get('checkout-button').textContent, /Buy the Mac beta.*49/);
   assert.match(f.get('edition-state').textContent, /beta/);
   assert.equal(f.get('hero-availability').textContent, 'Signed Mac beta available · Free open-source CLI');
 });
@@ -101,11 +101,11 @@ test('sandbox cannot advertise a live purchase', () => {
 test('availability returns only price and hardware, never secret configuration', () => {
   const res = response(); makeHandler(() => ({ live: true, key: 'private', release: { filename: 'Codex-Migrate-0.1.0-build1-arm64.zip' } }),
     { COMMERCE_CHECKOUT_OPEN: 'yes', COMMERCE_MODE: 'live' })({ method: 'GET' }, res);
-  assert.deepEqual(res.value, { available: true, priceUSD: 50, architecture: 'arm64' });
+  assert.deepEqual(res.value, { available: true, priceUSD: 49, architecture: 'arm64' });
 });
 test('beta availability exposes its channel but not approval internals', () => {
   const res = response(); makeHandler(() => ({ live: true, key: 'private', release: {
     filename: 'Codex-Migrate-0.1.0-build5-arm64.zip', channel: 'beta', acceptance: 'private-review' } }),
   { COMMERCE_CHECKOUT_OPEN: 'yes', COMMERCE_MODE: 'live' })({ method: 'GET' }, res);
-  assert.deepEqual(res.value, { available: true, priceUSD: 50, architecture: 'arm64', channel: 'beta' });
+  assert.deepEqual(res.value, { available: true, priceUSD: 49, architecture: 'arm64', channel: 'beta' });
 });

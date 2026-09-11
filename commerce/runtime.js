@@ -1,7 +1,7 @@
 const Stripe = require('stripe');
 const { database } = require('./database');
 const { sql } = require('drizzle-orm');
-const { configuration, CommerceError } = require('./config');
+const { configuration, CommerceError, PRICE_CENTS } = require('./config');
 const { purchaseStore } = require('./store');
 const { service } = require('./service');
 const { privateDownloads } = require('./artifacts');
@@ -9,7 +9,7 @@ const { privateDownloads } = require('./artifacts');
 const PURCHASE_NOTIFY_EMAILS = ['segerej@gmail.com', 'joshua@segeren.com'];
 
 function usd(cents) {
-  return Number.isSafeInteger(cents) ? `$${(cents / 100).toFixed(2)} USD` : '$50.00 USD';
+  return Number.isSafeInteger(cents) ? `$${(cents / 100).toFixed(2)} USD` : `$${(PRICE_CENTS / 100).toFixed(2)} USD`;
 }
 
 async function deliveryMail({ to, link, release, live, sessionId, paymentIntent, amountTotal }, env = process.env, request = fetch) {

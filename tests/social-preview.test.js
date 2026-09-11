@@ -12,7 +12,7 @@ test('homepage declares an accessible large social card with a real PNG asset', 
   }
   assert.equal(meta['twitter:card'], 'summary_large_image');
   assert.equal(meta['og:image:type'], 'image/png');
-  assert.match(meta['twitter:description'], /Free CLI; signed Mac beta with best-effort support for \$50/);
+  assert.match(meta['twitter:description'], /Free CLI; signed Mac beta with best-effort support for \$49/);
   for (const key of ['og:description', 'twitter:description']) {
     assert.match(meta[key], /OpenAI Codex/);
     assert.match(meta[key], /Codex in the ChatGPT desktop app/);

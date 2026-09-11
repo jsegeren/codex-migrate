@@ -1,5 +1,16 @@
 const { createHmac, timingSafeEqual } = require('node:crypto');
-const { CommerceError, validRelease } = require('./config');
+const { CommerceError, currentPriceCents, validRelease } = require('./config');
+
+// Paid sessions retain access after a public price change. These IDs are
+// public Stripe catalog identifiers, not credentials.
+const LEGACY_LIVE_PRICE_CENTS = Object.freeze({
+  price_1UCXtaJfbWpcJIZbp9W60sIv: 5000,
+});
+
+function purchasePriceCents(priceId, config) {
+  if (priceId === config.price) return currentPriceCents(config.live);
+  return config.live ? LEGACY_LIVE_PRICE_CENTS[priceId] : undefined;
+}
 
 function sessionId(id, live) {
   return typeof id === 'string' && id.length <= 255 &&
@@ -19,6 +30,7 @@ function tokenSession(token, config) {
 function validatePurchase(session, config) {
   const item = session?.line_items?.data?.[0];
   const price = item?.price;
+  const priceCents = purchasePriceCents(price?.id, config);
   const product = typeof price?.product === 'string' ? price.product : price?.product?.id;
   // Preserve purchases from the previous Managed Payments flow. Standard
   // Checkout must carry our server-created marker; changing the current
@@ -35,10 +47,10 @@ function validatePurchase(session, config) {
       session.metadata?.product !== 'codex-migrate' ||
       session.metadata?.release !== config.release.id ||
       session.line_items?.has_more !== false || session.line_items.data.length !== 1 ||
-      price?.id !== config.price || product !== config.product || price.livemode !== config.live ||
+      priceCents == null || product !== config.product || price.livemode !== config.live ||
       price.type !== 'one_time' || price.recurring != null || price.currency !== 'usd' ||
-      price.unit_amount !== 5000 || item.quantity !== 1 || item.amount_subtotal !== 5000 ||
-      session.amount_subtotal !== 5000 || session.currency !== 'usd' ||
+      price.unit_amount !== priceCents || item.quantity !== 1 || item.amount_subtotal !== priceCents ||
+      session.amount_subtotal !== priceCents || session.currency !== 'usd' ||
       session.total_details?.amount_discount !== 0) throw new CommerceError('purchase_not_verified', 409);
   const intent = session.payment_intent;
   const charge = intent?.latest_charge;
@@ -46,7 +58,7 @@ function validatePurchase(session, config) {
       !/^pi_[A-Za-z0-9]+$/.test(intent.id || '') ||
       typeof charge !== 'object' || charge?.paid !== true || charge.livemode !== config.live ||
       charge.status !== 'succeeded' || charge.currency !== 'usd' ||
-      !Number.isSafeInteger(session.amount_total) || session.amount_total < 5000 ||
+      !Number.isSafeInteger(session.amount_total) || session.amount_total < priceCents ||
       intent.amount_received !== session.amount_total || charge.amount !== session.amount_total) {
     throw new CommerceError('purchase_not_verified', 409);
   }
@@ -111,4 +123,4 @@ function service({ config, stripe, store, sendMail, signDownload }) {
   }
   return { fulfill, download, status };
 }
-module.exports = { service, validatePurchase, tokenFor, tokenSession, sessionId };
+module.exports = { service, validatePurchase, purchasePriceCents, tokenFor, tokenSession, sessionId };

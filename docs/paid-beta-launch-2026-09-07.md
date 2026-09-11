@@ -7,12 +7,22 @@ testing in parallel.” This replaces the earlier requirement to finish every
 general-release acceptance check before opening self-service sales. It does not
 mark those checks passed or complete the overarching release goal.
 
-The purchase is $50 USD one time for the current Apple silicon Mac beta,
+The purchase is $49 USD one time for the current Apple silicon Mac beta,
 including best-effort maintainer support and a 30-day refund policy. Signing,
 notarization, mandatory verified backups, strict SSH, payment verification and
 private entitlement-bound delivery remain enforced. Finalization replaces
 selected data; it does not merge two independently active workspaces. Buyers
 must retain their old Mac and an independent backup.
+
+## Price update — September 10, 2026
+
+The Founder set the ongoing one-time price at **$49 USD**. Stripe price
+`price_1UEMgFJfbWpcJIZbPsmXjF2J` was created on the existing live product and
+made its default price. The prior $50 price remains recorded as a legacy live
+price so a valid earlier payment cannot lose download access after the catalog
+change. The checkout still permits one item, no subscription and no discount;
+tax may be added separately. The dated $50 observations below remain historical
+receipts rather than descriptions of the current offer.
 
 ## Current exact artifact
 

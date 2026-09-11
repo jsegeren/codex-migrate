@@ -15,7 +15,7 @@ desktop app. It does not transfer ordinary ChatGPT cloud chats between accounts
 or migrate all ChatGPT modes. Support is limited to the local Codex data and
 selected workspace folders described below; compatibility testing is ongoing.
 
-## Get the Mac app — $50 one time
+## Get the Mac app — $49 one time
 
 Prefer a packaged app to cloning and running the source? **The paid Mac Founding
 Edition includes the downloadable Mac app and personal, best-effort migration
@@ -24,7 +24,7 @@ setup, transfer progress,
 pause/resume, verification, and recovery. Your workspace moves directly between
 your Macs, not through our servers.
 
-**[Get the signed Mac beta — $50 →](https://migrate.segeren.com/#founding-edition)**
+**[Get the signed Mac beta — $49 →](https://migrate.segeren.com/#founding-edition)**
 
 For Apple silicon Macs. Developer ID signed and Apple notarized, with
 best-effort support and a 30-day refund policy. The current build has passed

@@ -9,7 +9,7 @@ function fixture(live = false) {
   const config = { live, mode: live ? 'live' : 'sandbox', account: 'acct_fixture',
     product: 'prod_fixture', price: 'price_fixture', release: { id: 'release-1' }, site: SITE };
   const env = { COMMERCE_CHECKOUT_OPEN: 'yes', COMMERCE_SANDBOX_OPERATOR_TOKEN: operator };
-  const price = { livemode: live, active: true, unit_amount: 5000, currency: 'usd',
+  const price = { livemode: live, active: true, unit_amount: live ? 4900 : 5000, currency: 'usd',
     type: 'one_time', billing_scheme: 'per_unit', recurring: null, transform_quantity: null,
     product: { id: config.product, active: true, livemode: live } };
   const session = { livemode: live, managed_payments: { enabled: true }, url: 'https://checkout.stripe.com/c/pay/fixture' };

@@ -25,7 +25,7 @@ class ReleaseBuildTests(unittest.TestCase):
     def test_bundled_customer_setup_copy_matches_live_paid_beta(self):
         setup = (Path(__file__).resolve().parents[1] / "docs/desktop-setup.md").read_text()
         self.assertIn("signed, notarized Mac beta is available", setup)
-        self.assertIn("$50 USD", setup)
+        self.assertIn("$49 USD", setup)
         self.assertIn("MIT-licensed CLI and source remain free", setup)
         self.assertNotIn("No paid downloads or pre-orders are available", setup)
 

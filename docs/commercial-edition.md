@@ -24,7 +24,7 @@ readiness is tracked in [the desktop guide](desktop-setup.md).
 
 ## Founding Edition
 
-The downloadable Mac beta costs **$50 one time**, including personal,
+The downloadable Mac beta costs **$49 one time**, including personal,
 best-effort help with setup, migration, verification, and recovery, plus a
 30-day refund policy. No subscription or pre-order.
 
@@ -40,7 +40,7 @@ unfinished and are disclosed before payment. See the
 
 ### Historical policy: paid beta by request (superseded September 7)
 
-The Founder approved a separate **$50 paid beta with manual delivery**, without
+The Founder approved a separate **$49 paid beta with automated delivery**, without
 waiting for Apple Developer activation. This is not an instruction to open the
 general checkout or weaken its signed-artifact checks.
 

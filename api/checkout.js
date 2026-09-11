@@ -1,7 +1,7 @@
 const { timingSafeEqual } = require('node:crypto');
 const { runtime } = require('../commerce/runtime');
 const { reply, failure, body } = require('../commerce/http');
-const { CommerceError, configuration, commerceSite } = require('../commerce/config');
+const { CommerceError, currentPriceCents, configuration, commerceSite } = require('../commerce/config');
 function makeHandler(load = runtime, env = process.env, configure = configuration) {
   return async (req, res) => {
     if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); return reply(res, 405, { error: 'post_required' }); }
@@ -24,7 +24,7 @@ function makeHandler(load = runtime, env = process.env, configure = configuratio
       const { stripe } = await load(env);
       if ((await stripe.accounts.retrieve()).id !== config.account) throw new CommerceError('account_mismatch');
       const price = await stripe.prices.retrieve(config.price, { expand: ['product'] });
-      if (price.livemode !== config.live || !price.active || price.unit_amount !== 5000 || price.currency !== 'usd' ||
+      if (price.livemode !== config.live || !price.active || price.unit_amount !== currentPriceCents(config.live) || price.currency !== 'usd' ||
           price.type !== 'one_time' || price.recurring != null || price.billing_scheme !== 'per_unit' ||
           price.transform_quantity != null || price.product?.id !== config.product ||
           price.product.livemode !== config.live || !price.product.active) throw new CommerceError('catalog_mismatch');

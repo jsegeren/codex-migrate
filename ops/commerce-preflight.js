@@ -5,7 +5,7 @@ const { createHash } = require('node:crypto');
 const { configuration } = require('../commerce/config');
 const EXPECTED = Object.freeze({
   account: 'acct_1Rkc6eJfbWpcJIZb', product: 'prod_VCxpogUxaT0OeT',
-  price: 'price_1UCXtaJfbWpcJIZbp9W60sIv', store: 'Ksz4f7gOIH2qRu9I',
+  price: 'price_1UEMgFJfbWpcJIZbPsmXjF2J', store: 'Ksz4f7gOIH2qRu9I',
   database: 'ep-holy-surf-av4n95ee-pooler.c-11.us-east-1.aws.neon.tech',
 });
 const fixture = require('../commerce/releases.json')['sandbox-delivery-2026-09-05'];
@@ -72,7 +72,7 @@ async function preflight(env = process.env, makeDependencies = dependencies) {
     stage = 'stripe-price';
     const price = await deps.price();
     required(price.id === EXPECTED.price && price.product === EXPECTED.product &&
-      price.livemode === true && price.active === true && price.unit_amount === 5000 &&
+      price.livemode === true && price.active === true && price.unit_amount === 4900 &&
       price.currency === 'usd' && price.type === 'one_time' && price.recurring == null);
     let standardCheckout;
     if (env.COMMERCE_PROVE_STANDARD_CHECKOUT === 'yes') {
@@ -86,7 +86,7 @@ async function preflight(env = process.env, makeDependencies = dependencies) {
       const expired = session.status === 'expired' ? session : await deps.expireSession(session.id);
       required(expired.id === session.id && expired.status === 'expired' && expired.payment_status === 'unpaid');
       stage = 'standard-checkout-verify';
-      required(session.livemode === true && session.mode === 'payment' && session.amount_subtotal === 5000 &&
+      required(session.livemode === true && session.mode === 'payment' && session.amount_subtotal === 4900 &&
         session.currency === 'usd' && session.managed_payments?.enabled !== true);
       standardCheckout = { session: session.id, expired: true, charged: false };
     }

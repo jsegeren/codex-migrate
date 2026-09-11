@@ -38,7 +38,7 @@ class SiteTests(unittest.TestCase):
         guide = (SITE / "moving-to-a-new-mac.html").read_text()
         self.assertIn("Transfer or move Codex to a new Mac", guide)
         self.assertIn("<h1>Transfer Codex <br>to a new Mac.</h1>", guide)
-        self.assertIn("Get the Mac beta — $50", guide)
+        self.assertIn("Get the Mac beta — $49", guide)
         self.assertIn("Why signing in on the new Mac is not enough", guide)
         self.assertIn("New-Mac migration checklist", guide)
         missing = (SITE / "codex-history-missing-new-mac.html").read_text()
@@ -49,10 +49,10 @@ class SiteTests(unittest.TestCase):
         self.assertIn('href="/compare-codex-migration-tools"', home)
         self.assertIn('href="/access-codex-from-another-machine"', home)
         guide_actions = guide.split('<div class="actions">', 1)[1].split("</div>", 1)[0]
-        self.assertLess(guide_actions.index("Get the Mac beta — $50"), guide_actions.index("Read the free CLI setup"))
+        self.assertLess(guide_actions.index("Get the Mac beta — $49"), guide_actions.index("Read the free CLI setup"))
         recovery = (SITE / "backup-and-recovery.html").read_text()
         recovery_actions = recovery.split('<div class="actions">', 1)[1].split("</div>", 1)[0]
-        self.assertLess(recovery_actions.index("Get the Mac beta — $50"), recovery_actions.index("Explore the free source"))
+        self.assertLess(recovery_actions.index("Get the Mac beta — $49"), recovery_actions.index("Explore the free source"))
 
     def test_openai_chatgpt_names_preserve_local_codex_scope(self):
         for page in ("index.html", "moving-to-a-new-mac.html", "codex-history-missing-new-mac.html"):
@@ -86,7 +86,7 @@ class SiteTests(unittest.TestCase):
         self.assertIn("~/.codex/installation_id", japanese)
         self.assertIn("通常のChatGPTクラウド会話", japanese)
         self.assertIn("リアルタイムに統合する製品ではありません", japanese)
-        self.assertIn("Macベータ版を購入 — $50", japanese)
+        self.assertIn("Macベータ版を購入 — $49", japanese)
         self.assertIn("アプリ画面とサポートは現在英語です", japanese)
 
     def test_closing_actions_can_wrap_when_text_is_enlarged(self):
@@ -142,14 +142,14 @@ class SiteTests(unittest.TestCase):
         self.assertIn("apple silicon macs", text)
         self.assertIn("30-day refund policy", text)
         self.assertNotIn("not on sale yet", text)
-        self.assertIn("$50", text)
+        self.assertIn("$49", text)
         self.assertIn("no subscription", text)
         self.assertIn("free cli", text)
 
     def test_beta_checkout_is_immediately_visible_and_preserves_limitations(self):
         source = (SITE / "index.html").read_text()
         text = " ".join(self.parse("index.html").text)
-        self.assertIn("Request Mac beta access — $50", text)
+        self.assertIn("Request Mac beta access — $49", text)
         self.assertIn("If checkout is unavailable, email Josh", text)
         self.assertIn("physical Wi-Fi interruption/resume testing", text)
         self.assertIn("Guided permission recovery, direct-cable interruption, pristine-Mac installation, and broader hardware coverage remain ongoing", text)
@@ -317,7 +317,7 @@ class SiteTests(unittest.TestCase):
     def test_paid_mac_beta_is_primary_but_free_cli_remains_prominent(self):
         source = (SITE / "index.html").read_text()
         hero = source.split('<div class="actions">', 1)[1].split("</div>", 1)[0]
-        self.assertLess(hero.index("Get the Mac beta — $50"), hero.index("Get the free CLI"))
+        self.assertLess(hero.index("Get the Mac beta — $49"), hero.index("Get the free CLI"))
         self.assertIn('class="button button-primary" id="hero-paid-link" data-analytics-event="select_paid_beta"', hero)
         self.assertIn('class="button button-secondary" data-analytics-event="select_free_cli"', hero)
         self.assertIn('id="checkout-button" class="button button-primary full" data-analytics-event="begin_checkout"', source)
@@ -325,19 +325,19 @@ class SiteTests(unittest.TestCase):
         self.assertIn('<div id="edition-disclosure" hidden>', source)
 
         closing = source.split('<section class="closing">', 1)[1].split("</section>", 1)[0]
-        self.assertLess(closing.index("Get the Mac beta — $50"), closing.index("Use the free CLI"))
+        self.assertLess(closing.index("Get the Mac beta — $49"), closing.index("Use the free CLI"))
         self.assertIn('class="button button-primary" data-analytics-event="select_paid_beta" href="#founding-edition"', closing)
         self.assertIn('class="button button-secondary light" data-analytics-event="select_free_cli"', closing)
 
         editions = source.split('<section class="editions shell"', 1)[1].split("</section>", 1)[0]
         self.assertIn("The Mac app is the easy way.", editions)
         self.assertLess(editions.index('id="founding-edition"'), editions.index("Open source CLI"))
-        self.assertLess(editions.index("Get the Mac beta + help — $50"), editions.index("View the source and CLI"))
+        self.assertLess(editions.index("Get the Mac beta + help — $49"), editions.index("View the source and CLI"))
 
     def test_launch_interest_preserves_consent_and_separate_beta_help_email(self):
         page = self.parse("index.html")
         emails = [href for href in page.hrefs if href.startswith(
-            "mailto:joshua@segeren.com?subject=Codex%20Migrate%20%2450%20beta%20access&")]
+            "mailto:joshua@segeren.com?subject=Codex%20Migrate%20%2449%20beta%20access&")]
         self.assertEqual(len(emails), 1)
         text = " ".join(page.text)
         self.assertIn("Your request goes to Josh’s inbox via SendGrid", text)
@@ -388,7 +388,7 @@ class SiteTests(unittest.TestCase):
         self.assertIn("https://help.openai.com/en/articles/11369540", source)
         self.assertIn("https://github.com/openai/codex/issues/33830", source)
         self.assertIn("https://github.com/openai/codex/issues/37106", source)
-        self.assertIn('href="/#founding-edition">Move to a new Mac — $50', source)
+        self.assertIn('href="/#founding-edition">Move to a new Mac — $49', source)
         self.assertIn("Codex Migrate is independent software, not an OpenAI product", text)
 
     def test_guide_footers_link_the_founder_name_to_x(self):
@@ -399,7 +399,7 @@ class SiteTests(unittest.TestCase):
     def test_recovery_guide_matches_live_beta_without_waiving_safety_limits(self):
         source = (SITE / "backup-and-recovery.html").read_text()
         text = " ".join(self.parse("backup-and-recovery.html").text)
-        self.assertIn("signed, notarized Mac beta is $50 one time for Apple silicon Macs", text)
+        self.assertIn("signed, notarized Mac beta is $49 one time for Apple silicon Macs", text)
         self.assertIn("30-day refund policy", text)
         self.assertIn("physical Wi-Fi interruption/resume testing", text)
         self.assertIn("Guided permission recovery, direct-cable interruption, pristine-Mac installation, and broader hardware coverage remain ongoing", text)
@@ -416,7 +416,7 @@ class SiteTests(unittest.TestCase):
         self.assertIn("not a promise that every configuration has been tested", terms)
         self.assertIn("physical wi-fi interruption/resume testing", terms)
         self.assertIn("guided permission recovery, direct-cable interruption, pristine-mac installation, and broader hardware coverage remain ongoing", terms)
-        self.assertIn("$50 usd one time", terms)
+        self.assertIn("$49 usd one time", terms)
         self.assertIn("no subscription", terms)
         self.assertIn("best-effort", terms)
         self.assertIn("no response time, fix, resolution deadline", terms)
