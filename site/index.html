@@ -176,12 +176,16 @@
             </div>
             <div id="checkout-panel">
               <p id="checkout-platform" class="disclosure">For Apple silicon Macs. $49 USD plus applicable tax. Secure checkout through Stripe.</p>
-              <p id="beta-limits" class="disclosure"><strong>Beta:</strong> The current build has passed VoiceOver, a real macOS permission-denial check, and physical Wi-Fi interruption/resume testing. Guided permission recovery, direct-cable interruption, pristine-Mac installation, and broader hardware coverage remain ongoing. Keep your old Mac and an independent backup. This replaces selected destination data; it does not merge two active workspaces.</p>
+              <p id="beta-limits" class="disclosure"><strong>Apple-silicon beta:</strong> Keep your old Mac and an independent backup until you verify the move. This replaces selected destination data; it does not merge two active workspaces.</p>
+              <details class="beta-details">
+                <summary>What has been tested—and what remains</summary>
+                <p>The current build has passed VoiceOver, a real macOS permission-denial check, and physical Wi-Fi interruption/resume testing. Guided permission recovery, direct-cable interruption, pristine-Mac installation, and broader hardware coverage remain ongoing.</p>
+              </details>
               <button id="checkout-button" class="button button-primary full" data-analytics-event="begin_checkout" type="button" aria-describedby="checkout-platform beta-limits checkout-status">Move my Codex work + help — $49</button>
               <p id="checkout-status" role="status"></p>
               <p class="disclosure"><a href="/terms.html">Terms</a> · <a href="/refunds.html">30-day refund policy</a> · <a href="mailto:joshua@segeren.com?subject=Codex%20Migrate%20purchase%20help">Email Josh</a></p>
             </div>
-            <p class="disclosure">Questions or stuck during the move? Email Josh. Your purchase includes personal, best-effort help with setup, migration, verification, and recovery. Each request is handled case by case; we aim to respond within a few business days, depending on availability and complexity. No response time, fix, or resolution deadline is guaranteed.</p>
+            <p class="disclosure">Personal, best-effort help from Josh is included for setup, migration, verification, and recovery. Help is handled case by case; we aim to reply within a few business days, but timing and resolution are not guaranteed.</p>
             <div class="launch-interest" id="launch-email" hidden>
               <h3>Want a launch email?</h3>
               <form class="signup-form" action="/api/signup" method="post">
