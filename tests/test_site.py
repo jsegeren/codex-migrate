@@ -1,5 +1,7 @@
 from html.parser import HTMLParser
 from pathlib import Path
+import json
+import re
 import unittest
 
 
@@ -26,6 +28,20 @@ class _DocumentParser(HTMLParser):
 
 
 class SiteTests(unittest.TestCase):
+    def test_home_product_metadata_matches_the_live_paid_offer(self):
+        home = (SITE / "index.html").read_text()
+        match = re.search(r'<script type="application/ld\+json">\s*(.*?)\s*</script>', home, re.DOTALL)
+        self.assertIsNotNone(match)
+        product = json.loads(match.group(1))
+        self.assertEqual(product["@type"], "Product")
+        self.assertEqual(product["name"], "Codex Migrate Mac beta")
+        self.assertEqual(product["brand"]["name"], "Codex Migrate")
+        self.assertEqual(product["offers"]["url"], "https://migrate.segeren.com/#founding-edition")
+        self.assertEqual(product["offers"]["price"], 49)
+        self.assertEqual(product["offers"]["priceCurrency"], "USD")
+        self.assertEqual(product["offers"]["availability"], "https://schema.org/InStock")
+        self.assertEqual(product["offers"]["seller"]["name"], "Segeren Studio")
+
     def test_home_offer_and_migration_search_copy_are_current(self):
         home = (SITE / "index.html").read_text()
         self.assertIn("Signed Mac beta available · Free open-source CLI", home)
