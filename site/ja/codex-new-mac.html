@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Codexを新しいMacへ安全に移行・転送する方法 — Codex Migrate</title>
+    <meta name="description" content="OpenAI Codexを別のMacへ安全に移行する方法。ローカルの会話履歴、スキル、Gitリポジトリ、ブランチ、worktree、未完了ファイルを転送し、新しいMacのログインと端末IDを保持します。">
+    <link rel="canonical" href="https://migrate.segeren.com/ja/codex-new-mac">
+    <link rel="alternate" hreflang="en" href="https://migrate.segeren.com/moving-to-a-new-mac"><link rel="alternate" hreflang="ja" href="https://migrate.segeren.com/ja/codex-new-mac"><link rel="alternate" hreflang="x-default" href="https://migrate.segeren.com/moving-to-a-new-mac">
+    <meta property="og:title" content="Codexを新しいMacへ安全に移行する方法"><meta property="og:description" content="会話履歴、スキル、Gitリポジトリ、未完了の作業を移しながら、新しいMac固有のログインと端末IDを保持します。"><meta property="og:type" content="article"><meta property="og:url" content="https://migrate.segeren.com/ja/codex-new-mac"><meta property="og:image" content="https://migrate.segeren.com/og-white-v1.png"><meta property="og:locale" content="ja_JP">
+    <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Codexを新しいMacへ安全に移行する方法"><meta name="twitter:description" content="OpenAI Codexのローカル作業をMac間で安全に移すための実践ガイド。"><meta name="twitter:image" content="https://migrate.segeren.com/og-white-v1.png">
+    <link rel="icon" href="/assets/mark.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css?v=20260904-regional"><script src="/analytics.js?v=20260907-deferred" defer></script>
+  </head>
+  <body>
+    <header class="site-header"><a class="brand" href="/"><span class="brand-mark" aria-hidden="true">CM</span><span>Codex Migrate</span></a><nav aria-label="メインナビゲーション"><a href="/moving-to-a-new-mac" lang="en">English</a><a href="/#founding-edition">Macベータ版</a></nav></header>
+    <main class="legal shell">
+      <p class="eyebrow">MacからMacへの移行ガイド · <a href="/moving-to-a-new-mac" lang="en">English</a></p><h1>Codexを新しいMacへ<br>安全に移行する。</h1>
+      <p class="lede">ChatGPTに同じアカウントでサインインしても、Codexのローカル会話、スキル、Gitのworktree、未コミットの変更がすべて新しいMacに現れるとは限りません。このガイドでは、移すべきデータと、コピーしてはいけない端末固有データを分けて説明します。</p>
+      <p>Codex Migrateは、OpenAI Codex（ChatGPTデスクトップアプリ内のCodexを含む）のローカル作業環境を、SSH経由でMac間に直接転送する独立したオープンソースツールです。通常のChatGPTクラウド会話、アカウント間の会話履歴、ChatGPTの全モードを移行する製品ではありません。</p>
+
+      <h2>結論：<code>~/.codex</code>を丸ごとコピーしない</h2>
+      <p><code>~/.codex</code>全体をそのままコピーすると、会話だけでなく、古いMacの認証情報や<code>installation_id</code>などの端末固有データまで新しいMacへ持ち込む可能性があります。その結果、2台のMacが同じCodex端末として扱われたり、Remote Controlの接続先が上書きされたりする事例が報告されています（OpenAI Codexの<a href="https://github.com/openai/codex/issues/37106">issue #37106</a>、<a href="https://github.com/openai/codex/issues/33830">issue #33830</a>）。</p>
+      <p>新しいMacでは先にCodexをインストールし、一度起動してサインインします。そのMac自身のログイン情報と端末IDは保持し、移行可能な会話・設定・作業ファイルだけを転送するのが安全です。</p>
+
+      <h2>何を移行するのか</h2>
+      <ul>
+        <li>ローカルに保存されたCodexの会話とアーカイブ済みタスク</li>
+        <li>Codexの設定、プロジェクト構成、ルール、メモリ、オートメーション</li>
+        <li>個人用・プロジェクト用のカスタムスキル</li>
+        <li>選択したワークスペース内のGitリポジトリ、ローカルブランチ、タグ、stash、worktree</li>
+        <li>未コミット・未追跡のファイルなど、GitHubへpushされていない作業</li>
+      </ul>
+      <p><code>git clone</code>だけでは、pushしていないブランチ、stash、未追跡ファイル、Codexのローカル会話は戻りません。逆に、通常のMacデータをすべて移したい場合はAppleのMigration Assistantの方が目的に合うことがあります。</p>
+
+      <h2>転送しないもの</h2>
+      <ul>
+        <li>古いMacの<code>~/.codex/auth.json</code></li>
+        <li>古いMacの<code>~/.codex/installation_id</code></li>
+        <li><code>~/.ssh</code>内の秘密鍵</li>
+        <li>実行中だけ必要なsocket、lock、log、cache</li>
+        <li>明示的に選択していないホームフォルダ内のデータ</li>
+      </ul>
+      <p>ただし、選択したリポジトリ内にAPIキーや秘密情報が保存されていれば、そのファイルも転送対象になります。実行前に選択内容を確認してください。</p>
+
+      <h2>Wi‑Fi、USB‑C、Thunderboltのどれを使う？</h2>
+      <p>転送自体はSSHで行います。同じWi‑Fi上でも利用できます。USB‑CまたはThunderboltケーブルを使う場合は、そのケーブルとMacの設定でネットワーク接続が成立している必要があります。充電専用・低速のUSB‑Cケーブルでは、Thunderboltより遅い、または接続経路として使えないことがあります。</p>
+      <p>Codex Migrateは、信頼済みの移行先Macが公開するプライベートアドレスだけを確認し、到達可能な経路を小さな速度テストで比較します。LAN全体をスキャンしたり、SSHのホスト鍵検証を無効にしたりはしません。</p>
+
+      <h2>安全な移行手順</h2>
+      <ol>
+        <li>古いMacを消去せず、別のバックアップも残します。</li>
+        <li>新しいMacにCodexをインストールし、起動して自分のアカウントで一度サインインします。</li>
+        <li>新しいMacで、移行先ユーザーだけにRemote Loginを許可します。</li>
+        <li>SSHのホストフィンガープリントを確認し、移行元・移行先・選択フォルダ・必要容量を事前検査します。</li>
+        <li>隔離された場所へ転送をステージします。中断しても同じ条件で再実行すれば、完了済みデータを再利用できます。</li>
+        <li>両方のMacでCodexを終了し、移行先バックアップの内容検証が成功してから置き換えます。</li>
+        <li>新しいMacで重要な会話を開き、Git status、ブランチ、worktree、スキル、未完了ファイルを確認します。</li>
+        <li>実際に新しいMacで作業できるまで、古いMacと独立バックアップを保持します。</li>
+      </ol>
+
+      <h2>Codex Migrateの無料版と有料版</h2>
+      <p>MITライセンスのCLIとソースコードは無料で、同じ安全チェックとローカルブラウザのガイド画面を利用できます。Apple silicon向けの署名・公証済みMacベータ版は50米ドルの買い切りで、パッケージ済みアプリとJoshua Segerenによるベストエフォートのメールサポート、30日間の返金ポリシーが含まれます。サブスクリプションではありません。アプリ画面とサポートは現在英語です。</p>
+      <p>現在のビルドはVoiceOver、macOSの権限拒否、Wi‑Fi切断後の再開テストを通過しています。ガイド付きの権限復旧、ケーブル直結中断、完全に新しいMacへの導入、さらに多くのハードウェア構成のテストは継続中です。ベータ版のため、古いMacと独立バックアップを必ず保持してください。</p>
+
+      <h2>よくある質問</h2>
+      <h3>2台のMacを継続的に同期できますか？</h3>
+      <p>いいえ。Codex Migrateは一度の移行または復旧用で、2台で同時に変更された会話やリポジトリをリアルタイムに統合する製品ではありません。</p>
+      <h3>新しいMacのCodexログインは消えませんか？</h3>
+      <p>移行先Macで先に作成された認証情報と<code>installation_id</code>を保持し、移行後も変わっていないことを検証します。</p>
+      <h3>転送が途中で止まったら？</h3>
+      <p>ステージングは再開可能です。置き換え処理が中断した場合は、保存済みのトランザクションとバックアップを検査してから復旧します。中断したデータを「成功」とは扱いません。</p>
+
+      <p class="notice">Codex MigrateはJoshua Segerenが開発する独立したツールで、OpenAIの製品ではなく、OpenAIとの提携・承認・公式サポートはありません。</p>
+      <div class="actions"><a class="button button-primary" data-analytics-event="select_paid_beta" href="/#founding-edition">Macベータ版を購入 — $50</a><a class="button button-secondary" data-analytics-event="select_free_cli" href="https://github.com/jsegeren/codex-migrate#quick-start">無料CLIとソースを見る</a></div>
+    </main>
+    <footer><div class="shell"><p><a href="https://x.com/JoshuaSegeren">Joshua Segeren</a>による独立ソフトウェア。OpenAIとの提携・承認関係はありません。</p><div class="footer-bottom"><a href="/">Codex Migrate</a><a href="/privacy">Privacy</a><a href="/privacy#website-analytics" data-analytics-preferences>Analytics choices</a><a href="/terms">Terms</a></div></div></footer>
+  </body>
+</html>

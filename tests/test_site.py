@@ -66,6 +66,25 @@ class SiteTests(unittest.TestCase):
         for name in ("privacy", "terms", "refunds", "moving-to-a-new-mac", "codex-history-missing-new-mac", "backup-and-recovery", "compare-codex-migration-tools"):
             self.assertIn('<link rel="canonical" href="https://migrate.segeren.com/' + name + '">',
                           (SITE / (name + ".html")).read_text())
+        self.assertIn('<link rel="canonical" href="https://migrate.segeren.com/ja/codex-new-mac">',
+                      (SITE / "ja/codex-new-mac.html").read_text())
+
+    def test_japanese_migration_guide_is_discoverable_and_preserves_safety_scope(self):
+        english = (SITE / "moving-to-a-new-mac.html").read_text()
+        japanese = (SITE / "ja/codex-new-mac.html").read_text()
+        sitemap = (SITE / "sitemap.xml").read_text()
+        self.assertIn('hreflang="ja" href="https://migrate.segeren.com/ja/codex-new-mac"', english)
+        self.assertIn('hreflang="en" href="https://migrate.segeren.com/moving-to-a-new-mac"', japanese)
+        self.assertIn('href="/ja/codex-new-mac"', english)
+        self.assertIn('href="/moving-to-a-new-mac" lang="en">English</a>', japanese)
+        self.assertIn("https://migrate.segeren.com/ja/codex-new-mac", sitemap)
+        self.assertIn("Codexを新しいMacへ安全に移行・転送する方法", japanese)
+        self.assertIn("~/.codex/auth.json", japanese)
+        self.assertIn("~/.codex/installation_id", japanese)
+        self.assertIn("通常のChatGPTクラウド会話", japanese)
+        self.assertIn("リアルタイムに統合する製品ではありません", japanese)
+        self.assertIn("Macベータ版を購入 — $50", japanese)
+        self.assertIn("アプリ画面とサポートは現在英語です", japanese)
 
     def test_closing_actions_can_wrap_when_text_is_enlarged(self):
         styles = (SITE / "styles.css").read_text()
@@ -75,16 +94,17 @@ class SiteTests(unittest.TestCase):
         self.assertIn("max-width: 100%", actions)
         self.assertNotIn("flex: 0 0 auto", actions)
 
-    def parse(self, filename: str) -> _DocumentParser:
+    def parse(self, filename) -> _DocumentParser:
         parser = _DocumentParser()
         parser.feed((SITE / filename).read_text(encoding="utf-8"))
         return parser
 
     def test_every_page_has_title_h1_and_no_broken_local_link(self):
-        for page in SITE.glob("*.html"):
-            with self.subTest(page=page.name):
+        for page in SITE.rglob("*.html"):
+            relative = page.relative_to(SITE)
+            with self.subTest(page=str(relative)):
                 source = page.read_text(encoding="utf-8")
-                parser = self.parse(page.name)
+                parser = self.parse(relative)
                 self.assertIn("<title>", source)
                 self.assertTrue(parser.has_h1)
                 for href in parser.hrefs:
