@@ -158,7 +158,7 @@ class SiteTests(unittest.TestCase):
         self.assertIn('<div id="checkout-panel">', source)
         self.assertIn('<div id="edition-disclosure" hidden>', source)
         self.assertIn('aria-describedby="checkout-platform beta-limits checkout-status"', source)
-        self.assertIn('subject=Codex%20Migrate%20%2450%20beta%20access', source)
+        self.assertIn('subject=Codex%20Migrate%20%2449%20beta%20access', source)
         for page in ("index.html", "moving-to-a-new-mac.html", "codex-history-missing-new-mac.html", "backup-and-recovery.html"):
             self.assertNotIn("alpha", (SITE / page).read_text().lower())
 
