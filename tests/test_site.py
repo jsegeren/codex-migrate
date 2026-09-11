@@ -345,6 +345,7 @@ class SiteTests(unittest.TestCase):
         self.assertIn("email Josh for help with the signed Mac beta", text)
         self.assertIn("Don’t email credentials or workspace contents", text)
         source = (SITE / "index.html").read_text()
+        self.assertIn('class="launch-interest" id="launch-email" hidden', source)
         self.assertIn('action="/api/signup" method="post"', source)
         self.assertIn('type="checkbox" value="yes" required', source)
         self.assertIn('type="email"', source)

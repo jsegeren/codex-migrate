@@ -4,6 +4,7 @@
   const status = document.getElementById('checkout-status');
   const panel = document.getElementById('checkout-panel');
   const disclosure = document.getElementById('edition-disclosure');
+  const launch = document.getElementById('launch-email');
   if (!button || !status || !panel) return;
   let busy = false;
   // Reuse the same request ID on uncertain retries, including a reload in this
@@ -52,6 +53,7 @@
       if (data.available !== true || data.priceUSD !== 49 || !['arm64', 'x86_64'].includes(data.architecture)) {
         panel.hidden = true;
         if (disclosure) disclosure.hidden = false;
+        if (launch) launch.hidden = false;
         return;
       }
       const platform = data.architecture === 'arm64' ? 'Apple silicon Macs' : 'Intel Macs';
@@ -60,9 +62,7 @@
       document.getElementById('edition-state').textContent = beta ? 'Paid beta · available now' : 'Available now';
       document.getElementById('edition-signed').textContent = 'Signed and notarized Mac app';
       if (disclosure) disclosure.hidden = true;
-      // A slow readiness response must not remove a form someone is using.
-      const launch = document.getElementById('launch-email');
-      if (!launch.contains(document.activeElement) && !document.getElementById('launch-address').value) launch.hidden = true;
+      if (launch) launch.hidden = true;
       document.getElementById('hero-availability').textContent = beta ? 'Signed Mac beta available · Free open-source CLI' : 'Mac app available · Free open-source CLI';
       document.getElementById('purchase-faq').textContent = `Yes. The signed, notarized ${beta ? 'beta ' : ''}app is $49 USD for ${platform}, including best-effort support and a 30-day refund policy. ${beta ? 'The current build has passed VoiceOver, a real macOS permission-denial check, and physical Wi-Fi interruption/resume testing. Guided permission recovery, direct-cable interruption, pristine-Mac installation, and broader hardware coverage remain ongoing. Keep your old Mac and an independent backup. ' : ''}The CLI and source remain free.`;
       const hero = document.getElementById('hero-paid-link');

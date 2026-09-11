@@ -10,7 +10,7 @@ function fixture(data = { available: true, priceUSD: 49, architecture: 'arm64' }
   const elements = new Map(); const calls = []; const pending = []; const navigations = []; let stored;
   document.getElementById = id => {
     if (!elements.has(id)) {
-      const e = { hidden: id === 'edition-disclosure', textContent: '', events: {}, removeAttribute() {}, contains(other) { return other === this; },
+      const e = { hidden: id === 'edition-disclosure' || id === 'launch-email', textContent: '', events: {}, removeAttribute() {}, contains(other) { return other === this; },
         addEventListener(name, fn) { this.events[name] = fn; }, focus() { document.activeElement = this; } };
       let disabled;
       Object.defineProperty(e, 'disabled', { get: () => disabled, set(v) { disabled = v; if (v && document.activeElement === e) document.activeElement = document.body; } });
@@ -51,13 +51,12 @@ test('beta availability preserves clear beta labels instead of announcing a fini
   assert.match(f.get('edition-state').textContent, /beta/);
   assert.equal(f.get('hero-availability').textContent, 'Signed Mac beta available · Free open-source CLI');
 });
-test('delayed readiness preserves a focused or filled launch form', async () => {
-  const focused = fixture(); focused.get('launch-email').focus(); await tick();
-  assert.equal(focused.get('launch-email').hidden, false);
-  assert.equal(focused.document.activeElement, focused.get('launch-email'));
-  const filled = fixture(); filled.get('launch-address').value = 'test@example.com'; await tick();
-  assert.equal(filled.get('launch-email').hidden, false);
-  assert.equal(filled.get('checkout-panel').hidden, false);
+test('launch fallback starts hidden and stays hidden when checkout is ready', async () => {
+  const f = fixture();
+  assert.equal(f.get('launch-email').hidden, true);
+  await tick();
+  assert.equal(f.get('launch-email').hidden, true);
+  assert.equal(f.get('checkout-panel').hidden, false);
 });
 test('explicit click suppresses duplicates, preserves idempotency on retry and restores focus', async () => {
   const f = fixture(); await tick(); const b = f.get('checkout-button'); b.focus(); b.events.click(); b.events.click();
