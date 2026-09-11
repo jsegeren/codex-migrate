@@ -52,13 +52,28 @@
     };
   }
 
+  function eventParameters(name) {
+    const parameters = { transport_type: "beacon" };
+    if (name === "begin_checkout" || name === "purchase") {
+      parameters.currency = "USD";
+      parameters.value = 49;
+      parameters.items = [{
+        item_id: "codex_migrate_mac_beta",
+        item_name: "Codex Migrate Mac Beta",
+        price: 49,
+        quantity: 1,
+      }];
+    }
+    return parameters;
+  }
+
   function sendEvent(name) {
     if (typeof name !== "string" || !/^[a-z][a-z0-9_]{0,39}$/.test(name)) return;
     if (typeof window.gtag !== "function") {
       if (pendingEvents.length < 20) pendingEvents.push(name);
       return;
     }
-    window.gtag("event", name, { transport_type: "beacon" });
+    window.gtag("event", name, eventParameters(name));
   }
 
   function startGoogleTag(granted) {

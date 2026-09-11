@@ -265,10 +265,10 @@ class SiteTests(unittest.TestCase):
         for page in SITE.glob("*.html"):
             with self.subTest(page=page.name):
                 if page.name == "purchase.html":
-                    self.assertIn('src="/analytics.js?v=20260909-purchase"', page.read_text())
+                    self.assertIn('src="/analytics.js?v=20260911-ecommerce"', page.read_text())
                     self.assertIn('name="referrer" content="no-referrer"', page.read_text())
                     continue
-                self.assertIn('src="/analytics.js?v=20260907-deferred"', page.read_text())
+                self.assertIn('src="/analytics.js?v=20260911-ecommerce"', page.read_text())
         self.assertIn('const GRANTED = "granted"', analytics)
         self.assertIn('const PUBLIC_HOSTS = new Set(["migrate.segeren.com", "codex-migrate.vercel.app"]);', analytics)
         self.assertIn('!PUBLIC_HOSTS.has(window.location.hostname)', analytics)

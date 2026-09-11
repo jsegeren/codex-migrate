@@ -86,6 +86,27 @@ test('CTA events before page load are queued and flushed after analytics starts'
   assert.equal(browser.window.dataLayer.some(entry => entry[0] === 'event' && entry[1] === 'select_paid_beta'), true);
 });
 
+test('checkout and purchase events include GA4 ecommerce value without buyer data', async () => {
+  const browser = page();
+  await browser.finish('default');
+  browser.clickTarget({ closest: selector => selector === '[data-analytics-event]'
+    ? { dataset: { analyticsEvent: 'begin_checkout' } } : null });
+  browser.applicationEvent('purchase');
+  const events = browser.window.dataLayer.filter(entry => entry[0] === 'event');
+  assert.deepEqual(Array.from(events.at(-2)[2].items, item => ({ ...item })), [{
+    item_id: 'codex_migrate_mac_beta',
+    item_name: 'Codex Migrate Mac Beta',
+    price: 49,
+    quantity: 1,
+  }]);
+  assert.equal(events.at(-2)[2].currency, 'USD');
+  assert.equal(events.at(-2)[2].value, 49);
+  assert.equal(events.at(-1)[2].currency, 'USD');
+  assert.equal(events.at(-1)[2].value, 49);
+  assert.equal(JSON.stringify(events).includes('email'), false);
+  assert.equal(JSON.stringify(events).includes('session'), false);
+});
+
 test('verified application events use the same validated analytics queue', async () => {
   const browser = page();
   browser.applicationEvent('purchase');
