@@ -63,7 +63,7 @@
       document.getElementById('edition-signed').textContent = 'Signed and notarized Mac app';
       if (disclosure) disclosure.hidden = true;
       if (launch) launch.hidden = true;
-      document.getElementById('hero-availability').textContent = beta ? 'Signed Mac beta available · Free open-source CLI' : 'Mac app available · Free open-source CLI';
+      document.getElementById('hero-availability').textContent = beta ? 'Signed & notarized Mac beta' : 'Mac app available';
       document.getElementById('purchase-faq').textContent = `Yes. The signed, notarized ${beta ? 'beta ' : ''}app is $49 USD for ${platform}, including best-effort support and a 30-day refund policy. ${beta ? 'The current build has passed VoiceOver, a real macOS permission-denial check, and physical Wi-Fi interruption/resume testing. Guided permission recovery, direct-cable interruption, pristine-Mac installation, and broader hardware coverage remain ongoing. Keep your old Mac and an independent backup. ' : ''}The CLI and source remain free.`;
       const hero = document.getElementById('hero-paid-link');
       hero.href = '#founding-edition'; hero.textContent = 'Move my Codex work — $49';

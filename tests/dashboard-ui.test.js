@@ -80,3 +80,47 @@ test('interrupted installation and recovery expose guidance without calling an a
     if (label) assert.equal(next.textContent, label);
   }
 });
+
+test('backup summary stays concise and opens details only when action is needed', () => {
+  const elements = new Map([
+    ['backup-safety', {classList:{toggle() {}}}],
+    ['backup-details', {open:false}],
+    ['backup-heading', {textContent:''}],
+    ['backup-space', {textContent:''}],
+    ['backup-location', {textContent:''}],
+  ]);
+  const context = {
+    $: id => elements.get(id),
+    fmt: value => `${value} B`,
+  };
+  vm.createContext(context);
+  vm.runInContext(source.match(/function renderBackup\(s\)\{.*\}/)[0], context);
+
+  context.renderBackup({status:'running',space_check:'ok',receipt:{}});
+  assert.equal(elements.get('backup-details').open, false);
+  assert.equal(elements.get('backup-heading').textContent, 'Backup required before replacement');
+
+  context.renderBackup({status:'failed',space_check:'ok',receipt:{}});
+  assert.equal(elements.get('backup-details').open, true);
+
+  context.renderBackup({status:'complete',space_check:'ok',receipt:{backup_verified:true,backup:'/fixture/backup'}});
+  assert.equal(elements.get('backup-details').open, false);
+  assert.equal(elements.get('backup-heading').textContent, 'Backup verified');
+});
+
+test('only context-relevant migration actions stay visible', () => {
+  const actions = new Map(['inspect','start','pause','resume','finalize','cancel'].map(id => [id, {hidden:false,disabled:false}]));
+  const context = {$: id => actions.get(id)};
+  vm.createContext(context);
+  vm.runInContext(source.split('\n').find(line => line.startsWith('const setAction=')), context);
+  vm.runInContext(source.match(/function renderActions\(s\)\{.*\}/)[0], context);
+
+  context.renderActions({status:'running',phase:'staging',apply:true});
+  assert.deepEqual([...actions].filter(([,value]) => !value.hidden).map(([id]) => id), ['pause','cancel']);
+
+  context.renderActions({status:'ready',phase:'inspected',apply:true});
+  assert.deepEqual([...actions].filter(([,value]) => !value.hidden).map(([id]) => id), ['inspect','start']);
+
+  context.renderActions({status:'failed',phase:'staging',apply:true});
+  assert.deepEqual([...actions].filter(([,value]) => !value.hidden).map(([id]) => id), ['inspect','resume']);
+});

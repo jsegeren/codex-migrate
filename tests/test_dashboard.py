@@ -175,7 +175,7 @@ class DashboardTests(unittest.TestCase):
             self.assertIn('id="%s" disabled' % control, HTML)
 
     def test_dry_run_cannot_resume_a_mutating_migration(self):
-        self.assertIn('$("resume").disabled=!s.apply||', HTML)
+        self.assertIn('setAction("resume",canResume,s.apply)', HTML)
 
     def test_finalize_requires_explicit_server_side_confirmation(self):
         self.dashboard.engine.config = replace(self.dashboard.engine.config, apply=True)

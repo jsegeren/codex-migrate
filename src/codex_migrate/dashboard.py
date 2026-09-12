@@ -34,7 +34,7 @@ HTML = r"""<!doctype html>
     header > .support-link { flex:none; background:transparent; border-color:#8996ad; color:#d9cdff; }
     h1 { margin:0; font-size:clamp(30px,6vw,54px); letter-spacing:-.045em; line-height:1; }
     .tag { border:1px solid var(--line); border-radius:999px; padding:7px 11px; color:var(--muted); white-space:nowrap; }
-    .lede { color:var(--muted); font-size:17px; max-width:650px; margin:14px 0 0; }
+    .lede { color:var(--muted); font-size:17px; max-width:650px; margin:12px 0 0; }
     .panel { background:color-mix(in srgb,var(--panel) 94%,transparent); border:1px solid var(--line); border-radius:20px; padding:24px; box-shadow:0 24px 80px #0007; }
     .status-row { display:flex; align-items:center; justify-content:space-between; gap:20px; }
     .eyebrow { text-transform:uppercase; letter-spacing:.12em; font-size:14px; color:var(--muted); }
@@ -46,13 +46,18 @@ HTML = r"""<!doctype html>
     .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:20px 0; }
     .metric { border:1px solid var(--line); border-radius:14px; padding:14px; min-width:0; }
     .metric strong { display:block; margin-top:4px; overflow-wrap:anywhere; }
-    .controls { display:flex; flex-wrap:wrap; gap:10px; margin-top:22px; }
-    .scope { margin-top:18px; border-top:1px solid var(--line); padding-top:16px; color:var(--muted); }
+    .controls { display:flex; flex-wrap:wrap; gap:10px; margin-top:18px; }
+    .scope { margin-top:18px; color:var(--muted); }
+    .scope-card { border-top:1px solid var(--line); padding-top:16px; }
+    .scope-card > summary { color:var(--text); font-size:17px; font-weight:700; cursor:pointer; }
+    .scope-body { padding-top:10px; }
     .scope p { margin:5px 0; overflow-wrap:anywhere; }
     .scope ul { margin:7px 0 0; padding-left:22px; }
     .scope li { overflow-wrap:anywhere; }
-    #backup-safety { margin-top:18px; padding:16px; border:1px solid var(--line); border-radius:12px; }
+    #backup-safety { margin-top:18px; padding:14px 16px; border:1px solid var(--line); border-radius:12px; }
     #backup-safety p { margin:6px 0; overflow-wrap:anywhere; }
+    #backup-details { margin-top:8px; }
+    #backup-details > summary { cursor:pointer; color:var(--muted); }
     #backup-safety.blocked { border:2px solid var(--red); background:#3a151a; }
     #recovery-message:focus,#path-message:focus,#git-check-message:focus { outline:3px solid #d9cdff; outline-offset:4px; }
     #path-next,#recovery-next { margin-top:16px; }
@@ -75,7 +80,7 @@ HTML = r"""<!doctype html>
 <body>
 <main>
   <header>
-    <div><h1>Codex Migrate</h1><p class="lede">Move local Codex conversations, configuration, repositories, worktrees, and unfinished work to another Mac—with resumable staging and verification.</p></div>
+    <div><h1>Codex Migrate</h1><p class="lede">Move your Codex work safely to another Mac.</p></div>
     <a class="support-link" href="#migration-help">Help / Email support</a>
   </header>
   <section class="panel">
@@ -84,20 +89,30 @@ HTML = r"""<!doctype html>
     <div id="message" role="status" aria-live="polite">Connecting to the local migration service…</div>
     <a id="recovery-next" class="support-link" href="#recovery-help" hidden>Review recovery options</a>
     <a id="path-next" class="support-link" href="#path-help" hidden>Review home-path setup</a>
-    <div class="grid">
-      <div class="metric"><span class="eyebrow">Route</span><strong id="route">—</strong></div>
-      <div class="metric"><span class="eyebrow" id="size-heading">Staged / estimated total</span><strong id="bytes">—</strong></div>
-      <div class="metric"><span class="eyebrow">Current item</span><strong id="item">—</strong></div>
+    <div class="controls" id="transfer-controls">
+      <button id="inspect" disabled>Inspect</button>
+      <button class="primary" id="start" disabled>Start transfer</button>
+      <button id="pause" disabled>Pause</button>
+      <button id="resume" disabled>Resume</button>
+      <button class="primary" id="finalize" disabled>Finalize</button>
+      <button id="cancel" disabled>Stop safely</button>
     </div>
-    <div class="scope">
-      <div class="eyebrow">Configured migration scope</div>
+    <div class="grid">
+      <div class="metric"><span class="eyebrow">Connection</span><strong id="route">—</strong></div>
+      <div class="metric"><span class="eyebrow" id="size-heading">Transferred</span><strong id="bytes">—</strong></div>
+      <div class="metric"><span class="eyebrow" id="item-heading">Now moving</span><strong id="item">—</strong></div>
+    </div>
+    <details class="scope scope-card">
+      <summary>What’s moving</summary>
+      <div class="scope-body">
       <p><strong>Codex:</strong> <code id="codex-scope">—</code></p>
       <p><strong>SSH destination:</strong> <code id="ssh-target">—</code></p>
       <p><strong id="workspace-heading">Selected workspaces:</strong> <span id="workspace-count">0</span></p>
       <details><summary>Selected folders</summary><ul id="workspace-list"></ul></details>
       <p><strong id="skill-heading">Personal skills:</strong> <span id="skill-count">Not inspected yet</span></p>
       <details><summary>Skills included</summary><p id="skill-explanation">Custom skills are included from .agents/skills and legacy .codex/skills, with the current location taking precedence. Other destination skills are kept.</p><ul id="skill-list"></ul></details>
-    </div>
+      </div>
+    </details>
     <details id="git-scope" class="scope"><summary>Git repositories, worktrees and required folders</summary>
       <p id="git-summary">Git scope has not been inspected with this version.</p>
       <p id="workspace-proof">Workspace content verification is pending.</p>
@@ -111,10 +126,11 @@ HTML = r"""<!doctype html>
     </details>
     <section id="backup-safety" aria-label="Backup protection" aria-live="polite">
       <strong id="backup-heading">Backup required before replacement</strong>
-      <p id="backup-space">Destination space has not been checked yet.</p>
-      <p id="backup-location">No verified backup recorded for this migration.</p>
-      <p>Keep the old Mac intact. Close apps writing to selected folders before finalizing.</p>
-      <details><summary>Backup and verification details</summary><p>Installation is blocked if space is insufficient or backup verification fails. There is no skip-backup option. Same-disk backups protect against replacement mistakes, not disk failure.</p><p id="codex-state-proof">Retained Codex state verification is pending.</p></details>
+      <details id="backup-details"><summary>Backup and recovery details</summary>
+        <p id="backup-space">Destination space has not been checked yet.</p>
+        <p id="backup-location">No verified backup recorded for this migration.</p>
+        <p>Keep the old Mac intact. Close apps writing to selected folders before finalizing.</p>
+        <details><summary>What is verified?</summary><p>Installation is blocked if space is insufficient or backup verification fails. There is no skip-backup option. Same-disk backups protect against replacement mistakes, not disk failure.</p><p id="codex-state-proof">Retained Codex state verification is pending.</p></details>
       <details id="recovery-help"><summary>Recover an interrupted installation</summary>
         <p>Check the destination before trying again. This reads saved recovery evidence and backup contents; it does not restore or remove files.</p>
         <div class="controls"><button id="check_recovery" disabled>Check recovery</button><button id="stop_recovery" disabled>Stop check</button><button id="restore_recovery" disabled>Restore backup</button></div>
@@ -122,15 +138,8 @@ HTML = r"""<!doctype html>
         <details id="recovery-details" hidden><summary>Last check details</summary><p id="recovery-time"></p><p id="recovery-backup"></p><p id="recovery-terminal"></p><ul id="recovery-items"></ul></details>
         <p>Restore keeps displaced current files separately. It returns the previous destination, not a completed migration. Keep the old Mac, staging, and backups intact.</p>
       </details>
+      </details>
     </section>
-    <div class="controls" id="transfer-controls">
-      <button id="inspect" disabled>Inspect</button>
-      <button class="primary" id="start" disabled>Start transfer</button>
-      <button id="pause" disabled>Pause</button>
-      <button id="resume" disabled>Resume</button>
-      <button class="primary" id="finalize" disabled>Finalize</button>
-      <button id="cancel" disabled>Stop safely</button>
-    </div>
     <div id="warning"></div><div id="error" role="alert"></div>
     <details id="path-help"><summary>Home-path compatibility</summary>
       <p id="path-message" role="status" tabindex="-1">Home paths have not been checked.</p>
@@ -153,12 +162,14 @@ if(incomingToken)sessionStorage.setItem(tokenKey,incomingToken);
 const token=incomingToken||sessionStorage.getItem(tokenKey)||"";
 history.replaceState(null,"",location.pathname);
 const $=id=>document.getElementById(id);
+const setAction=(id,visible,enabled=visible)=>{const action=$(id);action.hidden=!visible;action.disabled=!enabled};
 let latestState={};
 let recoveryWasChecking=false;
 const fmt=n=>{if(!Number.isFinite(n))return "—";const u=["B","KB","MB","GB","TB"];let i=0;while(n>=1000&&i<u.length-1){n/=1000;i++}return `${n.toFixed(n>=100?0:n>=10?1:2)} ${u[i]}`};
-function renderBackup(s){const blocked=s.space_check==="blocked";$("backup-safety").classList.toggle("blocked",blocked);$("backup-heading").textContent=blocked?"Blocked — not enough space for a safe backup":"Backup required before replacement";$("backup-space").textContent=s.destination_bytes_required!=null?`Last space check: ${fmt(s.destination_bytes_free)} free; ${fmt(s.destination_bytes_required)} required, including ${fmt(s.backup_bytes_required)} for backups and ${fmt(s.reserve_bytes)} safety reserve. Space is checked again before replacement.`:"Destination space has not been checked yet.";const r=s.receipt||{};$("backup-location").textContent=s.pending_backup?`Pending backup on the destination: ${s.pending_backup}. Use Check recovery below; a saved path alone does not prove the backup is intact.`:r.backup_verified?`Last verified backup on the destination: ${r.backup}. File contents, tree structure and link targets checked before replacement.`:"No verified backup recorded for this migration."}
+function renderBackup(s){const blocked=s.space_check==="blocked";const r=s.receipt||{};$("backup-safety").classList.toggle("blocked",blocked);$("backup-details").open=blocked||["ready_to_finalize","waiting","failed","interrupted"].includes(s.status)||Boolean(s.pending_backup);$("backup-heading").textContent=blocked?"Blocked — not enough space for a safe backup":r.backup_verified?"Backup verified":"Backup required before replacement";$("backup-space").textContent=s.destination_bytes_required!=null?`Last space check: ${fmt(s.destination_bytes_free)} free; ${fmt(s.destination_bytes_required)} required, including ${fmt(s.backup_bytes_required)} for backups and ${fmt(s.reserve_bytes)} safety reserve. Space is checked again before replacement.`:"Destination space has not been checked yet.";$("backup-location").textContent=s.pending_backup?`Pending backup on the destination: ${s.pending_backup}. Use Check recovery below; a saved path alone does not prove the backup is intact.`:r.backup_verified?`Last verified backup on the destination: ${r.backup}. File contents, tree structure and link targets checked before replacement.`:"No verified backup recorded for this migration."}
+function renderActions(s){const active=s.status==="running";const canStart=["idle","ready"].includes(s.status);const canPause=active&&["staging","final_delta"].includes(s.phase);const canResume=['paused','cancelled','failed','interrupted'].includes(s.status);const canFinalize=s.status==="ready_to_finalize"||(s.status==="waiting"&&["close_source_codex","close_target_codex"].includes(s.phase));const canCancel=(active&&["inspecting","staging","final_delta","verifying_sources"].includes(s.phase))||s.status==="paused";setAction("inspect",!active);setAction("start",canStart,s.apply);setAction("pause",canPause);setAction("resume",canResume,s.apply);setAction("finalize",canFinalize,s.apply);setAction("cancel",canCancel)}
 async function api(path,options={}){const response=await fetch(path,{...options,headers:{"X-Codex-Migrate-Token":token,"Content-Type":"application/json",...(options.headers||{})}});const body=await response.json();if(!response.ok)throw new Error(body.error||`Request failed (${response.status})`);renderBackup(body);return body}
-function render(s){latestState=s;const p=Math.max(0,Math.min(100,Number(s.percent)||0));$("percent").textContent=`${p.toFixed(p===100?0:1)}%`;$("bar").style.width=`${p}%`;$("bar").parentElement.setAttribute("aria-valuenow",String(p));$("phase").textContent=String(s.phase||"unknown").replaceAll("_"," ");$("status").textContent=String(s.status||"unknown").replaceAll("_"," ");$("message").textContent=s.message||"";$("route").textContent=s.route||"—";$("bytes").textContent=`${fmt(s.bytes_staged||0)} / ${fmt(s.bytes_total||0)}`;$("item").textContent=s.current_item||"—";$("warning").style.display=s.warning?"block":"none";$("warning").textContent=s.warning||"";$("error").style.display=s.error?"block":"none";$("error").textContent=s.error||"";const c=s.config||{};$("codex-scope").textContent=`${c.source_home||"—"}/.codex → ${c.target_home||"—"}/.codex`;$("ssh-target").textContent=`${c.target||"—"} · ${c.target_home||"—"}`;const roots=Array.isArray(c.workspace_roots)?c.workspace_roots:[];$("workspace-count").textContent=String(roots.length);$("workspace-list").replaceChildren(...roots.map(root=>{const li=document.createElement("li");const prefix=`${c.source_home}/`;const relative=root.startsWith(prefix)?root.slice(prefix.length):root;li.textContent=`${root} → ${c.target_home}/${relative}`;return li}));const active=s.status==="running";const canStart=["idle","ready"].includes(s.status);const canFinalize=s.status==="ready_to_finalize"||(s.status==="waiting"&&["close_source_codex","close_target_codex"].includes(s.phase));$("inspect").disabled=active;$("start").disabled=!canStart||!s.apply;$("pause").disabled=!active||!["staging","final_delta"].includes(s.phase);$("resume").disabled=!s.apply||!['paused','cancelled','failed','interrupted'].includes(s.status);$("finalize").disabled=!canFinalize||!s.apply;$("cancel").disabled=!((active&&["inspecting","staging","final_delta"].includes(s.phase))||s.status==="paused");}
+function render(s){latestState=s;const p=Math.max(0,Math.min(100,Number(s.percent)||0));const phase=String(s.phase||"unknown").replaceAll("_"," ");const status=String(s.status||"unknown").replaceAll("_"," ");$("percent").textContent=`${p.toFixed(p===100?0:1)}%`;$("bar").style.width=`${p}%`;$("bar").parentElement.setAttribute("aria-valuenow",String(p));$("phase").textContent=phase===status?"Migration":phase;$("status").textContent=status;$("message").textContent=s.message||"";$("route").textContent=s.route||"—";$("bytes").textContent=`${fmt(s.bytes_staged||0)} / ${fmt(s.bytes_total||0)}`;$("item").textContent=s.current_item||"—";$("item-heading").textContent=s.status==="complete"?"Result":"Now moving";$("warning").style.display=s.warning?"block":"none";$("warning").textContent=s.warning||"";$("error").style.display=s.error?"block":"none";$("error").textContent=s.error||"";const c=s.config||{};$("codex-scope").textContent=`${c.source_home||"—"}/.codex → ${c.target_home||"—"}/.codex`;$("ssh-target").textContent=`${c.target||"—"} · ${c.target_home||"—"}`;const roots=Array.isArray(c.workspace_roots)?c.workspace_roots:[];$("workspace-count").textContent=String(roots.length);$("workspace-list").replaceChildren(...roots.map(root=>{const li=document.createElement("li");const prefix=`${c.source_home}/`;const relative=root.startsWith(prefix)?root.slice(prefix.length):root;li.textContent=`${root} → ${c.target_home}/${relative}`;return li}));renderActions(s)}
 function renderTransferControls(s){
   $('transfer-controls').hidden=s.status==='complete'||(!!s.receipt&&['path_compatibility','git_verification'].includes(s.phase));
 }
@@ -171,7 +182,7 @@ function renderSkills(s){
   renderGit(s);
   const waiting=s.status==="ready_to_finalize"||s.status==="waiting"||["verifying_sources","installing"].includes(s.phase);
   $("percent").hidden=waiting;$("bar").parentElement.hidden=waiting;
-  $("size-heading").textContent=s.status==="complete"?"Migration size estimate":"Staged / estimated total";
+  $("size-heading").textContent=s.status==="complete"?"Migration size":"Transferred";
   if(s.status==="complete")$("bytes").textContent=fmt(s.bytes_total||0);
   const repair=s.migration_mode==="skills";
   const skills=repair?s.inventory?.skill_exports:s.inventory?.personal_skills;

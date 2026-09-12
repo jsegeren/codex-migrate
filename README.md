@@ -55,13 +55,12 @@ The first five Founding Edition buyers receive priority, best-effort setup
 guidance and migration troubleshooting directly from Josh. This does not add a
 guaranteed response time or guarantee that every migration issue can be solved.
 
-## See the app in 56 seconds
+## See the app in one minute
 
 [![Codex Migrate local dashboard during a staged sample migration](site/assets/codex-migrate-demo-poster.jpg)](https://migrate.segeren.com/assets/codex-migrate-demo.webm)
 
-This is the real local dashboard with staged sample data. The silent demo
-accelerates inspection, transfer, backup, and verification into 56 seconds;
-actual transfer time depends on data size and the connection between the Macs.
+This is the real local dashboard with staged sample data. Actual transfer time
+depends on data size and the connection between the Macs.
 
 ## How migration works
 

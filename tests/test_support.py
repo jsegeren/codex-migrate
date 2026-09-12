@@ -143,9 +143,9 @@ class SupportTests(unittest.TestCase):
                     self.depth -= 1
         dashboard = Visibility()
         dashboard.feed(HTML)
-        for name in ("status", "message", "route", "backup-space", "backup-location", "error", "prepare-support"):
+        for name in ("status", "message", "route", "backup-heading", "error", "prepare-support"):
             self.assertFalse(dashboard.inside[name], name)
-        for name in ("workspace-list", "skill-explanation", "migration-events"):
+        for name in ("workspace-list", "skill-explanation", "backup-space", "backup-location", "migration-events"):
             self.assertTrue(dashboard.inside[name], name)
         setup = Visibility()
         setup.feed(SETUP_HTML)

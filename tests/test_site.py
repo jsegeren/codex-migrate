@@ -44,10 +44,10 @@ class SiteTests(unittest.TestCase):
 
     def test_home_offer_and_migration_search_copy_are_current(self):
         home = (SITE / "index.html").read_text()
-        self.assertIn("Signed Mac beta available · Free open-source CLI", home)
+        self.assertIn("Signed &amp; notarized Mac beta", home)
         self.assertIn("<h1>Change the Mac. <br>", home)
         self.assertIn("pick up exactly where you left off", home)
-        self.assertIn("Setup takes minutes; transfer time depends", home)
+        self.assertIn("Setup takes minutes; transfer time varies", home)
         self.assertNotIn("Mac builds by request", home)
         self.assertIn("How do I copy Codex to a different Mac?", home)
         self.assertIn("Can I access Codex from another machine without moving it?", home)
@@ -140,8 +140,7 @@ class SiteTests(unittest.TestCase):
                     self.assertTrue(target.exists(), f"{page.name}: missing {href}")
 
     def test_real_dashboard_screenshots_are_labeled_as_sample_data(self):
-        for page, asset in (("index.html", "dashboard-transfer.png"),
-                            ("backup-and-recovery.html", "dashboard-backup-blocked.png")):
+        for page, asset in (("backup-and-recovery.html", "dashboard-backup-blocked.png"),):
             with self.subTest(page=page):
                 source = (SITE / page).read_text()
                 self.assertIn('src="/assets/' + asset + '"', source)
@@ -161,8 +160,9 @@ class SiteTests(unittest.TestCase):
         self.assertIn('poster="/assets/codex-migrate-demo-poster.jpg"', source)
         self.assertIn('src="/assets/codex-migrate-demo.webm" type="video/webm"', source)
         self.assertIn('aria-describedby="demo-caption"', source)
+        self.assertIn("Watch a migration in 1 minute.", text)
         self.assertIn("Real product interface; staged sample data.", text)
-        self.assertIn("accelerates inspection, transfer, backup, and verification", text)
+        self.assertIn("Transfer time depends on data size and your connection.", text)
         self.assertTrue((SITE / "assets/codex-migrate-demo.webm").is_file())
         self.assertTrue((SITE / "assets/codex-migrate-demo-poster.jpg").is_file())
         self.assertLess((SITE / "assets/codex-migrate-demo.webm").stat().st_size, 2_000_000)
@@ -170,7 +170,7 @@ class SiteTests(unittest.TestCase):
     def test_first_five_offer_is_priority_best_effort_not_an_sla(self):
         home = " ".join(self.parse("index.html").text)
         readme = (ROOT / "README.md").read_text()
-        self.assertIn("The first five buyers receive priority, best-effort setup guidance", home)
+        self.assertIn("priority, best-effort help directly from Josh for the first five buyers", home)
         self.assertIn("The first five Founding Edition buyers receive priority, best-effort setup", readme)
         normalized_readme = " ".join(readme.split())
         self.assertIn("does not add a guaranteed response time", normalized_readme)
@@ -225,10 +225,11 @@ class SiteTests(unittest.TestCase):
 
     def test_codex_icon_is_a_separate_attributed_product_reference(self):
         source = (SITE / "index.html").read_text()
-        self.assertIn('class="product-reference"', source)
+        self.assertIn('class="header-compatibility"', source)
         self.assertIn('alt="Codex product icon"', source)
-        self.assertIn('>For Codex</a>', source)
-        self.assertIn('Not affiliated with or endorsed by OpenAI', source)
+        self.assertIn('<span>For Codex</span>', source)
+        self.assertIn('Codex Migrate is an independent compatibility project.', source)
+        self.assertIn('Codex product icon and OpenAI marks belong to OpenAI.', source)
         self.assertIn('href="/assets/mark.svg"', source)
         self.assertTrue((SITE / "assets/codex-product-dark.png").is_file())
         for size in (80, 288, 560):
