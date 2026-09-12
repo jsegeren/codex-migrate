@@ -10,7 +10,7 @@ function reply(res, status, heading, message, analyticsEvent = '') {
   res.setHeader('X-Robots-Tag', 'noindex');
   // Only static messages enter this template. Never reflect submitted content.
   const eventAttribute = analyticsEvent ? ` data-analytics-event="${analyticsEvent}"` : '';
-  res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>${heading} — Codex Migrate</title><link rel="stylesheet" href="/styles.css?v=20260904-regional"><script src="/analytics.js?v=20260911-ecommerce" defer></script></head><body${eventAttribute}><header class="site-header"><a class="brand" href="/">Codex Migrate</a></header><main class="legal shell"><h1>${heading}</h1><p role="status">${message}</p><p><a class="button button-primary" href="/#launch-email">Back to Codex Migrate</a></p><p>Need help? <a href="mailto:joshua@segeren.com?subject=Codex%20Migrate%20launch%20request">Email Josh</a>.</p></main></body></html>`);
+  res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>${heading} — Codex Migrate</title><link rel="stylesheet" href="/styles.css?v=20260904-regional"><script src="/analytics.js?v=20260911-ecommerce" defer></script></head><body${eventAttribute}><header class="site-header"><a class="brand" href="/">Codex Migrate</a></header><main class="legal shell"><h1>${heading}</h1><p role="status">${message}</p><p><a class="button button-primary" href="/#launch-email">Back to Codex Migrate</a></p><p>Need help? <a href="mailto:joshua@segeren.com?subject=Codex%20Migrate%20launch%20request">Email Joshua</a>.</p></main></body></html>`);
 }
 
 async function handler(req, res) {
@@ -50,7 +50,7 @@ async function handler(req, res) {
   const from = process.env.LAUNCH_FROM_EMAIL;
   const to = process.env.LAUNCH_NOTIFY_EMAIL;
   if (!key || !EMAIL.test(from || '') || !EMAIL.test(to || '')) {
-    return reply(res, 503, 'Email signup is unavailable', 'Your request has not been saved. Please email Josh instead, or try again later.');
+    return reply(res, 503, 'Email signup is unavailable', 'Your request has not been saved. Please email Joshua instead, or try again later.');
   }
   try {
     const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
@@ -75,10 +75,10 @@ async function handler(req, res) {
       }),
     });
     if (response.status !== 202) throw new Error('Mail not accepted');
-    return reply(res, 200, 'Launch request sent', 'Our email provider accepted your request for delivery to Josh. He manages launch requests personally; this is not a purchase or a preorder. No confirmation email is sent automatically.', 'generate_lead');
+    return reply(res, 200, 'Launch request sent', 'Our email provider accepted your request for delivery to Joshua. He manages launch requests personally; this is not a purchase or a preorder. No confirmation email is sent automatically.', 'generate_lead');
   } catch {
     // Do not retry automatically: a timed-out request may already be accepted.
-    return reply(res, 503, 'We could not confirm your request', 'There was a problem sending your request. It may not have reached Josh. Please email him instead; you have not been charged.');
+    return reply(res, 503, 'We could not confirm your request', 'There was a problem sending your request. It may not have reached Joshua. Please email him instead; you have not been charged.');
   }
 }
 

@@ -213,3 +213,15 @@ The private live-store upload was streamed back and matched that exact size and
 digest. The existing Founder authorization for the paid beta applies to this
 interface-only successor; existing purchases remain bound to their original
 catalogued artifacts.
+
+## Build 11 public-name correction
+
+Build 11 replaces the remaining shortened first-name references with “Joshua,”
+including the packaged Help screen, without changing migration
+behavior. It was built from clean pushed source
+`5fbbf6abd3ee7d30c8e4436b3bb09468bfef5f9e`, signed with Developer ID,
+accepted by Apple notarization submission
+`30dee211-1265-4357-9606-08bd68f283a2`, stapled, and accepted by Gatekeeper.
+Eleven exact packaged-engine checks passed with one expected filesystem skip.
+The private-store readback matched the 8,307,040-byte archive and SHA-256
+`b5fd8546c2d8d4cf285de2fab3d75b71778897da02f750ae6368cf2c25831c0c`.

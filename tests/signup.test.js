@@ -37,6 +37,18 @@ test('valid request sends consent to fixed maintainer, not visitor', async () =>
   assert.match(res.body, /data-analytics-event="generate_lead"/);
   assert.match(res.body, /src="\/analytics\.js\?v=20260911-ecommerce"/);
 });
+test('rendered signup responses use Joshua, never the shortened public name', async () => {
+  const responses = [await submit()];
+  delete process.env.SENDGRID_API_KEY;
+  responses.push(await submit());
+  process.env.SENDGRID_API_KEY = 'test-only';
+  global.fetch = async () => ({ status: 403 });
+  responses.push(await submit());
+  for (const response of responses) {
+    assert.match(response.body, /Joshua/);
+    assert.doesNotMatch(response.body, /\bJosh\b/);
+  }
+});
 test('supports urlencoded body and alias origin', async () => {
   assert.equal((await submit({ body: 'email=reader%40example.net&consent=yes&website=', headers: { origin: 'https://codex-migrate.vercel.app', 'content-type': 'application/x-www-form-urlencoded; charset=UTF-8' } })).statusCode, 200);
 });

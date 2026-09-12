@@ -63,7 +63,7 @@ test('only explicitly approved signed beta manifests are eligible for live distr
   const { validRelease } = require('../commerce/config');
   const releases = require('../commerce/releases.json');
   const betas = ['beta-build5-arm64', 'beta-build7-arm64', 'beta-build8-arm64', 'beta-build9-arm64',
-    'beta-build10-arm64']
+    'beta-build10-arm64', 'beta-build11-arm64']
     .map(id => releases[id]);
   for (const beta of betas) {
     assert.equal(validRelease(beta, true), true);
@@ -85,6 +85,9 @@ test('only explicitly approved signed beta manifests are eligible for live distr
   assert.equal(releases['beta-build10-arm64'].sha256,
     'f5a1634380c386c3c0c4bfdcab65270cd45c7ffe151b7378d01b9a8be1e6a739');
   assert.equal(releases['beta-build10-arm64'].source, 'c3e398b23d0a0d913bd7567e7d3e512c1d0e0e01');
+  assert.equal(releases['beta-build11-arm64'].sha256,
+    'b5fd8546c2d8d4cf285de2fab3d75b71778897da02f750ae6368cf2c25831c0c');
+  assert.equal(releases['beta-build11-arm64'].source, '5fbbf6abd3ee7d30c8e4436b3bb09468bfef5f9e');
 });
 test('beta delivery email includes the remaining checks and both operator alerts without adding tracking', async () => {
   let mail;
