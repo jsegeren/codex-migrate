@@ -54,23 +54,25 @@ test('preview checkout still requires operator authentication before runtime acc
 test('authorized preview checkout sends return URLs to that preview, never production', async () => {
   const configured = { live: false, mode: 'sandbox', site: origin, account: 'acct_fixture',
     product: 'prod_fixture', price: 'price_fixture', release: { id: 'fixture' } };
-  let created;
+  let created, options;
   const stripe = { accounts: { retrieve: async () => ({ id: configured.account }) },
     prices: { retrieve: async () => ({ livemode: false, active: true, unit_amount: 5000,
       currency: 'usd', type: 'one_time', billing_scheme: 'per_unit',
       product: { id: configured.product, livemode: false, active: true } }) },
-    checkout: { sessions: { create: async value => { created = value;
+    checkout: { sessions: { create: async (value, opts) => { created = value; options = opts;
       return { livemode: false, managed_payments: { enabled: true }, url: 'https://checkout.stripe.com/fixture' };
     } } } };
   const req = request({ requestId }); req.headers.authorization = `Bearer ${'c'.repeat(64)}`;
   const res = response();
   await checkout(async () => ({ stripe }), { ...env, COMMERCE_CHECKOUT_OPEN: 'yes',
+    COMMERCE_CHECKOUT_RECOVERY: 'yes',
     COMMERCE_SANDBOX_OPERATOR_TOKEN: 'c'.repeat(64) }, () => configured)(req, res);
   assert.equal(res.statusCode, 200);
   assert.equal(created.success_url, `${origin}/purchase#session={CHECKOUT_SESSION_ID}`);
   assert.equal(created.cancel_url, `${origin}/#founding-edition`);
   assert.deepEqual(created.consent_collection, { promotions: 'auto' });
   assert.deepEqual(created.after_expiration, { recovery: { enabled: true } });
+  assert.match(options.idempotencyKey, /-recovery-/);
 });
 test('preview purchase accepts its origin and uses the same server environment', async () => {
   let calls = 0;
@@ -104,9 +106,10 @@ test('standard checkout creates no managed payment and never silently falls back
   assert.equal(created.managed_payments, undefined);
   assert.equal(created.metadata.checkout_provider, 'stripe');
   assert.equal(created.billing_address_collection, undefined);
-  assert.deepEqual(created.consent_collection, { promotions: 'auto' });
-  assert.deepEqual(created.after_expiration, { recovery: { enabled: true } });
+  assert.equal(created.consent_collection, undefined);
+  assert.equal(created.after_expiration, undefined);
   assert.match(options.idempotencyKey, /-stripe-/);
+  assert.doesNotMatch(options.idempotencyKey, /-recovery-/);
   managed = { enabled: true };
   const bad = response(); await handler(req, bad);
   assert.equal(bad.statusCode, 503);

@@ -29,10 +29,16 @@ function makeHandler(load = runtime, env = process.env, configure = configuratio
           price.transform_quantity != null || price.product?.id !== config.product ||
           price.product.livemode !== config.live || !price.product.active) throw new CommerceError('catalog_mismatch');
       const standard = config.checkoutProvider === 'stripe';
+      // Stripe requires separate account-level promotional-email terms before
+      // these fields are accepted. Keep ordinary paid checkout independent so
+      // recovery can be enabled deliberately without blocking sales.
+      const checkoutRecovery = env.COMMERCE_CHECKOUT_RECOVERY === 'yes';
       const session = await stripe.checkout.sessions.create({
         mode: 'payment', line_items: [{ price: config.price, quantity: 1 }],
-        consent_collection: { promotions: 'auto' },
-        after_expiration: { recovery: { enabled: true } },
+        ...(checkoutRecovery ? {
+          consent_collection: { promotions: 'auto' },
+          after_expiration: { recovery: { enabled: true } },
+        } : {}),
         ...(standard ? {} : { managed_payments: { enabled: true } }),
         ...(config.release.channel === 'beta' ? { custom_text: { submit: { message:
           'Beta software for Apple silicon Macs. Keep your old Mac and an independent backup until you verify the move. A 30-day refund policy applies.' } } } : {}),
@@ -40,7 +46,7 @@ function makeHandler(load = runtime, env = process.env, configure = configuratio
           ...(config.release.channel === 'beta' ? { release_channel: 'beta' } : {}),
           checkout_provider: standard ? 'stripe' : 'managed' },
         success_url: `${config.site}/purchase#session={CHECKOUT_SESSION_ID}`, cancel_url: `${config.site}/#founding-edition`,
-      }, { idempotencyKey: `codex-migrate-${config.mode}-${config.release.id}-${standard ? 'stripe-' : ''}${data.requestId}` });
+      }, { idempotencyKey: `codex-migrate-${config.mode}-${config.release.id}-${standard ? 'stripe-' : ''}${checkoutRecovery ? 'recovery-' : ''}${data.requestId}` });
       const url = new URL(session.url);
       if (session.livemode !== config.live || (standard
           ? session.managed_payments != null && session.managed_payments.enabled !== false

@@ -4,7 +4,10 @@ Current status, September 11: standard Stripe Checkout is publicly available at
 $49 for the signed, notarized beta. The historical launch-gate notes below are
 retained as an audit trail; they no longer describe current availability.
 
-Checkout recovery is consent-based. New Checkout sessions ask Stripe to offer
+Checkout recovery is consent-based and separately gated by
+`COMMERCE_CHECKOUT_RECOVERY=yes`; it defaults off so Stripe's promotional-email
+terms cannot block ordinary paid checkout. Once the account-level terms are
+accepted and the flag is enabled, new Checkout sessions ask Stripe to offer
 its promotions-consent control and to generate a recovery URL after expiration.
 Only an exact, expired, unpaid Codex Migrate session with explicit `opt_in`, the
 expected product, price, release, environment and Stripe recovery origin may
@@ -375,6 +378,9 @@ Private server-only variables:
   explicitly scoped `COMMERCE_BLOB_READ_WRITE_TOKEN` can be supplied for operator
   use; never expose it or a signing key to the browser.
 - `COMMERCE_CHECKOUT_OPEN=yes`: a separate checkout-opening gate.
+- `COMMERCE_CHECKOUT_RECOVERY=yes`: opt in to Stripe's promotions-consent and
+  expired-session recovery fields only after the account-level terms are accepted;
+  absence keeps recovery off without closing ordinary checkout.
 - `COMMERCE_SANDBOX_OPERATOR_TOKEN`: random 32-byte hex token, required in the
   Authorization header to create sandbox checkouts through the endpoint.
 - `COMMERCE_SANDBOX_EMAIL`: the maintainer-controlled delivery sink; sandbox
