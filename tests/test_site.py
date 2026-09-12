@@ -154,6 +154,27 @@ class SiteTests(unittest.TestCase):
                 self.assertTrue((SITE / "assets" / f"{stem}-720.avif").is_file())
                 self.assertTrue((SITE / "assets" / f"{stem}-1120.avif").is_file())
 
+    def test_home_has_accessible_real_interface_demo_with_honest_timing(self):
+        source = (SITE / "index.html").read_text()
+        text = " ".join(self.parse("index.html").text)
+        self.assertIn('<video controls preload="metadata"', source)
+        self.assertIn('poster="/assets/codex-migrate-demo-poster.jpg"', source)
+        self.assertIn('src="/assets/codex-migrate-demo.webm" type="video/webm"', source)
+        self.assertIn('aria-describedby="demo-caption"', source)
+        self.assertIn("Real product interface; staged sample data.", text)
+        self.assertIn("accelerates inspection, transfer, backup, and verification", text)
+        self.assertTrue((SITE / "assets/codex-migrate-demo.webm").is_file())
+        self.assertTrue((SITE / "assets/codex-migrate-demo-poster.jpg").is_file())
+        self.assertLess((SITE / "assets/codex-migrate-demo.webm").stat().st_size, 2_000_000)
+
+    def test_first_five_offer_is_priority_best_effort_not_an_sla(self):
+        home = " ".join(self.parse("index.html").text)
+        readme = (ROOT / "README.md").read_text()
+        self.assertIn("The first five buyers receive priority, best-effort setup guidance", home)
+        self.assertIn("The first five Founding Edition buyers receive priority, best-effort setup", readme)
+        normalized_readme = " ".join(readme.split())
+        self.assertIn("does not add a guaranteed response time", normalized_readme)
+
     def test_paid_beta_offer_describes_current_download_and_price(self):
         text = " ".join(self.parse("index.html").text).lower()
         self.assertIn("signed, notarized mac beta", text)
