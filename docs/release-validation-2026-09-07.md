@@ -298,7 +298,7 @@ customer refund, new checkout or replacement delivery email was created.
 
 The original private link from the 11:42 AM delivery email was reopened in
 Chrome. The actual hosted page displayed **This purchase needs review. Please
-email Josh for help.** and offered no Download for Mac button. Thus the same
+email Joshua for help.** and offered no Download for Mac button. Thus the same
 entitlement that delivered the verified ZIP no longer authorizes a fresh
 download after refund. The previously downloaded file was not removed; this
 test does not claim revocation of files already obtained or immediate expiry of
@@ -580,7 +580,7 @@ physical-link test window are the remaining human dependencies.
 Separately, live Stripe account `acct_1Rkc6eJfbWpcJIZb` communication preferences
 were re-read: **Successful payment receipt — Email** remained checked. This is
 merchant-notification configuration evidence, not proof of an actual live-sale
-message arriving in Josh's mailbox. Buyer delivery email is a separate flow.
+message arriving in Joshua's mailbox. Buyer delivery email is a separate flow.
 
 ## Post-launch complete regression recheck
 

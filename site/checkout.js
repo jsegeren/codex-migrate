@@ -39,8 +39,8 @@
       status.textContent = error.message === 'rate_limited'
         ? 'Too many checkout attempts. Wait a minute, then try again. If you already paid, use your delivery email—do not pay again.'
         : error.message === 'checkout_closed'
-        ? 'Sales are not open right now. Please email Josh for help.'
-        : 'Checkout could not open. Try again or email Josh. If you already paid, use your delivery email—do not pay again.';
+        ? 'Sales are not open right now. Please email Joshua for help.'
+        : 'Checkout could not open. Try again or email Joshua. If you already paid, use your delivery email—do not pay again.';
     } finally {
       busy = false; button.disabled = false;
       if (hadFocus && document.activeElement === document.body) button.focus();

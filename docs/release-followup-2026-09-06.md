@@ -198,7 +198,7 @@ not included here.
 Only that new synthetic payment was refunded in full, with reason Other and
 an internal sandbox-acceptance note. Stripe displayed **Refunded**. Opening
 the same Inbox delivery link again changed the buyer page to "This purchase
-needs review. Please email Josh for help." The rendered page had no
+needs review. Please email Joshua for help." The rendered page had no
 Download for Mac link and retained Check again and support controls. This
 proves a refunded ordinary-Stripe purchase cannot obtain a fresh download
 through its email credential. It does not revoke an already downloaded file

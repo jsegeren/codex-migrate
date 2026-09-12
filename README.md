@@ -19,7 +19,7 @@ selected workspace folders described below; compatibility testing is ongoing.
 
 Prefer a packaged app to cloning and running the source? **The paid Mac Founding
 Edition includes the downloadable Mac app and personal, best-effort migration
-help directly from Josh.** It opens the guided local browser workflow for
+help directly from Joshua.** It opens the guided local browser workflow for
 setup, transfer progress,
 pause/resume, verification, and recovery. Your workspace moves directly between
 your Macs, not through our servers.
@@ -52,7 +52,7 @@ the archive checksum and notarization result. The default branch may be newer
 than an already-downloaded package.
 
 The first five Founding Edition buyers receive priority, best-effort setup
-guidance and migration troubleshooting directly from Josh. This does not add a
+guidance and migration troubleshooting directly from Joshua. This does not add a
 guaranteed response time or guarantee that every migration issue can be solved.
 
 ## See the app in one minute

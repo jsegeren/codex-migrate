@@ -95,13 +95,13 @@
       if (['invalid_link', 'purchase_requires_support', 'purchase_not_verified'].includes(error.message)) forget();
       const messages = {
         rate_limited: 'Too many download checks. Wait a minute, then select Check again. Do not purchase again.',
-        checkout_closed: 'Checkout is not open yet. If you have a payment receipt, email Josh for help.',
-        release_unavailable: 'Your download is temporarily unavailable. Please email Josh; do not purchase again.',
-        invalid_link: 'This download link is invalid. Reopen the link from your purchase email or email Josh.',
-        purchase_not_verified: 'We could not verify a completed payment yet. Check again shortly or email Josh. Do not purchase again.',
-        purchase_requires_support: 'This purchase needs review. Please email Josh for help.',
+        checkout_closed: 'Checkout is not open yet. If you have a payment receipt, email Joshua for help.',
+        release_unavailable: 'Your download is temporarily unavailable. Please email Joshua; do not purchase again.',
+        invalid_link: 'This download link is invalid. Reopen the link from your purchase email or email Joshua.',
+        purchase_not_verified: 'We could not verify a completed payment yet. Check again shortly or email Joshua. Do not purchase again.',
+        purchase_requires_support: 'This purchase needs review. Please email Joshua for help.',
       };
-      status.textContent = messages[error.message] || 'We couldn’t check your download right now. Try again or email Josh. Do not purchase again.';
+      status.textContent = messages[error.message] || 'We couldn’t check your download right now. Try again or email Joshua. Do not purchase again.';
       download.removeAttribute('href'); download.setAttribute('aria-disabled', 'true');
       download.hidden = true; retry.hidden = false; integrity.hidden = true;
       retry.textContent = 'Check again';

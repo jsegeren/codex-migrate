@@ -34,7 +34,7 @@ in-memory limiter, which would reset across serverless instances. Distributed
 abuse remains possible; disable intake by removing the sending credential if
 necessary. Monitor the maintainer inbox and SendGrid sending activity.
 
-Josh must deduplicate requests, confirm address ownership before launch mail,
+Joshua must deduplicate requests, confirm address ownership before launch mail,
 honor opt-outs, and remove launch requests after the requested notice. The form
 does not authorize unrelated marketing. Early-build requests remain individual
 email conversations and never automatically deliver an unsigned app.

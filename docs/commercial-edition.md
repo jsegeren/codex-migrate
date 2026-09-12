@@ -66,7 +66,7 @@ Do not promise a launch date or guaranteed fix. Standard signing/notarization
 and clean-Mac acceptance remain required for the later general release.
 
 Under that earlier policy, the signed Mac app was not publicly downloadable;
-early unsigned/unnotarized Mac builds may be requested from Josh and are handled
+early unsigned/unnotarized Mac builds may be requested from Joshua and are handled
 case by case. Beta does not mean release acceptance is complete. Keep the source
 Mac and an independent backup; finalization replaces selected destination data,
 not merges independently active workspaces. Do not send credentials or workspace

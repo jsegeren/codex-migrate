@@ -171,7 +171,7 @@ summary:focus-visible { outline:3px solid #d9cdff; outline-offset:4px; }
 
 SUPPORT_HTML = """<section id="migration-help" aria-labelledby="support-heading">
 <h2 id="support-heading">Need a hand?</h2>
-<p>Contact Josh at <a href="{url}">{email}</a>. Keep your source data, staging, and backups.</p>
+<p>Contact Joshua at <a href="{url}">{email}</a>. Keep your source data, staging, and backups.</p>
 <div class="controls"><button type="button" id="prepare-support">Prepare diagnostic report</button>
 <a class="support-link" href="{url}">Email support</a></div>
 <p>Review the report, save it, then attach it to your email. Nothing is uploaded automatically.</p>
