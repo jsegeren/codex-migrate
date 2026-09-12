@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
 const { database } = require('../commerce/database');
 const { sql } = require('drizzle-orm');
-const { purchaseStore } = require('../commerce/store');
+const { purchaseStore, checkoutRecoveryStore } = require('../commerce/store');
 
 test('real sandbox database grants and claims atomically across concurrent connections', {
   skip: !process.env.COMMERCE_TEST_DATABASE_URL, timeout: 60000,
@@ -33,6 +33,17 @@ test('real sandbox database grants and claims atomically across concurrent conne
   await store.ensure(q); const lease = await store.claim(q.sessionId, q.mode);
   await store.mailResult(q.sessionId, q.mode, lease, 'uncertain');
   await assert.rejects(store.claim(q.sessionId, q.mode), /review/);
+
+  const recovery = checkoutRecoveryStore(db);
+  const expired = { sessionId: `cs_test_recovery${id}`, mode: 'sandbox', email: 'fixture@example.invalid' };
+  await Promise.all(Array.from({ length: 8 }, () => recovery.ensure(expired)));
+  const recoveryResults = await Promise.allSettled(
+    Array.from({ length: 8 }, () => recovery.claim(expired.sessionId, expired.mode)));
+  const recoveryClaims = recoveryResults.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value);
+  assert.equal(recoveryClaims.length, 1);
+  await recovery.mailResult(expired.sessionId, expired.mode, recoveryClaims[0], 'accepted');
+  assert.equal(await recovery.claim(expired.sessionId, expired.mode), null);
+  await assert.rejects(recovery.ensure({ ...expired, email: 'changed@example.invalid' }), /conflict/);
   // Retain two clearly synthetic records as acceptance evidence; no customer
   // data is inserted, selected or removed by this runner.
 });

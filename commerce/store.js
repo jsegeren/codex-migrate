@@ -36,4 +36,37 @@ function purchaseStore(db) {
     },
   };
 }
-module.exports = { purchaseStore };
+function checkoutRecoveryStore(db) {
+  return {
+    async ensure(p) {
+      await db.execute(sql`insert into commerce_checkout_recoveries (session_id, mode, email)
+        values (${p.sessionId}, ${p.mode}, ${p.email})
+        on conflict (session_id, mode) do nothing`);
+      const { rows } = await db.execute(sql`select email from commerce_checkout_recoveries
+        where session_id = ${p.sessionId} and mode = ${p.mode}`);
+      if (rows.length !== 1 || rows[0].email !== p.email) {
+        throw new CommerceError('checkout_recovery_record_conflict');
+      }
+    },
+    async claim(id, mode) {
+      const lease = randomUUID();
+      const { rows } = await db.execute(sql`update commerce_checkout_recoveries
+        set mail_state = 'sending', mail_lease = ${lease}, mail_started_at = now(), mail_attempts = mail_attempts + 1
+        where session_id = ${id} and mode = ${mode} and mail_state = 'pending' and mail_attempts < 3
+        returning session_id`);
+      if (rows.length) return lease;
+      const existing = await db.execute(sql`select mail_state from commerce_checkout_recoveries
+        where session_id = ${id} and mode = ${mode}`);
+      if (existing.rows[0]?.mail_state !== 'sent') throw new CommerceError('checkout_recovery_needs_review');
+      return null;
+    },
+    async mailResult(id, mode, lease, result) {
+      const state = result === 'accepted' ? 'sent' : result === 'rejected' ? 'pending' : 'uncertain';
+      const { rows } = await db.execute(sql`update commerce_checkout_recoveries set mail_state = ${state}, mail_lease = null
+        where session_id = ${id} and mode = ${mode} and mail_lease = ${lease} and mail_state = 'sending'
+        returning session_id`);
+      if (rows.length !== 1) throw new CommerceError('checkout_recovery_needs_review');
+    },
+  };
+}
+module.exports = { purchaseStore, checkoutRecoveryStore };

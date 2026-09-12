@@ -11,6 +11,12 @@ function purchasePriceCents(priceId, config) {
   if (priceId === config.price) return currentPriceCents(config.live);
   return config.live ? LEGACY_LIVE_PRICE_CENTS[priceId] : undefined;
 }
+function checkoutProviderVerified(session) {
+  const provider = session?.metadata?.checkout_provider;
+  return session?.managed_payments?.enabled === true
+    ? provider == null || provider === 'managed'
+    : provider === 'stripe' && (session?.managed_payments == null || session.managed_payments.enabled === false);
+}
 
 function sessionId(id, live) {
   return typeof id === 'string' && id.length <= 255 &&
@@ -35,10 +41,7 @@ function validatePurchase(session, config) {
   // Preserve purchases from the previous Managed Payments flow. Standard
   // Checkout must carry our server-created marker; changing the current
   // configuration must not invalidate a buyer's historical download.
-  const provider = session?.metadata?.checkout_provider;
-  const verifiedProvider = session?.managed_payments?.enabled === true
-    ? provider == null || provider === 'managed'
-    : provider === 'stripe' && (session?.managed_payments == null || session.managed_payments.enabled === false);
+  const verifiedProvider = checkoutProviderVerified(session);
   // Metadata alone is not payment authority. Match the paid Stripe line item,
   // environment, quantity, actual amount and the successful charge as well.
   if (!sessionId(session?.id, config.live) || session.livemode !== config.live ||
@@ -72,6 +75,38 @@ function validatePurchase(session, config) {
   }
   return { sessionId: session.id, mode: config.mode, releaseId: config.release.id,
     paymentIntent: intent.id, amountTotal: session.amount_total, email };
+}
+
+function validateCheckoutRecovery(session, config) {
+  const item = session?.line_items?.data?.[0];
+  const price = item?.price;
+  const priceCents = purchasePriceCents(price?.id, config);
+  const product = typeof price?.product === 'string' ? price.product : price?.product?.id;
+  const release = config.catalog?.[session?.metadata?.release];
+  const recovery = session?.after_expiration?.recovery;
+  if (!sessionId(session?.id, config.live) || session.livemode !== config.live ||
+      session.mode !== 'payment' || session.status !== 'expired' || session.payment_status !== 'unpaid' ||
+      !checkoutProviderVerified(session) || session.metadata?.product !== 'codex-migrate' ||
+      !validRelease(release, config.live) || release.id !== session.metadata.release ||
+      session.line_items?.has_more !== false || session.line_items.data.length !== 1 ||
+      priceCents == null || product !== config.product || price.livemode !== config.live ||
+      price.type !== 'one_time' || price.recurring != null || price.currency !== 'usd' ||
+      price.unit_amount !== priceCents || item.quantity !== 1 || item.amount_subtotal !== priceCents ||
+      session.amount_subtotal !== priceCents || session.currency !== 'usd' ||
+      session.total_details?.amount_discount !== 0 || session.consent?.promotions !== 'opt_in' ||
+      recovery?.enabled !== true) throw new CommerceError('checkout_recovery_not_verified', 409);
+  const email = session.customer_details?.email;
+  if (typeof email !== 'string' || email.length > 254 ||
+      !/^[^\s<>@\r\n]+@[^\s<>@\r\n]+\.[^\s<>@\r\n]+$/.test(email)) {
+    throw new CommerceError('checkout_recovery_not_verified', 409);
+  }
+  let url;
+  try { url = new URL(recovery.url); } catch { throw new CommerceError('checkout_recovery_not_verified', 409); }
+  if (url.origin !== 'https://buy.stripe.com' || url.username || url.password || url.search || url.hash ||
+      !/^\/r\/[A-Za-z0-9_-]+$/.test(url.pathname)) {
+    throw new CommerceError('checkout_recovery_not_verified', 409);
+  }
+  return { sessionId: session.id, mode: config.mode, email, link: url.toString(), release };
 }
 
 function service({ config, stripe, store, sendMail, signDownload }) {
@@ -123,4 +158,25 @@ function service({ config, stripe, store, sendMail, signDownload }) {
   }
   return { fulfill, download, status };
 }
-module.exports = { service, validatePurchase, purchasePriceCents, tokenFor, tokenSession, sessionId };
+function checkoutRecovery({ config, stripe, store, sendMail }) {
+  async function recover(id) {
+    if (!sessionId(id, config.live)) throw new CommerceError('invalid_link', 403);
+    const account = await stripe.accounts.retrieve();
+    if (account.id !== config.account) throw new CommerceError('account_mismatch');
+    const session = await stripe.checkout.sessions.retrieve(id, { expand: ['line_items'] });
+    const recovery = validateCheckoutRecovery(session, config);
+    await store.ensure(recovery);
+    const claim = await store.claim(id, config.mode);
+    if (!claim) return { status: 'recorded' };
+    let result;
+    try { result = await sendMail({ to: recovery.email, link: recovery.link,
+      release: recovery.release, live: config.live }); }
+    catch { result = 'uncertain'; }
+    await store.mailResult(id, config.mode, claim, result);
+    if (result !== 'accepted') throw new CommerceError('checkout_recovery_delivery_needs_retry');
+    return { status: 'recorded' };
+  }
+  return { recover };
+}
+module.exports = { service, checkoutRecovery, validatePurchase, validateCheckoutRecovery,
+  purchasePriceCents, tokenFor, tokenSession, sessionId };

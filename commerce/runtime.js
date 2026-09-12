@@ -2,8 +2,8 @@ const Stripe = require('stripe');
 const { database } = require('./database');
 const { sql } = require('drizzle-orm');
 const { configuration, CommerceError, PRICE_CENTS } = require('./config');
-const { purchaseStore } = require('./store');
-const { service } = require('./service');
+const { purchaseStore, checkoutRecoveryStore } = require('./store');
+const { service, checkoutRecovery } = require('./service');
 const { privateDownloads } = require('./artifacts');
 
 const PURCHASE_NOTIFY_EMAILS = ['segerej@gmail.com', 'joshua@segeren.com'];
@@ -80,6 +80,35 @@ async function deliveryMail({ to, link, release, live, sessionId, paymentIntent,
     return response.status >= 400 && response.status < 500 ? 'rejected' : 'uncertain';
   } catch { return 'uncertain'; }
 }
+async function recoveryMail({ to, link, release, live }, env = process.env, request = fetch) {
+  const from = env.LAUNCH_FROM_EMAIL;
+  if (!env.SENDGRID_API_KEY || !/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(from || '')) return 'rejected';
+  if (!live && to !== env.COMMERCE_SANDBOX_EMAIL) return 'rejected';
+  try {
+    const response = await request('https://api.sendgrid.com/v3/mail/send', {
+      method: 'POST', redirect: 'error', signal: AbortSignal.timeout(8000),
+      headers: { Authorization: `Bearer ${env.SENDGRID_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: { email: from, name: 'Codex Migrate' },
+        reply_to: { email: 'joshua@segeren.com', name: 'Joshua Segeren' },
+        personalizations: [{ to: [{ email: to }],
+          subject: live ? 'Finish your Codex Migrate purchase' : 'TEST ONLY — Codex Migrate checkout recovery' }],
+        content: [{ type: 'text/plain', value: [
+          live ? 'You started a Codex Migrate purchase but did not finish checkout.' :
+            'Sandbox test only. No real payment was charged.',
+          `Continue securely through Stripe: ${link}`,
+          `Release: ${release.id}`,
+          'Codex Migrate moves local Codex work directly between Macs. The signed and Apple-notarized Apple-silicon beta is $49 once, with best-effort support and a 30-day refund policy.',
+          'This is one checkout reminder because you opted in on Stripe Checkout. You are not being added to a marketing list, and we will not send another reminder for this checkout.',
+          'Questions? Reply to joshua@segeren.com.',
+        ].join('\n\n') }],
+        tracking_settings: { click_tracking: { enable: false, enable_text: false }, open_tracking: { enable: false } },
+      }),
+    });
+    if (response.status === 202) return 'accepted';
+    return response.status >= 400 && response.status < 500 ? 'rejected' : 'uncertain';
+  } catch { return 'uncertain'; }
+}
 async function runtime(env = process.env) {
   const config = configuration(env);
   let url;
@@ -92,7 +121,10 @@ async function runtime(env = process.env) {
   if (identity.rows.length !== 1 || identity.rows[0].mode !== config.mode) throw new CommerceError('database_environment_mismatch');
   const stripe = new Stripe(config.key, { apiVersion: '2025-03-31.basil', maxNetworkRetries: 0, timeout: 10000 });
   const store = purchaseStore(db);
-  return { config, stripe, service: service({ config, stripe, store,
-    signDownload: privateDownloads(config, env), sendMail: value => deliveryMail(value, env) }) };
+  return { config, stripe,
+    service: service({ config, stripe, store,
+      signDownload: privateDownloads(config, env), sendMail: value => deliveryMail(value, env) }),
+    recovery: checkoutRecovery({ config, stripe, store: checkoutRecoveryStore(db),
+      sendMail: value => recoveryMail(value, env) }) };
 }
-module.exports = { runtime, deliveryMail, PURCHASE_NOTIFY_EMAILS };
+module.exports = { runtime, deliveryMail, recoveryMail, PURCHASE_NOTIFY_EMAILS };

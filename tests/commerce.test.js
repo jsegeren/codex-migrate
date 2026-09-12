@@ -3,8 +3,9 @@ const assert = require('node:assert/strict');
 const { Readable } = require('node:stream');
 const Stripe = require('stripe');
 const { configuration, SITE } = require('../commerce/config');
-const { service, validatePurchase, purchasePriceCents, tokenFor, tokenSession } = require('../commerce/service');
-const { deliveryMail, PURCHASE_NOTIFY_EMAILS } = require('../commerce/runtime');
+const { service, checkoutRecovery, validatePurchase, validateCheckoutRecovery,
+  purchasePriceCents, tokenFor, tokenSession } = require('../commerce/service');
+const { deliveryMail, recoveryMail, PURCHASE_NOTIFY_EMAILS } = require('../commerce/runtime');
 const { makeHandler: webhook } = require('../api/stripe-webhook');
 const { makeHandler: checkout } = require('../api/checkout');
 const { makeHandler: purchase } = require('../api/purchase');
@@ -33,6 +34,21 @@ function fixture() {
     checkout: { sessions: { retrieve: async () => structuredClone(s) } } };
   const api = service({ config, stripe, store, signDownload, sendMail: async () => { sends++; return 'accepted'; } });
   return { s, api, records, stripe, store, sends: () => sends };
+}
+function recoveryFixture() {
+  const f = fixture();
+  delete f.s.managed_payments;
+  f.s.metadata.checkout_provider = 'stripe';
+  f.s.status = 'expired';
+  f.s.payment_status = 'unpaid';
+  f.s.payment_intent = null;
+  f.s.amount_total = 5000;
+  f.s.consent = { promotions: 'opt_in' };
+  f.s.after_expiration = { recovery: { enabled: true, url: 'https://buy.stripe.com/r/test_fixture' } };
+  let sends = 0;
+  const api = checkoutRecovery({ config, stripe: f.stripe, store: f.store,
+    sendMail: async () => { sends++; return 'accepted'; } });
+  return { ...f, api, sends: () => sends };
 }
 test('commerce defaults closed and requires reviewed release, matching key mode and valid secrets', () => {
   assert.throws(() => configuration({}), /checkout_closed/);
@@ -113,6 +129,31 @@ test('standard Checkout verifies paid delivery without invalidating older manage
     const bad = fixture().s; delete bad.managed_payments; bad.metadata.checkout_provider = 'stripe';
     mutation(bad); assert.throws(() => validatePurchase(bad, config));
   }
+});
+test('expired Checkout recovery requires an opted-in, exact Stripe recovery session', () => {
+  assert.equal(validateCheckoutRecovery(recoveryFixture().s, config).link,
+    'https://buy.stripe.com/r/test_fixture');
+  for (const mutate of [
+    s => s.status = 'open',
+    s => s.payment_status = 'paid',
+    s => s.consent.promotions = 'opt_out',
+    s => s.after_expiration.recovery.enabled = false,
+    s => s.after_expiration.recovery.url = 'https://evil.example/r/test_fixture',
+    s => s.after_expiration.recovery.url = 'https://buy.stripe.com/r/test_fixture?token=leak',
+    s => s.metadata.product = 'you-one',
+    s => s.line_items.data[0].price.id = 'price_other',
+    s => s.customer_details.email = 'buyer@example.invalid\r\nInjected',
+  ]) {
+    const f = recoveryFixture(); mutate(f.s);
+    assert.throws(() => validateCheckoutRecovery(f.s, config), /checkout_recovery_not_verified/);
+  }
+});
+test('concurrent and replayed checkout recovery sends at most one reminder', async () => {
+  const f = recoveryFixture();
+  await Promise.all(Array.from({ length: 10 }, () => f.api.recover(f.s.id)));
+  await f.api.recover(f.s.id);
+  assert.equal(f.records.size, 1);
+  assert.equal(f.sends(), 1);
 });
 test('Checkout provider selection is explicit and rejects typos', () => {
   const catalog = { [release.id]: release };
@@ -208,6 +249,24 @@ test('webhook durable processing failure asks Stripe to retry without leaking pr
   const res = response(); await handler(await eventRequest({ type: 'checkout.session.completed', livemode: false, data: { object: fixture().s } }), res);
   assert.equal(res.statusCode, 503); assert.equal(JSON.stringify(res).includes('credential-private'), false);
 });
+test('webhook sends recovery only for an opted-in expired Codex Migrate checkout', async () => {
+  let recoveries = 0; let loads = 0;
+  const handler = webhook(async () => { loads++; return {
+    service: { fulfill: async () => { throw Error('wrong path'); } },
+    recovery: { recover: async () => recoveries++ },
+  }; }, () => config);
+  const expired = recoveryFixture().s;
+  let event = { id: 'evt_expired_fixture', type: 'checkout.session.expired', livemode: false,
+    data: { object: expired } };
+  let res = response(); await handler(await eventRequest(event), res);
+  assert.equal(res.statusCode, 200); assert.equal(loads, 1); assert.equal(recoveries, 1);
+  const optedOut = structuredClone(event); optedOut.data.object.consent.promotions = 'opt_out';
+  res = response(); await handler(await eventRequest(optedOut), res);
+  assert.equal(res.statusCode, 200); assert.equal(loads, 1); assert.equal(recoveries, 1);
+  const unrelated = structuredClone(event); unrelated.data.object.metadata.product = 'you-one';
+  res = response(); await handler(await eventRequest(unrelated), res);
+  assert.equal(res.statusCode, 200); assert.equal(loads, 1); assert.equal(recoveries, 1);
+});
 test('checkout stays closed by default without network access', async () => {
   const res = response(); await checkout(() => { throw Error('must not load'); }, {})({ method: 'POST', headers: {} }, res);
   assert.equal(res.statusCode, 503); assert.equal(res.body.error, 'checkout_closed');
@@ -248,6 +307,22 @@ test('mail explicit rejection and uncertain network outcomes remain distinct', a
   assert.equal(await deliveryMail(value, e, async () => ({ status: 429 })), 'rejected');
   assert.equal(await deliveryMail(value, e, async () => ({ status: 500 })), 'uncertain');
   assert.equal(await deliveryMail(value, e, async () => { throw Error('secret'); }), 'uncertain');
+});
+test('checkout recovery email is one opt-in reminder with tracking disabled', async () => {
+  let count = 0; let sent;
+  const request = async (url, options) => { count++; sent = JSON.parse(options.body); return { status: 202 }; };
+  const mailEnv = { SENDGRID_API_KEY: 'fixture', LAUNCH_FROM_EMAIL: 'sender@example.invalid',
+    COMMERCE_SANDBOX_EMAIL: 'buyer@example.invalid' };
+  const value = { to: 'other@example.invalid', link: 'https://buy.stripe.com/r/test_fixture', release, live: false };
+  assert.equal(await recoveryMail(value, mailEnv, request), 'rejected'); assert.equal(count, 0);
+  assert.equal(await recoveryMail({ ...value, to: mailEnv.COMMERCE_SANDBOX_EMAIL }, mailEnv, request), 'accepted');
+  assert.equal(sent.personalizations.length, 1);
+  assert.match(sent.content[0].value, /one checkout reminder because you opted in/i);
+  assert.match(sent.content[0].value, /not being added to a marketing list/i);
+  assert.equal(sent.tracking_settings.click_tracking.enable, false);
+  assert.equal(sent.tracking_settings.open_tracking.enable, false);
+  assert.equal(await recoveryMail({ ...value, live: true }, mailEnv, request), 'accepted');
+  assert.equal(sent.personalizations.length, 1);
 });
 test('operator-buyer address is included once so SendGrid accepts the atomic message', async () => {
   let sent;

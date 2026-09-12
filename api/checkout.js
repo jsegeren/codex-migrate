@@ -31,6 +31,8 @@ function makeHandler(load = runtime, env = process.env, configure = configuratio
       const standard = config.checkoutProvider === 'stripe';
       const session = await stripe.checkout.sessions.create({
         mode: 'payment', line_items: [{ price: config.price, quantity: 1 }],
+        consent_collection: { promotions: 'auto' },
+        after_expiration: { recovery: { enabled: true } },
         ...(standard ? {} : { managed_payments: { enabled: true } }),
         ...(config.release.channel === 'beta' ? { custom_text: { submit: { message:
           'Beta software for Apple silicon Macs. Keep your old Mac and an independent backup until you verify the move. A 30-day refund policy applies.' } } } : {}),

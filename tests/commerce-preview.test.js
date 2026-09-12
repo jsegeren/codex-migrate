@@ -69,6 +69,8 @@ test('authorized preview checkout sends return URLs to that preview, never produ
   assert.equal(res.statusCode, 200);
   assert.equal(created.success_url, `${origin}/purchase#session={CHECKOUT_SESSION_ID}`);
   assert.equal(created.cancel_url, `${origin}/#founding-edition`);
+  assert.deepEqual(created.consent_collection, { promotions: 'auto' });
+  assert.deepEqual(created.after_expiration, { recovery: { enabled: true } });
 });
 test('preview purchase accepts its origin and uses the same server environment', async () => {
   let calls = 0;
@@ -102,6 +104,8 @@ test('standard checkout creates no managed payment and never silently falls back
   assert.equal(created.managed_payments, undefined);
   assert.equal(created.metadata.checkout_provider, 'stripe');
   assert.equal(created.billing_address_collection, undefined);
+  assert.deepEqual(created.consent_collection, { promotions: 'auto' });
+  assert.deepEqual(created.after_expiration, { recovery: { enabled: true } });
   assert.match(options.idempotencyKey, /-stripe-/);
   managed = { enabled: true };
   const bad = response(); await handler(req, bad);

@@ -1,6 +1,16 @@
 # Purchase and delivery implementation — September 5, 2026
 
-Status: implementation and private-storage transport tested; **not a live checkout release**.
+Current status, September 11: standard Stripe Checkout is publicly available at
+$49 for the signed, notarized beta. The historical launch-gate notes below are
+retained as an audit trail; they no longer describe current availability.
+
+Checkout recovery is consent-based. New Checkout sessions ask Stripe to offer
+its promotions-consent control and to generate a recovery URL after expiration.
+Only an exact, expired, unpaid Codex Migrate session with explicit `opt_in`, the
+expected product, price, release, environment and Stripe recovery origin may
+send one untracked reminder. The recovery record is durable and concurrency-safe;
+it is not a newsletter subscription. The webhook must subscribe to
+`checkout.session.expired` in addition to the two purchase-completion events.
 
 September 6 standard-Checkout decision: the Founder explicitly selected ordinary
 Stripe Checkout in the existing account and accepted seller tax responsibility.
@@ -278,6 +288,12 @@ release gates before enabling any buyer checkout.
   partial refunds), disputes and unverifiable fields stop delivery/access.
 
 ## Recovery and email semantics
+
+`commerce_checkout_recoveries` records only the session ID, environment, buyer
+email, delivery state, attempts and lease. It deliberately excludes the private
+Stripe recovery URL. Replayed or concurrent expiration events claim at most one
+send. An opt-out expiration is acknowledged before loading the database or mail
+provider. SendGrid open and click tracking are disabled.
 
 The database's unique session key and conditional delivery claim handle
 concurrent/replayed events. A purchase record is durable before sending mail.

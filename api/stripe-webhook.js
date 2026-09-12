@@ -2,7 +2,7 @@ const Stripe = require('stripe');
 const { configuration } = require('../commerce/config');
 const { runtime } = require('../commerce/runtime');
 const { reply, failure } = require('../commerce/http');
-const TYPES = new Set(['checkout.session.completed', 'checkout.session.async_payment_succeeded']);
+const TYPES = new Set(['checkout.session.completed', 'checkout.session.async_payment_succeeded', 'checkout.session.expired']);
 function makeHandler(load = runtime, configure = configuration) {
   return async (req, res) => {
     if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); return reply(res, 405, { error: 'post_required' }); }
@@ -24,10 +24,19 @@ function makeHandler(load = runtime, configure = configuration) {
     const session = event.data?.object;
     // Shared account events belonging to You.one are acknowledged but untouched.
     if (session?.metadata?.product !== 'codex-migrate') return reply(res, 200, { received: true });
-    if (session.payment_status === 'unpaid') return reply(res, 200, { received: true });
+    // Stripe only exposes the entered email for recovery when the customer
+    // explicitly opted in. Non-consenting expirations require no runtime or
+    // provider work and are deliberately forgotten.
+    if (event.type === 'checkout.session.expired' && session.consent?.promotions !== 'opt_in') {
+      return reply(res, 200, { received: true });
+    }
+    if (event.type !== 'checkout.session.expired' && session.payment_status === 'unpaid') {
+      return reply(res, 200, { received: true });
+    }
     try {
-      const { service } = await load();
-      await service.fulfill(session.id);
+      const loaded = await load();
+      if (event.type === 'checkout.session.expired') await loaded.recovery.recover(session.id);
+      else await loaded.service.fulfill(session.id);
       return reply(res, 200, { received: true });
     } catch (error) { return failure(res, error); }
   };

@@ -1,1 +1,1 @@
-{"version":"7","dialect":"postgresql","entries":[{"idx":0,"version":"7","when":1788580800000,"tag":"0000_purchases","breakpoints":true}]}
+{"version":"7","dialect":"postgresql","entries":[{"idx":0,"version":"7","when":1788580800000,"tag":"0000_purchases","breakpoints":true},{"idx":1,"version":"7","when":1789182000000,"tag":"0001_checkout_recoveries","breakpoints":true}]}
