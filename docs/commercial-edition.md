@@ -31,7 +31,8 @@ best-effort help with setup, migration, verification, and recovery, plus a
 On September 7 the Founder explicitly authorized opening self-service paid beta
 downloads while the remaining acceptance checks continue. This supersedes the
 earlier manual-only beta policy below. The approved artifact is signed and
-notarized build 9 for Apple silicon, not an unsigned early build. Build 9 has
+notarized build 10 for Apple silicon, not an unsigned early build. Build 10 keeps
+the tested migration machinery from build 9 and ships its simpler dashboard. Build 9 has
 passed VoiceOver, a real macOS permission-denial check, and physical Wi-Fi
 interruption/resume testing. Guided permission recovery, direct-cable
 interruption, pristine-Mac installation, and broader hardware coverage remain

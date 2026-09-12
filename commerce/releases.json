@@ -1,4 +1,16 @@
 {
+  "beta-build10-arm64": {
+    "id": "beta-build10-arm64",
+    "kind": "signed-notarized",
+    "channel": "beta",
+    "accepted": true,
+    "acceptance": "founder-approved-paid-beta-2026-09-07",
+    "source": "c3e398b23d0a0d913bd7567e7d3e512c1d0e0e01",
+    "sha256": "f5a1634380c386c3c0c4bfdcab65270cd45c7ffe151b7378d01b9a8be1e6a739",
+    "filename": "Codex-Migrate-0.1.0-build10-arm64.zip",
+    "size": 8308464,
+    "pathname": "live/f5a1634380c386c3c0c4bfdcab65270cd45c7ffe151b7378d01b9a8be1e6a739/Codex-Migrate-0.1.0-build10-arm64.zip"
+  },
   "beta-build9-arm64": {
     "id": "beta-build9-arm64",
     "kind": "signed-notarized",

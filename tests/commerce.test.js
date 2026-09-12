@@ -62,7 +62,8 @@ test('commerce defaults closed and requires reviewed release, matching key mode 
 test('only explicitly approved signed beta manifests are eligible for live distribution', () => {
   const { validRelease } = require('../commerce/config');
   const releases = require('../commerce/releases.json');
-  const betas = ['beta-build5-arm64', 'beta-build7-arm64', 'beta-build8-arm64', 'beta-build9-arm64']
+  const betas = ['beta-build5-arm64', 'beta-build7-arm64', 'beta-build8-arm64', 'beta-build9-arm64',
+    'beta-build10-arm64']
     .map(id => releases[id]);
   for (const beta of betas) {
     assert.equal(validRelease(beta, true), true);
@@ -81,6 +82,9 @@ test('only explicitly approved signed beta manifests are eligible for live distr
   assert.equal(releases['beta-build9-arm64'].sha256,
     '7aadccacec63b09fe637cd61c506f4730f2de62163687ec56a2cc63ad8306133');
   assert.equal(releases['beta-build9-arm64'].source, '8f1e0225a6babcb1be1be0a876da11edd73732d8');
+  assert.equal(releases['beta-build10-arm64'].sha256,
+    'f5a1634380c386c3c0c4bfdcab65270cd45c7ffe151b7378d01b9a8be1e6a739');
+  assert.equal(releases['beta-build10-arm64'].source, 'c3e398b23d0a0d913bd7567e7d3e512c1d0e0e01');
 });
 test('beta delivery email includes the remaining checks and both operator alerts without adding tracking', async () => {
   let mail;

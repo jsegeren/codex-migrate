@@ -5,6 +5,17 @@ remaining acceptance checks continue. This is not full release certification.
 The [paid-beta launch record](paid-beta-launch-2026-09-07.md) controls the current
 distribution decision; the dated entries below preserve their original status.
 
+## September 12 interface release
+
+The current distributed artifact is signed and notarized build 10, produced
+from clean pushed source `c3e398b23d0a0d913bd7567e7d3e512c1d0e0e01`. It keeps
+the tested build 9 migration, backup, recovery and verification behavior while
+simplifying the browser dashboard and public demo. Apple accepted submission
+`0ca60a10-15d3-41a3-8af7-502fe0f730d6`; the stapled app passed Gatekeeper and
+11 exact packaged-engine checks passed with one expected filesystem skip. The
+private-store readback matched the 8,308,464-byte archive and SHA-256
+`f5a1634380c386c3c0c4bfdcab65270cd45c7ffe151b7378d01b9a8be1e6a739`.
+
 ## September 10 launch and funnel refresh
 
 The current `main` release state was refreshed without changing Production.
@@ -106,17 +117,17 @@ shown as `unknown`. The route probe now selects the address family before
 looking up the hardware port, with regression coverage for the observed ULA
 IPv6 path.
 
-## Current release boundary — September 10
+## Current release boundary — September 12
 
-The current distributed artifact is **signed and notarized build 9**, $50 USD,
+The current distributed artifact is **signed and notarized build 10**, $49 USD,
 Apple silicon, beta channel. Production checkout is open and the live Stripe
-webhook is active. Exact source/artifact identifiers, private delivery readback
-and pre-payment disclosures are in the paid-beta launch record above. Build 9
-keeps build 8's migration behavior and corrects hardware-port labeling for
-working IPv6 Wi-Fi routes. Existing build 5, build 7 and build 8
+webhook is active. Exact source/artifact identifiers, private delivery readback,
+and pre-payment disclosures are in the paid-beta launch record above. Build 10
+keeps build 9's migration behavior and presents a more focused dashboard.
+Existing build 5, build 7, build 8 and build 9
 purchases remain bound to their original artifacts; new purchases receive build
-9. A fresh
-read of `/api/availability` returned `available:true`, `priceUSD:50`,
+10. A fresh
+read of `/api/availability` returned `available:true`, `priceUSD:49`,
 `architecture:arm64`, `channel:beta` during the post-launch audit.
 
 The exact build 9 setup now has a spoken VoiceOver walkthrough of its key setup,
@@ -663,11 +674,11 @@ release certification remains open while the named native/hardware gates remain.
 | Full and selective migration, pause/resume and recovery | Real packaged cross-Mac full installation, browser-driven skills-only repair, Pause/Stop/Resume after 409,413,176 staged bytes, unexpected SSH-child loss and helper restart with 677,848,813 staged bytes retained, protected-phase restore, and a physical destination-Wi-Fi interruption/resume with an exact 256 MiB hash match all passed. Verified backups, newer files and out-of-scope files were preserved. | Physically interrupt a working USB-C/Thunderbolt network route during disposable staging. A truly space-constrained destination and broader installer interruption timing remain useful hardware coverage. Never use Josh's active workspace. |
 | Git and old-home paths remain usable | Different-user packaged two-Mac acceptance verified the direct old-home compatibility path and the selected Git baseline before reopening the real project conversation. Local linked-worktree, stash, alternate-storage, uncommitted and untracked cases have deterministic coverage. | Run representative destination development commands with the source Mac disconnected. Existing checks do not prove every project-specific toolchain or absolute path. |
 | Browser-first local-data experience and clear status/help | Loopback-only helper, SSH transfer, one guided browser setup, saved setup, contextual Help, bounded private diagnostic events, operation-specific controls, strict host verification and multi-address speed selection are implemented. Desktop and 1440/390/320px keyboard/reflow checks passed. Exact build 9 key setup/recovery controls produced correct spoken VoiceOver labels and roles; its engine failed closed on a real TCC-protected workspace; physical Wi-Fi interruption/resume passed. | Complete the guided permission-recovery journey and direct-cable route acceptance. Automatic updating is not implemented. |
-| Public website, useful guides, screenshots, price and launch intake | Canonical site is live with paid signed Mac beta as the primary CTA, exact $50 checkout, sample-labelled real UI screenshots, two informative indexed guides, launch intake and personal-support disclosures. Build 9 availability and the live Stripe webhook are active. | Watch actual buyer behavior and support load; preserve rate limiting, accurate beta limits and the free-source path. A real-sale buyer/owner inbox receipt remains unverified until the first sale. |
+| Public website, useful guides, screenshots, price and launch intake | Canonical site is live with paid signed Mac beta as the primary CTA, exact $49 checkout, a concise one-minute product demo, two informative indexed guides, launch intake and personal-support disclosures. Build 10 availability and the live Stripe webhook are active. | Watch actual buyer behavior and support load; preserve rate limiting, accurate beta limits and the free-source path. A real-sale buyer/owner inbox receipt remains unverified until the first sale. |
 | Website accessibility and performance | Fresh production Lighthouse: mobile 97 performance and 100 accessibility/best practices/SEO; desktop 98 performance and 100 in the other categories. Keyboard, narrow-width reflow, text enlargement, contrast and semantics have automated/browser evidence. Exact build 9's browser-first setup passed a spoken VoiceOver walkthrough of key controls. | Broader screen-reader/state coverage remains useful; no blanket WCAG conformance claim is made. Field Core Web Vitals require real traffic. |
 | Domain, search discovery, analytics and cross-promotion | Live canonical domain/robots/sitemap; recorded Search Console ownership, successful sitemap submission and accepted homepage request; separate GA4 property with region-aware default/full measurement, consent-mode handling for the EEA/UK/Switzerland, 14-month retention, returning-user continuity, aggregate Google Signals reporting, granular location/device reporting, ads personalization and user-provided data disabled, launch-request key event and Search Console link; live U.S. edge returned default mode with no banner and both host-only GA cookies; browser-forced consent mode showed the compact control, set no cookies before choice, produced a denied cookieless measurement, and correctly allowed or declined; You.one link on the live homepage; fresh HTTP 200 check of segeren.com confirms its “Explore Codex Migrate” link to the canonical domain | Watch native reports after real visits. A request originating from an actual EEA/UK/Swiss edge remains useful additional confirmation, but endpoint unit tests and browser-boundary simulation cover the branch. Actual demographics depend on consent, Google eligibility and reporting thresholds; indexing, ranking and traffic are not guaranteed. No repeated indexing request needed. |
-| Reproducible identifiable packaged app | Build 9 is produced from pushed source `8f1e0225a6babcb1be1be0a876da11edd73732d8`, Developer ID signed, Apple Accepted, stapled and Gatekeeper accepted. The private archive is 8,307,597 bytes with SHA-256 `7aadccacec63b09fe637cd61c506f4730f2de62163687ec56a2cc63ad8306133`. A receiving test account completed Safari download, macOS Internet-download confirmation and native open on an earlier signed build; build 9's exact archive has independent signature, staple, Gatekeeper, packaged-browser Help, spoken VoiceOver and packaged-engine TCC-denial checks. | A pristine receiving Mac without prior test state or developer tooling remains stronger installation evidence. The complete guided permission-recovery journey remains open. |
-| Paid purchase, delivery, support and refunds | Production checkout and webhook are live for build 9. Ordinary Stripe sandbox payment, signed-app delivery, email recovery, refreshed private download, refund and post-refund denial passed. Private links remain entitlement-bound and short lived; merchant successful-payment email is enabled. | Confirm buyer delivery and merchant notification from the first real sale. This is an operational observation for the live beta, not a reason to close the revenue path. |
+| Reproducible identifiable packaged app | Build 10 is produced from pushed source `c3e398b23d0a0d913bd7567e7d3e512c1d0e0e01`, Developer ID signed, Apple Accepted, stapled and Gatekeeper accepted. The private archive is 8,308,464 bytes with SHA-256 `f5a1634380c386c3c0c4bfdcab65270cd45c7ffe151b7378d01b9a8be1e6a739`; its private-store readback and 11 exact packaged-engine checks passed. Prior receiving-Mac, VoiceOver, interruption and TCC observations remain applicable because the migration machinery is unchanged. | A pristine receiving Mac without prior test state or developer tooling remains stronger installation evidence. The complete guided permission-recovery journey remains open. |
+| Paid purchase, delivery, support and refunds | Production checkout and webhook are live for build 10. Ordinary Stripe sandbox payment, signed-app delivery, email recovery, refreshed private download, refund and post-refund denial passed. Private links remain entitlement-bound and short lived; merchant successful-payment email is enabled. | Confirm buyer delivery and merchant notification from the first real sale. This is an operational observation for the live beta, not a reason to close the revenue path. |
 
 ### Earlier device chronology (historical evidence)
 

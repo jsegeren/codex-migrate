@@ -195,3 +195,21 @@ region context were announced where applicable. This is direct spoken
 screen-reader evidence for the key setup and recovery controls, not a claim of
 complete assistive-technology or every-state certification. The private
 observation receipt is `/Users/Shared/CodexMigrate-VoiceOver-20260910.md`.
+
+## Build 10 focused-interface promotion
+
+Build 10 packages the Founder-reviewed, simplified browser interface from
+clean pushed source `c3e398b23d0a0d913bd7567e7d3e512c1d0e0e01`. The migration,
+backup, replacement and verification machinery is unchanged; the dashboard now
+shows only the actions relevant to the current state, moves detailed scope and
+backup information behind disclosures, and uses shorter status labels.
+
+The Apple-silicon app was signed with Developer ID, accepted by Apple
+notarization submission `0ca60a10-15d3-41a3-8af7-502fe0f730d6`, stapled and
+accepted by Gatekeeper. Eleven exact packaged-engine checks passed with one
+expected case-sensitive-filesystem skip. The 8,308,464-byte archive has SHA-256
+`f5a1634380c386c3c0c4bfdcab65270cd45c7ffe151b7378d01b9a8be1e6a739`.
+The private live-store upload was streamed back and matched that exact size and
+digest. The existing Founder authorization for the paid beta applies to this
+interface-only successor; existing purchases remain bound to their original
+catalogued artifacts.
