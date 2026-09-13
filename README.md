@@ -27,7 +27,9 @@ your Macs, not through our servers.
 **[Get the signed Mac beta — $49 →](https://migrate.segeren.com/#founding-edition)**
 
 For Apple silicon Macs. Developer ID signed and Apple notarized, with
-best-effort support and a 30-day refund policy. The current build has passed
+best-effort support and a 30-day migration guarantee: if the app does not
+successfully move your supported Mac-to-Mac setup, contact Joshua within 30
+days for a full refund. The current build has passed
 VoiceOver, a real macOS permission-denial check, and physical Wi-Fi
 interruption/resume testing. Guided permission recovery, direct-cable
 interruption, pristine-Mac installation, and broader hardware coverage remain

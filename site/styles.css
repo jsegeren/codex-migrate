@@ -75,6 +75,7 @@ h1 .accent { color: var(--purple); }
 #checkout-button { margin-top: 12px; font: inherit; font-weight: 740; cursor: pointer; }
 #checkout-button:disabled { cursor: wait; opacity: .7; }
 #checkout-status:not(:empty) { margin-top: 16px; }
+.checkout-assurance { margin: 16px 0 10px; color: var(--purple); font-size: 15px; line-height: 1.55; }
 .button.disabled { opacity: .55; pointer-events: none; box-shadow: none; }
 .fine-print { margin: 19px 0 0; color: var(--muted); font-size: 16px; }
 

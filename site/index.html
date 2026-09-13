@@ -81,7 +81,7 @@
                 <a class="button button-primary" id="hero-paid-link" data-analytics-event="select_paid_beta" href="#founding-edition">Move my Codex work — $49</a>
                 <a class="button button-secondary" data-analytics-event="select_free_cli" href="https://github.com/jsegeren/codex-migrate">Get the free CLI</a>
               </div>
-              <p class="fine-print">One-time purchase · 30-day refund · Help from Joshua</p>
+              <p class="fine-print">One-time purchase · 30-day migration guarantee · Help from Joshua</p>
             </div>
             <picture class="hero-inline-media">
               <source srcset="/assets/codex-product-dark-288.avif 288w, /assets/codex-product-dark-560.avif 560w" sizes="(max-width: 760px) 144px, (max-width: 980px) 160px, 280px" type="image/avif">
@@ -181,11 +181,12 @@
                 <summary>What has been tested—and what remains</summary>
                 <p>The current build has passed VoiceOver, a real macOS permission-denial check, and physical Wi-Fi interruption/resume testing. Guided permission recovery, direct-cable interruption, pristine-Mac installation, and broader hardware coverage remain ongoing.</p>
               </details>
-              <button id="checkout-button" class="button button-primary full" data-analytics-event="begin_checkout" type="button" aria-describedby="checkout-platform beta-limits checkout-status">Move my Codex work + help — $49</button>
+              <button id="checkout-button" class="button button-primary full" data-analytics-event="begin_checkout" type="button" aria-describedby="checkout-platform beta-limits migration-guarantee checkout-status">Move my Codex work + help — $49</button>
               <p id="checkout-status" role="status"></p>
-              <p class="disclosure"><a href="/terms.html">Terms</a> · <a href="/refunds.html">30-day refund policy</a> · <a href="mailto:joshua@segeren.com?subject=Codex%20Migrate%20purchase%20help">Email Joshua</a></p>
+              <p class="checkout-assurance" id="migration-guarantee"><strong>30-day migration guarantee.</strong> If the app doesn’t successfully move your supported Mac-to-Mac setup, email Joshua within 30 days for a full refund.</p>
+              <p class="disclosure"><a href="mailto:joshua@segeren.com?subject=Question%20before%20buying%20Codex%20Migrate">Questions before buying? Ask Joshua</a> · <a href="/terms.html">Terms</a> · <a href="/refunds.html">Refund details</a></p>
             </div>
-            <p class="disclosure">Personal, best-effort help from Joshua is included for setup, migration, verification, and recovery. Help is handled case by case; we aim to reply within a few business days, but timing and resolution are not guaranteed.</p>
+            <p class="disclosure">Best-effort help from Joshua is included for setup, migration, verification, and recovery. We aim to reply within a few business days; timing and resolution are not guaranteed.</p>
             <div class="launch-interest" id="launch-email" hidden>
               <h3>Want a launch email?</h3>
               <form class="signup-form" action="/api/signup" method="post">
@@ -249,7 +250,7 @@
           <details><summary>Does it work on Windows?</summary><p>Not yet. Codex Migrate currently supports Mac-to-Mac migration only, including the open-source CLI. A Windows version is feasible, but it needs its own work on file locations, permissions, backups, packaging, and recovery testing. Windows and cross-platform transfers are not supported today, and there is no announced release date.</p></details>
           <details><summary>What if the transfer is interrupted?</summary><p>Rerun it. Staging uses resumable transfer semantics, so completed data is reused. The source Mac is never deleted or modified.</p></details>
           <details><summary>Can I migrate only one thing?</summary><p>Yes. Personal and repository-scoped skills can already be exported independently; more selective components will use the same guarded workflow.</p></details>
-          <details><summary>What support and refunds are included?</summary><p>Best-effort support, with an initial response target of a few business days, not a guaranteed fix or service level. Purchases have a 30-day refund window. See the <a href="/refunds.html">refund policy</a>.</p></details>
+          <details><summary>What support and refunds are included?</summary><p>Best-effort support, with an initial response target of a few business days, not a guaranteed fix or service level. The 30-day migration guarantee provides a full refund if the app does not successfully move your supported Mac-to-Mac setup—or you decide it is not right for you. See the <a href="/refunds.html">refund policy</a>.</p></details>
         </div>
       </section>
 
