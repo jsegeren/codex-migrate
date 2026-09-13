@@ -1,5 +1,12 @@
 # Website and launch intake
 
+> **Current-state note (September 13, 2026):** the signed and notarized Mac
+> beta is live at $49. The sandbox and pre-launch sections below are preserved
+> as dated evidence, not as the current sales state. Use
+> [the maintainer handoff](maintainer-handoff.md),
+> [the paid-beta launch record](paid-beta-launch-2026-09-07.md) and
+> [release readiness](release-readiness.md) for current authority.
+
 The public site is deployed to the existing `codex-migrate` Vercel project.
 Its canonical hostname is `migrate.segeren.com`; Squarespace manages DNS.
 The `migrate` CNAME serves the site. Three additional CNAMEs authenticate
@@ -147,7 +154,7 @@ application. Build a custom exploration only after enough real traffic exists
 to define useful questions; do not create a public dashboard or expose the
 Analytics Data API merely to duplicate the native reports.
 
-## Paid checkout: sandbox evidence, not a live release
+## Historical paid-checkout sandbox evidence (superseded by the live beta)
 
 On September 4, 2026, the existing **Segeren Studio sandbox** in Stripe was
 used to create **Codex Migrate — Founding Edition (TEST ONLY)** at **$50 USD,

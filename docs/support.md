@@ -46,5 +46,6 @@ closed on the destination and ask for help before replacing anything.
 
 Support is best-effort and case by case. We aim for an initial reply within a
 few business days, depending on availability and complexity; response times,
-fixes, and resolution deadlines are not guaranteed. The paid app is not yet
-released, and this contact path does not change its release status.
+fixes, and resolution deadlines are not guaranteed. The signed and notarized
+paid Mac beta is available. This contact path does not expand its stated
+compatibility, beta boundary or support promise.

@@ -597,6 +597,10 @@ acceptance remains a release gate.
 Start with [CONTRIBUTING.md](CONTRIBUTING.md). Migration code has an unusually
 high trust burden: safety changes require tests and should fail closed.
 
+Maintainers and future engineers should begin with the
+[product and operations handoff](docs/maintainer-handoff.md), then follow its
+links to the security model, recovery contract and current release evidence.
+
 ## License
 
 [MIT](LICENSE)

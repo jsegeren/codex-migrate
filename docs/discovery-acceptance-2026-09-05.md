@@ -4,8 +4,10 @@
 
 The live homepage and availability endpoint returned HTTP 200. Production
 reported the signed Apple-silicon beta available at $50, and the homepage's
-Open Graph and X metadata referenced the Founder-selected white social image at
-`https://migrate.segeren.com/og-white-v1.png` with the independent-tool notice.
+Open Graph and X metadata referenced the Founder-selected white social design.
+On September 13 its reproducible, social-standard 1200×630 output became
+`https://migrate.segeren.com/og.png`; the original launch asset remains preserved
+as `site/og-white-v1.png`.
 
 The authenticated GA4 property reported 40 active users, 48 sessions, 52 page
 views, three `begin_checkout` events and zero key events for the preceding seven

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Lead the public homepage with the loss-prevention promise: do not lose local
+  Codex work when changing or upgrading a Mac.
+- Add the canonical maintainer handoff and reconcile current paid-beta state
+  across support, launch and operations documentation.
+- Preserve a reproducible 1200×630 white social-card source and output.
+
+## 0.1.0 paid beta build 11 — 2026-09-12
+
 - Add automatic preflight speed testing across trusted Wi-Fi and private wired
   addresses reported by the verified destination Mac, select the fastest route,
   show the measured connection in the dashboard, and re-evaluate it on resume
@@ -15,6 +23,13 @@
   now says that authentication—and therefore the user's password—was never
   attempted; key-authentication, name-resolution, Remote Login, and network
   failures have separate next actions.
+- Publish a signed, Apple-notarized Apple-silicon beta for $49 with
+  entitlement-bound private delivery, best-effort support and a 30-day refund
+  policy.
+- Preserve destination authentication and installation identity; add staged,
+  verified, resumable migration and explicit interrupted-installation recovery.
+- Simplify the browser-first migration interface and use Joshua Segeren's public
+  name consistently.
 
 ## 0.1.0 — 2026-09-03
 

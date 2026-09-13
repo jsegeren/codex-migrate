@@ -26,19 +26,19 @@ receipts rather than descriptions of the current offer.
 
 ## Current exact artifact
 
-- Release ID: `beta-build9-arm64`, explicit `beta` channel.
-- Filename: `Codex-Migrate-0.1.0-build9-arm64.zip`; 8,307,597 bytes.
-- Source: `8f1e0225a6babcb1be1be0a876da11edd73732d8`.
-- SHA-256: `7aadccacec63b09fe637cd61c506f4730f2de62163687ec56a2cc63ad8306133`.
-- Notarization: `9ddf03b5-c947-4d97-a598-d71519e179d9`, Accepted.
+- Release ID: `beta-build11-arm64`, explicit `beta` channel.
+- Filename: `Codex-Migrate-0.1.0-build11-arm64.zip`; 8,307,040 bytes.
+- Source: `5fbbf6abd3ee7d30c8e4436b3bb09468bfef5f9e`.
+- SHA-256: `b5fd8546c2d8d4cf285de2fab3d75b71778897da02f750ae6368cf2c25831c0c`.
+- Notarization: `30dee211-1265-4357-9606-08bd68f283a2`, Accepted.
 - Private live-store upload and full readback matched exact size and digest.
 
 The catalog's `accepted: true` records this specific distribution approval, not
 full clean-Mac or WCAG certification. Sandbox entries remain ineligible for live
-sale. Build 9 retains build 8's migration behavior and atomic destination Codex
-identity preservation while correcting the observed IPv6 hardware-route label.
-Its fault-injection, complete-suite, exact packaged executable, signature,
-staple and Gatekeeper evidence is recorded in
+sale. Build 11 retains build 9's migration, recovery and atomic destination
+Codex-identity behavior while simplifying the interface and using Joshua's
+public name consistently. Its fault-injection, complete-suite, exact packaged
+executable, signature, staple and Gatekeeper evidence is recorded in
 [installer interruption validation](identity-interruption-validation-2026-09-07.md).
 
 ## Remaining validation
