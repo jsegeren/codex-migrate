@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from contextlib import contextmanager
+import getpass
 import json
 from pathlib import Path
 import sys
@@ -95,6 +96,28 @@ def parser() -> argparse.ArgumentParser:
     vault_backup.add_argument("--apply", action="store_true",
                               help="Create and verify a snapshot; otherwise show the plan")
     vault_backup.add_argument("--json", action="store_true")
+    vault_verify = vault_commands.add_parser(
+        "verify", help="Verify every encrypted object in a Vault snapshot")
+    vault_verify.add_argument("--vault", required=True)
+    vault_verify.add_argument("--snapshot", default="latest")
+    vault_verify.add_argument("--crypto-helper")
+    vault_verify.add_argument("--json", action="store_true")
+    vault_restore = vault_commands.add_parser(
+        "restore", help="Decrypt a verified snapshot into a separate staging folder")
+    vault_restore.add_argument("--vault", required=True)
+    vault_restore.add_argument("--output", required=True)
+    vault_restore.add_argument("--snapshot", default="latest")
+    vault_restore.add_argument("--crypto-helper")
+    vault_restore.add_argument("--apply", action="store_true")
+    vault_restore.add_argument("--json", action="store_true")
+    vault_import = vault_commands.add_parser(
+        "key-import", help="Import a Vault recovery key into this Mac's Keychain")
+    vault_import.add_argument("--vault", required=True)
+    vault_import.add_argument("--crypto-helper")
+    vault_export = vault_commands.add_parser(
+        "key-export", help="Display the Vault recovery key for password-manager storage")
+    vault_export.add_argument("--vault", required=True)
+    vault_export.add_argument("--crypto-helper")
 
     return root
 
@@ -219,6 +242,49 @@ def main(argv: Optional[List[str]] = None) -> int:
                         print("Destination: %s" % result.destination)
                         print("Client-side authenticated encryption: required")
                         print("Planning mode only; add --apply to create a verified snapshot.")
+                return 0
+            if args.vault_command in ("verify", "restore", "key-import", "key-export"):
+                from codex_migrate.vault_recovery import (
+                    export_recovery_key, import_recovery_key, plan_restore,
+                    restore_snapshot, verify_snapshot,
+                )
+                if args.vault_command == "key-import":
+                    recovery_key = getpass.getpass(
+                        "Vault recovery key (input hidden; not stored in shell history): ")
+                    key_id = import_recovery_key(
+                        args.vault, recovery_key, crypto_helper=args.crypto_helper)
+                    print("Recovery key imported into this Mac's Keychain: %s" % key_id)
+                    return 0
+                if args.vault_command == "key-export":
+                    print("RECOVERY KEY (store in a password manager):")
+                    print(export_recovery_key(args.vault, crypto_helper=args.crypto_helper))
+                    return 0
+                if args.vault_command == "verify":
+                    result = verify_snapshot(
+                        args.vault, snapshot=args.snapshot,
+                        crypto_helper=args.crypto_helper)
+                elif args.apply:
+                    result = restore_snapshot(
+                        args.source_home, args.vault, args.output,
+                        snapshot=args.snapshot, crypto_helper=args.crypto_helper)
+                else:
+                    result = plan_restore(
+                        args.source_home, args.vault, args.output,
+                        snapshot=args.snapshot, crypto_helper=args.crypto_helper)
+                if args.json:
+                    print(json.dumps(result.as_dict(), indent=2, sort_keys=True))
+                else:
+                    print("Verified snapshot: %s" % result.snapshot_id)
+                    print("Conversation files: %d" % result.transcript_files)
+                    print("Plaintext bytes protected: %d" % result.transcript_bytes)
+                    if result.applied:
+                        print("Restored to staging folder: %s" % result.output)
+                        print("Live Codex data was not changed.")
+                    elif args.vault_command == "restore":
+                        print("Would restore to: %s" % result.output)
+                        print("Planning mode only; add --apply to stage recovered files.")
+                    else:
+                        print("Encrypted chunks: %d" % result.chunks)
                 return 0
             results = search_vault(args.source_home, args.query, args.limit)
             if args.json:

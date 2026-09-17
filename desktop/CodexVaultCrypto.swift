@@ -41,6 +41,13 @@ private struct Verification: Codable {
     let bytes: Int
 }
 
+private struct RestoreResult: Codable {
+    let snapshot_id: String
+    let files: Int
+    let bytes: Int
+    let output: String
+}
+
 private struct KeyResult: Codable {
     let key_id: String
     let recovery_key: String?
@@ -358,7 +365,8 @@ private func sealManifestCommand(_ arguments: [String]) throws {
     try printJSON(SealResult(bytes: plaintext.count, sealed: true))
 }
 
-private func verifyCommand(_ arguments: [String]) throws {
+private func validatedSnapshot(_ arguments: [String]) throws ->
+    (Manifest, SymmetricKey, SymmetricKey, Verification) {
     let keyID = try canonicalKeyID(argument("--key-id", in: arguments))
     let root = URL(fileURLWithPath: try argument("--object-dir", in: arguments), isDirectory: true)
     let manifestURL = URL(fileURLWithPath: try argument("--manifest", in: arguments))
@@ -379,7 +387,20 @@ private func verifyCommand(_ arguments: [String]) throws {
     }
     var totalBytes = 0
     var totalChunks = 0
+    var seenPaths = Set<String>()
     for file in manifest.files {
+        guard file.collection == "active" || file.collection == "archived",
+              !file.path.isEmpty, !file.path.hasPrefix("/"), !file.path.contains("\\"),
+              file.path.split(separator: "/", omittingEmptySubsequences: false).allSatisfy({
+                  !$0.isEmpty && $0 != "." && $0 != ".."
+              }), file.size >= 0,
+              file.sha256.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil else {
+            throw VaultError.message("the decrypted manifest contains an unsafe transcript record")
+        }
+        let logicalPath = file.collection + "/" + file.path
+        guard seenPaths.insert(logicalPath).inserted else {
+            throw VaultError.message("the decrypted manifest contains a duplicate transcript path")
+        }
         var digest = SHA256()
         var fileBytes = 0
         for chunk in file.chunks {
@@ -394,16 +415,111 @@ private func verifyCommand(_ arguments: [String]) throws {
                 throw VaultError.message("an encrypted chunk failed identity verification")
             }
             digest.update(data: plaintext)
-            fileBytes += plaintext.count
-            totalChunks += 1
+            let (nextFileBytes, fileOverflow) = fileBytes.addingReportingOverflow(plaintext.count)
+            let (nextChunks, chunkOverflow) = totalChunks.addingReportingOverflow(1)
+            guard !fileOverflow, !chunkOverflow, nextFileBytes <= file.size else {
+                throw VaultError.message("the decrypted manifest contains invalid byte counts")
+            }
+            fileBytes = nextFileBytes
+            totalChunks = nextChunks
         }
         guard fileBytes == file.size, hex(digest.finalize()) == file.sha256 else {
             throw VaultError.message("a restored transcript failed file verification")
         }
-        totalBytes += fileBytes
+        let (nextTotal, totalOverflow) = totalBytes.addingReportingOverflow(fileBytes)
+        guard !totalOverflow else {
+            throw VaultError.message("the decrypted manifest contains invalid total bytes")
+        }
+        totalBytes = nextTotal
     }
-    try printJSON(Verification(snapshot_id: snapshotID, files: manifest.files.count,
-                               chunks: totalChunks, bytes: totalBytes))
+    let verification = Verification(snapshot_id: snapshotID, files: manifest.files.count,
+                                    chunks: totalChunks, bytes: totalBytes)
+    return (manifest, encryption, identifiers, verification)
+}
+
+private func verifyCommand(_ arguments: [String]) throws {
+    let (_, _, _, verification) = try validatedSnapshot(arguments)
+    try printJSON(verification)
+}
+
+private func prepareEmptyRestoreRoot(_ path: String) throws -> URL {
+    let root = URL(fileURLWithPath: path, isDirectory: true)
+    let manager = FileManager.default
+    if manager.fileExists(atPath: root.path) {
+        let values = try root.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+        guard values.isDirectory == true, values.isSymbolicLink != true,
+              try manager.contentsOfDirectory(atPath: root.path).isEmpty else {
+            throw VaultError.message("the restore output must be a new or empty unlinked folder")
+        }
+    } else {
+        try manager.createDirectory(at: root, withIntermediateDirectories: false,
+                                    attributes: [.posixPermissions: 0o700])
+    }
+    return root
+}
+
+private func restoreCommand(_ arguments: [String]) throws {
+    let (manifest, encryption, identifiers, verification) = try validatedSnapshot(arguments)
+    let output = try prepareEmptyRestoreRoot(argument("--output", in: arguments))
+    let manager = FileManager.default
+    let objectRoot = URL(fileURLWithPath: try argument("--object-dir", in: arguments),
+                         isDirectory: true)
+    for file in manifest.files {
+        let collection = file.collection == "active" ? "sessions" : "archived_sessions"
+        let target = output.appendingPathComponent(collection, isDirectory: true)
+            .appendingPathComponent(file.path, isDirectory: false)
+        let parent = target.deletingLastPathComponent()
+        try manager.createDirectory(at: parent, withIntermediateDirectories: true,
+                                    attributes: [.posixPermissions: 0o700])
+        guard !manager.fileExists(atPath: target.path) else {
+            throw VaultError.message("restore output already contains a transcript")
+        }
+        let temporary = parent.appendingPathComponent("." + UUID().uuidString + ".tmp")
+        let descriptor = open(temporary.path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0o600)
+        guard descriptor >= 0 else {
+            throw VaultError.message("a restored transcript could not be staged safely")
+        }
+        let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
+        var digest = SHA256()
+        var restoredBytes = 0
+        do {
+            for chunk in file.chunks {
+                let url = try objectURL(root: objectRoot, id: chunk.id)
+                let plaintext = try opened(
+                    try safeRegularFile(url, maxBytes: chunk.size + 64),
+                    key: encryption,
+                    aad: chunkAAD(id: chunk.id, size: chunk.size)
+                )
+                guard plaintext.count == chunk.size,
+                      objectID(plaintext, key: identifiers) == chunk.id else {
+                    throw VaultError.message("an encrypted chunk failed during restore")
+                }
+                try handle.write(contentsOf: plaintext)
+                digest.update(data: plaintext)
+                restoredBytes += plaintext.count
+            }
+            guard restoredBytes == file.size, hex(digest.finalize()) == file.sha256 else {
+                throw VaultError.message("a staged transcript failed restore verification")
+            }
+            try handle.synchronize()
+            try handle.close()
+            try manager.moveItem(at: temporary, to: target)
+            if file.mtime_ns >= 0 {
+                let date = Date(timeIntervalSince1970: Double(file.mtime_ns) / 1_000_000_000)
+                try manager.setAttributes([.modificationDate: date], ofItemAtPath: target.path)
+            }
+        } catch {
+            try? handle.close()
+            try? manager.removeItem(at: temporary)
+            throw error
+        }
+    }
+    let receipt = RestoreResult(snapshot_id: verification.snapshot_id,
+                                files: verification.files,
+                                bytes: verification.bytes,
+                                output: output.path)
+    try writeNew(try JSON(receipt), to: output.appendingPathComponent("restore-receipt.json"))
+    try printJSON(receipt)
 }
 
 private func run() throws {
@@ -419,6 +535,7 @@ private func run() throws {
     case "store-chunks": try storeChunksCommand(arguments)
     case "seal-manifest": try sealManifestCommand(arguments)
     case "verify": try verifyCommand(arguments)
+    case "restore": try restoreCommand(arguments)
     default: throw VaultError.message("the requested command is not supported")
     }
 }

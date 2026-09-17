@@ -87,6 +87,20 @@ backup unrecoverable. The restore UI, automation, retention controls, and
 customer-owned cloud-folder setup are still under development, so this CLI is
 an engineering foundation rather than the public Vault subscription.
 
+A verified snapshot can be checked or decrypted into a separate staging folder
+without touching live Codex data:
+
+```bash
+codex-migrate vault verify --vault "/absolute/path/Codex Vault"
+codex-migrate vault restore --vault "/absolute/path/Codex Vault" \
+  --output "/absolute/path/Recovered Codex" --apply
+```
+
+On another Mac, run `vault key-import` first and enter the recovery key at the
+hidden prompt. `vault key-export` deliberately reveals the current recovery key
+for password-manager storage. The staging command never installs recovered
+files into `~/.codex`; guarded live-state restore remains a later milestone.
+
 See the [portable backup format](docs/vault-backup-format.md) for the exact
 encryption, key derivation, repository layout, verification, and compatibility
 contract.

@@ -129,3 +129,10 @@ versions may add algorithms, content types or retention metadata, but must not
 silently change version 1 semantics. Recovery software must default to a plan,
 stage restored plaintext outside live Codex state, verify it, and require
 explicit apply intent before replacing anything.
+
+The initial recovery command implements only that safe staging boundary. It
+verifies the complete encrypted snapshot first, requires a new or empty output
+folder outside both live `~/.codex` data and the Vault repository, reconstructs
+each transcript through authenticated chunks, hashes the staged plaintext, and
+writes a content-free `restore-receipt.json`. It never installs staged files
+into live Codex state.

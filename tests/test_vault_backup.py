@@ -8,6 +8,9 @@ import unittest
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_backup import backup, plan
+from codex_migrate.vault_recovery import (
+    export_recovery_key, import_recovery_key, restore_snapshot, verify_snapshot,
+)
 
 
 @unittest.skipUnless(platform.system() == "Darwin", "CryptoKit backup helper requires macOS")
@@ -131,6 +134,83 @@ class VaultBackupTests(unittest.TestCase):
                 self.assertEqual(len(references), 1)
                 latest = json.loads((destination / "latest.json").read_text(encoding="utf-8"))
                 self.assertEqual(latest["snapshot_id"], first.snapshot_id)
+            finally:
+                self.delete_key(destination)
+
+    def test_snapshot_can_be_verified_rekeyed_and_restored_to_staging(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            destination = root / "vault"
+            restored = root / "restored"
+            self.fixture(source)
+            try:
+                saved = backup(
+                    str(source), str(destination), crypto_helper=str(self.helper),
+                    chunk_size=64 * 1024,
+                )
+                checked = verify_snapshot(
+                    str(destination), crypto_helper=str(self.helper))
+                self.assertEqual(checked.snapshot_id, saved.snapshot_id)
+                self.assertEqual(checked.transcript_files, 2)
+                self.assertFalse(restored.exists())
+
+                recovery_key = export_recovery_key(
+                    str(destination), crypto_helper=str(self.helper))
+                self.assertEqual(recovery_key, saved.recovery_key)
+                self.delete_key(destination)
+                with self.assertRaisesRegex(MigrationError, "no new snapshot"):
+                    verify_snapshot(str(destination), crypto_helper=str(self.helper))
+                import_recovery_key(
+                    str(destination), recovery_key, crypto_helper=str(self.helper))
+
+                result = restore_snapshot(
+                    str(source), str(destination), str(restored),
+                    crypto_helper=str(self.helper),
+                )
+                self.assertEqual(result.snapshot_id, saved.snapshot_id)
+                self.assertEqual(
+                    (restored / "sessions/2026/09/17/active.jsonl").read_text(
+                        encoding="utf-8"),
+                    (source / ".codex/sessions/2026/09/17/active.jsonl").read_text(
+                        encoding="utf-8"),
+                )
+                self.assertEqual(
+                    (restored / "archived_sessions/archived.jsonl").read_text(
+                        encoding="utf-8"),
+                    (source / ".codex/archived_sessions/archived.jsonl").read_text(
+                        encoding="utf-8"),
+                )
+                self.assertFalse((restored / "auth.json").exists())
+                self.assertFalse((restored / "installation_id").exists())
+                receipt = json.loads(
+                    (restored / "restore-receipt.json").read_text(encoding="utf-8"))
+                self.assertEqual(receipt["snapshot_id"], saved.snapshot_id)
+                self.assertEqual(receipt["files"], 2)
+            finally:
+                self.delete_key(destination)
+
+    def test_restore_output_cannot_overlap_live_data_or_vault(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            destination = root / "vault"
+            self.fixture(source)
+            try:
+                backup(
+                    str(source), str(destination), crypto_helper=str(self.helper),
+                    chunk_size=64 * 1024,
+                )
+                with self.assertRaisesRegex(MigrationError, "separate"):
+                    restore_snapshot(
+                        str(source), str(destination), str(source / ".codex/staged"),
+                        crypto_helper=str(self.helper),
+                    )
+                with self.assertRaisesRegex(MigrationError, "separate"):
+                    restore_snapshot(
+                        str(source), str(destination), str(destination / "restored"),
+                        crypto_helper=str(self.helper),
+                    )
             finally:
                 self.delete_key(destination)
 
