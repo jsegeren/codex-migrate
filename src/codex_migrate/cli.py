@@ -73,6 +73,19 @@ def parser() -> argparse.ArgumentParser:
     _migration_arguments(recovery)
     recovery.add_argument("--json", action="store_true")
 
+    vault = commands.add_parser(
+        "vault",
+        help="Inspect or search local Codex conversation history without changing it",
+    )
+    vault.add_argument("--source-home", default=str(Path.home()))
+    vault_commands = vault.add_subparsers(dest="vault_command", required=True)
+    vault_inspect = vault_commands.add_parser("inspect", help="Count locally stored conversations")
+    vault_inspect.add_argument("--json", action="store_true")
+    vault_search = vault_commands.add_parser("search", help="Search message text in local conversations")
+    vault_search.add_argument("query")
+    vault_search.add_argument("--limit", type=int, default=25)
+    vault_search.add_argument("--json", action="store_true")
+
     return root
 
 
@@ -160,6 +173,29 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print("Estimated bytes: %d" % result.estimated_transfer_bytes)
                 if result.unreadable_paths:
                     print("Unreadable paths: %d" % len(result.unreadable_paths))
+            return 0
+        if args.command == "vault":
+            from codex_migrate.vault import inspect as inspect_vault, search as search_vault
+            if args.vault_command == "inspect":
+                result = inspect_vault(args.source_home)
+                if args.json:
+                    print(json.dumps(result.as_dict(), indent=2, sort_keys=True))
+                else:
+                    print("Active conversations: %d" % result.active_transcripts)
+                    print("Archived conversations: %d" % result.archived_transcripts)
+                    print("Transcript bytes: %d" % result.transcript_bytes)
+                return 0
+            results = search_vault(args.source_home, args.query, args.limit)
+            if args.json:
+                print(json.dumps([item.as_dict() for item in results], indent=2, sort_keys=True))
+            else:
+                for item in results:
+                    when = " (%s)" % item.timestamp if item.timestamp else ""
+                    print("%s · %s:%d%s" % (
+                        item.collection, item.transcript, item.line, when))
+                    print("  %s" % item.snippet)
+                if not results:
+                    print("No matching conversation text found.")
             return 0
 
         config = _config(args)

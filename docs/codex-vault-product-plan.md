@@ -1,0 +1,102 @@
+# Codex Vault product plan
+
+## Decision
+
+Codex Vault is the planned umbrella product for preserving local Codex work.
+It extends this repository, engine and Mac app; it is not a second competing
+application or a rewrite. **Migrate** remains a named, independently purchasable
+job inside Vault and remains an important search/landing-page term.
+
+Do not rename the public app, repository or website until the backup and browser
+experience is usable. Existing Codex Migrate links and customers must continue
+to work after the umbrella name changes.
+
+The product promise is:
+
+> Back up, find, restore and move your Codex work.
+
+## Customer jobs
+
+1. **Find:** browse and search local active and archived Codex conversations,
+   including valid transcripts that the current Codex UI does not show.
+2. **Back up:** create automatic, versioned, integrity-checked backups without
+   copying credentials or installation identity.
+3. **Restore:** recover selected conversations or a verified point-in-time set
+   through a staged, reversible operation.
+4. **Migrate:** safely move the complete supported Codex environment and chosen
+   workspaces to another Mac using the existing migration engine.
+
+Continuous merging of two active Codex installations is not part of this
+product. That is a different synchronization and conflict-resolution problem.
+
+## Editions and pricing
+
+Keep the offer modular while the market is being proven:
+
+- **Open source:** portable archive format, manual CLI inspection/export,
+  verification and recovery primitives.
+- **Codex Vault for Mac — $49 one time:** packaged automatic local backup,
+  browse/search, verified restore, updates and best-effort support.
+- **Codex Migrate for Mac — $49 one time:** the current complete Mac migration.
+- **Complete — $79 one time:** Vault and Migrate together.
+
+Existing paid Codex Migrate buyers should receive the first Vault beta or a
+nominal upgrade rather than being asked to buy the same foundation twice.
+
+Do not sell a subscription merely for scheduling backups into a folder the
+customer owns. A recurring plan becomes defensible when Codex Vault operates an
+ongoing service: client-side encrypted managed storage, off-device health
+monitoring and a cross-device web reader. A reasonable initial target is
+**$49/year**, with an explicit storage allowance and no weekly billing friction.
+
+## Delivery sequence
+
+### 1. Read-only browser and search
+
+- Discover only documented active and archived transcript trees.
+- Never read `auth.json`, `installation_id`, SSH material or browser sessions.
+- Tolerate versioned transcript event shapes without inventing missing data.
+- Keep all content local; provide explicit Markdown and JSON exports.
+- Clearly distinguish "stored locally" from "visible in the current Codex UI."
+
+The first implementation slice is the streaming `codex-migrate vault`
+inspector/search command. It creates no index or duplicate content.
+
+### 2. Versioned backup
+
+- Take a consistent SQLite snapshot using SQLite's backup mechanism; never copy
+  a live database file and assume it is complete.
+- Freeze transcript manifests and content hashes around the snapshot.
+- Use content-addressed chunks and immutable manifests for incremental backup.
+- Exclude authentication, installation identity, logs, caches and runtime locks.
+- Require client-side authenticated encryption before recommending cloud-synced
+  folders or operated object storage.
+- Verify every completed version and make retention policy visible.
+
+### 3. Verified restore
+
+- Default to inspection and a restore plan.
+- Require explicit apply intent and Codex shutdown.
+- Back up displaced destination state before replacement.
+- Stage, verify, install, verify again and roll back on failure.
+- Support selected transcript recovery before whole-state replacement.
+- Never claim a recovered transcript is visible in Codex until that is tested.
+
+### 4. Optional Vault Cloud
+
+- The client encrypts before upload; the service never receives plaintext keys.
+- The hosted reader either decrypts locally in the browser or is omitted.
+- Storage, retention, deletion, export, recovery and provider exit are explicit.
+- Keep the local/user-owned destination available so cloud service is optional.
+
+## Launch gate
+
+The umbrella rename is ready only when a nontechnical customer can:
+
+1. see what local history was found;
+2. create and verify a backup;
+3. find a known conversation through the browser;
+4. restore a disposable deleted conversation through the guarded workflow; and
+5. understand exactly what is and is not encrypted, uploaded and recoverable.
+
+Until then, public commerce remains the truthful Codex Migrate beta.

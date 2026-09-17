@@ -336,6 +336,22 @@ file-content and directory-tree snapshot. Rerunning the command is safe.
 Additional independently selectable
 components will follow the same stage → backup → install → verify contract.
 
+## Experimental local history search
+
+The first read-only Codex Vault foundation can inspect and search locally stored
+active and archived conversation transcripts. It does not create an index,
+backup, cloud copy or restore point, and it never opens Codex authentication or
+installation identity files.
+
+```bash
+./codex-migrate vault inspect
+./codex-migrate vault search "launch checklist" --limit 25
+```
+
+This experimental CLI is not yet the planned automatic backup/browser product.
+See [the Codex Vault product plan](docs/codex-vault-product-plan.md) for the
+product boundary, safety sequence and proposed editions.
+
 ## Migration phases
 
 1. **Inspect** — verify source state, destination identity, SSH safety, required
