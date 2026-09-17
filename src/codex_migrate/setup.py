@@ -11,6 +11,7 @@ from pathlib import Path
 import platform
 import subprocess
 import threading
+from urllib.parse import parse_qs, urlsplit
 
 from codex_migrate.config import MigrationConfig, SSHOptions
 from codex_migrate.dashboard import Dashboard
@@ -19,6 +20,10 @@ from codex_migrate.component_migration import ComponentMigrationEngine
 from codex_migrate.state import StateStore
 from codex_migrate.support import with_support, SUPPORT_HTML
 from codex_migrate.pairing import Pairing
+from codex_migrate.vault import inspect as inspect_vault
+from codex_migrate.vault import markdown as vault_markdown
+from codex_migrate.vault import read_thread, search as search_vault
+from codex_migrate.vault_dashboard import VAULT_HTML
 
 FOLDER_PICKER_ERROR = (
     "Folder selection could not finish. Close any open folder dialog and try again, "
@@ -37,6 +42,7 @@ label{display:block;margin:16px 0 6px}input,textarea,button,select{font:inherit}
 </style></head><body><main>
 <a class="support-link" href="#migration-help">Help / Email support</a>
 <h1>Let’s move your Codex.</h1><p>Your conversations, skills, and unfinished work. Directly from this Mac to your new one.</p>
+<a class="button secondary" id="open-vault" href="/vault">Browse and search this Mac’s Codex history</a>
 <button type="button" class="secondary" id="receiver-toggle">I’m on the new Mac</button>
 <div id="error" role="alert"></div><p id="message" role="status" aria-live="polite">Connecting to your local helper…</p>
 <section id="receiver" hidden><h2 tabindex="-1">Prepare this new Mac</h2>
@@ -95,6 +101,7 @@ const incoming=new URLSearchParams(location.hash.slice(1)).get("token");
 if(incoming)sessionStorage.setItem(storageKey,incoming);
 const token=incoming||sessionStorage.getItem(storageKey)||"";
 history.replaceState(null,"",location.pathname);
+$("open-vault").href="/vault#token="+encodeURIComponent(token);
 const roots=()=>$("workspaces").value.split("\n").map(x=>x.trim()).filter(Boolean);
 const fullScopeHelp=$("scope-help").textContent;
 const fullKeyHelp=$("key-help").textContent;
@@ -334,6 +341,53 @@ JSON.stringify(app.chooseFolder({withPrompt: "Choose workspace folders for Codex
             def do_GET(self):
                 if not self._local():
                     self._json(403, {"error": "Local origin required"})
+                    return
+                parsed = urlsplit(self.path)
+                if parsed.path == "/vault":
+                    self._html(VAULT_HTML)
+                    return
+                if parsed.path.startswith("/api/vault/"):
+                    if not self._authorized():
+                        self._json(403, {"error": "Missing or invalid local control token"})
+                        return
+                    try:
+                        query = parse_qs(parsed.query, keep_blank_values=True)
+                        if parsed.path == "/api/vault/summary" and not query:
+                            self._json(200, inspect_vault(setup.source_home).as_dict())
+                            return
+                        if parsed.path == "/api/vault/search" and set(query) <= {"q", "limit"}:
+                            phrase = query.get("q", [""])[0]
+                            raw_limit = query.get("limit", ["50"])[0]
+                            if len(phrase) > 500 or len(raw_limit) > 4:
+                                raise ValueError("invalid history search")
+                            results = search_vault(setup.source_home, phrase, int(raw_limit))
+                            self._json(200, {"results": [item.as_dict() for item in results]})
+                            return
+                        if parsed.path in ("/api/vault/thread", "/api/vault/export") and set(query) <= {"collection", "transcript"}:
+                            collection = query.get("collection", [""])[0]
+                            transcript = query.get("transcript", [""])[0]
+                            if len(collection) > 16 or len(transcript) > 4096:
+                                raise ValueError("invalid conversation identifier")
+                            thread = read_thread(setup.source_home, collection, transcript)
+                            if parsed.path == "/api/vault/thread":
+                                self._json(200, thread.as_dict())
+                            else:
+                                encoded = vault_markdown(thread).encode("utf-8")
+                                self.send_response(200)
+                                self.send_header("Content-Type", "text/markdown; charset=utf-8")
+                                self.send_header("Content-Disposition", 'attachment; filename="codex-conversation.md"')
+                                self.send_header("Cache-Control", "no-store")
+                                self.send_header("X-Content-Type-Options", "nosniff")
+                                self.send_header("Referrer-Policy", "no-referrer")
+                                self.send_header("Content-Length", str(len(encoded)))
+                                self.end_headers()
+                                self.wfile.write(encoded)
+                            return
+                        self._json(404, {"error": "Not found"})
+                    except (MigrationError, ValueError):
+                        self._json(400, {"error": "Local Codex history could not be read safely. The original files were not changed."})
+                    except Exception:
+                        self._json(409, {"error": "Local Codex history is unavailable. The original files were not changed."})
                     return
                 if self.path == "/api/setup":
                     if not self._authorized():

@@ -35,19 +35,24 @@ Keep the offer modular while the market is being proven:
 
 - **Open source:** portable archive format, manual CLI inspection/export,
   verification and recovery primitives.
-- **Codex Vault for Mac — $49 one time:** packaged automatic local backup,
-  browse/search, verified restore, updates and best-effort support.
+- **Codex Vault — $5/month or $49/year:** continuously maintained automatic
+  backup to a customer-owned folder, browse/search, verified restore, updates
+  and best-effort support. Cancellation stops automation and support but leaves
+  portable existing backups readable and exportable.
 - **Codex Migrate for Mac — $49 one time:** the current complete Mac migration.
-- **Complete — $79 one time:** Vault and Migrate together.
+- **Complete annual plan:** Vault plus one full migration during the paid year;
+  validate willingness to pay before fixing a permanent bundle price.
 
 Existing paid Codex Migrate buyers should receive the first Vault beta or a
 nominal upgrade rather than being asked to buy the same foundation twice.
 
-Do not sell a subscription merely for scheduling backups into a folder the
-customer owns. A recurring plan becomes defensible when Codex Vault operates an
-ongoing service: client-side encrypted managed storage, off-device health
-monitoring and a cross-device web reader. A reasonable initial target is
-**$49/year**, with an explicit storage allowance and no weekly billing friction.
+The recurring value is the continuously maintained backup agent, health checks,
+format compatibility, version retention and viewer/restore path—not ownership
+of the customer's storage bytes. Do not promise lifetime maintenance for a
+one-time price. A later **Vault Cloud** tier adds client-side encrypted managed
+storage, off-device monitoring and cross-device web access at a higher recurring
+price with an explicit storage allowance. Prefer monthly or annual billing over
+literal weekly charges.
 
 ## Delivery sequence
 
@@ -58,6 +63,9 @@ monitoring and a cross-device web reader. A reasonable initial target is
 - Tolerate versioned transcript event shapes without inventing missing data.
 - Keep all content local; provide explicit Markdown and JSON exports.
 - Clearly distinguish "stored locally" from "visible in the current Codex UI."
+- Export a selected thread to Markdown. Use the browser's print dialog for PDF
+  and its native share sheet when file sharing is supported; otherwise download
+  the Markdown file for email or another sharing app.
 
 The first implementation slice is the streaming `codex-migrate vault`
 inspector/search command. It creates no index or duplicate content.

@@ -4,7 +4,7 @@ import tempfile
 import unittest
 
 from codex_migrate.errors import MigrationError
-from codex_migrate.vault import inspect, search
+from codex_migrate.vault import inspect, markdown, read_thread, search
 
 
 class VaultTests(unittest.TestCase):
@@ -76,6 +76,39 @@ class VaultTests(unittest.TestCase):
                 search(str(root), " ")
             with self.assertRaisesRegex(ValueError, "between 1 and 500"):
                 search(str(root), "launch", limit=0)
+
+    def test_reads_exact_discovered_thread_and_exports_markdown(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.fixture(root)
+            thread = read_thread(
+                str(root), "active", "2026/09/17/active.jsonl")
+            self.assertEqual(thread.collection, "active")
+            self.assertEqual(len(thread.entries), 1)
+            self.assertEqual(thread.entries[0].text, "Design the launch checklist.")
+            document = markdown(thread)
+            self.assertIn("# Codex conversation", document)
+            self.assertIn("Design the launch checklist.", document)
+            self.assertNotIn("/private/customer/path", document)
+            self.assertNotIn("secret-id", document)
+
+    def test_thread_identifier_cannot_escape_discovered_transcripts(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.fixture(root)
+            with self.assertRaisesRegex(ValueError, "not found"):
+                read_thread(str(root), "active", "../auth.json")
+            with self.assertRaisesRegex(ValueError, "unknown"):
+                read_thread(str(root), "other", "active.jsonl")
+
+    def test_browser_export_has_a_bounded_text_budget(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            transcript = root / ".codex/sessions/large.jsonl"
+            transcript.parent.mkdir(parents=True)
+            transcript.write_text(json.dumps({"text": "1234567890"}) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(MigrationError, "too large"):
+                read_thread(str(root), "active", "large.jsonl", max_text_bytes=5)
 
 
 if __name__ == "__main__":

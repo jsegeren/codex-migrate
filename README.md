@@ -348,7 +348,9 @@ installation identity files.
 ./codex-migrate vault search "launch checklist" --limit 25
 ```
 
-This experimental CLI is not yet the planned automatic backup/browser product.
+The packaged local helper also exposes an experimental history browser with
+per-thread Markdown download, print-to-PDF and the browser's native share sheet
+when supported. This is not yet the planned automatic backup product.
 See [the Codex Vault product plan](docs/codex-vault-product-plan.md) for the
 product boundary, safety sequence and proposed editions.
 

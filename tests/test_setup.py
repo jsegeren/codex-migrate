@@ -59,6 +59,54 @@ class SetupTests(unittest.TestCase):
         self.assertNotIn(str(self.home), body)
         self.assertNotIn(self.helper.token, body)
 
+    def test_vault_shell_is_content_free_and_private_apis_require_token(self):
+        transcript = self.home / ".codex/sessions/2026/09/thread.jsonl"
+        transcript.parent.mkdir(parents=True)
+        transcript.write_text(json.dumps({
+            "timestamp": "2026-09-17T10:00:00Z",
+            "payload": {"message": {"role": "user", "content": "PRIVATE VAULT FIXTURE"}},
+        }) + "\n", encoding="utf-8")
+        code, shell = self.request("/vault", authorized=False)
+        self.assertEqual(code, 200)
+        self.assertIn("Codex Vault", shell)
+        self.assertIn("Print / Save PDF", shell)
+        self.assertIn("Share thread", shell)
+        self.assertNotIn("PRIVATE VAULT FIXTURE", shell)
+        for path in ("/api/vault/summary", "/api/vault/search?q=PRIVATE",
+                     "/api/vault/thread?collection=active&transcript=2026/09/thread.jsonl",
+                     "/api/vault/export?collection=active&transcript=2026/09/thread.jsonl"):
+            self.assertEqual(self.request(path, authorized=False)[0], 403)
+
+    def test_vault_search_open_and_markdown_export_are_read_only(self):
+        transcript = self.home / ".codex/sessions/2026/09/thread.jsonl"
+        transcript.parent.mkdir(parents=True)
+        original = json.dumps({
+            "timestamp": "2026-09-17T10:00:00Z",
+            "payload": {"message": {"role": "user", "content": "Portable launch notes"}},
+        }) + "\n"
+        transcript.write_text(original, encoding="utf-8")
+        code, summary = self.request("/api/vault/summary")
+        self.assertEqual(code, 200)
+        self.assertEqual(summary["active_transcripts"], 1)
+        code, results = self.request("/api/vault/search?q=launch&limit=10")
+        self.assertEqual(code, 200)
+        item = results["results"][0]
+        self.assertEqual(item["collection"], "active")
+        identifier = "2026/09/thread.jsonl"
+        code, thread = self.request("/api/vault/thread?collection=active&transcript=" + identifier)
+        self.assertEqual(code, 200)
+        self.assertEqual(thread["entries"][0]["role"], "user")
+        code, document = self.request("/api/vault/export?collection=active&transcript=" + identifier)
+        self.assertEqual(code, 200)
+        self.assertIn("# Codex conversation", document)
+        self.assertIn("Portable launch notes", document)
+        self.assertEqual(transcript.read_text(encoding="utf-8"), original)
+
+    def test_vault_rejects_traversal_and_foreign_origin(self):
+        path = "/api/vault/thread?collection=active&transcript=../auth.json"
+        self.assertEqual(self.request(path)[0], 400)
+        self.assertEqual(self.request("/api/vault/summary", extra_headers={"Origin": "https://example.com"})[0], 403)
+
     def test_private_setup_and_picker_require_token(self):
         for path, data in (("/api/setup", None), ("/api/setup", self.config()),
                            ("/api/folders", {}), ("/api/suggestions", {})):

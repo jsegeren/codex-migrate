@@ -44,6 +44,30 @@ class VaultMatch:
         return asdict(self)
 
 
+@dataclass(frozen=True)
+class ThreadEntry:
+    timestamp: Optional[str]
+    role: Optional[str]
+    text: str
+
+    def as_dict(self) -> Dict[str, object]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class VaultThread:
+    collection: str
+    transcript: str
+    entries: List[ThreadEntry]
+
+    def as_dict(self) -> Dict[str, object]:
+        return {
+            "collection": self.collection,
+            "transcript": self.transcript,
+            "entries": [entry.as_dict() for entry in self.entries],
+        }
+
+
 def _transcripts(source_home: str) -> Iterator[Tuple[str, Path, str]]:
     """Yield regular JSONL transcripts without following links."""
     codex = Path(source_home) / ".codex"
@@ -111,11 +135,31 @@ def _timestamp(record: object) -> Optional[str]:
     if not isinstance(record, dict):
         return None
     value = record.get("timestamp")
-    if isinstance(value, str):
+    if isinstance(value, str) and len(value) <= 100 and "\n" not in value and "\r" not in value:
         return value
     payload = record.get("payload")
-    if isinstance(payload, dict) and isinstance(payload.get("timestamp"), str):
-        return payload["timestamp"]
+    if isinstance(payload, dict):
+        value = payload.get("timestamp")
+        if isinstance(value, str) and len(value) <= 100 and "\n" not in value and "\r" not in value:
+            return value
+    return None
+
+
+def _first_named_string(value: object, name: str) -> Optional[str]:
+    if isinstance(value, dict):
+        direct = value.get(name)
+        if (isinstance(direct, str) and len(direct) <= 80
+                and "\n" not in direct and "\r" not in direct):
+            return direct
+        for child in value.values():
+            found = _first_named_string(child, name)
+            if found is not None:
+                return found
+    elif isinstance(value, list):
+        for child in value:
+            found = _first_named_string(child, name)
+            if found is not None:
+                return found
     return None
 
 
@@ -157,7 +201,11 @@ def search(source_home: str, query: str, limit: int = 25) -> List[VaultMatch]:
                         record = json.loads(line)
                     except (UnicodeError, json.JSONDecodeError) as error:
                         raise MigrationError("A conversation transcript contains unreadable JSON; history search stopped.") from error
+                    seen = set()
                     for text in _strings(record):
+                        if text in seen:
+                            continue
+                        seen.add(text)
                         position = text.casefold().find(needle)
                         if position < 0:
                             continue
@@ -175,3 +223,75 @@ def search(source_home: str, query: str, limit: int = 25) -> List[VaultMatch]:
         except (OSError, UnicodeError) as error:
             raise MigrationError("Codex conversation history could not be read safely.") from error
     return matches
+
+
+def _find_transcript(source_home: str, collection: str, transcript: str) -> Path:
+    if collection not in ("active", "archived"):
+        raise ValueError("unknown conversation collection")
+    if not transcript or transcript.startswith("/") or "\\" in transcript:
+        raise ValueError("invalid conversation identifier")
+    folder = "sessions" if collection == "active" else "archived_sessions"
+    for candidate_folder, path, relative in _transcripts(source_home):
+        if candidate_folder == folder and relative == transcript:
+            return path
+    raise ValueError("conversation was not found")
+
+
+def read_thread(
+    source_home: str,
+    collection: str,
+    transcript: str,
+    max_text_bytes: int = 25 * 1024 * 1024,
+) -> VaultThread:
+    """Return message-like text from one exact discovered transcript."""
+    path = _find_transcript(source_home, collection, transcript)
+    entries: List[ThreadEntry] = []
+    total = 0
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
+            info = os.fstat(handle.fileno())
+            if not stat.S_ISREG(info.st_mode):
+                raise MigrationError("A conversation transcript changed while it was being read.")
+            for line in handle:
+                try:
+                    record = json.loads(line)
+                except (UnicodeError, json.JSONDecodeError) as error:
+                    raise MigrationError("A conversation transcript contains unreadable JSON; it was not opened.") from error
+                seen = set()
+                for text in _strings(record):
+                    if text in seen:
+                        continue
+                    seen.add(text)
+                    encoded_size = len(text.encode("utf-8"))
+                    if total + encoded_size > max_text_bytes:
+                        raise MigrationError("This conversation is too large for the browser export. The original transcript was not changed.")
+                    total += encoded_size
+                    entries.append(ThreadEntry(
+                        timestamp=_timestamp(record),
+                        role=_first_named_string(record, "role"),
+                        text=text,
+                    ))
+    except MigrationError:
+        raise
+    except (OSError, UnicodeError) as error:
+        raise MigrationError("The conversation could not be read safely.") from error
+    return VaultThread(collection, transcript, entries)
+
+
+def markdown(thread: VaultThread) -> str:
+    """Create a portable, plain Markdown representation of a thread."""
+    lines = [
+        "# Codex conversation",
+        "",
+        "- Collection: %s" % thread.collection,
+        "- Transcript: `%s`" % thread.transcript.replace("`", "\\`"),
+        "",
+    ]
+    for index, entry in enumerate(thread.entries, start=1):
+        heading = entry.role.strip().title() if entry.role and entry.role.strip() else "Entry %d" % index
+        lines.extend(("## %s" % heading, ""))
+        if entry.timestamp:
+            lines.extend(("_%s_" % entry.timestamp, ""))
+        lines.extend((entry.text, ""))
+    return "\n".join(lines).rstrip() + "\n"
