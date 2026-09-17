@@ -81,6 +81,21 @@ inspector/search command. It creates no index or duplicate content.
   folders or operated object storage.
 - Verify every completed version and make retention policy visible.
 
+The first backup implementation uses immutable 4 MiB chunks (configurable for
+testing), private HMAC-SHA256 object identifiers and AES-256-GCM authenticated
+encryption. Separate keys are derived for encryption and object identifiers
+from a random 256-bit master key held in the macOS Keychain. The encrypted
+manifest is verified by completely decrypting and hashing every referenced
+chunk before its reference can become `latest.json`. The one-time recovery key
+must be stored in a password manager so a new Mac can import it; it is never
+written into the backup repository.
+
+The storage folder exposes only format/version metadata, an opaque Keychain key
+identifier, encrypted chunks, encrypted manifests and snapshot timestamps. It
+does not contain plaintext conversation names or contents. Interrupted work can
+leave unreferenced encrypted objects, but cannot replace the last verified
+snapshot.
+
 ### 3. Verified restore
 
 - Default to inspection and a restore plan.

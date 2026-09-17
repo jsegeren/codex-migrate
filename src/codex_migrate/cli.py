@@ -85,6 +85,16 @@ def parser() -> argparse.ArgumentParser:
     vault_search.add_argument("query")
     vault_search.add_argument("--limit", type=int, default=25)
     vault_search.add_argument("--json", action="store_true")
+    vault_backup = vault_commands.add_parser(
+        "backup", help="Create a verified, client-side encrypted conversation backup")
+    vault_backup.add_argument("--destination", required=True,
+                              help="Absolute path to a new or existing Codex Vault folder")
+    vault_backup.add_argument("--crypto-helper",
+                              help="Absolute path to the open-source CryptoKit helper")
+    vault_backup.add_argument("--chunk-size", type=int, default=4 * 1024 * 1024)
+    vault_backup.add_argument("--apply", action="store_true",
+                              help="Create and verify a snapshot; otherwise show the plan")
+    vault_backup.add_argument("--json", action="store_true")
 
     return root
 
@@ -184,6 +194,31 @@ def main(argv: Optional[List[str]] = None) -> int:
                     print("Active conversations: %d" % result.active_transcripts)
                     print("Archived conversations: %d" % result.archived_transcripts)
                     print("Transcript bytes: %d" % result.transcript_bytes)
+                return 0
+            if args.vault_command == "backup":
+                from codex_migrate.vault_backup import backup as backup_vault, plan as plan_vault
+                result = (backup_vault(
+                    args.source_home, args.destination,
+                    crypto_helper=args.crypto_helper, chunk_size=args.chunk_size,
+                ) if args.apply else plan_vault(args.source_home, args.destination))
+                if args.json:
+                    print(json.dumps(result.as_dict(), indent=2, sort_keys=True))
+                else:
+                    if result.applied:
+                        print("Verified snapshot: %s" % result.snapshot_id)
+                        print("Conversation files: %d" % result.transcript_files)
+                        print("Plaintext bytes protected: %d" % result.transcript_bytes)
+                        print("Encrypted chunks: %d" % result.chunks)
+                        print("Vault: %s" % result.destination)
+                        if result.recovery_key:
+                            print("RECOVERY KEY (save in a password manager; shown once):")
+                            print(result.recovery_key)
+                    else:
+                        print("Would back up %d conversation file(s), %d byte(s)." % (
+                            result.transcript_files, result.transcript_bytes))
+                        print("Destination: %s" % result.destination)
+                        print("Client-side authenticated encryption: required")
+                        print("Planning mode only; add --apply to create a verified snapshot.")
                 return 0
             results = search_vault(args.source_home, args.query, args.limit)
             if args.json:

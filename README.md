@@ -64,6 +64,33 @@ guaranteed response time or guarantee that every migration issue can be solved.
 This is the real local dashboard with staged sample data. Actual transfer time
 depends on data size and the connection between the Macs.
 
+## Codex Vault foundation
+
+This repository now includes the first open-source Codex Vault primitives for
+local conversation history: read-only inspection, streaming search, a local
+browser, Markdown/PDF/share exports, and versioned client-side encrypted
+backup. Vault backs up only active and archived transcript trees. It does not
+copy `auth.json`, `installation_id`, SSH keys, logs, caches, or runtime locks.
+
+Planning is read-only:
+
+```bash
+codex-migrate vault backup --destination "/absolute/path/Codex Vault"
+```
+
+Creating a snapshot requires the open-source native CryptoKit helper bundled
+with the packaged Mac app (source: `desktop/CodexVaultCrypto.swift`) and an
+explicit `--apply`. The first snapshot creates a random key in macOS Keychain
+and displays its recovery key once. Save that recovery key in a password
+manager; losing both the Mac Keychain item and recovery key makes the encrypted
+backup unrecoverable. The restore UI, automation, retention controls, and
+customer-owned cloud-folder setup are still under development, so this CLI is
+an engineering foundation rather than the public Vault subscription.
+
+See the [portable backup format](docs/vault-backup-format.md) for the exact
+encryption, key derivation, repository layout, verification, and compatibility
+contract.
+
 ## How migration works
 
 It stages a resumable copy over SSH, preserves the new Mac's authentication,

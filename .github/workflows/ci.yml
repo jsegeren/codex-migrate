@@ -55,7 +55,9 @@ jobs:
       - name: Check CLI
         run: PYTHONPATH=src python -m codex_migrate --version
       - name: Check native Mac shell
-        run: xcrun swiftc -typecheck -parse-as-library desktop/CodexMigrate.swift desktop/SavedSetup.swift
+        run: |
+          xcrun swiftc -typecheck -parse-as-library desktop/CodexMigrate.swift desktop/SavedSetup.swift
+          xcrun swiftc -typecheck -parse-as-library desktop/CodexVaultCrypto.swift
       - uses: actions/setup-node@v7
         with:
           node-version: "24"
