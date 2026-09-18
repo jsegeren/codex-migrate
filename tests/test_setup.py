@@ -1,6 +1,7 @@
 import json
 from http.client import HTTPConnection
 from pathlib import Path
+import subprocess
 import tempfile
 import threading
 import unittest
@@ -8,6 +9,7 @@ from unittest.mock import patch
 
 from codex_migrate.dashboard import LoopbackHTTPServer
 from codex_migrate.setup import SetupDashboard, SETUP_HTML
+from codex_migrate.vault_backup import BackupPlan, BackupResult
 
 
 class SetupTests(unittest.TestCase):
@@ -58,6 +60,151 @@ class SetupTests(unittest.TestCase):
         self.assertIn("Choose folders on this Mac", body)
         self.assertNotIn(str(self.home), body)
         self.assertNotIn(self.helper.token, body)
+
+    def test_vault_shell_is_content_free_and_private_apis_require_token(self):
+        transcript = self.home / ".codex/sessions/2026/09/thread.jsonl"
+        transcript.parent.mkdir(parents=True)
+        transcript.write_text(json.dumps({
+            "timestamp": "2026-09-17T10:00:00Z",
+            "payload": {"message": {"role": "user", "content": "PRIVATE VAULT FIXTURE"}},
+        }) + "\n", encoding="utf-8")
+        code, shell = self.request("/vault", authorized=False)
+        self.assertEqual(code, 200)
+        self.assertIn("Codex Vault", shell)
+        self.assertIn("Print / Save PDF", shell)
+        self.assertIn("Share thread", shell)
+        self.assertIn("Create encrypted backup", shell)
+        self.assertIn("Save this recovery key", shell)
+        self.assertNotIn("PRIVATE VAULT FIXTURE", shell)
+        for path in ("/api/vault/summary", "/api/vault/search?q=PRIVATE",
+                     "/api/vault/thread?collection=active&transcript=2026/09/thread.jsonl",
+                     "/api/vault/export?collection=active&transcript=2026/09/thread.jsonl",
+                     "/api/vault/backup-status"):
+            self.assertEqual(self.request(path, authorized=False)[0], 403)
+        for path in ("/api/vault/folder", "/api/vault/backup",
+                     "/api/vault/recovery-saved"):
+            self.assertEqual(self.request(path, {}, authorized=False)[0], 403)
+
+    def test_vault_backup_runs_off_request_thread_and_recovery_key_is_acknowledged(self):
+        destination = str(self.home / "vault")
+        planned = BackupPlan(destination, 2, 100)
+        completed = BackupResult(
+            destination=destination, snapshot_id="fixture-snapshot",
+            transcript_files=2, transcript_bytes=100, chunks=2,
+            key_id="fixture-key", recovery_key="CV1-PRIVATE-RECOVERY",
+        )
+
+        def finish(*args, **kwargs):
+            kwargs["progress"](2, 2, 100, 100)
+            return completed
+
+        with patch("codex_migrate.setup.plan_vault_backup", return_value=planned), \
+                patch("codex_migrate.setup.backup_vault", side_effect=finish):
+            code, running = self.request(
+                "/api/vault/backup", {"destination": destination, "apply": True})
+            self.assertEqual(code, 202)
+            self.assertIn(running["status"], ("running", "completed"))
+            self.helper._vault_thread.join(timeout=3)
+            code, status = self.request("/api/vault/backup-status")
+            self.assertEqual(code, 200)
+            self.assertEqual(status["status"], "completed")
+            self.assertEqual(status["recovery_key"], "CV1-PRIVATE-RECOVERY")
+            self.assertEqual(status["transcript_files"], 2)
+            self.assertEqual(self.request("/api/shutdown", {})[0], 409)
+            code, acknowledged = self.request("/api/vault/recovery-saved", {})
+            self.assertEqual(code, 200)
+            self.assertNotIn("recovery_key", acknowledged)
+
+    def test_vault_backup_rejects_a_second_writer_while_running(self):
+        destination = str(self.home / "vault")
+        planned = BackupPlan(destination, 1, 10)
+        entered, release = threading.Event(), threading.Event()
+
+        def wait_for_release(*args, **kwargs):
+            entered.set()
+            release.wait(3)
+            return BackupResult(
+                destination=destination, snapshot_id="fixture-snapshot",
+                transcript_files=1, transcript_bytes=10, chunks=1,
+                key_id="fixture-key", recovery_key=None,
+            )
+
+        try:
+            with patch("codex_migrate.setup.plan_vault_backup", return_value=planned), \
+                    patch("codex_migrate.setup.backup_vault", side_effect=wait_for_release):
+                self.assertEqual(self.request(
+                    "/api/vault/backup", {"destination": destination, "apply": True})[0], 202)
+                self.assertTrue(entered.wait(1))
+                code, body = self.request(
+                    "/api/vault/backup", {"destination": destination, "apply": True})
+                self.assertEqual(code, 400)
+                self.assertIn("already running", body["error"])
+        finally:
+            release.set()
+            if self.helper._vault_thread:
+                self.helper._vault_thread.join(timeout=3)
+
+    def test_failed_first_backup_preserves_recovery_key_until_acknowledged(self):
+        destination = str(self.home / "vault")
+        planned = BackupPlan(destination, 1, 10)
+        with patch("codex_migrate.setup.plan_vault_backup", return_value=planned), \
+                patch("codex_migrate.setup.backup_vault", side_effect=RuntimeError("private")), \
+                patch("codex_migrate.setup.export_recovery_key",
+                      return_value="CV1-PRIVATE-RECOVERY"):
+            self.assertEqual(self.request(
+                "/api/vault/backup", {"destination": destination, "apply": True})[0], 202)
+            self.helper._vault_thread.join(timeout=3)
+            status = self.request("/api/vault/backup-status")[1]
+            self.assertEqual(status["status"], "failed")
+            self.assertEqual(status["recovery_key"], "CV1-PRIVATE-RECOVERY")
+            self.assertNotIn("private", status["error"])
+            self.assertEqual(self.request("/api/shutdown", {})[0], 409)
+            acknowledged = self.request("/api/vault/recovery-saved", {})[1]
+            self.assertNotIn("recovery_key", acknowledged)
+
+    def test_vault_folder_picker_is_fixed_and_cancel_is_non_destructive(self):
+        completed = subprocess.CompletedProcess(
+            [], 0, stdout=str(self.home / "Vault") + "\n", stderr="")
+        with patch("codex_migrate.setup.subprocess.run", return_value=completed) as run:
+            code, result = self.request("/api/vault/folder", {})
+        self.assertEqual(code, 200)
+        self.assertEqual(result["path"], str(self.home / "Vault"))
+        self.assertEqual(run.call_args.args[0][:3], ["/usr/bin/osascript", "-l", "JavaScript"])
+        self.assertNotIn(str(self.home), run.call_args.args[0][-1])
+
+        cancelled = subprocess.CompletedProcess([], 1, stdout="", stderr="User canceled. (-128)")
+        with patch("codex_migrate.setup.subprocess.run", return_value=cancelled):
+            self.assertEqual(self.request("/api/vault/folder", {})[1]["path"], None)
+
+    def test_vault_search_open_and_markdown_export_are_read_only(self):
+        transcript = self.home / ".codex/sessions/2026/09/thread.jsonl"
+        transcript.parent.mkdir(parents=True)
+        original = json.dumps({
+            "timestamp": "2026-09-17T10:00:00Z",
+            "payload": {"message": {"role": "user", "content": "Portable launch notes"}},
+        }) + "\n"
+        transcript.write_text(original, encoding="utf-8")
+        code, summary = self.request("/api/vault/summary")
+        self.assertEqual(code, 200)
+        self.assertEqual(summary["active_transcripts"], 1)
+        code, results = self.request("/api/vault/search?q=launch&limit=10")
+        self.assertEqual(code, 200)
+        item = results["results"][0]
+        self.assertEqual(item["collection"], "active")
+        identifier = "2026/09/thread.jsonl"
+        code, thread = self.request("/api/vault/thread?collection=active&transcript=" + identifier)
+        self.assertEqual(code, 200)
+        self.assertEqual(thread["entries"][0]["role"], "user")
+        code, document = self.request("/api/vault/export?collection=active&transcript=" + identifier)
+        self.assertEqual(code, 200)
+        self.assertIn("# Codex conversation", document)
+        self.assertIn("Portable launch notes", document)
+        self.assertEqual(transcript.read_text(encoding="utf-8"), original)
+
+    def test_vault_rejects_traversal_and_foreign_origin(self):
+        path = "/api/vault/thread?collection=active&transcript=../auth.json"
+        self.assertEqual(self.request(path)[0], 400)
+        self.assertEqual(self.request("/api/vault/summary", extra_headers={"Origin": "https://example.com"})[0], 403)
 
     def test_private_setup_and_picker_require_token(self):
         for path, data in (("/api/setup", None), ("/api/setup", self.config()),

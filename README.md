@@ -64,6 +64,50 @@ guaranteed response time or guarantee that every migration issue can be solved.
 This is the real local dashboard with staged sample data. Actual transfer time
 depends on data size and the connection between the Macs.
 
+## Codex Vault foundation
+
+This repository now includes the first open-source Codex Vault primitives for
+local conversation history: read-only inspection, streaming search, a local
+browser, Markdown/PDF/share exports, and versioned client-side encrypted
+backup. Vault backs up only active and archived transcript trees. It does not
+copy `auth.json`, `installation_id`, SSH keys, logs, caches, or runtime locks.
+
+Planning is read-only:
+
+```bash
+codex-migrate vault backup --destination "/absolute/path/Codex Vault"
+```
+
+Creating a snapshot requires the open-source native CryptoKit helper bundled
+with the packaged Mac app (source: `desktop/CodexVaultCrypto.swift`) and an
+explicit `--apply`. The first snapshot creates a random key in macOS Keychain
+and displays its recovery key once. Save that recovery key in a password
+manager; losing both the Mac Keychain item and recovery key makes the encrypted
+backup unrecoverable. The packaged app's local Vault page can create the same
+verified backup in an empty local or cloud-sync folder and guides the customer
+through saving the recovery key. Restore UI, automatic scheduling, retention
+controls, and cloud-folder health monitoring are still under development, so
+this remains an engineering foundation rather than the public Vault
+subscription.
+
+A verified snapshot can be checked or decrypted into a separate staging folder
+without touching live Codex data:
+
+```bash
+codex-migrate vault verify --vault "/absolute/path/Codex Vault"
+codex-migrate vault restore --vault "/absolute/path/Codex Vault" \
+  --output "/absolute/path/Recovered Codex" --apply
+```
+
+On another Mac, run `vault key-import` first and enter the recovery key at the
+hidden prompt. `vault key-export` deliberately reveals the current recovery key
+for password-manager storage. The staging command never installs recovered
+files into `~/.codex`; guarded live-state restore remains a later milestone.
+
+See the [portable backup format](docs/vault-backup-format.md) for the exact
+encryption, key derivation, repository layout, verification, and compatibility
+contract.
+
 ## How migration works
 
 It stages a resumable copy over SSH, preserves the new Mac's authentication,
@@ -335,6 +379,24 @@ untouched. Staged and installed skills are compared with a frozen source
 file-content and directory-tree snapshot. Rerunning the command is safe.
 Additional independently selectable
 components will follow the same stage → backup → install → verify contract.
+
+## Experimental local history search
+
+The first read-only Codex Vault foundation can inspect and search locally stored
+active and archived conversation transcripts. It does not create an index,
+backup, cloud copy or restore point, and it never opens Codex authentication or
+installation identity files.
+
+```bash
+./codex-migrate vault inspect
+./codex-migrate vault search "launch checklist" --limit 25
+```
+
+The packaged local helper also exposes an experimental history browser with
+per-thread Markdown download, print-to-PDF and the browser's native share sheet
+when supported. This is not yet the planned automatic backup product.
+See [the Codex Vault product plan](docs/codex-vault-product-plan.md) for the
+product boundary, safety sequence and proposed editions.
 
 ## Migration phases
 

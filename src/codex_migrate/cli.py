@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from contextlib import contextmanager
+import getpass
 import json
 from pathlib import Path
 import sys
@@ -72,6 +73,51 @@ def parser() -> argparse.ArgumentParser:
     recovery = commands.add_parser("recovery", help="Inspect an interrupted destination installation without changing files")
     _migration_arguments(recovery)
     recovery.add_argument("--json", action="store_true")
+
+    vault = commands.add_parser(
+        "vault",
+        help="Inspect or search local Codex conversation history without changing it",
+    )
+    vault.add_argument("--source-home", default=str(Path.home()))
+    vault_commands = vault.add_subparsers(dest="vault_command", required=True)
+    vault_inspect = vault_commands.add_parser("inspect", help="Count locally stored conversations")
+    vault_inspect.add_argument("--json", action="store_true")
+    vault_search = vault_commands.add_parser("search", help="Search message text in local conversations")
+    vault_search.add_argument("query")
+    vault_search.add_argument("--limit", type=int, default=25)
+    vault_search.add_argument("--json", action="store_true")
+    vault_backup = vault_commands.add_parser(
+        "backup", help="Create a verified, client-side encrypted conversation backup")
+    vault_backup.add_argument("--destination", required=True,
+                              help="Absolute path to a new or existing Codex Vault folder")
+    vault_backup.add_argument("--crypto-helper",
+                              help="Absolute path to the open-source CryptoKit helper")
+    vault_backup.add_argument("--chunk-size", type=int, default=4 * 1024 * 1024)
+    vault_backup.add_argument("--apply", action="store_true",
+                              help="Create and verify a snapshot; otherwise show the plan")
+    vault_backup.add_argument("--json", action="store_true")
+    vault_verify = vault_commands.add_parser(
+        "verify", help="Verify every encrypted object in a Vault snapshot")
+    vault_verify.add_argument("--vault", required=True)
+    vault_verify.add_argument("--snapshot", default="latest")
+    vault_verify.add_argument("--crypto-helper")
+    vault_verify.add_argument("--json", action="store_true")
+    vault_restore = vault_commands.add_parser(
+        "restore", help="Decrypt a verified snapshot into a separate staging folder")
+    vault_restore.add_argument("--vault", required=True)
+    vault_restore.add_argument("--output", required=True)
+    vault_restore.add_argument("--snapshot", default="latest")
+    vault_restore.add_argument("--crypto-helper")
+    vault_restore.add_argument("--apply", action="store_true")
+    vault_restore.add_argument("--json", action="store_true")
+    vault_import = vault_commands.add_parser(
+        "key-import", help="Import a Vault recovery key into this Mac's Keychain")
+    vault_import.add_argument("--vault", required=True)
+    vault_import.add_argument("--crypto-helper")
+    vault_export = vault_commands.add_parser(
+        "key-export", help="Display the Vault recovery key for password-manager storage")
+    vault_export.add_argument("--vault", required=True)
+    vault_export.add_argument("--crypto-helper")
 
     return root
 
@@ -160,6 +206,97 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print("Estimated bytes: %d" % result.estimated_transfer_bytes)
                 if result.unreadable_paths:
                     print("Unreadable paths: %d" % len(result.unreadable_paths))
+            return 0
+        if args.command == "vault":
+            from codex_migrate.vault import inspect as inspect_vault, search as search_vault
+            if args.vault_command == "inspect":
+                result = inspect_vault(args.source_home)
+                if args.json:
+                    print(json.dumps(result.as_dict(), indent=2, sort_keys=True))
+                else:
+                    print("Active conversations: %d" % result.active_transcripts)
+                    print("Archived conversations: %d" % result.archived_transcripts)
+                    print("Transcript bytes: %d" % result.transcript_bytes)
+                return 0
+            if args.vault_command == "backup":
+                from codex_migrate.vault_backup import backup as backup_vault, plan as plan_vault
+                result = (backup_vault(
+                    args.source_home, args.destination,
+                    crypto_helper=args.crypto_helper, chunk_size=args.chunk_size,
+                ) if args.apply else plan_vault(args.source_home, args.destination))
+                if args.json:
+                    print(json.dumps(result.as_dict(), indent=2, sort_keys=True))
+                else:
+                    if result.applied:
+                        print("Verified snapshot: %s" % result.snapshot_id)
+                        print("Conversation files: %d" % result.transcript_files)
+                        print("Plaintext bytes protected: %d" % result.transcript_bytes)
+                        print("Encrypted chunks: %d" % result.chunks)
+                        print("Vault: %s" % result.destination)
+                        if result.recovery_key:
+                            print("RECOVERY KEY (save in a password manager; shown once):")
+                            print(result.recovery_key)
+                    else:
+                        print("Would back up %d conversation file(s), %d byte(s)." % (
+                            result.transcript_files, result.transcript_bytes))
+                        print("Destination: %s" % result.destination)
+                        print("Client-side authenticated encryption: required")
+                        print("Planning mode only; add --apply to create a verified snapshot.")
+                return 0
+            if args.vault_command in ("verify", "restore", "key-import", "key-export"):
+                from codex_migrate.vault_recovery import (
+                    export_recovery_key, import_recovery_key, plan_restore,
+                    restore_snapshot, verify_snapshot,
+                )
+                if args.vault_command == "key-import":
+                    recovery_key = getpass.getpass(
+                        "Vault recovery key (input hidden; not stored in shell history): ")
+                    key_id = import_recovery_key(
+                        args.vault, recovery_key, crypto_helper=args.crypto_helper)
+                    print("Recovery key imported into this Mac's Keychain: %s" % key_id)
+                    return 0
+                if args.vault_command == "key-export":
+                    print("RECOVERY KEY (store in a password manager):")
+                    print(export_recovery_key(args.vault, crypto_helper=args.crypto_helper))
+                    return 0
+                if args.vault_command == "verify":
+                    result = verify_snapshot(
+                        args.vault, snapshot=args.snapshot,
+                        crypto_helper=args.crypto_helper)
+                elif args.apply:
+                    result = restore_snapshot(
+                        args.source_home, args.vault, args.output,
+                        snapshot=args.snapshot, crypto_helper=args.crypto_helper)
+                else:
+                    result = plan_restore(
+                        args.source_home, args.vault, args.output,
+                        snapshot=args.snapshot, crypto_helper=args.crypto_helper)
+                if args.json:
+                    print(json.dumps(result.as_dict(), indent=2, sort_keys=True))
+                else:
+                    print("Verified snapshot: %s" % result.snapshot_id)
+                    print("Conversation files: %d" % result.transcript_files)
+                    print("Plaintext bytes protected: %d" % result.transcript_bytes)
+                    if result.applied:
+                        print("Restored to staging folder: %s" % result.output)
+                        print("Live Codex data was not changed.")
+                    elif args.vault_command == "restore":
+                        print("Would restore to: %s" % result.output)
+                        print("Planning mode only; add --apply to stage recovered files.")
+                    else:
+                        print("Encrypted chunks: %d" % result.chunks)
+                return 0
+            results = search_vault(args.source_home, args.query, args.limit)
+            if args.json:
+                print(json.dumps([item.as_dict() for item in results], indent=2, sort_keys=True))
+            else:
+                for item in results:
+                    when = " (%s)" % item.timestamp if item.timestamp else ""
+                    print("%s · %s:%d%s" % (
+                        item.collection, item.transcript, item.line, when))
+                    print("  %s" % item.snippet)
+                if not results:
+                    print("No matching conversation text found.")
             return 0
 
         config = _config(args)

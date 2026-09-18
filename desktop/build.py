@@ -319,6 +319,7 @@ def main():
         contents = app / "Contents"
         executable = contents / "MacOS/CodexMigrate"
         resources = contents / "Resources"
+        vault_crypto = resources / "CodexVaultCrypto"
         executable.parent.mkdir(parents=True)
         resources.mkdir()
         shutil.copytree(scratch / "dist/codex-migrate-engine", resources / "engine", symlinks=True)
@@ -332,9 +333,13 @@ def main():
         (resources / "build-info.json").write_text(json.dumps(receipt, indent=2) + "\n")
         run("xcrun", "swiftc", "-parse-as-library", "-O", "-target", arch + "-apple-macos13.0",
             ROOT / "desktop/CodexMigrate.swift", ROOT / "desktop/SavedSetup.swift", "-o", executable)
+        run("xcrun", "swiftc", "-parse-as-library", "-O", "-target", arch + "-apple-macos13.0",
+            ROOT / "desktop/CodexVaultCrypto.swift", "-o", vault_crypto)
         signing = ["codesign", "--force", "--sign", args.identity or "-"]
         if args.identity:
             signing += ["--options", "runtime", "--timestamp"]
+        run(*signing, vault_crypto)
+        run("codesign", "--verify", "--strict", vault_crypto)
         run(*signing, app)
         run("codesign", "--verify", "--deep", "--strict", app)
         engine_version = subprocess.check_output(
