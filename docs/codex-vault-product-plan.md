@@ -154,6 +154,15 @@ never overwrites or merges an existing conversation. Every pre-existing
 transcript is verified unchanged, an owner-only receipt records the addition,
 and a final failure removes the newly added file and verifies rollback.
 
+Physical-device acceptance on September 18, 2026 also exercised the additive
+selected-thread path across two Macs with an encrypted snapshot and the
+receiving Mac's GUI Keychain context. The selected transcript matched the
+source bytes, pre-existing history and unrelated configuration stayed
+unchanged, the receipt verified, and a repeated plan returned
+`already_present`. See the
+[selected-thread acceptance receipt](vault-selected-thread-acceptance-2026-09-18.md)
+for its deliberately bounded claim.
+
 ### 4. Optional Vault Cloud
 
 - The client encrypts before upload; the service never receives plaintext keys.
