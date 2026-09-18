@@ -130,9 +130,14 @@ silently change version 1 semantics. Recovery software must default to a plan,
 stage restored plaintext outside live Codex state, verify it, and require
 explicit apply intent before replacing anything.
 
-The initial recovery command implements only that safe staging boundary. It
+The staging recovery command implements that safe inspection boundary. It
 verifies the complete encrypted snapshot first, requires a new or empty output
 folder outside both live `~/.codex` data and the Vault repository, reconstructs
 each transcript through authenticated chunks, hashes the staged plaintext, and
-writes a content-free `restore-receipt.json`. It never installs staged files
-into live Codex state.
+writes a content-free `restore-receipt.json`.
+
+Live installation is a separate explicit operation after Codex is closed.
+Whole-history installation keeps and verifies a rollback copy. Selected-thread
+installation re-verifies and stages the complete snapshot, then atomically adds
+one exact missing transcript. It does not overwrite or merge an existing thread
+identity, and it verifies all pre-existing transcript hashes are unchanged.

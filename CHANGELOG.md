@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Open a verified encrypted Vault snapshot in private temporary staging,
+  search it, and add one missing conversation without overwriting or merging
+  unrelated local Codex history.
 - Lead the public homepage with the loss-prevention promise: do not lose local
   Codex work when changing or upgrading a Mac.
 - Add the canonical maintainer handoff and reconcile current paid-beta state

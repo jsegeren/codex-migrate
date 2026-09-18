@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 import platform
 import subprocess
+import tempfile
 import threading
 import uuid
 from urllib.parse import parse_qs, urlsplit
@@ -31,6 +32,7 @@ from codex_migrate.vault_recovery import export_recovery_key
 from codex_migrate.vault_recovery import list_snapshots as list_vault_snapshots
 from codex_migrate.vault_recovery import restore_snapshot as restore_vault_snapshot
 from codex_migrate.vault_install import install_snapshot as install_vault_snapshot
+from codex_migrate.vault_install import install_thread as install_vault_thread
 from codex_migrate.vault_install import install_status as persistent_install_status
 from codex_migrate.vault_install import recover_interrupted_install
 from codex_migrate.vault_schedule import (
@@ -235,6 +237,13 @@ class SetupDashboard(Dashboard):
         self._restore_status = {"status": "idle"}
         self._install_thread = None
         self._install_status = {"status": "idle"}
+        self._browse_thread = None
+        self._browse_status = {"status": "idle"}
+        self._browse_temporary = None
+        self._browse_home = None
+        self._browse_data_lock = threading.RLock()
+        self._thread_install_thread = None
+        self._thread_install_status = {"status": "idle"}
         self._closing = False
         self.pairing = Pairing(self.source_home, self.registry.root)
 
@@ -316,6 +325,9 @@ class SetupDashboard(Dashboard):
                 not (self._vault_thread and self._vault_thread.is_alive())
                 and not (self._restore_thread and self._restore_thread.is_alive())
                 and not (self._install_thread and self._install_thread.is_alive())
+                and not (self._browse_thread and self._browse_thread.is_alive())
+                and not (self._thread_install_thread
+                         and self._thread_install_thread.is_alive())
                 and not self._vault_status.get("recovery_key")
             )
         return vault_idle and (self.engine is None or (
@@ -326,6 +338,11 @@ class SetupDashboard(Dashboard):
         if self.engine is not None:
             self.engine.shutdown()
             self.state.release_process_lock()
+        with self._browse_data_lock:
+            if self._browse_temporary is not None:
+                self._browse_temporary.cleanup()
+                self._browse_temporary = None
+                self._browse_home = None
         self.registry.release_process_lock()
 
     def choose_folders(self):
@@ -432,6 +449,164 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
         return {"snapshots": [
             item.as_dict() for item in list_vault_snapshots(vault, limit=100)
         ]}
+
+    @staticmethod
+    def _vault_snapshot(snapshot):
+        if not isinstance(snapshot, str) or len(snapshot) > 64:
+            raise MigrationError("Choose a valid Vault snapshot")
+        if snapshot == "latest":
+            return snapshot
+        try:
+            return str(uuid.UUID(snapshot)).lower()
+        except (ValueError, TypeError, AttributeError):
+            raise MigrationError("Choose a valid Vault snapshot") from None
+
+    def vault_browse_status(self):
+        with self._vault_lock:
+            return dict(self._browse_status)
+
+    def start_vault_browse(self, vault, snapshot):
+        if not isinstance(vault, str) or len(vault) > 4096:
+            raise MigrationError("Choose a valid existing Vault folder")
+        snapshot = self._vault_snapshot(snapshot)
+        temporary = tempfile.TemporaryDirectory(
+            prefix=".codex-vault-browser-", dir=self.source_home)
+        browse_home = Path(temporary.name)
+
+        def run():
+            try:
+                result = restore_vault_snapshot(
+                    self.source_home, vault, str(browse_home / ".codex"),
+                    snapshot=snapshot,
+                )
+                with self._browse_data_lock:
+                    old = self._browse_temporary
+                    self._browse_temporary = temporary
+                    self._browse_home = browse_home
+                    if old is not None:
+                        old.cleanup()
+                with self._vault_lock:
+                    self._browse_status = {"status": "ready", **result.as_dict()}
+            except Exception:
+                temporary.cleanup()
+                with self._vault_lock:
+                    self._browse_status = {
+                        "status": "failed",
+                        "error": "The selected backup could not be opened safely. "
+                                 "Local Codex history and the encrypted Vault were not changed.",
+                    }
+
+        worker = threading.Thread(target=run, daemon=True)
+        with self._vault_lock:
+            if self._vault_thread and self._vault_thread.is_alive():
+                temporary.cleanup()
+                raise MigrationError("Wait for the encrypted backup to finish before opening one")
+            if self._restore_thread and self._restore_thread.is_alive():
+                temporary.cleanup()
+                raise MigrationError("Wait for Vault recovery to finish before opening a backup")
+            if self._install_thread and self._install_thread.is_alive():
+                temporary.cleanup()
+                raise MigrationError("Wait for Vault installation to finish before opening a backup")
+            if self._browse_thread and self._browse_thread.is_alive():
+                temporary.cleanup()
+                raise MigrationError("A Vault backup is already being opened")
+            if self._thread_install_thread and self._thread_install_thread.is_alive():
+                temporary.cleanup()
+                raise MigrationError("Wait for selected recovery to finish before opening a backup")
+            if self._vault_status.get("recovery_key"):
+                temporary.cleanup()
+                raise MigrationError("Save and acknowledge the recovery key before opening a backup")
+            self._browse_status = {
+                "status": "running", "vault": vault, "snapshot": snapshot,
+            }
+            self._browse_thread = worker
+            worker.start()
+        return self.vault_browse_status()
+
+    def _browse(self, function, *args):
+        with self._browse_data_lock:
+            if self._browse_home is None:
+                raise MigrationError("Open a verified Vault backup before searching it")
+            return function(str(self._browse_home), *args)
+
+    def search_vault_backup(self, phrase, limit):
+        return self._browse(search_vault, phrase, limit)
+
+    def read_vault_backup_thread(self, collection, transcript):
+        return self._browse(read_thread, collection, transcript)
+
+    def vault_thread_install_status(self):
+        with self._vault_lock:
+            return dict(self._thread_install_status)
+
+    def start_vault_thread_install(self, collection, transcript):
+        if collection not in ("active", "archived"):
+            raise MigrationError("Choose a valid conversation")
+        if not isinstance(transcript, str) or len(transcript) > 4096:
+            raise MigrationError("Choose a valid conversation")
+        with self._vault_lock:
+            if self._browse_status.get("status") != "ready":
+                raise MigrationError("Open a verified Vault backup before recovering a conversation")
+            vault = self._browse_status.get("vault")
+            snapshot = self._browse_status.get("snapshot_id")
+        if not isinstance(vault, str) or not isinstance(snapshot, str):
+            raise MigrationError("Open a verified Vault backup before recovering a conversation")
+
+        def run():
+            try:
+                result = install_vault_thread(
+                    self.source_home, vault, collection, transcript,
+                    snapshot=snapshot,
+                )
+                with self._vault_lock:
+                    self._thread_install_status = {
+                        "status": result.status, **result.as_dict(),
+                    }
+            except MigrationError as error:
+                needs_attention = str(error).startswith(
+                    "Selected recovery stopped and automatic rollback could not be verified.")
+                with self._vault_lock:
+                    if needs_attention:
+                        self._thread_install_status = {
+                            "status": "needs_attention",
+                            "error": "Selected recovery needs attention. Keep Codex closed and "
+                                     "review local conversation history before retrying.",
+                        }
+                    else:
+                        self._thread_install_status = {
+                            "status": "failed",
+                            "error": "Selected recovery stopped safely. No existing Codex "
+                                     "conversation was replaced or merged.",
+                        }
+            except Exception:
+                with self._vault_lock:
+                    self._thread_install_status = {
+                        "status": "failed",
+                        "error": "Selected recovery could not start safely. No existing Codex "
+                                 "conversation was replaced or merged.",
+                    }
+
+        worker = threading.Thread(target=run, daemon=True)
+        with self._vault_lock:
+            if self._vault_thread and self._vault_thread.is_alive():
+                raise MigrationError("Wait for the encrypted backup to finish before recovery")
+            if self._restore_thread and self._restore_thread.is_alive():
+                raise MigrationError("Wait for Vault recovery to finish before selected recovery")
+            if self._install_thread and self._install_thread.is_alive():
+                raise MigrationError("Wait for Vault installation to finish before selected recovery")
+            if self._browse_thread and self._browse_thread.is_alive():
+                raise MigrationError("Wait for the backup to finish opening")
+            if self._thread_install_thread and self._thread_install_thread.is_alive():
+                raise MigrationError("A selected conversation recovery is already running")
+            if persistent_install_status(self.source_home).get("status") == "interrupted":
+                raise MigrationError("Roll back the interrupted Vault installation before retrying")
+            self._thread_install_status = {
+                "status": "running", "vault": vault, "snapshot": snapshot,
+                "collection": collection, "transcript": transcript,
+            }
+            self._thread_install_thread = worker
+            worker.start()
+        return self.vault_thread_install_status()
 
     def start_vault_restore(self, vault, output, snapshot):
         if not isinstance(vault, str) or len(vault) > 4096:
@@ -678,24 +853,39 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                         if parsed.path == "/api/vault/install-status" and not query:
                             self._json(200, setup.vault_install_status())
                             return
+                        if parsed.path == "/api/vault/browse-status" and not query:
+                            self._json(200, setup.vault_browse_status())
+                            return
+                        if parsed.path == "/api/vault/thread-install-status" and not query:
+                            self._json(200, setup.vault_thread_install_status())
+                            return
                         if (parsed.path == "/api/vault/snapshots"
                                 and set(query) == {"vault"} and len(query["vault"]) == 1):
                             self._json(200, setup.vault_snapshots(query["vault"][0]))
                             return
-                        if parsed.path == "/api/vault/search" and set(query) <= {"q", "limit"}:
+                        if parsed.path == "/api/vault/search" and set(query) <= {"q", "limit", "source"}:
                             phrase = query.get("q", [""])[0]
                             raw_limit = query.get("limit", ["50"])[0]
-                            if len(phrase) > 500 or len(raw_limit) > 4:
+                            source = query.get("source", ["local"])[0]
+                            if (len(phrase) > 500 or len(raw_limit) > 4
+                                    or source not in ("local", "backup")):
                                 raise ValueError("invalid history search")
-                            results = search_vault(setup.source_home, phrase, int(raw_limit))
+                            results = (setup.search_vault_backup(phrase, int(raw_limit))
+                                       if source == "backup" else
+                                       search_vault(setup.source_home, phrase, int(raw_limit)))
                             self._json(200, {"results": [item.as_dict() for item in results]})
                             return
-                        if parsed.path in ("/api/vault/thread", "/api/vault/export") and set(query) <= {"collection", "transcript"}:
+                        if (parsed.path in ("/api/vault/thread", "/api/vault/export")
+                                and set(query) <= {"collection", "transcript", "source"}):
                             collection = query.get("collection", [""])[0]
                             transcript = query.get("transcript", [""])[0]
-                            if len(collection) > 16 or len(transcript) > 4096:
+                            source = query.get("source", ["local"])[0]
+                            if (len(collection) > 16 or len(transcript) > 4096
+                                    or source not in ("local", "backup")):
                                 raise ValueError("invalid conversation identifier")
-                            thread = read_thread(setup.source_home, collection, transcript)
+                            thread = (setup.read_vault_backup_thread(collection, transcript)
+                                      if source == "backup" else
+                                      read_thread(setup.source_home, collection, transcript))
                             if parsed.path == "/api/vault/thread":
                                 self._json(200, thread.as_dict())
                             else:
@@ -770,7 +960,8 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                                  "/api/vault/recovery-saved", "/api/vault/schedule",
                                  "/api/vault/schedule-remove", "/api/vault/restore-folder",
                                  "/api/vault/restore", "/api/vault/install",
-                                 "/api/vault/install-recover"):
+                                 "/api/vault/install-recover", "/api/vault/browse",
+                                 "/api/vault/install-thread"):
                     try:
                         length = int(self.headers.get("Content-Length", "0"))
                         if not 0 < length <= 8192:
@@ -779,7 +970,8 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                         if (payload != {} and self.path not in (
                                 "/api/vault/backup", "/api/vault/schedule",
                                 "/api/vault/schedule-remove", "/api/vault/restore",
-                                "/api/vault/install", "/api/vault/install-recover")):
+                                "/api/vault/install", "/api/vault/install-recover",
+                                "/api/vault/browse", "/api/vault/install-thread")):
                             raise MigrationError("Invalid Vault request")
                         if self.path == "/api/vault/folder":
                             path = setup.choose_vault_folder()
@@ -815,6 +1007,20 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                                 raise MigrationError("Vault installation requires explicit confirmation")
                             self._json(202, setup.start_vault_install(
                                 payload.get("vault"), payload.get("snapshot")))
+                        elif self.path == "/api/vault/browse":
+                            if (not isinstance(payload, dict)
+                                    or set(payload) != {"vault", "snapshot", "apply"}
+                                    or payload.get("apply") is not True):
+                                raise MigrationError("Opening a Vault backup requires explicit confirmation")
+                            self._json(202, setup.start_vault_browse(
+                                payload.get("vault"), payload.get("snapshot")))
+                        elif self.path == "/api/vault/install-thread":
+                            if (not isinstance(payload, dict)
+                                    or set(payload) != {"collection", "transcript", "apply"}
+                                    or payload.get("apply") is not True):
+                                raise MigrationError("Selected recovery requires explicit confirmation")
+                            self._json(202, setup.start_vault_thread_install(
+                                payload.get("collection"), payload.get("transcript")))
                         elif self.path == "/api/vault/install-recover":
                             if payload != {"apply": True}:
                                 raise MigrationError("Vault rollback requires explicit confirmation")

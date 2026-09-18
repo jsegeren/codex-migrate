@@ -8,7 +8,8 @@ from unittest.mock import patch
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_backup import backup
 from codex_migrate.vault_install import (
-    install_snapshot, install_status, recover_interrupted_install,
+    install_snapshot, install_status, install_thread, plan_thread_install,
+    recover_interrupted_install,
 )
 from codex_migrate.vault_local_lock import local_history_lock
 from codex_migrate.vault_recovery import RestorePlan, RestoreResult
@@ -68,6 +69,19 @@ class VaultInstallTests(unittest.TestCase):
                       side_effect=process_states):
             return install_snapshot(
                 str(self.home), str(self.vault), snapshot=self.snapshot)
+
+    def install_selected(self, collection="archived", transcript="new.jsonl",
+                         process_states=(False, False, False)):
+        with patch("codex_migrate.vault_install.verify_snapshot",
+                   return_value=self.verified()), \
+                patch("codex_migrate.vault_install.restore_snapshot",
+                      side_effect=self.restored), \
+                patch("codex_migrate.vault_install.codex_running",
+                      side_effect=process_states):
+            return install_thread(
+                str(self.home), str(self.vault), collection, transcript,
+                snapshot=self.snapshot,
+            )
 
     def test_install_replaces_only_history_and_keeps_verified_rollback_backup(self):
         result = self.install()
@@ -168,6 +182,105 @@ class VaultInstallTests(unittest.TestCase):
             with self.assertRaisesRegex(
                     MigrationError, "Another local Vault history operation"):
                 backup(str(self.home), str(self.vault))
+
+    def test_selected_install_adds_only_one_thread_and_preserves_everything_else(self):
+        before_active = (self.codex / "sessions/old/thread.jsonl").read_bytes()
+        before_archive = (self.codex / "archived_sessions/old.jsonl").read_bytes()
+
+        result = self.install_selected()
+
+        self.assertEqual(result.status, "installed")
+        self.assertTrue(result.applied)
+        self.assertEqual(
+            (self.codex / "archived_sessions/new.jsonl").read_text(),
+            json.dumps({"payload": {"text": "NEW ARCHIVE"}}) + "\n",
+        )
+        self.assertEqual(
+            (self.codex / "sessions/old/thread.jsonl").read_bytes(), before_active)
+        self.assertEqual(
+            (self.codex / "archived_sessions/old.jsonl").read_bytes(), before_archive)
+        self.assertFalse((self.codex / "sessions/new/thread.jsonl").exists())
+        self.assertEqual((self.codex / "auth.json").read_text(), "AUTH MUST STAY")
+        self.assertEqual(
+            (self.codex / "installation_id").read_text(), "IDENTITY MUST STAY")
+        receipt = json.loads(Path(result.receipt).read_text())
+        self.assertEqual(receipt["format"], "codex-vault-thread-restore-receipt")
+        self.assertEqual(receipt["transcript"], "new.jsonl")
+        self.assertTrue(receipt["verified"])
+        self.assertFalse(any(self.home.glob(".codex-vault-selected-*")))
+
+    def test_selected_plan_is_read_only(self):
+        with patch("codex_migrate.vault_install.verify_snapshot",
+                   return_value=self.verified()), \
+                patch("codex_migrate.vault_install.restore_snapshot",
+                      side_effect=self.restored):
+            plan = plan_thread_install(
+                str(self.home), str(self.vault), "archived", "new.jsonl",
+                snapshot=self.snapshot,
+            )
+        self.assertEqual(plan.action, "add")
+        self.assertEqual(plan.target, "archived_sessions/new.jsonl")
+        self.assertFalse(plan.applied)
+        self.assertFalse((self.codex / "archived_sessions/new.jsonl").exists())
+
+    def test_selected_install_reports_identical_thread_already_present(self):
+        content = json.dumps({"payload": {"text": "NEW ARCHIVE"}}) + "\n"
+        (self.codex / "sessions/already").mkdir()
+        (self.codex / "sessions/already/new.jsonl").write_text(content)
+
+        result = self.install_selected(process_states=(False,))
+
+        self.assertEqual(result.status, "already_present")
+        self.assertFalse(result.applied)
+        self.assertIsNone(result.receipt)
+        self.assertEqual(result.target, "sessions/already/new.jsonl")
+        self.assertFalse((self.codex / "archived_sessions/new.jsonl").exists())
+
+    def test_selected_install_refuses_same_identity_with_different_content(self):
+        (self.codex / "archived_sessions/new.jsonl").write_text("different\n")
+
+        with self.assertRaisesRegex(MigrationError, "never overwrites or merges"):
+            self.install_selected(process_states=(False,))
+
+        self.assertEqual(
+            (self.codex / "archived_sessions/new.jsonl").read_text(), "different\n")
+        self.assertFalse(any(self.home.glob("Codex-Vault-Thread-Restore-Receipt-*")))
+
+    def test_selected_install_rolls_back_if_receipt_write_fails(self):
+        with patch("codex_migrate.vault_install.verify_snapshot",
+                   return_value=self.verified()), \
+                patch("codex_migrate.vault_install.restore_snapshot",
+                      side_effect=self.restored), \
+                patch("codex_migrate.vault_install.codex_running",
+                      side_effect=(False, False, False)), \
+                patch("codex_migrate.vault_install._atomic_json",
+                      side_effect=MigrationError("simulated receipt failure")):
+            with self.assertRaisesRegex(MigrationError, "stopped safely"):
+                install_thread(
+                    str(self.home), str(self.vault), "archived", "new.jsonl",
+                    snapshot=self.snapshot,
+                )
+
+        self.assertFalse((self.codex / "archived_sessions/new.jsonl").exists())
+        self.assertTrue((self.codex / "archived_sessions/old.jsonl").is_file())
+        self.assertTrue((self.codex / "sessions/old/thread.jsonl").is_file())
+        self.assertFalse(any(self.home.glob(".codex-vault-selected-*")))
+
+    def test_selected_install_rejects_unsafe_or_missing_selection(self):
+        with patch("codex_migrate.vault_install.verify_snapshot",
+                   return_value=self.verified()), \
+                patch("codex_migrate.vault_install.restore_snapshot",
+                      side_effect=self.restored):
+            with self.assertRaisesRegex(ValueError, "invalid conversation"):
+                plan_thread_install(
+                    str(self.home), str(self.vault), "archived", "../new.jsonl",
+                    snapshot=self.snapshot,
+                )
+            with self.assertRaisesRegex(MigrationError, "not present"):
+                plan_thread_install(
+                    str(self.home), str(self.vault), "archived", "missing.jsonl",
+                    snapshot=self.snapshot,
+                )
 
 
 if __name__ == "__main__":

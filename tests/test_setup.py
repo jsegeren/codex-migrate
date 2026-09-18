@@ -8,9 +8,10 @@ import unittest
 from unittest.mock import patch
 
 from codex_migrate.dashboard import LoopbackHTTPServer
+from codex_migrate.errors import MigrationError
 from codex_migrate.setup import SetupDashboard, SETUP_HTML
 from codex_migrate.vault_backup import BackupPlan, BackupResult
-from codex_migrate.vault_install import InstallResult
+from codex_migrate.vault_install import InstallResult, ThreadInstallResult
 from codex_migrate.vault_recovery import RestoreResult, SnapshotInfo
 from codex_migrate.vault_schedule import SchedulePlan
 
@@ -81,8 +82,10 @@ class SetupTests(unittest.TestCase):
         self.assertIn("Automatic backup", shell)
         self.assertIn("Turn on daily backup", shell)
         self.assertIn("Recover a backup", shell)
-        self.assertIn("does not replace your live Codex data", shell)
-        self.assertIn("Restore into Codex", shell)
+        self.assertIn("Open this backup", shell)
+        self.assertIn("Restore this conversation into Codex", shell)
+        self.assertIn("never overwrites or merges", shell)
+        self.assertIn("Replace conversation history", shell)
         self.assertIn("installation identity stay unchanged", shell)
         self.assertNotIn("PRIVATE VAULT FIXTURE", shell)
         for path in ("/api/vault/summary", "/api/vault/search?q=PRIVATE",
@@ -91,14 +94,119 @@ class SetupTests(unittest.TestCase):
                      "/api/vault/backup-status", "/api/vault/schedule",
                      "/api/vault/restore-status",
                      "/api/vault/install-status",
+                     "/api/vault/browse-status",
+                     "/api/vault/thread-install-status",
                      "/api/vault/snapshots?vault=/private/tmp/vault"):
             self.assertEqual(self.request(path, authorized=False)[0], 403)
         for path in ("/api/vault/folder", "/api/vault/backup",
                      "/api/vault/recovery-saved", "/api/vault/schedule",
                      "/api/vault/schedule-remove", "/api/vault/restore-folder",
                      "/api/vault/restore", "/api/vault/install",
-                     "/api/vault/install-recover"):
+                     "/api/vault/install-recover", "/api/vault/browse",
+                     "/api/vault/install-thread"):
             self.assertEqual(self.request(path, {}, authorized=False)[0], 403)
+
+    def test_vault_backup_can_be_opened_searched_and_selected_thread_installed(self):
+        (self.home / ".codex").mkdir()
+        vault = str(self.home / "vault")
+        snapshot = "11111111-1111-4111-8111-111111111111"
+
+        def restored(_home, _vault, output, *, snapshot, crypto_helper=None):
+            root = Path(output)
+            (root / "sessions/2026/09").mkdir(parents=True)
+            content = json.dumps({
+                "timestamp": "2026-09-18T10:00:00Z",
+                "payload": {"message": {"role": "user", "content": "RECOVER ME"}},
+            }) + "\n"
+            (root / "sessions/2026/09/recovered.jsonl").write_text(content)
+            return RestoreResult(
+                vault=vault, snapshot_id=snapshot, transcript_files=1,
+                transcript_bytes=len(content.encode()), output=str(root),
+            )
+
+        installed = ThreadInstallResult(
+            vault=vault, snapshot_id=snapshot, collection="active",
+            transcript="2026/09/recovered.jsonl", status="installed",
+            target="sessions/2026/09/recovered.jsonl", transcript_bytes=10,
+            receipt=str(self.home / "receipt.json"), applied=True,
+        )
+        with patch("codex_migrate.setup.restore_vault_snapshot",
+                   side_effect=restored), patch(
+                "codex_migrate.setup.persistent_install_status",
+                return_value={"status": "idle"}), patch(
+                "codex_migrate.setup.install_vault_thread",
+                return_value=installed) as install:
+            code, opening = self.request("/api/vault/browse", {
+                "vault": vault, "snapshot": snapshot, "apply": True,
+            })
+            self.assertEqual(code, 202)
+            self.assertIn(opening["status"], ("running", "ready"))
+            self.helper._browse_thread.join(timeout=3)
+            status = self.request("/api/vault/browse-status")[1]
+            self.assertEqual(status["status"], "ready")
+
+            code, results = self.request(
+                "/api/vault/search?q=RECOVER&limit=50&source=backup")
+            self.assertEqual(code, 200)
+            self.assertEqual(len(results["results"]), 1)
+            item = results["results"][0]
+            self.assertEqual(item["transcript"], "2026/09/recovered.jsonl")
+            code, thread = self.request(
+                "/api/vault/thread?collection=active&"
+                "transcript=2026%2F09%2Frecovered.jsonl&source=backup")
+            self.assertEqual(code, 200)
+            self.assertEqual(thread["entries"][0]["text"], "RECOVER ME")
+
+            code, running = self.request("/api/vault/install-thread", {
+                "collection": "active", "transcript": item["transcript"],
+                "apply": True,
+            })
+            self.assertEqual(code, 202)
+            self.assertIn(running["status"], ("running", "installed"))
+            self.helper._thread_install_thread.join(timeout=3)
+            result = self.request("/api/vault/thread-install-status")[1]
+            self.assertEqual(result["status"], "installed")
+            install.assert_called_once_with(
+                str(self.home), vault, "active", "2026/09/recovered.jsonl",
+                snapshot=snapshot,
+            )
+
+    def test_vault_selected_thread_install_requires_open_backup_and_confirmation(self):
+        (self.home / ".codex").mkdir()
+        self.assertEqual(self.request("/api/vault/install-thread", {
+            "collection": "active", "transcript": "thread.jsonl",
+            "apply": False,
+        })[0], 400)
+        code, body = self.request("/api/vault/install-thread", {
+            "collection": "active", "transcript": "thread.jsonl",
+            "apply": True,
+        })
+        self.assertEqual(code, 400)
+        self.assertIn("Open a verified Vault backup", body["error"])
+
+    def test_vault_selected_thread_unverified_rollback_reports_attention(self):
+        (self.home / ".codex").mkdir()
+        vault = str(self.home / "vault")
+        snapshot = "11111111-1111-4111-8111-111111111111"
+        self.helper._browse_status = {
+            "status": "ready", "vault": vault, "snapshot_id": snapshot,
+        }
+        with patch("codex_migrate.setup.persistent_install_status",
+                   return_value={"status": "idle"}), patch(
+                "codex_migrate.setup.install_vault_thread",
+                side_effect=MigrationError(
+                    "Selected recovery stopped and automatic rollback could not be verified. "
+                    "PRIVATE CUSTOMER CONTENT")):
+            code, _ = self.request("/api/vault/install-thread", {
+                "collection": "active", "transcript": "thread.jsonl",
+                "apply": True,
+            })
+            self.assertEqual(code, 202)
+            self.helper._thread_install_thread.join(timeout=3)
+        status = self.request("/api/vault/thread-install-status")[1]
+        self.assertEqual(status["status"], "needs_attention")
+        self.assertIn("Keep Codex closed", status["error"])
+        self.assertNotIn("PRIVATE CUSTOMER CONTENT", json.dumps(status))
 
     def test_vault_install_runs_off_request_thread_and_uses_selected_snapshot(self):
         (self.home / ".codex").mkdir()
