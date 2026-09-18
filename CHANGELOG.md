@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.0 paid beta build 12 — 2026-09-18
+
 - Open a verified encrypted Vault snapshot in private temporary staging,
   search it, and add one missing conversation without overwriting or merging
   unrelated local Codex history.
