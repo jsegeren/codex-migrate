@@ -96,9 +96,14 @@ history trees after Codex is closed. It first verifies the selected snapshot,
 keeps a verified rollback backup, verifies the installed history, and restores
 the previous history automatically if installation fails. Authentication,
 installation identity, settings, skills, and other Codex state are not changed.
-Physical-device visibility testing, selected-thread recovery, retention
-controls, and cloud-folder health monitoring are still underway, so this
-remains an engineering foundation rather than the public Vault subscription.
+Physical-device acceptance on September 18, 2026 verified that a Codex-created
+thread could be encrypted on one Mac, installed on a second Mac, and resumed by
+the actual Codex binary there while destination authentication, installation
+identity, and the displaced history remained protected. Selected-thread
+recovery, retention controls, cloud-folder health monitoring, and broader Codex
+version coverage are still underway, so this remains an engineering foundation
+rather than the public Vault subscription. See the
+[physical-device acceptance receipt](docs/vault-physical-device-acceptance-2026-09-18.md).
 
 The equivalent schedule commands are explicit and reversible:
 
@@ -146,8 +151,9 @@ Installation writes an owner-only crash journal before the first live-history
 move. A failure after that point triggers verified rollback; a process crash or
 power loss leaves the journal for the explicit recovery command. Keep Codex
 closed until recovery finishes. This installs only `sessions` and
-`archived_sessions`; it does not promise that every recovered thread is visible
-in every Codex version until physical-device acceptance testing confirms that.
+`archived_sessions`. Physical-device acceptance confirmed that the tested Codex
+build could resume an installed thread on a second Mac; this is not a promise
+about every past or future Codex version or every desktop UI surface.
 
 See the [portable backup format](docs/vault-backup-format.md) for the exact
 encryption, key derivation, repository layout, verification, and compatibility

@@ -136,9 +136,14 @@ an explicit rollback operation. Backup and install also share a local lock so a
 scheduled backup cannot race a replacement. Authentication, installation
 identity, settings, skills, and unrelated Codex state remain untouched.
 
-This is not yet a claim that every recovered thread appears in every Codex UI
-version; that requires physical-device acceptance evidence. Selected-thread
-recovery remains a later milestone.
+Physical-device acceptance on September 18, 2026 confirmed that the current
+tested Codex binary could resume a verified whole-history snapshot installed on
+a second Mac. The test also confirmed that destination authentication and
+installation identity were unchanged and that the displaced history matched
+its rollback backup. This does not claim compatibility with every past or
+future Codex version or every desktop UI surface. See the
+[acceptance receipt](vault-physical-device-acceptance-2026-09-18.md).
+Selected-thread recovery remains a later milestone.
 
 ### 4. Optional Vault Cloud
 
