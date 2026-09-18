@@ -96,6 +96,13 @@ does not contain plaintext conversation names or contents. Interrupted work can
 leave unreferenced encrypted objects, but cannot replace the last verified
 snapshot.
 
+The packaged app now exposes this manual backup flow in the local Vault page:
+choose an empty folder or existing Vault, watch content-free progress, receive
+the first Vault's recovery key once, and acknowledge that it has been saved.
+The UI and its private local APIs are covered by desktop/mobile rendering and
+authorization tests. Scheduling, retention and background health reporting are
+the next backup milestone.
+
 ### 3. Verified restore
 
 - Default to inspection and a restore plan.

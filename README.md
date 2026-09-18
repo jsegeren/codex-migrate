@@ -83,9 +83,12 @@ with the packaged Mac app (source: `desktop/CodexVaultCrypto.swift`) and an
 explicit `--apply`. The first snapshot creates a random key in macOS Keychain
 and displays its recovery key once. Save that recovery key in a password
 manager; losing both the Mac Keychain item and recovery key makes the encrypted
-backup unrecoverable. The restore UI, automation, retention controls, and
-customer-owned cloud-folder setup are still under development, so this CLI is
-an engineering foundation rather than the public Vault subscription.
+backup unrecoverable. The packaged app's local Vault page can create the same
+verified backup in an empty local or cloud-sync folder and guides the customer
+through saving the recovery key. Restore UI, automatic scheduling, retention
+controls, and cloud-folder health monitoring are still under development, so
+this remains an engineering foundation rather than the public Vault
+subscription.
 
 A verified snapshot can be checked or decrypted into a separate staging folder
 without touching live Codex data:

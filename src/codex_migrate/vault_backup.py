@@ -18,7 +18,7 @@ from pathlib import Path
 import stat
 import subprocess
 import sys
-from typing import BinaryIO, Dict, Iterator, List, Optional, Tuple
+from typing import BinaryIO, Callable, Dict, Iterator, List, Optional, Tuple
 import uuid
 
 from codex_migrate.errors import MigrationError
@@ -294,6 +294,7 @@ def backup(
     *,
     crypto_helper: Optional[str] = None,
     chunk_size: int = DEFAULT_CHUNK_SIZE,
+    progress: Optional[Callable[[int, int, int, int], None]] = None,
 ) -> BackupResult:
     if chunk_size < 64 * 1024 or chunk_size > 64 * 1024 * 1024:
         raise ValueError("chunk size must be between 64 KiB and 64 MiB")
@@ -306,6 +307,9 @@ def backup(
         raise MigrationError("The Vault destination is not a folder.")
     helper = _helper_path(crypto_helper)
     files = _source_files(source_home)
+    expected_bytes = sum(check_info(path.lstat()).st_size for _, path, _ in files)
+    if progress is not None:
+        progress(0, len(files), 0, expected_bytes)
     with _repository_lock(root):
         key_id, recovery_key = _prepare_repository(root, helper)
         objects = root / "objects"
@@ -376,6 +380,8 @@ def backup(
             })
             total_bytes += stored_size
             total_chunks += len(chunks)
+            if progress is not None:
+                progress(len(manifest_files), len(files), total_bytes, expected_bytes)
 
         manifest = {
             "format": "codex-vault-snapshot",

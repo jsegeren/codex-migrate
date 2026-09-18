@@ -23,7 +23,10 @@ from codex_migrate.pairing import Pairing
 from codex_migrate.vault import inspect as inspect_vault
 from codex_migrate.vault import markdown as vault_markdown
 from codex_migrate.vault import read_thread, search as search_vault
+from codex_migrate.vault_backup import backup as backup_vault
+from codex_migrate.vault_backup import plan as plan_vault_backup
 from codex_migrate.vault_dashboard import VAULT_HTML
+from codex_migrate.vault_recovery import export_recovery_key
 
 FOLDER_PICKER_ERROR = (
     "Folder selection could not finish. Close any open folder dialog and try again, "
@@ -214,6 +217,9 @@ class SetupDashboard(Dashboard):
         self._setup_lock = threading.Lock()
         self._picker_lock = threading.Lock()
         self._request_lock = threading.Lock()
+        self._vault_lock = threading.Lock()
+        self._vault_thread = None
+        self._vault_status = {"status": "idle"}
         self._closing = False
         self.pairing = Pairing(self.source_home, self.registry.root)
 
@@ -290,9 +296,14 @@ class SetupDashboard(Dashboard):
             self._request_lock.release()
 
     def _idle_for_shutdown(self):
-        return self.engine is None or (
+        with self._vault_lock:
+            vault_idle = (
+                not (self._vault_thread and self._vault_thread.is_alive())
+                and not self._vault_status.get("recovery_key")
+            )
+        return vault_idle and (self.engine is None or (
             self.state.read().get("status") not in ("running", "paused")
-            and not (self.engine._thread and self.engine._thread.is_alive()))
+            and not (self.engine._thread and self.engine._thread.is_alive())))
 
     def close(self):
         if self.engine is not None:
@@ -324,6 +335,97 @@ JSON.stringify(app.chooseFolder({withPrompt: "Choose workspace folders for Codex
         finally:
             self._picker_lock.release()
 
+    def choose_vault_folder(self):
+        if platform.system() != "Darwin":
+            raise MigrationError("Native folder selection requires macOS")
+        if not self._picker_lock.acquire(blocking=False):
+            raise MigrationError("A folder picker is already open")
+        try:
+            result = subprocess.run(["/usr/bin/osascript", "-l", "JavaScript", "-e", '''
+const app = Application.currentApplication();
+app.includeStandardAdditions = true;
+String(app.chooseFolder({withPrompt: "Choose an empty folder or an existing Codex Vault"}));
+'''], capture_output=True, text=True, timeout=120)
+            if result.returncode != 0:
+                if "(-128)" in result.stderr:
+                    return None
+                raise MigrationError("Vault folder picker could not open")
+            path = result.stdout.strip()
+            if not path or "\n" in path or "\r" in path:
+                raise MigrationError("The selected Vault folder is invalid")
+            return path
+        finally:
+            self._picker_lock.release()
+
+    def vault_status(self):
+        with self._vault_lock:
+            return dict(self._vault_status)
+
+    def acknowledge_vault_recovery_key(self):
+        with self._vault_lock:
+            if not self._vault_status.get("recovery_key"):
+                raise MigrationError("No Vault recovery key needs acknowledgement")
+            self._vault_status.pop("recovery_key", None)
+            return dict(self._vault_status)
+
+    def start_vault_backup(self, destination):
+        if not isinstance(destination, str) or len(destination) > 4096:
+            raise MigrationError("Choose a valid Vault folder")
+        planned = plan_vault_backup(self.source_home, destination)
+
+        def progress(completed_files, total_files, completed_bytes, total_bytes):
+            with self._vault_lock:
+                if self._vault_status.get("status") == "running":
+                    self._vault_status.update(
+                        completed_files=completed_files, total_files=total_files,
+                        completed_bytes=completed_bytes, total_bytes=total_bytes)
+
+        def run():
+            try:
+                result = backup_vault(
+                    self.source_home, planned.destination, progress=progress)
+                with self._vault_lock:
+                    self._vault_status = {"status": "completed", **result.as_dict()}
+            except Exception:
+                # A first backup can fail after its new Keychain key and Vault
+                # metadata are durable but before a verified snapshot exists.
+                # Recover that key for the customer instead of making the only
+                # portable copy disappear with this process.
+                recovery_key = None
+                try:
+                    recovery_key = export_recovery_key(planned.destination)
+                except Exception:
+                    pass
+                with self._vault_lock:
+                    self._vault_status = {
+                        "status": "failed",
+                        "destination": planned.destination,
+                        "error": "Encrypted backup stopped safely. The previous verified snapshot and local Codex data were not changed.",
+                    }
+                    if recovery_key:
+                        self._vault_status["recovery_key"] = recovery_key
+
+        worker = threading.Thread(target=run, daemon=True)
+        # Publish and start the worker while holding the same lock used by the
+        # admission check. Concurrent browser requests cannot both launch a
+        # writer into the same repository.
+        with self._vault_lock:
+            if self._vault_thread and self._vault_thread.is_alive():
+                raise MigrationError("An encrypted backup is already running")
+            if self._vault_status.get("recovery_key"):
+                raise MigrationError("Save and acknowledge the recovery key before another backup")
+            self._vault_status = {
+                "status": "running",
+                "destination": planned.destination,
+                "completed_files": 0,
+                "total_files": planned.transcript_files,
+                "completed_bytes": 0,
+                "total_bytes": planned.transcript_bytes,
+            }
+            self._vault_thread = worker
+            worker.start()
+        return self.vault_status()
+
     def _handler(self):
         setup = self
         base = super()._handler()
@@ -354,6 +456,9 @@ JSON.stringify(app.chooseFolder({withPrompt: "Choose workspace folders for Codex
                         query = parse_qs(parsed.query, keep_blank_values=True)
                         if parsed.path == "/api/vault/summary" and not query:
                             self._json(200, inspect_vault(setup.source_home).as_dict())
+                            return
+                        if parsed.path == "/api/vault/backup-status" and not query:
+                            self._json(200, setup.vault_status())
                             return
                         if parsed.path == "/api/vault/search" and set(query) <= {"q", "limit"}:
                             phrase = query.get("q", [""])[0]
@@ -433,11 +538,36 @@ JSON.stringify(app.chooseFolder({withPrompt: "Choose workspace folders for Codex
                     # _request_lock excludes concurrent configuration, pickers,
                     # and new operations while shutdown closes the action gate.
                     if not setup._idle_for_shutdown():
-                        self._json(409, {"error": "Use Stop safely in the migration page, or wait for verification to finish, before quitting."})
+                        self._json(409, {"error": "Finish running work and save any displayed Vault recovery key before quitting."})
                         return
                     setup._closing = True
                     self._json(200, {"closing": True})
                     threading.Thread(target=self.server.shutdown, daemon=True).start()
+                    return
+                if self.path in ("/api/vault/folder", "/api/vault/backup",
+                                 "/api/vault/recovery-saved"):
+                    try:
+                        length = int(self.headers.get("Content-Length", "0"))
+                        if not 0 < length <= 8192:
+                            raise MigrationError("Invalid Vault request size")
+                        payload = json.loads(self.rfile.read(length))
+                        if payload != {} and self.path != "/api/vault/backup":
+                            raise MigrationError("Invalid Vault request")
+                        if self.path == "/api/vault/folder":
+                            path = setup.choose_vault_folder()
+                            self._json(200, {"path": path})
+                        elif self.path == "/api/vault/recovery-saved":
+                            self._json(200, setup.acknowledge_vault_recovery_key())
+                        else:
+                            if (not isinstance(payload, dict)
+                                    or set(payload) != {"destination", "apply"}
+                                    or payload.get("apply") is not True):
+                                raise MigrationError("Encrypted backup requires explicit confirmation")
+                            self._json(202, setup.start_vault_backup(payload.get("destination")))
+                    except MigrationError as error:
+                        self._json(400, {"error": str(error)})
+                    except Exception:
+                        self._json(400, {"error": "Encrypted backup setup could not finish safely."})
                     return
                 if self.path.startswith("/api/connection/"):
                     if setup.engine is not None:
