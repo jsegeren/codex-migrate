@@ -10,6 +10,7 @@ from unittest.mock import patch
 from codex_migrate.dashboard import LoopbackHTTPServer
 from codex_migrate.setup import SetupDashboard, SETUP_HTML
 from codex_migrate.vault_backup import BackupPlan, BackupResult
+from codex_migrate.vault_install import InstallResult
 from codex_migrate.vault_recovery import RestoreResult, SnapshotInfo
 from codex_migrate.vault_schedule import SchedulePlan
 
@@ -81,19 +82,127 @@ class SetupTests(unittest.TestCase):
         self.assertIn("Turn on daily backup", shell)
         self.assertIn("Recover a backup", shell)
         self.assertIn("does not replace your live Codex data", shell)
+        self.assertIn("Restore into Codex", shell)
+        self.assertIn("installation identity stay unchanged", shell)
         self.assertNotIn("PRIVATE VAULT FIXTURE", shell)
         for path in ("/api/vault/summary", "/api/vault/search?q=PRIVATE",
                      "/api/vault/thread?collection=active&transcript=2026/09/thread.jsonl",
                      "/api/vault/export?collection=active&transcript=2026/09/thread.jsonl",
                      "/api/vault/backup-status", "/api/vault/schedule",
                      "/api/vault/restore-status",
+                     "/api/vault/install-status",
                      "/api/vault/snapshots?vault=/private/tmp/vault"):
             self.assertEqual(self.request(path, authorized=False)[0], 403)
         for path in ("/api/vault/folder", "/api/vault/backup",
                      "/api/vault/recovery-saved", "/api/vault/schedule",
                      "/api/vault/schedule-remove", "/api/vault/restore-folder",
-                     "/api/vault/restore"):
+                     "/api/vault/restore", "/api/vault/install",
+                     "/api/vault/install-recover"):
             self.assertEqual(self.request(path, {}, authorized=False)[0], 403)
+
+    def test_vault_install_runs_off_request_thread_and_uses_selected_snapshot(self):
+        (self.home / ".codex").mkdir()
+        vault = str(self.home / "vault")
+        snapshot = "11111111-1111-4111-8111-111111111111"
+        backup = str(self.home / "Codex-Vault-Restore-Backup-fixture")
+        completed = InstallResult(
+            vault=vault, snapshot_id=snapshot, transcript_files=2,
+            transcript_bytes=100, backup=backup,
+        )
+        with patch("codex_migrate.setup.persistent_install_status",
+                   return_value={"status": "idle"}), patch(
+                "codex_migrate.setup.install_vault_snapshot",
+                return_value=completed) as install:
+            code, running = self.request("/api/vault/install", {
+                "vault": vault, "snapshot": snapshot, "apply": True,
+            })
+            self.assertEqual(code, 202)
+            self.assertIn(running["status"], ("running", "completed"))
+            self.helper._install_thread.join(timeout=3)
+            code, status = self.request("/api/vault/install-status")
+            self.assertEqual(code, 200)
+            self.assertEqual(status["status"], "completed")
+            self.assertEqual(status["backup"], backup)
+            install.assert_called_once_with(
+                str(self.home), vault, snapshot=snapshot)
+
+    def test_vault_install_requires_confirmation_and_sanitizes_failure(self):
+        (self.home / ".codex").mkdir()
+        vault = str(self.home / "vault")
+        self.assertEqual(self.request("/api/vault/install", {
+            "vault": vault, "snapshot": "latest", "apply": False,
+        })[0], 400)
+        with patch("codex_migrate.setup.persistent_install_status",
+                   return_value={"status": "idle"}), patch(
+                "codex_migrate.setup.install_vault_snapshot",
+                side_effect=RuntimeError("PRIVATE CUSTOMER CONTENT")):
+            self.assertEqual(self.request("/api/vault/install", {
+                "vault": vault, "snapshot": "latest", "apply": True,
+            })[0], 202)
+            self.helper._install_thread.join(timeout=3)
+        status = self.request("/api/vault/install-status")[1]
+        self.assertEqual(status["status"], "failed")
+        self.assertNotIn("PRIVATE CUSTOMER CONTENT", json.dumps(status))
+
+    def test_vault_install_recovery_requires_interrupted_journal(self):
+        (self.home / ".codex").mkdir()
+        with patch("codex_migrate.setup.persistent_install_status",
+                   return_value={"status": "interrupted", "backup": "/safe/backup"}), patch(
+                "codex_migrate.setup.recover_interrupted_install",
+                return_value={"status": "rolled_back", "applied": True,
+                              "backup": "/safe/backup"}) as recover:
+            self.assertEqual(self.request(
+                "/api/vault/install-recover", {"apply": False})[0], 400)
+            code, running = self.request(
+                "/api/vault/install-recover", {"apply": True})
+            self.assertEqual(code, 202)
+            self.assertIn(running["status"], ("rolling_back", "rolled_back"))
+            self.helper._install_thread.join(timeout=3)
+            self.assertEqual(
+                self.request("/api/vault/install-status")[1]["status"],
+                "rolled_back")
+            recover.assert_called_once_with(str(self.home), apply=True)
+
+    def test_backup_and_recovery_wait_for_active_vault_install(self):
+        (self.home / ".codex").mkdir()
+        vault = str(self.home / "vault")
+        snapshot = "11111111-1111-4111-8111-111111111111"
+        entered, release = threading.Event(), threading.Event()
+
+        def wait_for_release(*_args, **_kwargs):
+            entered.set()
+            release.wait(3)
+            return InstallResult(
+                vault=vault, snapshot_id=snapshot, transcript_files=1,
+                transcript_bytes=10,
+                backup=str(self.home / "Codex-Vault-Restore-Backup-fixture"),
+            )
+
+        try:
+            with patch("codex_migrate.setup.persistent_install_status",
+                       return_value={"status": "idle"}), patch(
+                    "codex_migrate.setup.install_vault_snapshot",
+                    side_effect=wait_for_release), patch(
+                    "codex_migrate.setup.plan_vault_backup") as plan:
+                self.assertEqual(self.request("/api/vault/install", {
+                    "vault": vault, "snapshot": snapshot, "apply": True,
+                })[0], 202)
+                self.assertTrue(entered.wait(1))
+                code, body = self.request(
+                    "/api/vault/backup", {"destination": vault, "apply": True})
+                self.assertEqual(code, 400)
+                self.assertIn("installation to finish", body["error"])
+                plan.assert_not_called()
+                code, body = self.request("/api/vault/restore", {
+                    "vault": vault, "output": str(self.home / "recovered"),
+                    "snapshot": snapshot, "apply": True,
+                })
+                self.assertEqual(code, 400)
+                self.assertIn("installation to finish", body["error"])
+        finally:
+            release.set()
+            if self.helper._install_thread:
+                self.helper._install_thread.join(timeout=3)
 
     def test_vault_restore_runs_off_request_thread_and_never_changes_live_data(self):
         vault = str(self.home / "vault")

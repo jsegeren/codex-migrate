@@ -90,10 +90,15 @@ a private macOS LaunchAgent that adds a verified encrypted snapshot every day,
 even when the app is closed. Turning automatic backup off removes only the local
 schedule; existing Vault snapshots remain. The local Vault page can also show
 the published backup history and recover a chosen verified snapshot into a
-separate empty folder for inspection without changing live Codex data. Guarded
-installation into Codex, retention controls, and cloud-folder health monitoring
-are still under development, so this remains an engineering foundation rather
-than the public Vault subscription.
+separate empty folder for inspection without changing live Codex data. A
+separately confirmed install action can replace only the two local conversation
+history trees after Codex is closed. It first verifies the selected snapshot,
+keeps a verified rollback backup, verifies the installed history, and restores
+the previous history automatically if installation fails. Authentication,
+installation identity, settings, skills, and other Codex state are not changed.
+Physical-device visibility testing, selected-thread recovery, retention
+controls, and cloud-folder health monitoring are still underway, so this
+remains an engineering foundation rather than the public Vault subscription.
 
 The equivalent schedule commands are explicit and reversible:
 
@@ -120,7 +125,29 @@ codex-migrate vault restore --vault "/absolute/path/Codex Vault" \
 On another Mac, run `vault key-import` first and enter the recovery key at the
 hidden prompt. `vault key-export` deliberately reveals the current recovery key
 for password-manager storage. The staging command never installs recovered
-files into `~/.codex`; guarded live-state restore remains a later milestone.
+files into `~/.codex`. Installing a whole verified history is a separate,
+explicit operation:
+
+```bash
+# Plan only; no local history changes.
+codex-migrate vault install --vault "/absolute/path/Codex Vault" \
+  --snapshot "<snapshot UUID>"
+
+# Close Codex and its CLI sessions, then apply.
+codex-migrate vault install --vault "/absolute/path/Codex Vault" \
+  --snapshot "<snapshot UUID>" --apply
+
+# Inspect or roll back a crash-interrupted install.
+codex-migrate vault install-status
+codex-migrate vault install-recover --apply
+```
+
+Installation writes an owner-only crash journal before the first live-history
+move. A failure after that point triggers verified rollback; a process crash or
+power loss leaves the journal for the explicit recovery command. Keep Codex
+closed until recovery finishes. This installs only `sessions` and
+`archived_sessions`; it does not promise that every recovered thread is visible
+in every Codex version until physical-device acceptance testing confirms that.
 
 See the [portable backup format](docs/vault-backup-format.md) for the exact
 encryption, key derivation, repository layout, verification, and compatibility

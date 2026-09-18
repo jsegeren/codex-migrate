@@ -115,6 +115,20 @@ def parser() -> argparse.ArgumentParser:
     vault_restore.add_argument("--crypto-helper")
     vault_restore.add_argument("--apply", action="store_true")
     vault_restore.add_argument("--json", action="store_true")
+    vault_install = vault_commands.add_parser(
+        "install", help="Install a verified snapshot into local Codex with rollback")
+    vault_install.add_argument("--vault", required=True)
+    vault_install.add_argument("--snapshot", default="latest")
+    vault_install.add_argument("--crypto-helper")
+    vault_install.add_argument("--apply", action="store_true")
+    vault_install.add_argument("--json", action="store_true")
+    vault_install_status = vault_commands.add_parser(
+        "install-status", help="Inspect interrupted local Vault installation state")
+    vault_install_status.add_argument("--json", action="store_true")
+    vault_install_recover = vault_commands.add_parser(
+        "install-recover", help="Roll back an interrupted local Vault installation")
+    vault_install_recover.add_argument("--apply", action="store_true")
+    vault_install_recover.add_argument("--json", action="store_true")
     vault_import = vault_commands.add_parser(
         "key-import", help="Import a Vault recovery key into this Mac's Keychain")
     vault_import.add_argument("--vault", required=True)
@@ -312,6 +326,45 @@ def main(argv: Optional[List[str]] = None) -> int:
                         print("Destination: %s" % result.destination)
                         print("Client-side authenticated encryption: required")
                         print("Planning mode only; add --apply to create a verified snapshot.")
+                return 0
+            if args.vault_command in ("install", "install-status", "install-recover"):
+                from codex_migrate.vault_install import (
+                    install_snapshot, install_status, plan_install,
+                    recover_interrupted_install,
+                )
+                if args.vault_command == "install-status":
+                    result = install_status(args.source_home)
+                elif args.vault_command == "install-recover":
+                    result = recover_interrupted_install(
+                        args.source_home, apply=args.apply)
+                elif args.apply:
+                    result = install_snapshot(
+                        args.source_home, args.vault, snapshot=args.snapshot,
+                        crypto_helper=args.crypto_helper)
+                else:
+                    result = plan_install(
+                        args.source_home, args.vault, snapshot=args.snapshot,
+                        crypto_helper=args.crypto_helper)
+                payload = result if isinstance(result, dict) else result.as_dict()
+                if args.json:
+                    print(json.dumps(payload, indent=2, sort_keys=True))
+                elif args.vault_command == "install-status":
+                    print("Vault installation status: %s" % payload["status"])
+                    if payload.get("backup"):
+                        print("Rollback backup: %s" % payload["backup"])
+                elif args.vault_command == "install-recover":
+                    print("Vault installation recovery: %s" % payload["status"])
+                    if not payload.get("applied") and payload["status"] != "idle":
+                        print("Planning mode only; add --apply to verify rollback.")
+                elif payload.get("applied"):
+                    print("Installed verified snapshot: %s" % payload["snapshot_id"])
+                    print("Conversation files: %d" % payload["transcript_files"])
+                    print("Rollback backup: %s" % payload["backup"])
+                    print("Authentication and installation identity were not changed.")
+                else:
+                    print("Would install verified snapshot: %s" % payload["snapshot_id"])
+                    print("Conversation files: %d" % payload["transcript_files"])
+                    print("Close Codex before applying. Planning mode only; add --apply.")
                 return 0
             if args.vault_command in (
                     "verify", "restore", "snapshots", "key-import", "key-export"):

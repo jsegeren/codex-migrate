@@ -30,6 +30,9 @@ from codex_migrate.vault_dashboard import VAULT_HTML
 from codex_migrate.vault_recovery import export_recovery_key
 from codex_migrate.vault_recovery import list_snapshots as list_vault_snapshots
 from codex_migrate.vault_recovery import restore_snapshot as restore_vault_snapshot
+from codex_migrate.vault_install import install_snapshot as install_vault_snapshot
+from codex_migrate.vault_install import install_status as persistent_install_status
+from codex_migrate.vault_install import recover_interrupted_install
 from codex_migrate.vault_schedule import (
     install_schedule as install_vault_schedule,
     remove_schedule as remove_vault_schedule,
@@ -230,6 +233,8 @@ class SetupDashboard(Dashboard):
         self._vault_status = {"status": "idle"}
         self._restore_thread = None
         self._restore_status = {"status": "idle"}
+        self._install_thread = None
+        self._install_status = {"status": "idle"}
         self._closing = False
         self.pairing = Pairing(self.source_home, self.registry.root)
 
@@ -310,6 +315,7 @@ class SetupDashboard(Dashboard):
             vault_idle = (
                 not (self._vault_thread and self._vault_thread.is_alive())
                 and not (self._restore_thread and self._restore_thread.is_alive())
+                and not (self._install_thread and self._install_thread.is_alive())
                 and not self._vault_status.get("recovery_key")
             )
         return vault_idle and (self.engine is None or (
@@ -413,6 +419,13 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
         with self._vault_lock:
             return dict(self._restore_status)
 
+    def vault_install_status(self):
+        with self._vault_lock:
+            current = dict(self._install_status)
+        if current.get("status") != "idle":
+            return current
+        return persistent_install_status(self.source_home)
+
     def vault_snapshots(self, vault):
         if not isinstance(vault, str) or len(vault) > 4096:
             raise MigrationError("Choose a valid existing Vault folder")
@@ -452,6 +465,8 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                 raise MigrationError("Wait for the encrypted backup to finish before recovering")
             if self._restore_thread and self._restore_thread.is_alive():
                 raise MigrationError("A Vault recovery is already running")
+            if self._install_thread and self._install_thread.is_alive():
+                raise MigrationError("Wait for Vault installation to finish before recovering")
             if self._vault_status.get("recovery_key"):
                 raise MigrationError("Save and acknowledge the recovery key before recovering")
             self._restore_status = {
@@ -461,6 +476,87 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
             self._restore_thread = worker
             worker.start()
         return self.vault_restore_status()
+
+    def start_vault_install(self, vault, snapshot):
+        if not isinstance(vault, str) or len(vault) > 4096:
+            raise MigrationError("Choose a valid existing Vault folder")
+        if not isinstance(snapshot, str) or len(snapshot) > 64:
+            raise MigrationError("Choose a valid Vault snapshot")
+        if snapshot != "latest":
+            try:
+                snapshot = str(uuid.UUID(snapshot)).lower()
+            except (ValueError, TypeError, AttributeError):
+                raise MigrationError("Choose a valid Vault snapshot") from None
+
+        def run():
+            try:
+                result = install_vault_snapshot(
+                    self.source_home, vault, snapshot=snapshot)
+                with self._vault_lock:
+                    self._install_status = {"status": "completed", **result.as_dict()}
+            except Exception:
+                try:
+                    status = persistent_install_status(self.source_home)
+                except Exception:
+                    status = {"status": "interrupted"}
+                with self._vault_lock:
+                    if status.get("status") == "interrupted":
+                        self._install_status = {
+                            **status,
+                            "error": "Installation was interrupted. Keep Codex closed and roll back before retrying.",
+                        }
+                    else:
+                        self._install_status = {
+                            "status": "failed",
+                            "error": "Installation stopped safely. Previous history was restored if replacement had begun.",
+                        }
+
+        worker = threading.Thread(target=run, daemon=True)
+        with self._vault_lock:
+            if self._vault_thread and self._vault_thread.is_alive():
+                raise MigrationError("Wait for the encrypted backup to finish before installing")
+            if self._restore_thread and self._restore_thread.is_alive():
+                raise MigrationError("Wait for Vault recovery to finish before installing")
+            if self._install_thread and self._install_thread.is_alive():
+                raise MigrationError("A Vault installation is already running")
+            if self._vault_status.get("recovery_key"):
+                raise MigrationError("Save and acknowledge the recovery key before installing")
+            if persistent_install_status(self.source_home).get("status") == "interrupted":
+                raise MigrationError("Roll back the interrupted Vault installation before retrying")
+            self._install_status = {
+                "status": "running", "vault": vault, "snapshot": snapshot,
+            }
+            self._install_thread = worker
+            worker.start()
+        return self.vault_install_status()
+
+    def start_vault_install_recovery(self):
+        def run():
+            try:
+                result = recover_interrupted_install(self.source_home, apply=True)
+                with self._vault_lock:
+                    self._install_status = dict(result)
+            except Exception:
+                with self._vault_lock:
+                    self._install_status = {
+                        "status": "interrupted",
+                        "error": "Rollback could not be verified. Keep Codex closed and contact support.",
+                    }
+
+        worker = threading.Thread(target=run, daemon=True)
+        with self._vault_lock:
+            if self._vault_thread and self._vault_thread.is_alive():
+                raise MigrationError("Wait for the encrypted backup to finish before rollback")
+            if self._restore_thread and self._restore_thread.is_alive():
+                raise MigrationError("Wait for Vault recovery to finish before rollback")
+            if self._install_thread and self._install_thread.is_alive():
+                raise MigrationError("A Vault installation operation is already running")
+            if persistent_install_status(self.source_home).get("status") != "interrupted":
+                raise MigrationError("No interrupted Vault installation needs rollback")
+            self._install_status = {"status": "rolling_back"}
+            self._install_thread = worker
+            worker.start()
+        return self.vault_install_status()
 
     def acknowledge_vault_recovery_key(self):
         with self._vault_lock:
@@ -478,6 +574,8 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
         with self._vault_lock:
             if self._restore_thread and self._restore_thread.is_alive():
                 raise MigrationError("Wait for Vault recovery to finish before backing up")
+            if self._install_thread and self._install_thread.is_alive():
+                raise MigrationError("Wait for Vault installation to finish before backing up")
         planned = plan_vault_backup(self.source_home, destination)
 
         def progress(completed_files, total_files, completed_bytes, total_bytes):
@@ -521,6 +619,8 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                 raise MigrationError("An encrypted backup is already running")
             if self._restore_thread and self._restore_thread.is_alive():
                 raise MigrationError("Wait for Vault recovery to finish before backing up")
+            if self._install_thread and self._install_thread.is_alive():
+                raise MigrationError("Wait for Vault installation to finish before backing up")
             if self._vault_status.get("recovery_key"):
                 raise MigrationError("Save and acknowledge the recovery key before another backup")
             self._vault_status = {
@@ -574,6 +674,9 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                             return
                         if parsed.path == "/api/vault/restore-status" and not query:
                             self._json(200, setup.vault_restore_status())
+                            return
+                        if parsed.path == "/api/vault/install-status" and not query:
+                            self._json(200, setup.vault_install_status())
                             return
                         if (parsed.path == "/api/vault/snapshots"
                                 and set(query) == {"vault"} and len(query["vault"]) == 1):
@@ -666,7 +769,8 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                 if self.path in ("/api/vault/folder", "/api/vault/backup",
                                  "/api/vault/recovery-saved", "/api/vault/schedule",
                                  "/api/vault/schedule-remove", "/api/vault/restore-folder",
-                                 "/api/vault/restore"):
+                                 "/api/vault/restore", "/api/vault/install",
+                                 "/api/vault/install-recover"):
                     try:
                         length = int(self.headers.get("Content-Length", "0"))
                         if not 0 < length <= 8192:
@@ -674,7 +778,8 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                         payload = json.loads(self.rfile.read(length))
                         if (payload != {} and self.path not in (
                                 "/api/vault/backup", "/api/vault/schedule",
-                                "/api/vault/schedule-remove", "/api/vault/restore")):
+                                "/api/vault/schedule-remove", "/api/vault/restore",
+                                "/api/vault/install", "/api/vault/install-recover")):
                             raise MigrationError("Invalid Vault request")
                         if self.path == "/api/vault/folder":
                             path = setup.choose_vault_folder()
@@ -703,6 +808,17 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                             self._json(202, setup.start_vault_restore(
                                 payload.get("vault"), payload.get("output"),
                                 payload.get("snapshot")))
+                        elif self.path == "/api/vault/install":
+                            if (not isinstance(payload, dict)
+                                    or set(payload) != {"vault", "snapshot", "apply"}
+                                    or payload.get("apply") is not True):
+                                raise MigrationError("Vault installation requires explicit confirmation")
+                            self._json(202, setup.start_vault_install(
+                                payload.get("vault"), payload.get("snapshot")))
+                        elif self.path == "/api/vault/install-recover":
+                            if payload != {"apply": True}:
+                                raise MigrationError("Vault rollback requires explicit confirmation")
+                            self._json(202, setup.start_vault_install_recovery())
                         else:
                             if (not isinstance(payload, dict)
                                     or set(payload) != {"destination", "apply"}
@@ -714,6 +830,8 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                     except Exception:
                         message = ("Vault recovery could not finish safely."
                                    if self.path.startswith("/api/vault/restore") else
+                                   "Vault installation could not finish safely."
+                                   if self.path.startswith("/api/vault/install") else
                                    "Encrypted backup setup could not finish safely.")
                         self._json(400, {"error": message})
                     return

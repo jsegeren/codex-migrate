@@ -123,10 +123,22 @@ The packaged local Vault page now lists the published backup versions and
 restores the selected snapshot into a separate new or empty folder. Every
 restore re-verifies the selected encrypted snapshot before recovery. The
 operation runs in the background, never replaces live `~/.codex`, and reports
-only bounded content-free status. It is an
-inspection and recovery export, not yet a claim that the recovered threads have
-been installed or made visible inside Codex. Guarded live-state installation
-and selected-thread recovery remain later milestones.
+only bounded content-free status.
+
+The next implemented slice adds separately confirmed, whole-history
+installation of the chosen verified snapshot. Codex and its CLI sessions must
+be closed. Before replacement, the installer records an owner-only crash
+journal and moves the existing `sessions` and `archived_sessions` trees into a
+private rollback folder. It installs only those two trees, verifies the full
+content digest, verifies the displaced history, and automatically restores the
+old history if anything fails. A crash or power loss leaves durable state for
+an explicit rollback operation. Backup and install also share a local lock so a
+scheduled backup cannot race a replacement. Authentication, installation
+identity, settings, skills, and unrelated Codex state remain untouched.
+
+This is not yet a claim that every recovered thread appears in every Codex UI
+version; that requires physical-device acceptance evidence. Selected-thread
+recovery remains a later milestone.
 
 ### 4. Optional Vault Cloud
 
