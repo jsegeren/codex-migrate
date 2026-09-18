@@ -102,6 +102,11 @@ def parser() -> argparse.ArgumentParser:
     vault_verify.add_argument("--snapshot", default="latest")
     vault_verify.add_argument("--crypto-helper")
     vault_verify.add_argument("--json", action="store_true")
+    vault_snapshots = vault_commands.add_parser(
+        "snapshots", help="List published backup versions without decrypting content")
+    vault_snapshots.add_argument("--vault", required=True)
+    vault_snapshots.add_argument("--limit", type=int, default=100)
+    vault_snapshots.add_argument("--json", action="store_true")
     vault_restore = vault_commands.add_parser(
         "restore", help="Decrypt a verified snapshot into a separate staging folder")
     vault_restore.add_argument("--vault", required=True)
@@ -308,10 +313,11 @@ def main(argv: Optional[List[str]] = None) -> int:
                         print("Client-side authenticated encryption: required")
                         print("Planning mode only; add --apply to create a verified snapshot.")
                 return 0
-            if args.vault_command in ("verify", "restore", "key-import", "key-export"):
+            if args.vault_command in (
+                    "verify", "restore", "snapshots", "key-import", "key-export"):
                 from codex_migrate.vault_recovery import (
-                    export_recovery_key, import_recovery_key, plan_restore,
-                    restore_snapshot, verify_snapshot,
+                    export_recovery_key, import_recovery_key, list_snapshots,
+                    plan_restore, restore_snapshot, verify_snapshot,
                 )
                 if args.vault_command == "key-import":
                     recovery_key = getpass.getpass(
@@ -323,6 +329,18 @@ def main(argv: Optional[List[str]] = None) -> int:
                 if args.vault_command == "key-export":
                     print("RECOVERY KEY (store in a password manager):")
                     print(export_recovery_key(args.vault, crypto_helper=args.crypto_helper))
+                    return 0
+                if args.vault_command == "snapshots":
+                    snapshots = list_snapshots(args.vault, limit=args.limit)
+                    if args.json:
+                        print(json.dumps(
+                            [item.as_dict() for item in snapshots],
+                            indent=2, sort_keys=True))
+                    else:
+                        for item in snapshots:
+                            marker = " (latest)" if item.latest else ""
+                            print("%s · %s%s" % (
+                                item.created_at, item.snapshot_id, marker))
                     return 0
                 if args.vault_command == "verify":
                     result = verify_snapshot(

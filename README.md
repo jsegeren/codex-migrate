@@ -88,12 +88,12 @@ verified backup in an empty local or cloud-sync folder and guides the customer
 through saving the recovery key. After that first verified backup, it can install
 a private macOS LaunchAgent that adds a verified encrypted snapshot every day,
 even when the app is closed. Turning automatic backup off removes only the local
-schedule; existing Vault snapshots remain. The local Vault page can also
-recover the latest verified snapshot into a separate empty folder for
-inspection without changing live Codex data. Guarded installation into Codex,
-retention controls, and cloud-folder health monitoring are still under
-development, so this remains an engineering foundation rather than the public
-Vault subscription.
+schedule; existing Vault snapshots remain. The local Vault page can also show
+the published backup history and recover a chosen verified snapshot into a
+separate empty folder for inspection without changing live Codex data. Guarded
+installation into Codex, retention controls, and cloud-folder health monitoring
+are still under development, so this remains an engineering foundation rather
+than the public Vault subscription.
 
 The equivalent schedule commands are explicit and reversible:
 
@@ -111,9 +111,10 @@ A verified snapshot can be checked or decrypted into a separate staging folder
 without touching live Codex data:
 
 ```bash
+codex-migrate vault snapshots --vault "/absolute/path/Codex Vault"
 codex-migrate vault verify --vault "/absolute/path/Codex Vault"
 codex-migrate vault restore --vault "/absolute/path/Codex Vault" \
-  --output "/absolute/path/Recovered Codex" --apply
+  --snapshot "<snapshot UUID>" --output "/absolute/path/Recovered Codex" --apply
 ```
 
 On another Mac, run `vault key-import` first and enter the recovery key at the
@@ -412,7 +413,7 @@ installation identity files.
 The packaged local helper also exposes an experimental history browser with
 per-thread Markdown download, print-to-PDF and the browser's native share sheet
 when supported, opt-in daily encrypted backups after the first verified manual
-snapshot, and recovery of the latest snapshot into a separate inspection
+snapshot, and recovery of a chosen backup version into a separate inspection
 folder.
 See [the Codex Vault product plan](docs/codex-vault-product-plan.md) for the
 product boundary, safety sequence and proposed editions.

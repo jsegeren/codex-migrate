@@ -9,7 +9,8 @@ import unittest
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_backup import backup, plan
 from codex_migrate.vault_recovery import (
-    export_recovery_key, import_recovery_key, restore_snapshot, verify_snapshot,
+    export_recovery_key, import_recovery_key, list_snapshots, restore_snapshot,
+    verify_snapshot,
 )
 
 
@@ -100,6 +101,17 @@ class VaultBackupTests(unittest.TestCase):
                 self.assertEqual(len(list((destination / "refs").glob("*.json"))), 2)
                 latest = json.loads((destination / "latest.json").read_text(encoding="utf-8"))
                 self.assertEqual(latest["snapshot_id"], second.snapshot_id)
+                history = list_snapshots(str(destination))
+                self.assertEqual(
+                    [item.snapshot_id for item in history],
+                    [second.snapshot_id, first.snapshot_id],
+                )
+                self.assertEqual([item.latest for item in history], [True, False])
+                self.assertEqual(
+                    [item.snapshot_id for item in list_snapshots(
+                        str(destination), limit=1)],
+                    [second.snapshot_id],
+                )
 
                 stored = b"".join(
                     path.read_bytes() for path in destination.rglob("*") if path.is_file())
