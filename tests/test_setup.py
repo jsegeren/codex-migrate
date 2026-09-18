@@ -10,6 +10,7 @@ from unittest.mock import patch
 from codex_migrate.dashboard import LoopbackHTTPServer
 from codex_migrate.setup import SetupDashboard, SETUP_HTML
 from codex_migrate.vault_backup import BackupPlan, BackupResult
+from codex_migrate.vault_schedule import SchedulePlan
 
 
 class SetupTests(unittest.TestCase):
@@ -75,15 +76,59 @@ class SetupTests(unittest.TestCase):
         self.assertIn("Share thread", shell)
         self.assertIn("Create encrypted backup", shell)
         self.assertIn("Save this recovery key", shell)
+        self.assertIn("Automatic backup", shell)
+        self.assertIn("Turn on daily backup", shell)
         self.assertNotIn("PRIVATE VAULT FIXTURE", shell)
         for path in ("/api/vault/summary", "/api/vault/search?q=PRIVATE",
                      "/api/vault/thread?collection=active&transcript=2026/09/thread.jsonl",
                      "/api/vault/export?collection=active&transcript=2026/09/thread.jsonl",
-                     "/api/vault/backup-status"):
+                     "/api/vault/backup-status", "/api/vault/schedule"):
             self.assertEqual(self.request(path, authorized=False)[0], 403)
         for path in ("/api/vault/folder", "/api/vault/backup",
-                     "/api/vault/recovery-saved"):
+                     "/api/vault/recovery-saved", "/api/vault/schedule",
+                     "/api/vault/schedule-remove"):
             self.assertEqual(self.request(path, {}, authorized=False)[0], 403)
+
+    def test_vault_schedule_requires_explicit_apply_and_reports_state(self):
+        destination = str(self.home / "vault")
+        plan = SchedulePlan(destination, 24, applied=True)
+        with patch("codex_migrate.setup.vault_schedule_status", return_value={
+                "enabled": True, "healthy": True, "vault": destination,
+                "interval_hours": 24,
+        }) as status, patch(
+                "codex_migrate.setup.install_vault_schedule", return_value=plan
+        ) as install, patch(
+                "codex_migrate.setup.remove_vault_schedule",
+                return_value={"enabled": False},
+        ) as remove:
+            code, current = self.request("/api/vault/schedule")
+            self.assertEqual(code, 200)
+            self.assertTrue(current["healthy"])
+            status.assert_called_once_with(str(self.home))
+
+            self.assertEqual(self.request(
+                "/api/vault/schedule",
+                {"destination": destination, "interval_hours": 24},
+            )[0], 400)
+            install.assert_not_called()
+
+            code, enabled = self.request(
+                "/api/vault/schedule",
+                {"destination": destination, "interval_hours": 24, "apply": True},
+            )
+            self.assertEqual(code, 200)
+            self.assertTrue(enabled["enabled"])
+            install.assert_called_once_with(
+                str(self.home), destination, interval_hours=24)
+
+            self.assertEqual(self.request(
+                "/api/vault/schedule-remove", {"apply": False})[0], 400)
+            remove.assert_not_called()
+            code, disabled = self.request(
+                "/api/vault/schedule-remove", {"apply": True})
+            self.assertEqual(code, 200)
+            self.assertFalse(disabled["enabled"])
+            remove.assert_called_once_with(str(self.home))
 
     def test_vault_backup_runs_off_request_thread_and_recovery_key_is_acknowledged(self):
         destination = str(self.home / "vault")
