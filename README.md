@@ -96,11 +96,15 @@ history trees after Codex is closed. It first verifies the selected snapshot,
 keeps a verified rollback backup, verifies the installed history, and restores
 the previous history automatically if installation fails. Authentication,
 installation identity, settings, skills, and other Codex state are not changed.
+The Vault page can also open a verified encrypted snapshot privately, search
+it, and add one missing conversation without replacing unrelated history. An
+identical local thread is left alone; the operation stops if the same thread
+identity has different content rather than overwriting or merging it.
 Physical-device acceptance on September 18, 2026 verified that a Codex-created
 thread could be encrypted on one Mac, installed on a second Mac, and resumed by
 the actual Codex binary there while destination authentication, installation
-identity, and the displaced history remained protected. Selected-thread
-recovery, retention controls, cloud-folder health monitoring, and broader Codex
+identity, and the displaced history remained protected. Retention controls,
+cloud-folder health monitoring, and broader Codex
 version coverage are still underway, so this remains an engineering foundation
 rather than the public Vault subscription. See the
 [physical-device acceptance receipt](docs/vault-physical-device-acceptance-2026-09-18.md).
@@ -145,6 +149,11 @@ codex-migrate vault install --vault "/absolute/path/Codex Vault" \
 # Inspect or roll back a crash-interrupted install.
 codex-migrate vault install-status
 codex-migrate vault install-recover --apply
+
+# Add one missing conversation only. Omit --apply for a read-only plan.
+codex-migrate vault install-thread --vault "/absolute/path/Codex Vault" \
+  --snapshot "<snapshot UUID>" --collection active \
+  --transcript "2026/09/18/<exact transcript filename>.jsonl" --apply
 ```
 
 Installation writes an owner-only crash journal before the first live-history
@@ -153,7 +162,11 @@ power loss leaves the journal for the explicit recovery command. Keep Codex
 closed until recovery finishes. This installs only `sessions` and
 `archived_sessions`. Physical-device acceptance confirmed that the tested Codex
 build could resume an installed thread on a second Mac; this is not a promise
-about every past or future Codex version or every desktop UI surface.
+about every past or future Codex version or every desktop UI surface. A
+selected-thread install is additive and atomic: it re-verifies the encrypted
+snapshot, verifies all pre-existing transcripts remain byte-for-byte unchanged,
+writes an owner-only receipt, and removes the newly added file if final
+verification or receipt creation fails.
 
 See the [portable backup format](docs/vault-backup-format.md) for the exact
 encryption, key derivation, repository layout, verification, and compatibility

@@ -122,6 +122,20 @@ def parser() -> argparse.ArgumentParser:
     vault_install.add_argument("--crypto-helper")
     vault_install.add_argument("--apply", action="store_true")
     vault_install.add_argument("--json", action="store_true")
+    vault_install_thread = vault_commands.add_parser(
+        "install-thread",
+        help="Add one missing verified conversation without replacing local history",
+    )
+    vault_install_thread.add_argument("--vault", required=True)
+    vault_install_thread.add_argument("--snapshot", default="latest")
+    vault_install_thread.add_argument(
+        "--collection", required=True, choices=("active", "archived"))
+    vault_install_thread.add_argument(
+        "--transcript", required=True,
+        help="Exact transcript path shown by Vault search")
+    vault_install_thread.add_argument("--crypto-helper")
+    vault_install_thread.add_argument("--apply", action="store_true")
+    vault_install_thread.add_argument("--json", action="store_true")
     vault_install_status = vault_commands.add_parser(
         "install-status", help="Inspect interrupted local Vault installation state")
     vault_install_status.add_argument("--json", action="store_true")
@@ -327,9 +341,11 @@ def main(argv: Optional[List[str]] = None) -> int:
                         print("Client-side authenticated encryption: required")
                         print("Planning mode only; add --apply to create a verified snapshot.")
                 return 0
-            if args.vault_command in ("install", "install-status", "install-recover"):
+            if args.vault_command in (
+                    "install", "install-thread", "install-status", "install-recover"):
                 from codex_migrate.vault_install import (
-                    install_snapshot, install_status, plan_install,
+                    install_snapshot, install_status, install_thread, plan_install,
+                    plan_thread_install,
                     recover_interrupted_install,
                 )
                 if args.vault_command == "install-status":
@@ -337,6 +353,13 @@ def main(argv: Optional[List[str]] = None) -> int:
                 elif args.vault_command == "install-recover":
                     result = recover_interrupted_install(
                         args.source_home, apply=args.apply)
+                elif args.vault_command == "install-thread":
+                    function = install_thread if args.apply else plan_thread_install
+                    result = function(
+                        args.source_home, args.vault, args.collection,
+                        args.transcript, snapshot=args.snapshot,
+                        crypto_helper=args.crypto_helper,
+                    )
                 elif args.apply:
                     result = install_snapshot(
                         args.source_home, args.vault, snapshot=args.snapshot,
@@ -356,6 +379,20 @@ def main(argv: Optional[List[str]] = None) -> int:
                     print("Vault installation recovery: %s" % payload["status"])
                     if not payload.get("applied") and payload["status"] != "idle":
                         print("Planning mode only; add --apply to verify rollback.")
+                elif args.vault_command == "install-thread":
+                    if payload.get("applied"):
+                        print("Recovered one verified conversation: %s" % payload["transcript"])
+                        print("Installed at: %s" % payload["target"])
+                        print("Unrelated Codex history was not changed.")
+                        print("Receipt: %s" % payload["receipt"])
+                    elif payload.get("status") == "already_present" or \
+                            payload.get("action") == "already_present":
+                        print("Conversation is already present: %s" % payload["target"])
+                        print("No local history was changed.")
+                    else:
+                        print("Would add one verified conversation: %s" % payload["transcript"])
+                        print("Target: %s" % payload["target"])
+                        print("Planning mode only; add --apply after closing Codex.")
                 elif payload.get("applied"):
                     print("Installed verified snapshot: %s" % payload["snapshot_id"])
                     print("Conversation files: %d" % payload["transcript_files"])

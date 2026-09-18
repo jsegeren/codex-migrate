@@ -9,7 +9,7 @@ import fcntl
 import hashlib
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import secrets
 import shutil
 import stat
@@ -73,6 +73,37 @@ class InstallResult:
         return asdict(self)
 
 
+@dataclass(frozen=True)
+class ThreadInstallPlan:
+    vault: str
+    snapshot_id: str
+    collection: str
+    transcript: str
+    action: str
+    target: str
+    transcript_bytes: int
+    applied: bool = False
+
+    def as_dict(self) -> Dict[str, object]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class ThreadInstallResult:
+    vault: str
+    snapshot_id: str
+    collection: str
+    transcript: str
+    status: str
+    target: str
+    transcript_bytes: int
+    receipt: Optional[str]
+    applied: bool
+
+    def as_dict(self) -> Dict[str, object]:
+        return asdict(self)
+
+
 def _home(source_home: str) -> Tuple[Path, Path]:
     home = Path(source_home).expanduser()
     if not home.is_absolute():
@@ -131,7 +162,11 @@ def _hash_file(path: Path) -> Tuple[int, str]:
     return before.st_size, digest.hexdigest()
 
 
-def _tree_summary(root: Path, *, strict_root: bool = False) -> TreeSummary:
+def _tree_records(
+    root: Path,
+    *,
+    strict_root: bool = False,
+) -> Dict[str, Tuple[int, str]]:
     _require_unlinked_path(root)
     require_local(root)
     if strict_root:
@@ -141,8 +176,7 @@ def _tree_summary(root: Path, *, strict_root: bool = False) -> TreeSummary:
                 raise MigrationError("The recovered snapshot contains an unexpected item.")
         except OSError as error:
             raise MigrationError("The recovered snapshot could not be inspected safely.") from error
-    records = []
-    total = 0
+    records: Dict[str, Tuple[int, str]] = {}
     for folder in TRANSCRIPT_FOLDERS:
         collection = root / folder
         if not collection.exists():
@@ -168,22 +202,361 @@ def _tree_summary(root: Path, *, strict_root: bool = False) -> TreeSummary:
                     require_local(path)
                     size, digest = _hash_file(path)
                     relative = folder + "/" + path.relative_to(collection).as_posix()
-                    records.append((relative, size, digest))
-                    total += size
+                    if relative in records:
+                        raise MigrationError("The conversation history contains a duplicate transcript path.")
+                    records[relative] = (size, digest)
         except MigrationError:
             raise
         except OSError as error:
             raise MigrationError("Conversation history could not be inspected safely.") from error
-    records.sort()
+    return records
+
+
+def _summary(records: Dict[str, Tuple[int, str]]) -> TreeSummary:
+    total = 0
     aggregate = hashlib.sha256()
-    for relative, size, digest in records:
+    for relative in sorted(records):
+        size, digest = records[relative]
         aggregate.update(relative.encode("utf-8"))
         aggregate.update(b"\0")
         aggregate.update(str(size).encode("ascii"))
         aggregate.update(b"\0")
         aggregate.update(digest.encode("ascii"))
         aggregate.update(b"\n")
+        total += size
     return TreeSummary(len(records), total, aggregate.hexdigest())
+
+
+def _tree_summary(root: Path, *, strict_root: bool = False) -> TreeSummary:
+    return _summary(_tree_records(root, strict_root=strict_root))
+
+
+def _selection(collection: str, transcript: str) -> Tuple[str, PurePosixPath]:
+    if collection not in ("active", "archived"):
+        raise ValueError("unknown conversation collection")
+    if (not isinstance(transcript, str) or not transcript
+            or len(transcript) > 4096 or transcript.startswith("/")
+            or "\\" in transcript or "\x00" in transcript):
+        raise ValueError("invalid conversation identifier")
+    relative = PurePosixPath(transcript)
+    if (relative.as_posix() != transcript or relative.suffix != ".jsonl"
+            or any(part in ("", ".", "..") for part in relative.parts)):
+        raise ValueError("invalid conversation identifier")
+    folder = "sessions" if collection == "active" else "archived_sessions"
+    return folder, relative
+
+
+def _selected_source(
+    recovered: Path,
+    collection: str,
+    transcript: str,
+) -> Tuple[str, PurePosixPath, Path, Tuple[int, str]]:
+    folder, relative = _selection(collection, transcript)
+    logical = folder + "/" + relative.as_posix()
+    records = _tree_records(recovered, strict_root=True)
+    if logical not in records:
+        raise MigrationError("The selected conversation is not present in this Vault snapshot.")
+    return folder, relative, recovered / folder / Path(*relative.parts), records[logical]
+
+
+def _selected_action(
+    live_records: Dict[str, Tuple[int, str]],
+    folder: str,
+    relative: PurePosixPath,
+    source_record: Tuple[int, str],
+) -> Tuple[str, str]:
+    target = folder + "/" + relative.as_posix()
+    identity = relative.name
+    collisions = {
+        logical: record for logical, record in live_records.items()
+        if PurePosixPath(logical).name == identity
+    }
+    if not collisions:
+        return "add", target
+    if all(record == source_record for record in collisions.values()):
+        return "already_present", sorted(collisions)[0]
+    raise MigrationError(
+        "A conversation with this thread identity already exists locally with different "
+        "content. Selected recovery never overwrites or merges an existing conversation."
+    )
+
+
+def _safe_target_parent(root: Path, relative: PurePosixPath) -> Path:
+    current = root
+    for part in relative.parts:
+        current = current / part
+        _require_unlinked_path(current, allow_missing_leaf=True)
+        if current.exists():
+            try:
+                info = current.lstat()
+            except OSError as error:
+                raise MigrationError("The selected conversation destination is unavailable.") from error
+            if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
+                raise MigrationError("The selected conversation destination needs review.")
+            require_local(current)
+            continue
+        try:
+            current.mkdir(mode=0o700)
+            _fsync_directory(current.parent)
+        except OSError as error:
+            raise MigrationError("The selected conversation destination could not be prepared.") from error
+    return current
+
+
+def _copy_selected(source: Path, target: Path, expected: Tuple[int, str]) -> None:
+    _require_unlinked_path(target, allow_missing_leaf=True)
+    if target.exists():
+        raise MigrationError("The selected conversation appeared locally before recovery finished.")
+    temporary = target.parent / ("." + target.name + ".vault-" + secrets.token_hex(8) + ".tmp")
+    source_descriptor = -1
+    target_descriptor = -1
+    try:
+        source_descriptor = os.open(source, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        source_info = os.fstat(source_descriptor)
+        if (not stat.S_ISREG(source_info.st_mode)
+                or source_info.st_uid != os.getuid()):
+            raise MigrationError("The selected recovered conversation is not a regular file.")
+        target_descriptor = os.open(
+            temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(source_descriptor, "rb", closefd=False) as source_handle, \
+                os.fdopen(target_descriptor, "wb", closefd=False) as target_handle:
+            shutil.copyfileobj(source_handle, target_handle, length=1024 * 1024)
+            target_handle.flush()
+            os.fsync(target_handle.fileno())
+        _same(
+            _summary({"selected": _hash_file(temporary)}),
+            _summary({"selected": expected}),
+            "The selected conversation changed while it was staged for recovery.",
+        )
+        os.replace(temporary, target)
+        _fsync_directory(target.parent)
+    finally:
+        if source_descriptor >= 0:
+            os.close(source_descriptor)
+        if target_descriptor >= 0:
+            os.close(target_descriptor)
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def _selected_stage(
+    home: Path,
+    vault: str,
+    snapshot: str,
+    collection: str,
+    transcript: str,
+    crypto_helper: Optional[str],
+):
+    verified = verify_snapshot(
+        vault, snapshot=_snapshot_id(snapshot), crypto_helper=crypto_helper)
+    temporary = tempfile.TemporaryDirectory(prefix=".codex-vault-selected-", dir=str(home))
+    try:
+        recovered = Path(temporary.name) / "recovered"
+        restored = restore_snapshot(
+            str(home), verified.vault, str(recovered),
+            snapshot=verified.snapshot_id, crypto_helper=crypto_helper,
+        )
+        staged = _tree_summary(recovered, strict_root=True)
+        if (staged.files != restored.transcript_files
+                or staged.bytes != restored.transcript_bytes):
+            raise MigrationError("The recovered snapshot changed before selected recovery.")
+        selected = _selected_source(recovered, collection, transcript)
+        return verified, temporary, selected
+    except Exception:
+        temporary.cleanup()
+        raise
+
+
+def _thread_receipt_path(home: Path) -> Path:
+    return home / (
+        "Codex-Vault-Thread-Restore-Receipt-"
+        + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ-")
+        + secrets.token_hex(8)
+        + ".json"
+    )
+
+
+def _remove_selected_after_failure(
+    target: Path,
+    expected: Tuple[int, str],
+    collection_root: Path,
+) -> None:
+    """Remove only the file this operation added, then prune its empty parents."""
+    _require_unlinked_path(target, allow_missing_leaf=True)
+    if target.exists():
+        if _hash_file(target) != expected:
+            raise MigrationError(
+                "The newly recovered conversation changed before rollback and needs review."
+            )
+        target.unlink()
+        _fsync_directory(target.parent)
+    current = target.parent
+    while current != collection_root:
+        if collection_root not in current.parents:
+            raise MigrationError("The selected conversation rollback path needs review.")
+        try:
+            current.rmdir()
+        except OSError:
+            break
+        parent = current.parent
+        _fsync_directory(parent)
+        current = parent
+
+
+def plan_thread_install(
+    source_home: str,
+    vault: str,
+    collection: str,
+    transcript: str,
+    *,
+    snapshot: str = "latest",
+    crypto_helper: Optional[str] = None,
+) -> ThreadInstallPlan:
+    """Verify a snapshot and preview one additive conversation recovery."""
+    home, codex = _home(source_home)
+    with _install_lock(home):
+        if _journal(home) is not None:
+            raise MigrationError("An interrupted Vault installation must be rolled back first.")
+        verified, temporary, selected = _selected_stage(
+            home, vault, snapshot, collection, transcript, crypto_helper)
+        try:
+            folder, relative, _, source_record = selected
+            action, target = _selected_action(
+                _tree_records(codex), folder, relative, source_record)
+            return ThreadInstallPlan(
+                vault=verified.vault,
+                snapshot_id=verified.snapshot_id,
+                collection=collection,
+                transcript=transcript,
+                action=action,
+                target=target,
+                transcript_bytes=source_record[0],
+            )
+        finally:
+            temporary.cleanup()
+
+
+def install_thread(
+    source_home: str,
+    vault: str,
+    collection: str,
+    transcript: str,
+    *,
+    snapshot: str = "latest",
+    crypto_helper: Optional[str] = None,
+) -> ThreadInstallResult:
+    """Install one missing verified transcript without replacing local history."""
+    home, codex = _home(source_home)
+    with _install_lock(home):
+        if _journal(home) is not None:
+            raise MigrationError("An interrupted Vault installation must be rolled back first.")
+        with local_history_lock(str(home)):
+            if codex_running(str(home)):
+                raise MigrationError(
+                    "Close Codex and its CLI sessions before recovering a conversation."
+                )
+            verified, temporary, selected = _selected_stage(
+                home, vault, snapshot, collection, transcript, crypto_helper)
+            added_target: Optional[Path] = None
+            receipt: Optional[Path] = None
+            before: Optional[Dict[str, Tuple[int, str]]] = None
+            source_record: Optional[Tuple[int, str]] = None
+            collection_root: Optional[Path] = None
+            try:
+                folder, relative, source, source_record = selected
+                before = _tree_records(codex)
+                action, logical_target = _selected_action(
+                    before, folder, relative, source_record)
+                if action == "already_present":
+                    return ThreadInstallResult(
+                        vault=verified.vault,
+                        snapshot_id=verified.snapshot_id,
+                        collection=collection,
+                        transcript=transcript,
+                        status="already_present",
+                        target=logical_target,
+                        transcript_bytes=source_record[0],
+                        receipt=None,
+                        applied=False,
+                    )
+                if codex_running(str(home)):
+                    raise MigrationError(
+                        "Codex reopened before selected recovery; no conversation was changed."
+                    )
+                collection_root = codex / folder
+                _require_unlinked_path(collection_root, allow_missing_leaf=True)
+                if not collection_root.exists():
+                    collection_root.mkdir(mode=0o700)
+                    _fsync_directory(codex)
+                target_parent = _safe_target_parent(
+                    collection_root, PurePosixPath(*relative.parts[:-1]))
+                added_target = target_parent / relative.name
+                _copy_selected(source, added_target, source_record)
+
+                after = _tree_records(codex)
+                expected = dict(before)
+                expected[logical_target] = source_record
+                if after != expected:
+                    raise MigrationError(
+                        "Local conversation history changed during selected recovery."
+                    )
+                if codex_running(str(home)):
+                    raise MigrationError("Codex reopened during selected recovery.")
+                receipt = _thread_receipt_path(home)
+                _atomic_json(receipt, {
+                    "format": "codex-vault-thread-restore-receipt",
+                    "version": FORMAT_VERSION,
+                    "vault": verified.vault,
+                    "snapshot_id": verified.snapshot_id,
+                    "collection": collection,
+                    "transcript": transcript,
+                    "target": logical_target,
+                    "transcript_bytes": source_record[0],
+                    "sha256": source_record[1],
+                    "preexisting_transcripts": len(before),
+                    "installed_at": datetime.now(timezone.utc).isoformat(),
+                    "verified": True,
+                })
+                return ThreadInstallResult(
+                    vault=verified.vault,
+                    snapshot_id=verified.snapshot_id,
+                    collection=collection,
+                    transcript=transcript,
+                    status="installed",
+                    target=logical_target,
+                    transcript_bytes=source_record[0],
+                    receipt=str(receipt),
+                    applied=True,
+                )
+            except Exception as error:
+                if added_target is not None and before is not None \
+                        and source_record is not None and collection_root is not None:
+                    try:
+                        if receipt is not None and receipt.exists():
+                            receipt.unlink()
+                            _fsync_directory(home)
+                        _remove_selected_after_failure(
+                            added_target, source_record, collection_root)
+                        if _tree_records(codex) != before:
+                            raise MigrationError(
+                                "The previous conversation history could not be verified after rollback."
+                            )
+                    except Exception as rollback_error:
+                        raise MigrationError(
+                            "Selected recovery stopped and automatic rollback could not be verified. "
+                            "Keep Codex closed and review the local conversation history."
+                        ) from rollback_error
+                    raise MigrationError(
+                        "Selected recovery stopped safely. The added conversation was removed and "
+                        "previous history was verified."
+                    ) from error
+                if isinstance(error, (MigrationError, ValueError)):
+                    raise
+                raise MigrationError("Selected recovery could not start safely.") from error
+            finally:
+                temporary.cleanup()
 
 
 def _same(actual: TreeSummary, expected: TreeSummary, message: str) -> None:

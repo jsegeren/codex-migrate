@@ -125,7 +125,7 @@ restore re-verifies the selected encrypted snapshot before recovery. The
 operation runs in the background, never replaces live `~/.codex`, and reports
 only bounded content-free status.
 
-The next implemented slice adds separately confirmed, whole-history
+The whole-history slice adds separately confirmed, whole-history
 installation of the chosen verified snapshot. Codex and its CLI sessions must
 be closed. Before replacement, the installer records an owner-only crash
 journal and moves the existing `sessions` and `archived_sessions` trees into a
@@ -143,7 +143,16 @@ installation identity were unchanged and that the displaced history matched
 its rollback backup. This does not claim compatibility with every past or
 future Codex version or every desktop UI surface. See the
 [acceptance receipt](vault-physical-device-acceptance-2026-09-18.md).
-Selected-thread recovery remains a later milestone.
+
+Selected-thread recovery is now implemented in both the local browser and CLI.
+The customer opens a verified encrypted snapshot into private temporary
+staging, searches and reads it, then explicitly restores one exact transcript.
+The installer re-verifies the snapshot, requires Codex and its CLI sessions to
+be closed, and only adds a missing thread. An identical local thread returns
+`already_present`; a matching identity with different bytes fails closed. It
+never overwrites or merges an existing conversation. Every pre-existing
+transcript is verified unchanged, an owner-only receipt records the addition,
+and a final failure removes the newly added file and verifies rollback.
 
 ### 4. Optional Vault Cloud
 
