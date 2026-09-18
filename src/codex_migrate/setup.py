@@ -27,6 +27,7 @@ from codex_migrate.vault_backup import backup as backup_vault
 from codex_migrate.vault_backup import plan as plan_vault_backup
 from codex_migrate.vault_dashboard import VAULT_HTML
 from codex_migrate.vault_recovery import export_recovery_key
+from codex_migrate.vault_recovery import restore_snapshot as restore_vault_snapshot
 from codex_migrate.vault_schedule import (
     install_schedule as install_vault_schedule,
     remove_schedule as remove_vault_schedule,
@@ -225,6 +226,8 @@ class SetupDashboard(Dashboard):
         self._vault_lock = threading.Lock()
         self._vault_thread = None
         self._vault_status = {"status": "idle"}
+        self._restore_thread = None
+        self._restore_status = {"status": "idle"}
         self._closing = False
         self.pairing = Pairing(self.source_home, self.registry.root)
 
@@ -304,6 +307,7 @@ class SetupDashboard(Dashboard):
         with self._vault_lock:
             vault_idle = (
                 not (self._vault_thread and self._vault_thread.is_alive())
+                and not (self._restore_thread and self._restore_thread.is_alive())
                 and not self._vault_status.get("recovery_key")
             )
         return vault_idle and (self.engine is None or (
@@ -362,6 +366,28 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder or an existing Code
         finally:
             self._picker_lock.release()
 
+    def choose_restore_folder(self):
+        if platform.system() != "Darwin":
+            raise MigrationError("Native folder selection requires macOS")
+        if not self._picker_lock.acquire(blocking=False):
+            raise MigrationError("A folder picker is already open")
+        try:
+            result = subprocess.run(["/usr/bin/osascript", "-l", "JavaScript", "-e", '''
+const app = Application.currentApplication();
+app.includeStandardAdditions = true;
+String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered Codex history"}));
+'''], capture_output=True, text=True, timeout=120)
+            if result.returncode != 0:
+                if "(-128)" in result.stderr:
+                    return None
+                raise MigrationError("Recovery folder picker could not open")
+            path = result.stdout.strip()
+            if not path or "\n" in path or "\r" in path:
+                raise MigrationError("The selected recovery folder is invalid")
+            return path
+        finally:
+            self._picker_lock.release()
+
     def vault_status(self):
         with self._vault_lock:
             return dict(self._vault_status)
@@ -381,6 +407,44 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder or an existing Code
     def disable_vault_schedule(self):
         return remove_vault_schedule(self.source_home)
 
+    def vault_restore_status(self):
+        with self._vault_lock:
+            return dict(self._restore_status)
+
+    def start_vault_restore(self, vault, output):
+        if not isinstance(vault, str) or len(vault) > 4096:
+            raise MigrationError("Choose a valid existing Vault folder")
+        if not isinstance(output, str) or len(output) > 4096:
+            raise MigrationError("Choose a valid empty recovery folder")
+
+        def run():
+            try:
+                result = restore_vault_snapshot(
+                    self.source_home, vault, output, snapshot="latest")
+                with self._vault_lock:
+                    self._restore_status = {"status": "completed", **result.as_dict()}
+            except Exception:
+                with self._vault_lock:
+                    self._restore_status = {
+                        "status": "failed",
+                        "error": "Recovery stopped safely. Live Codex data and the encrypted Vault were not changed.",
+                    }
+
+        worker = threading.Thread(target=run, daemon=True)
+        with self._vault_lock:
+            if self._vault_thread and self._vault_thread.is_alive():
+                raise MigrationError("Wait for the encrypted backup to finish before recovering")
+            if self._restore_thread and self._restore_thread.is_alive():
+                raise MigrationError("A Vault recovery is already running")
+            if self._vault_status.get("recovery_key"):
+                raise MigrationError("Save and acknowledge the recovery key before recovering")
+            self._restore_status = {
+                "status": "running", "vault": vault, "output": output,
+            }
+            self._restore_thread = worker
+            worker.start()
+        return self.vault_restore_status()
+
     def acknowledge_vault_recovery_key(self):
         with self._vault_lock:
             if not self._vault_status.get("recovery_key"):
@@ -391,6 +455,12 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder or an existing Code
     def start_vault_backup(self, destination):
         if not isinstance(destination, str) or len(destination) > 4096:
             raise MigrationError("Choose a valid Vault folder")
+        # Reject conflicting work before inspecting source data. The check is
+        # repeated at admission below because planning deliberately runs
+        # outside the status lock.
+        with self._vault_lock:
+            if self._restore_thread and self._restore_thread.is_alive():
+                raise MigrationError("Wait for Vault recovery to finish before backing up")
         planned = plan_vault_backup(self.source_home, destination)
 
         def progress(completed_files, total_files, completed_bytes, total_bytes):
@@ -432,6 +502,8 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder or an existing Code
         with self._vault_lock:
             if self._vault_thread and self._vault_thread.is_alive():
                 raise MigrationError("An encrypted backup is already running")
+            if self._restore_thread and self._restore_thread.is_alive():
+                raise MigrationError("Wait for Vault recovery to finish before backing up")
             if self._vault_status.get("recovery_key"):
                 raise MigrationError("Save and acknowledge the recovery key before another backup")
             self._vault_status = {
@@ -482,6 +554,9 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder or an existing Code
                             return
                         if parsed.path == "/api/vault/schedule" and not query:
                             self._json(200, setup.vault_schedule())
+                            return
+                        if parsed.path == "/api/vault/restore-status" and not query:
+                            self._json(200, setup.vault_restore_status())
                             return
                         if parsed.path == "/api/vault/search" and set(query) <= {"q", "limit"}:
                             phrase = query.get("q", [""])[0]
@@ -569,7 +644,8 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder or an existing Code
                     return
                 if self.path in ("/api/vault/folder", "/api/vault/backup",
                                  "/api/vault/recovery-saved", "/api/vault/schedule",
-                                 "/api/vault/schedule-remove"):
+                                 "/api/vault/schedule-remove", "/api/vault/restore-folder",
+                                 "/api/vault/restore"):
                     try:
                         length = int(self.headers.get("Content-Length", "0"))
                         if not 0 < length <= 8192:
@@ -577,10 +653,13 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder or an existing Code
                         payload = json.loads(self.rfile.read(length))
                         if (payload != {} and self.path not in (
                                 "/api/vault/backup", "/api/vault/schedule",
-                                "/api/vault/schedule-remove")):
+                                "/api/vault/schedule-remove", "/api/vault/restore")):
                             raise MigrationError("Invalid Vault request")
                         if self.path == "/api/vault/folder":
                             path = setup.choose_vault_folder()
+                            self._json(200, {"path": path})
+                        elif self.path == "/api/vault/restore-folder":
+                            path = setup.choose_restore_folder()
                             self._json(200, {"path": path})
                         elif self.path == "/api/vault/recovery-saved":
                             self._json(200, setup.acknowledge_vault_recovery_key())
@@ -595,6 +674,13 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder or an existing Code
                             if payload != {"apply": True}:
                                 raise MigrationError("Turning off automatic backup requires explicit confirmation")
                             self._json(200, setup.disable_vault_schedule())
+                        elif self.path == "/api/vault/restore":
+                            if (not isinstance(payload, dict)
+                                    or set(payload) != {"vault", "output", "apply"}
+                                    or payload.get("apply") is not True):
+                                raise MigrationError("Vault recovery requires explicit confirmation")
+                            self._json(202, setup.start_vault_restore(
+                                payload.get("vault"), payload.get("output")))
                         else:
                             if (not isinstance(payload, dict)
                                     or set(payload) != {"destination", "apply"}
@@ -604,7 +690,10 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder or an existing Code
                     except MigrationError as error:
                         self._json(400, {"error": str(error)})
                     except Exception:
-                        self._json(400, {"error": "Encrypted backup setup could not finish safely."})
+                        message = ("Vault recovery could not finish safely."
+                                   if self.path.startswith("/api/vault/restore") else
+                                   "Encrypted backup setup could not finish safely.")
+                        self._json(400, {"error": message})
                     return
                 if self.path.startswith("/api/connection/"):
                     if setup.engine is not None:

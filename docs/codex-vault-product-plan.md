@@ -119,6 +119,13 @@ cloud-folder health reporting remain the next backup milestone.
 - Support selected transcript recovery before whole-state replacement.
 - Never claim a recovered transcript is visible in Codex until that is tested.
 
+The packaged local Vault page now restores the latest verified snapshot into a
+separate new or empty folder. The operation runs in the background, never
+replaces live `~/.codex`, and reports only bounded content-free status. It is an
+inspection and recovery export, not yet a claim that the recovered threads have
+been installed or made visible inside Codex. Guarded live-state installation
+and selected-thread recovery remain later milestones.
+
 ### 4. Optional Vault Cloud
 
 - The client encrypts before upload; the service never receives plaintext keys.
