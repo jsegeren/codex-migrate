@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from datetime import datetime
 import os
 from pathlib import Path
 import stat
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 import uuid
 
 from codex_migrate.errors import MigrationError
@@ -43,6 +44,16 @@ class RestoreResult:
     transcript_bytes: int
     output: str
     applied: bool = True
+
+    def as_dict(self) -> Dict[str, object]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class SnapshotInfo:
+    snapshot_id: str
+    created_at: str
+    latest: bool
 
     def as_dict(self) -> Dict[str, object]:
         return asdict(self)
@@ -134,6 +145,44 @@ def verify_snapshot(
         transcript_files=verified["files"], transcript_bytes=verified["bytes"],
         chunks=verified["chunks"], output=None,
     )
+
+
+def list_snapshots(vault: str, *, limit: int = 100) -> List[SnapshotInfo]:
+    if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 1000:
+        raise ValueError("snapshot limit must be between 1 and 1000")
+    root, _, latest_id, _, _ = _snapshot(vault, "latest")
+    references = root / "refs"
+    _require_unlinked_path(references)
+    if not references.is_dir():
+        raise MigrationError("The Vault snapshot history is missing.")
+    paths = sorted(references.glob("*.json"))
+    if len(paths) > 1000:
+        raise MigrationError("The Vault snapshot history is unexpectedly large.")
+    history = []
+    for path in paths:
+        try:
+            snapshot_id = str(uuid.UUID(path.stem)).lower()
+        except (ValueError, TypeError, AttributeError):
+            raise MigrationError("The Vault snapshot history contains an invalid reference.") from None
+        _, _, checked_id, _, _ = _snapshot(str(root), snapshot_id)
+        reference = _read_json(path)
+        created_at = reference.get("created_at")
+        if not isinstance(created_at, str) or not 1 <= len(created_at) <= 64:
+            raise MigrationError("The Vault snapshot history contains an invalid timestamp.")
+        try:
+            created = datetime.fromisoformat(created_at)
+        except ValueError:
+            raise MigrationError(
+                "The Vault snapshot history contains an invalid timestamp.") from None
+        if created.tzinfo is None:
+            raise MigrationError("The Vault snapshot history contains an invalid timestamp.")
+        history.append(SnapshotInfo(
+            snapshot_id=checked_id,
+            created_at=created_at,
+            latest=checked_id == latest_id,
+        ))
+    history.sort(key=lambda item: (item.created_at, item.snapshot_id), reverse=True)
+    return history[:limit]
 
 
 def _restore_output(source_home: str, vault: Path, output: str) -> Path:

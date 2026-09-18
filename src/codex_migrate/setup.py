@@ -11,6 +11,7 @@ from pathlib import Path
 import platform
 import subprocess
 import threading
+import uuid
 from urllib.parse import parse_qs, urlsplit
 
 from codex_migrate.config import MigrationConfig, SSHOptions
@@ -27,6 +28,7 @@ from codex_migrate.vault_backup import backup as backup_vault
 from codex_migrate.vault_backup import plan as plan_vault_backup
 from codex_migrate.vault_dashboard import VAULT_HTML
 from codex_migrate.vault_recovery import export_recovery_key
+from codex_migrate.vault_recovery import list_snapshots as list_vault_snapshots
 from codex_migrate.vault_recovery import restore_snapshot as restore_vault_snapshot
 from codex_migrate.vault_schedule import (
     install_schedule as install_vault_schedule,
@@ -411,16 +413,30 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
         with self._vault_lock:
             return dict(self._restore_status)
 
-    def start_vault_restore(self, vault, output):
+    def vault_snapshots(self, vault):
+        if not isinstance(vault, str) or len(vault) > 4096:
+            raise MigrationError("Choose a valid existing Vault folder")
+        return {"snapshots": [
+            item.as_dict() for item in list_vault_snapshots(vault, limit=100)
+        ]}
+
+    def start_vault_restore(self, vault, output, snapshot):
         if not isinstance(vault, str) or len(vault) > 4096:
             raise MigrationError("Choose a valid existing Vault folder")
         if not isinstance(output, str) or len(output) > 4096:
             raise MigrationError("Choose a valid empty recovery folder")
+        if not isinstance(snapshot, str) or len(snapshot) > 64:
+            raise MigrationError("Choose a valid Vault snapshot")
+        if snapshot != "latest":
+            try:
+                snapshot = str(uuid.UUID(snapshot)).lower()
+            except (ValueError, TypeError, AttributeError):
+                raise MigrationError("Choose a valid Vault snapshot") from None
 
         def run():
             try:
                 result = restore_vault_snapshot(
-                    self.source_home, vault, output, snapshot="latest")
+                    self.source_home, vault, output, snapshot=snapshot)
                 with self._vault_lock:
                     self._restore_status = {"status": "completed", **result.as_dict()}
             except Exception:
@@ -440,6 +456,7 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                 raise MigrationError("Save and acknowledge the recovery key before recovering")
             self._restore_status = {
                 "status": "running", "vault": vault, "output": output,
+                "snapshot": snapshot,
             }
             self._restore_thread = worker
             worker.start()
@@ -557,6 +574,10 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                             return
                         if parsed.path == "/api/vault/restore-status" and not query:
                             self._json(200, setup.vault_restore_status())
+                            return
+                        if (parsed.path == "/api/vault/snapshots"
+                                and set(query) == {"vault"} and len(query["vault"]) == 1):
+                            self._json(200, setup.vault_snapshots(query["vault"][0]))
                             return
                         if parsed.path == "/api/vault/search" and set(query) <= {"q", "limit"}:
                             phrase = query.get("q", [""])[0]
@@ -676,11 +697,12 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                             self._json(200, setup.disable_vault_schedule())
                         elif self.path == "/api/vault/restore":
                             if (not isinstance(payload, dict)
-                                    or set(payload) != {"vault", "output", "apply"}
+                                    or set(payload) != {"vault", "output", "snapshot", "apply"}
                                     or payload.get("apply") is not True):
                                 raise MigrationError("Vault recovery requires explicit confirmation")
                             self._json(202, setup.start_vault_restore(
-                                payload.get("vault"), payload.get("output")))
+                                payload.get("vault"), payload.get("output"),
+                                payload.get("snapshot")))
                         else:
                             if (not isinstance(payload, dict)
                                     or set(payload) != {"destination", "apply"}
