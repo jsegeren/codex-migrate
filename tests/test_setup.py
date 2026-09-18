@@ -10,6 +10,7 @@ from unittest.mock import patch
 from codex_migrate.dashboard import LoopbackHTTPServer
 from codex_migrate.setup import SetupDashboard, SETUP_HTML
 from codex_migrate.vault_backup import BackupPlan, BackupResult
+from codex_migrate.vault_recovery import RestoreResult
 from codex_migrate.vault_schedule import SchedulePlan
 
 
@@ -78,16 +79,103 @@ class SetupTests(unittest.TestCase):
         self.assertIn("Save this recovery key", shell)
         self.assertIn("Automatic backup", shell)
         self.assertIn("Turn on daily backup", shell)
+        self.assertIn("Recover a backup", shell)
+        self.assertIn("does not replace your live Codex data", shell)
         self.assertNotIn("PRIVATE VAULT FIXTURE", shell)
         for path in ("/api/vault/summary", "/api/vault/search?q=PRIVATE",
                      "/api/vault/thread?collection=active&transcript=2026/09/thread.jsonl",
                      "/api/vault/export?collection=active&transcript=2026/09/thread.jsonl",
-                     "/api/vault/backup-status", "/api/vault/schedule"):
+                     "/api/vault/backup-status", "/api/vault/schedule",
+                     "/api/vault/restore-status"):
             self.assertEqual(self.request(path, authorized=False)[0], 403)
         for path in ("/api/vault/folder", "/api/vault/backup",
                      "/api/vault/recovery-saved", "/api/vault/schedule",
-                     "/api/vault/schedule-remove"):
+                     "/api/vault/schedule-remove", "/api/vault/restore-folder",
+                     "/api/vault/restore"):
             self.assertEqual(self.request(path, {}, authorized=False)[0], 403)
+
+    def test_vault_restore_runs_off_request_thread_and_never_changes_live_data(self):
+        vault = str(self.home / "vault")
+        output = str(self.home / "recovered")
+        completed = RestoreResult(
+            vault=vault, snapshot_id="fixture-snapshot", transcript_files=2,
+            transcript_bytes=100, output=output,
+        )
+        with patch("codex_migrate.setup.restore_vault_snapshot",
+                   return_value=completed) as restore:
+            code, running = self.request("/api/vault/restore", {
+                "vault": vault, "output": output, "apply": True,
+            })
+            self.assertEqual(code, 202)
+            self.assertIn(running["status"], ("running", "completed"))
+            self.helper._restore_thread.join(timeout=3)
+            code, status = self.request("/api/vault/restore-status")
+            self.assertEqual(code, 200)
+            self.assertEqual(status["status"], "completed")
+            self.assertEqual(status["transcript_files"], 2)
+            restore.assert_called_once_with(
+                str(self.home), vault, output, snapshot="latest")
+
+    def test_vault_restore_requires_explicit_apply_and_sanitizes_failure(self):
+        vault = str(self.home / "vault")
+        output = str(self.home / "recovered")
+        code, body = self.request("/api/vault/restore", {
+            "vault": vault, "output": output, "apply": False,
+        })
+        self.assertEqual(code, 400)
+        self.assertIn("explicit confirmation", body["error"])
+        with patch("codex_migrate.setup.restore_vault_snapshot",
+                   side_effect=RuntimeError("PRIVATE CUSTOMER CONTENT")):
+            self.assertEqual(self.request("/api/vault/restore", {
+                "vault": vault, "output": output, "apply": True,
+            })[0], 202)
+            self.helper._restore_thread.join(timeout=3)
+        status = self.request("/api/vault/restore-status")[1]
+        self.assertEqual(status["status"], "failed")
+        self.assertNotIn("PRIVATE CUSTOMER CONTENT", json.dumps(status))
+
+    def test_vault_backup_waits_for_active_restore(self):
+        vault = str(self.home / "vault")
+        output = str(self.home / "recovered")
+        started = threading.Event()
+        release = threading.Event()
+
+        def slow_restore(*_args, **_kwargs):
+            started.set()
+            release.wait(timeout=3)
+            return RestoreResult(
+                vault=vault, snapshot_id="fixture-snapshot", transcript_files=1,
+                transcript_bytes=10, output=output,
+            )
+
+        try:
+            with patch("codex_migrate.setup.restore_vault_snapshot", side_effect=slow_restore):
+                self.assertEqual(self.request("/api/vault/restore", {
+                    "vault": vault, "output": output, "apply": True,
+                })[0], 202)
+                self.assertTrue(started.wait(timeout=1))
+                code, body = self.request(
+                    "/api/vault/backup", {"destination": vault, "apply": True})
+                self.assertEqual(code, 400)
+                self.assertIn("recovery to finish", body["error"])
+        finally:
+            release.set()
+            if self.helper._restore_thread:
+                self.helper._restore_thread.join(timeout=3)
+
+    def test_vault_restore_folder_picker_is_fixed_and_cancel_is_non_destructive(self):
+        completed = subprocess.CompletedProcess(
+            [], 0, stdout=str(self.home / "Recovered") + "\n", stderr="")
+        with patch("codex_migrate.setup.subprocess.run", return_value=completed) as run:
+            code, result = self.request("/api/vault/restore-folder", {})
+        self.assertEqual(code, 200)
+        self.assertEqual(result["path"], str(self.home / "Recovered"))
+        self.assertEqual(run.call_args.args[0][:3], ["/usr/bin/osascript", "-l", "JavaScript"])
+        self.assertNotIn(str(self.home), run.call_args.args[0][-1])
+
+        cancelled = subprocess.CompletedProcess([], 1, stdout="", stderr="User canceled. (-128)")
+        with patch("codex_migrate.setup.subprocess.run", return_value=cancelled):
+            self.assertEqual(self.request("/api/vault/restore-folder", {})[1]["path"], None)
 
     def test_vault_schedule_requires_explicit_apply_and_reports_state(self):
         destination = str(self.home / "vault")
@@ -184,6 +272,12 @@ class SetupTests(unittest.TestCase):
                     "/api/vault/backup", {"destination": destination, "apply": True})
                 self.assertEqual(code, 400)
                 self.assertIn("already running", body["error"])
+                code, body = self.request("/api/vault/restore", {
+                    "vault": destination, "output": str(self.home / "recovered"),
+                    "apply": True,
+                })
+                self.assertEqual(code, 400)
+                self.assertIn("backup to finish", body["error"])
         finally:
             release.set()
             if self.helper._vault_thread:
