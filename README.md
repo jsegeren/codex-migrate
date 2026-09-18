@@ -85,10 +85,24 @@ and displays its recovery key once. Save that recovery key in a password
 manager; losing both the Mac Keychain item and recovery key makes the encrypted
 backup unrecoverable. The packaged app's local Vault page can create the same
 verified backup in an empty local or cloud-sync folder and guides the customer
-through saving the recovery key. Restore UI, automatic scheduling, retention
-controls, and cloud-folder health monitoring are still under development, so
-this remains an engineering foundation rather than the public Vault
-subscription.
+through saving the recovery key. After that first verified backup, it can install
+a private macOS LaunchAgent that adds a verified encrypted snapshot every day,
+even when the app is closed. Turning automatic backup off removes only the local
+schedule; existing Vault snapshots remain. Restore UI, retention controls, and
+cloud-folder health monitoring are still under development, so this remains an
+engineering foundation rather than the public Vault subscription.
+
+The equivalent schedule commands are explicit and reversible:
+
+```bash
+codex-migrate vault schedule --vault "/absolute/path/Codex Vault" --apply
+codex-migrate vault schedule-status
+codex-migrate vault schedule-remove --apply
+```
+
+Scheduling is refused until the selected Vault and its latest snapshot verify
+with the key already stored in this Mac's Keychain. An unattended run never
+creates or prints a recovery key.
 
 A verified snapshot can be checked or decrypted into a separate staging folder
 without touching live Codex data:
@@ -394,7 +408,8 @@ installation identity files.
 
 The packaged local helper also exposes an experimental history browser with
 per-thread Markdown download, print-to-PDF and the browser's native share sheet
-when supported. This is not yet the planned automatic backup product.
+when supported, plus opt-in daily encrypted backups after the first verified
+manual snapshot.
 See [the Codex Vault product plan](docs/codex-vault-product-plan.md) for the
 product boundary, safety sequence and proposed editions.
 

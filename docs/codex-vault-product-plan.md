@@ -100,8 +100,15 @@ The packaged app now exposes this manual backup flow in the local Vault page:
 choose an empty folder or existing Vault, watch content-free progress, receive
 the first Vault's recovery key once, and acknowledge that it has been saved.
 The UI and its private local APIs are covered by desktop/mobile rendering and
-authorization tests. Scheduling, retention and background health reporting are
-the next backup milestone.
+authorization tests.
+
+The automatic-backup slice adds a macOS LaunchAgent only after the latest
+snapshot in an existing Vault verifies with a key already present in the local
+Keychain. It runs every 24 hours by default, reuses the same backup lock and
+publish-after-verification contract, and records only content-free run health.
+Disabling it removes the schedule but leaves every snapshot intact. Unattended
+runs never create or display a recovery key. Retention controls and richer
+cloud-folder health reporting remain the next backup milestone.
 
 ### 3. Verified restore
 

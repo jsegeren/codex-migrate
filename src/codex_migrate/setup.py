@@ -27,6 +27,11 @@ from codex_migrate.vault_backup import backup as backup_vault
 from codex_migrate.vault_backup import plan as plan_vault_backup
 from codex_migrate.vault_dashboard import VAULT_HTML
 from codex_migrate.vault_recovery import export_recovery_key
+from codex_migrate.vault_schedule import (
+    install_schedule as install_vault_schedule,
+    remove_schedule as remove_vault_schedule,
+    schedule_status as vault_schedule_status,
+)
 
 FOLDER_PICKER_ERROR = (
     "Folder selection could not finish. Close any open folder dialog and try again, "
@@ -361,6 +366,21 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder or an existing Code
         with self._vault_lock:
             return dict(self._vault_status)
 
+    def vault_schedule(self):
+        return vault_schedule_status(self.source_home)
+
+    def enable_vault_schedule(self, destination, interval_hours):
+        if not isinstance(destination, str) or len(destination) > 4096:
+            raise MigrationError("Choose a valid existing Vault folder")
+        if isinstance(interval_hours, bool) or not isinstance(interval_hours, int):
+            raise MigrationError("Choose a valid backup interval")
+        result = install_vault_schedule(
+            self.source_home, destination, interval_hours=interval_hours)
+        return {"enabled": True, "healthy": True, **result.as_dict()}
+
+    def disable_vault_schedule(self):
+        return remove_vault_schedule(self.source_home)
+
     def acknowledge_vault_recovery_key(self):
         with self._vault_lock:
             if not self._vault_status.get("recovery_key"):
@@ -460,6 +480,9 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder or an existing Code
                         if parsed.path == "/api/vault/backup-status" and not query:
                             self._json(200, setup.vault_status())
                             return
+                        if parsed.path == "/api/vault/schedule" and not query:
+                            self._json(200, setup.vault_schedule())
+                            return
                         if parsed.path == "/api/vault/search" and set(query) <= {"q", "limit"}:
                             phrase = query.get("q", [""])[0]
                             raw_limit = query.get("limit", ["50"])[0]
@@ -545,19 +568,33 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder or an existing Code
                     threading.Thread(target=self.server.shutdown, daemon=True).start()
                     return
                 if self.path in ("/api/vault/folder", "/api/vault/backup",
-                                 "/api/vault/recovery-saved"):
+                                 "/api/vault/recovery-saved", "/api/vault/schedule",
+                                 "/api/vault/schedule-remove"):
                     try:
                         length = int(self.headers.get("Content-Length", "0"))
                         if not 0 < length <= 8192:
                             raise MigrationError("Invalid Vault request size")
                         payload = json.loads(self.rfile.read(length))
-                        if payload != {} and self.path != "/api/vault/backup":
+                        if (payload != {} and self.path not in (
+                                "/api/vault/backup", "/api/vault/schedule",
+                                "/api/vault/schedule-remove")):
                             raise MigrationError("Invalid Vault request")
                         if self.path == "/api/vault/folder":
                             path = setup.choose_vault_folder()
                             self._json(200, {"path": path})
                         elif self.path == "/api/vault/recovery-saved":
                             self._json(200, setup.acknowledge_vault_recovery_key())
+                        elif self.path == "/api/vault/schedule":
+                            if (not isinstance(payload, dict)
+                                    or set(payload) != {"destination", "interval_hours", "apply"}
+                                    or payload.get("apply") is not True):
+                                raise MigrationError("Automatic backup requires explicit confirmation")
+                            self._json(200, setup.enable_vault_schedule(
+                                payload.get("destination"), payload.get("interval_hours")))
+                        elif self.path == "/api/vault/schedule-remove":
+                            if payload != {"apply": True}:
+                                raise MigrationError("Turning off automatic backup requires explicit confirmation")
+                            self._json(200, setup.disable_vault_schedule())
                         else:
                             if (not isinstance(payload, dict)
                                     or set(payload) != {"destination", "apply"}

@@ -118,6 +118,24 @@ def parser() -> argparse.ArgumentParser:
         "key-export", help="Display the Vault recovery key for password-manager storage")
     vault_export.add_argument("--vault", required=True)
     vault_export.add_argument("--crypto-helper")
+    vault_schedule = vault_commands.add_parser(
+        "schedule", help="Create a recurring verified Vault backup on this Mac")
+    vault_schedule.add_argument("--vault", required=True)
+    vault_schedule.add_argument("--interval-hours", type=int, default=24,
+                                choices=(6, 12, 24, 168))
+    vault_schedule.add_argument("--crypto-helper")
+    vault_schedule.add_argument("--apply", action="store_true")
+    vault_schedule.add_argument("--json", action="store_true")
+    vault_schedule_status = vault_commands.add_parser(
+        "schedule-status", help="Show the automatic Vault backup state")
+    vault_schedule_status.add_argument("--json", action="store_true")
+    vault_schedule_remove = vault_commands.add_parser(
+        "schedule-remove", help="Turn off automatic Vault backups without deleting snapshots")
+    vault_schedule_remove.add_argument("--apply", action="store_true")
+    vault_schedule_remove.add_argument("--json", action="store_true")
+    vault_scheduled_run = vault_commands.add_parser(
+        "scheduled-run", help=argparse.SUPPRESS)
+    vault_scheduled_run.add_argument("--config", required=True)
 
     return root
 
@@ -209,6 +227,53 @@ def main(argv: Optional[List[str]] = None) -> int:
             return 0
         if args.command == "vault":
             from codex_migrate.vault import inspect as inspect_vault, search as search_vault
+            if args.vault_command in (
+                    "schedule", "schedule-status", "schedule-remove", "scheduled-run"):
+                from codex_migrate.vault_schedule import (
+                    install_schedule, plan_schedule, remove_schedule,
+                    run_scheduled_backup, schedule_status,
+                )
+                if args.vault_command == "scheduled-run":
+                    return run_scheduled_backup(args.config)
+                if args.vault_command == "schedule-status":
+                    result = schedule_status(args.source_home)
+                elif args.vault_command == "schedule-remove":
+                    if not args.apply:
+                        result = {"enabled": schedule_status(args.source_home).get("enabled", False),
+                                  "applied": False}
+                    else:
+                        result = remove_schedule(args.source_home)
+                        result["applied"] = True
+                else:
+                    result = (install_schedule(
+                        args.source_home, args.vault,
+                        interval_hours=args.interval_hours,
+                        crypto_helper=args.crypto_helper,
+                    ) if args.apply else plan_schedule(
+                        args.source_home, args.vault,
+                        interval_hours=args.interval_hours,
+                        crypto_helper=args.crypto_helper,
+                    ))
+                    result = result.as_dict()
+                if args.json:
+                    print(json.dumps(result, indent=2, sort_keys=True))
+                elif args.vault_command == "schedule":
+                    if result["applied"]:
+                        print("Automatic verified backup enabled every %d hour(s)." % result["interval_hours"])
+                    else:
+                        print("Would enable an automatic verified backup every %d hour(s)." % result["interval_hours"])
+                        print("Planning mode only; add --apply to install the macOS schedule.")
+                    print("Vault: %s" % result["vault"])
+                elif args.vault_command == "schedule-remove":
+                    print("Automatic backup is off." if result["applied"] else
+                          "Would turn off automatic backups without deleting Vault snapshots.")
+                else:
+                    print("Automatic backup: %s" % ("on" if result.get("enabled") else "off"))
+                    if result.get("enabled"):
+                        print("Healthy: %s" % ("yes" if result.get("healthy") else "no"))
+                        print("Every %d hour(s)" % result["interval_hours"])
+                        print("Vault: %s" % result["vault"])
+                return 0
             if args.vault_command == "inspect":
                 result = inspect_vault(args.source_home)
                 if args.json:
