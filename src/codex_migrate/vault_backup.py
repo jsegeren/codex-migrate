@@ -24,6 +24,7 @@ import uuid
 from codex_migrate.errors import MigrationError
 from codex_migrate.source_availability import check_info, require_local
 from codex_migrate.vault import _transcripts
+from codex_migrate.vault_local_lock import local_history_lock
 
 
 FORMAT_VERSION = 1
@@ -289,6 +290,20 @@ def plan(source_home: str, destination: str) -> BackupPlan:
 
 
 def backup(
+    source_home: str,
+    destination: str,
+    *,
+    crypto_helper: Optional[str] = None,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+    progress: Optional[Callable[[int, int, int, int], None]] = None,
+) -> BackupResult:
+    with local_history_lock(source_home):
+        return _backup_unlocked(
+            source_home, destination, crypto_helper=crypto_helper,
+            chunk_size=chunk_size, progress=progress)
+
+
+def _backup_unlocked(
     source_home: str,
     destination: str,
     *,
