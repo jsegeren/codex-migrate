@@ -3,23 +3,23 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Search, encrypt, back up, recover, and safely move your local OpenAI Codex conversations and work. Free CLI; signed Mac beta with Codex Vault.">
+    <meta name="description" content="Back up, search, recover, and safely move local OpenAI Codex conversations and work on your Mac. Free CLI; signed Mac beta for $49.">
     <meta name="theme-color" content="#f7f4ed">
-    <meta property="og:title" content="Codex Migrate + Vault — Don’t lose your Codex work.">
-    <meta property="og:description" content="Search, back up, recover, and safely move local OpenAI Codex work—including Codex in the ChatGPT desktop app—to another Mac.">
+    <meta property="og:title" content="Codex Migrate + Vault — Keep your Codex work safe.">
+    <meta property="og:description" content="Back up, search, recover, and safely move local OpenAI Codex work—including Codex in the ChatGPT desktop app—on your Mac.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://migrate.segeren.com/">
     <meta property="og:image" content="https://migrate.segeren.com/og.png">
     <meta property="og:image:type" content="image/png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="Codex Migrate: Change the Mac. Keep the work. Codex product icon labelled For Codex. Independent tool, not affiliated with OpenAI.">
+    <meta property="og:image:alt" content="Codex Migrate: Change the Mac. Keep the work. Independent tool, not affiliated with OpenAI.">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:site" content="@JoshuaSegeren">
-    <meta name="twitter:title" content="Codex Migrate + Vault — Don’t lose your Codex work.">
-    <meta name="twitter:description" content="Protect local OpenAI Codex work, including Codex in the ChatGPT desktop app. Free CLI; signed Mac beta with best-effort support for $49.">
+    <meta name="twitter:title" content="Codex Migrate + Vault — Keep your Codex work safe.">
+    <meta name="twitter:description" content="Back up, search, recover, and safely move local OpenAI Codex work—including Codex in the ChatGPT desktop app—on your Mac. Signed app $49; free CLI.">
     <meta name="twitter:image" content="https://migrate.segeren.com/og.png">
-    <meta name="twitter:image:alt" content="Codex Migrate: Change the Mac. Keep the work. Codex product icon labelled For Codex. Independent tool, not affiliated with OpenAI.">
+    <meta name="twitter:image:alt" content="Codex Migrate: Change the Mac. Keep the work. Independent tool, not affiliated with OpenAI.">
     <link rel="canonical" href="https://migrate.segeren.com/">
     <script type="application/ld+json">
       {
@@ -28,10 +28,7 @@
         "name": "Codex Migrate Mac beta",
         "description": "A signed and Apple-notarized Mac app that searches, encrypts, backs up, recovers, and safely moves local Codex conversations and selected workspaces.",
         "image": "https://migrate.segeren.com/og.png",
-        "brand": {
-          "@type": "Brand",
-          "name": "Codex Migrate"
-        },
+        "brand": { "@type": "Brand", "name": "Codex Migrate" },
         "offers": {
           "@type": "Offer",
           "url": "https://migrate.segeren.com/#founding-edition",
@@ -39,267 +36,142 @@
           "priceCurrency": "USD",
           "availability": "https://schema.org/InStock",
           "itemCondition": "https://schema.org/NewCondition",
-          "seller": {
-            "@type": "Organization",
-            "name": "Segeren Studio"
-          }
+          "seller": { "@type": "Organization", "name": "Segeren Studio" }
         }
       }
     </script>
-    <title>Codex Migrate + Vault — Back up and move OpenAI Codex</title>
+    <title>Codex Migrate + Vault — Back up, search, and move Codex</title>
     <link rel="icon" href="/assets/mark.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="/styles.css?v=20260918-vault">
+    <link rel="stylesheet" href="/styles.css?v=20260918-short">
     <script src="/analytics.js?v=20260911-ecommerce" defer></script>
-    <script src="/checkout.js?v=20260918-vault" defer></script>
+    <script src="/demo.js?v=20260918-short" defer></script>
+    <script src="/checkout.js?v=20260918-short" defer></script>
   </head>
   <body>
     <header class="site-header">
-      <a class="brand" href="/">
-        <span class="brand-mark" aria-hidden="true">CM</span>
-        <span>Codex Migrate</span>
-      </a>
+      <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">CM</span><span>Codex Migrate</span></a>
       <a class="header-compatibility" href="https://openai.com/codex/" aria-label="For Codex — independent migration tool">
         <picture><source srcset="/assets/codex-product-dark-80.avif" type="image/avif"><img src="/assets/codex-product-dark-80.png" width="40" height="40" alt=""></picture>
-        <span>For Codex</span>
+        <span class="compatibility-copy"><strong>For Codex</strong><small>Independent · not affiliated</small></span>
       </a>
-      <nav aria-label="Primary navigation">
-        <a href="#vault">Vault</a>
-        <a href="#how-it-works">Migration</a>
-        <a href="#editions">Editions</a>
-        <a href="https://github.com/jsegeren/codex-migrate">GitHub</a>
-      </nav>
+      <nav aria-label="Primary navigation"><a href="#what-it-does">What it does</a><a href="#watch">Watch</a><a href="#why">Why not DIY?</a><a href="#founding-edition">Get it</a></nav>
     </header>
 
     <main>
       <section class="hero shell">
         <div class="hero-copy">
-          <p class="eyebrow" id="hero-availability"><span class="status-dot"></span> Signed &amp; notarized Mac beta · Now with Vault</p>
+          <p class="eyebrow" id="hero-availability"><span class="status-dot"></span> Signed &amp; notarized Mac beta · Codex Vault included</p>
           <div class="hero-heading">
             <div class="hero-message">
-              <h1>Don’t lose your <br><span class="accent">Codex work.</span></h1>
-              <p class="lede">Search old threads. Keep encrypted, versioned backups in a folder you control. Recover one conversation—or safely move everything to a new Mac.</p>
+              <h1>Keep your <br><span class="accent">Codex work safe.</span></h1>
+              <p class="lede">Back up and search your local Codex conversations. Recover a missing thread. Move everything safely when you change Macs.</p>
               <div class="actions">
                 <a class="button button-primary" id="hero-paid-link" data-analytics-event="select_paid_beta" href="#founding-edition">Protect my Codex work — $49</a>
                 <a class="button button-secondary" data-analytics-event="select_free_cli" href="https://github.com/jsegeren/codex-migrate">Get the free CLI</a>
               </div>
-              <p class="fine-print">Codex Vault + Mac migration · One payment · 30-day refund · Help from Joshua</p>
+              <p class="fine-print"><strong>For OpenAI Codex on Apple silicon Macs</strong>—including Codex in the ChatGPT desktop app. Not for ordinary ChatGPT cloud chats or all ChatGPT modes.<br><span>Independent tool. Not affiliated with or endorsed by OpenAI.</span></p>
             </div>
-            <picture class="hero-inline-media">
-              <source srcset="/assets/codex-product-dark-288.avif 288w, /assets/codex-product-dark-560.avif 560w" sizes="(max-width: 760px) 144px, (max-width: 980px) 160px, 280px" type="image/avif">
-              <img class="hero-inline-icon" src="/assets/codex-product-dark-288.png"
-                srcset="/assets/codex-product-dark-288.png 288w, /assets/codex-product-dark-560.png 560w"
-                sizes="(max-width: 760px) 144px, (max-width: 980px) 160px, 280px"
-                width="280" height="280" fetchpriority="high" decoding="async" alt="Codex product icon">
-            </picture>
           </div>
         </div>
       </section>
 
-      <section class="proof-strip" aria-label="Product principles">
-        <div><strong>Find old threads</strong><span>Search active and archived history</span></div>
-        <div><strong>Encrypted backups</strong><span>Stored in a folder you control</span></div>
-        <div><strong>Recover safely</strong><span>One conversation or a full snapshot</span></div>
-        <div><strong>Move everything</strong><span>Backup, install, and verify</span></div>
+      <section class="jobs shell" id="what-it-does" aria-labelledby="jobs-heading">
+        <div class="section-intro compact-intro"><p class="eyebrow">Three jobs. One app.</p><h2 id="jobs-heading">Your Codex work should not live on one fragile Mac.</h2></div>
+        <div class="jobs-grid">
+          <article><span>01</span><h3>Back up to Vault</h3><p>Create an encrypted, versioned backup in a folder you control. Daily backup is the recommended default; choose manual backup instead if you prefer.</p></article>
+          <article><span>02</span><h3>Search your history</h3><p>Use the separate local Vault interface to search active and archived conversations, open old threads, and export them as Markdown or PDF—outside Codex.</p></article>
+          <article><span>03</span><h3>Move to another Mac</h3><p>Transfer conversations, settings, skills, repositories, worktrees, and unfinished files. The new Mac keeps its own login and device identity.</p></article>
+        </div>
+        <p class="jobs-note">Automatic backup runs locally through macOS—even when the app is closed—and needs the Mac and your chosen Vault folder to be available. It is not real-time sync.</p>
       </section>
 
-      <section class="vault-preview shell" id="vault" aria-labelledby="vault-heading">
-        <div class="section-intro">
-          <p class="eyebrow">New in build 12</p>
-          <h2 id="vault-heading">Your Codex history should survive your Mac.</h2>
-          <p>Codex Vault turns the local conversation files already on your Mac into something you can actually find, protect, and recover.</p>
+      <section class="demo-section shell" id="watch" aria-labelledby="watch-heading">
+        <div class="section-intro compact-intro"><p class="eyebrow">The real app</p><h2 id="watch-heading">Choose a walkthrough.</h2><p>Both recordings use the shipped interface with staged sample data.</p></div>
+        <div class="demo-tabs" role="tablist" aria-label="Product walkthroughs">
+          <button type="button" role="tab" id="vault-demo-tab" aria-selected="true" aria-controls="vault-demo-panel" data-demo-target="vault-demo-panel">Vault: back up &amp; search</button>
+          <button type="button" role="tab" id="migration-demo-tab" aria-selected="false" aria-controls="migration-demo-panel" data-demo-target="migration-demo-panel" tabindex="-1">Migration: move Macs</button>
         </div>
-        <div class="vault-showcase">
-          <div class="vault-feature-grid" aria-label="Codex Vault capabilities">
-            <article><span>01</span><h3>Find past work</h3><p>Search active and archived conversation text without uploading it or creating a separate content index.</p></article>
-            <article><span>02</span><h3>Back it up privately</h3><p>Create encrypted snapshots in a local or cloud-sync folder you choose. Add a verified backup every day.</p></article>
-            <article><span>03</span><h3>Recover with guardrails</h3><p>Restore one missing conversation without overwriting unrelated history, or recover a complete verified snapshot with rollback protection.</p></article>
-          </div>
-          <figure class="vault-demo">
-            <a href="/assets/codex-vault-dashboard.png">
-              <picture>
-                <source srcset="/assets/codex-vault-dashboard-720.avif 720w, /assets/codex-vault-dashboard-1120.avif 1120w" sizes="(max-width: 760px) calc(100vw - 30px), 680px" type="image/avif">
-                <img src="/assets/codex-vault-dashboard.png" width="1440" height="1610" loading="lazy" decoding="async" alt="Codex Vault interface showing local conversation counts, encrypted backup, automatic daily backup, recovery, and search controls">
-              </picture>
-            </a>
-            <figcaption><strong>Real build 12 interface; staged sample data.</strong> Vault reads local Codex conversation history and never copies authentication or installation identity.</figcaption>
+        <div class="demo-panel" id="vault-demo-panel" role="tabpanel" aria-labelledby="vault-demo-tab">
+          <figure class="product-demo">
+            <video controls preload="metadata" poster="/assets/codex-vault-demo-poster.jpg" aria-describedby="vault-demo-caption">
+              <source src="/assets/codex-vault-demo.webm" type="video/webm">
+              Your browser cannot play this demo. <a href="/assets/codex-vault-demo.webm">Open the Codex Vault demo</a>.
+            </video>
+            <figcaption id="vault-demo-caption"><strong>19 seconds:</strong> daily-versus-manual backup setup, local conversation search, and thread export. <a href="/codex-vault">Vault details</a>.</figcaption>
           </figure>
         </div>
-        <div class="actions vault-actions"><a class="button button-primary" data-analytics-event="select_paid_beta" href="#founding-edition">Get Vault + migration — $49</a><a class="button button-secondary" href="/codex-vault">How Codex Vault works</a></div>
-        <p class="fine-print">No app telemetry · No hosted copy of your conversations · Complete engine remains MIT licensed</p>
-      </section>
-
-      <section class="product-preview shell" aria-labelledby="preview-heading">
-        <div class="section-intro">
-          <p class="eyebrow">Mac-to-Mac migration</p>
-          <h2 id="preview-heading">Watch the move in 1 minute.</h2>
-          <p>See the connection, progress, backup checks, and final result.</p>
+        <div class="demo-panel" id="migration-demo-panel" role="tabpanel" aria-labelledby="migration-demo-tab" hidden>
+          <figure class="product-demo">
+            <video controls preload="metadata" poster="/assets/codex-migrate-demo-poster.jpg" aria-describedby="migration-demo-caption">
+              <source src="/assets/codex-migrate-demo.webm" type="video/webm">
+              Your browser cannot play this demo. <a href="/assets/codex-migrate-demo.webm">Open the one-minute Codex Migrate demo</a>.
+            </video>
+            <figcaption id="migration-demo-caption"><strong>Watch a migration in 1 minute.</strong> Transfer time depends on data size and your connection. <a href="/moving-to-a-new-mac">Migration details</a>.</figcaption>
+          </figure>
         </div>
-        <figure class="product-demo">
-          <video controls preload="metadata" poster="/assets/codex-migrate-demo-poster.jpg" aria-describedby="demo-caption">
-            <source src="/assets/codex-migrate-demo.webm" type="video/webm">
-            Your browser cannot play this demo. <a href="/assets/codex-migrate-demo.webm">Open the one-minute Codex Migrate demo</a>.
-          </video>
-          <figcaption id="demo-caption"><strong>Real product interface; staged sample data.</strong> Transfer time depends on data size and your connection.</figcaption>
-        </figure>
-        <p><a href="/backup-and-recovery">See backup and recovery details</a>.</p>
       </section>
 
-      <section class="story shell" id="how-it-works">
-        <div class="section-intro">
-          <p class="eyebrow">Built after the hard version</p>
-          <h2>Your Codex workspace is more than a login.</h2>
-          <p>Signing in on a new Mac does not recreate every piece of local working state. Codex Migrate inventories what exists, moves it over a connection you control, preserves the new Mac's identity, and proves the result before calling it done.</p>
-        </div>
-        <ol class="steps">
-          <li><span>01</span><div><h3>Inspect</h3><p>See exactly what will move, how large it is, and whether both Macs are ready. Planning mode changes nothing.</p></div></li>
-          <li><span>02</span><div><h3>Transfer</h3><p>Move your workspace over Wi-Fi or a compatible USB-C/Thunderbolt network connection. Both use secure SSH. When both routes are available, Codex Migrate tests them and selects the faster verified connection. Pause and resume without starting over.</p></div></li>
-          <li><span>03</span><div><h3>Protect</h3><p>Verify a destination backup before replacement. Insufficient space or failed verification blocks installation. Keep an independent backup too.</p></div></li>
-          <li><span>04</span><div><h3>Verify</h3><p>Compare conversation counts, check databases, and produce a readable receipt of what arrived.</p></div></li>
-        </ol>
-      </section>
-
-      <section class="inventory">
-        <div class="shell inventory-grid">
-          <div>
-            <p class="eyebrow">The whole working environment</p>
-            <h2>Not just the clean, committed parts.</h2>
-            <p>Selected workspace roots move byte-for-byte, including the work that has not reached a remote yet.</p>
-          </div>
-          <ul class="check-list">
-            <li>Active and archived conversations</li>
-            <li>Configuration, project organization, rules, and memories</li>
-            <li>Personal and repository-scoped skills</li>
-            <li>Automations and relevant local state</li>
-            <li>Repositories, branches, tags, remotes, and stashes</li>
-            <li>Worktrees, uncommitted changes, and untracked files</li>
+      <section class="diy" id="why">
+        <div class="shell diy-grid">
+          <div><p class="eyebrow">Why not just do it yourself?</p><h2>You can. Don’t gamble with the only copy.</h2><p>The complete engine is MIT licensed and free. The paid app is for people who want the guardrails, automation, packaging, and help—not a mystery box.</p></div>
+          <ul class="diy-list">
+            <li><strong>Preserves the new Mac’s identity.</strong><span>It deliberately excludes login credentials and installation identity.</span></li>
+            <li><strong>Proves the backup before recovery.</strong><span>Encrypted snapshots are integrity-checked; unsafe or conflicting restores stop.</span></li>
+            <li><strong>Protects unrelated history.</strong><span>Recover one missing conversation without replacing everything else.</span></li>
+            <li><strong>Makes a safe Mac move repeatable.</strong><span>Resumable staging, space checks, destination backup, rollback, and post-move verification are built in.</span></li>
           </ul>
         </div>
       </section>
 
       <section class="editions shell" id="editions">
-        <div class="section-intro centered">
-          <p class="eyebrow">One engine. Two ways to use it.</p>
-          <h2>The Mac app is the easy way.</h2>
-          <p>Buy the signed, notarized app for the easiest setup and personal migration help from Joshua. Developers can still inspect and run the complete migration engine from source.</p>
-        </div>
-        <div class="pricing-grid">
+        <div class="section-intro centered compact-intro"><p class="eyebrow">Get Codex Migrate + Vault</p><h2>Use the app—or inspect every line.</h2><p>The paid Mac app and free CLI use the same open-source engine.</p></div>
+        <div class="pricing-grid compact-pricing">
           <article class="price-card featured" id="founding-edition">
             <div class="badge" id="edition-state">Mac beta</div>
-            <p class="plan-name">Codex Vault + Mac migration app</p>
-            <p class="price"><span>$</span>49</p>
-            <p class="price-note">One payment · no subscription</p>
-            <p class="cohort-note"><strong>Founding five:</strong> priority, best-effort help directly from Joshua for the first five buyers.</p>
-            <ul class="check-list compact">
-              <li id="edition-signed">Signed and notarized Mac beta</li>
-              <li>Search and export local conversations</li>
-              <li>Encrypted, versioned backups with an optional daily schedule</li>
-              <li>Recover one conversation or a complete snapshot</li>
-              <li>Guided, verified Mac-to-Mac migration</li>
-              <li>Personal setup, backup, migration, and recovery help</li>
-            </ul>
+            <p class="plan-name">Signed Mac app</p><p class="price"><span>$</span>49</p><p class="price-note">One payment · no subscription · 30-day refund policy</p>
+            <ul class="check-list compact offer-list"><li id="edition-signed">Signed and notarized Apple silicon Mac beta</li><li>Vault search, encrypted daily backup, recovery, and full migration</li><li>Best-effort help directly from Joshua</li></ul>
             <div id="edition-disclosure" hidden>
               <a class="button button-secondary full" href="mailto:joshua@segeren.com?subject=Codex%20Migrate%20%2449%20beta%20access&amp;body=My%20Mac%20models%20and%20macOS%20versions%3A%0AWhat%20I%20want%20to%20migrate%3A%0A">Request Mac beta access — $49</a>
-              <p class="disclosure">If checkout is unavailable, email Joshua for help with the signed Mac beta. Don’t email credentials or workspace contents.</p>
-              <p class="disclosure">Prefer to wait? Request a launch email below.</p>
+              <p class="disclosure">If checkout is unavailable, email Joshua for help with the signed Mac beta. Don’t email credentials or workspace contents.</p><p class="disclosure">Prefer to wait? Request a launch email below.</p>
             </div>
             <div id="checkout-panel">
               <p id="checkout-platform" class="disclosure">For Apple silicon Macs. $49 USD plus applicable tax. Secure checkout through Stripe.</p>
-              <p id="beta-limits" class="disclosure"><strong>Apple-silicon beta:</strong> Keep your old Mac and an independent backup until you verify Vault recovery or migration. Migration replaces selected destination data; it does not merge two active workspaces.</p>
-              <details class="beta-details">
-                <summary>What has been tested—and what remains</summary>
-                <p>Selected-thread Vault recovery has passed a physical two-Mac test. Migration has passed VoiceOver, a real macOS permission-denial check, and physical Wi-Fi interruption/resume testing. Retention controls, cloud-folder health monitoring, broader Codex-version coverage, guided permission recovery, direct-cable interruption, pristine-Mac installation, and broader hardware coverage remain ongoing.</p>
-              </details>
-              <button id="checkout-button" class="button button-primary full" data-analytics-event="begin_checkout" type="button" aria-describedby="checkout-platform beta-limits migration-guarantee checkout-status">Protect and move my Codex work — $49</button>
+              <p id="beta-limits" class="disclosure"><strong>Beta:</strong> Keep your old Mac and an independent backup until you verify recovery or migration. Migration replaces selected destination data; it does not merge two active workspaces.</p>
+              <details class="beta-details"><summary>Current testing boundary</summary><p>Selected-thread recovery, VoiceOver, permission denial, and physical Wi-Fi interruption/resume testing have passed. Retention controls, cloud-folder health monitoring, broader Codex-version coverage, guided permission recovery, direct-cable interruption, pristine-Mac installation, and broader hardware coverage remain ongoing.</p></details>
+              <button id="checkout-button" class="button button-primary full" data-analytics-event="begin_checkout" type="button" aria-describedby="checkout-platform beta-limits migration-guarantee checkout-status">Protect my Codex work — $49</button>
               <p id="checkout-status" role="status"></p>
-              <p class="checkout-assurance" id="migration-guarantee"><strong>30-day refund guarantee.</strong> If the supported Vault or Mac-to-Mac migration workflow does not work for you, email Joshua within 30 days for a full refund.</p>
+              <p class="checkout-assurance" id="migration-guarantee"><strong>30-day refund guarantee.</strong> If the supported Vault or Mac-to-Mac migration workflow does not work for you, email Joshua for a full refund.</p>
               <p class="disclosure"><a href="mailto:joshua@segeren.com?subject=Question%20before%20buying%20Codex%20Migrate">Questions before buying? Ask Joshua</a> · <a href="/terms.html">Terms</a> · <a href="/refunds.html">Refund details</a></p>
             </div>
-            <p class="disclosure">Best-effort help from Joshua is included for setup, backup, migration, verification, and recovery. We aim to reply within a few business days; timing and resolution are not guaranteed.</p>
+            <p class="disclosure">Best-effort support aims for an initial reply within a few business days; timing and resolution are not guaranteed.</p>
             <div class="launch-interest" id="launch-email" hidden>
-              <h3>Want a launch email?</h3>
-              <form class="signup-form" action="/api/signup" method="post">
-                <label for="launch-address">Email address</label>
-                <input id="launch-address" name="email" type="email" autocomplete="email" inputmode="email" maxlength="254" placeholder="you@example.com" required aria-describedby="launch-privacy">
-                <div class="form-trap" aria-hidden="true"><label for="launch-website">Leave this empty</label><input id="launch-website" name="website" type="text" tabindex="-1" autocomplete="off"></div>
-                <label class="consent"><input name="consent" type="checkbox" value="yes" required><span>Please email me when the Mac app is available.</span></label>
-                <button class="button button-primary full" type="submit">Request a launch email</button>
-              </form>
+              <h3>Want a launch email?</h3><form class="signup-form" action="/api/signup" method="post"><label for="launch-address">Email address</label><input id="launch-address" name="email" type="email" autocomplete="email" inputmode="email" maxlength="254" placeholder="you@example.com" required aria-describedby="launch-privacy"><div class="form-trap" aria-hidden="true"><label for="launch-website">Leave this empty</label><input id="launch-website" name="website" type="text" tabindex="-1" autocomplete="off"></div><label class="consent"><input name="consent" type="checkbox" value="yes" required><span>Please email me when the Mac app is available.</span></label><button class="button button-primary full" type="submit">Request a launch email</button></form>
               <p class="disclosure" id="launch-privacy">Your request goes to Joshua’s inbox via SendGrid. No payment, preorder, or newsletter. Email Joshua to opt out. <a href="/privacy.html">Privacy</a>.</p>
             </div>
           </article>
-
-          <article class="price-card">
-            <p class="plan-name">Open source CLI</p>
-            <p class="price">$0</p>
-            <p class="price-note">MIT licensed · available today</p>
-            <ul class="check-list compact">
-              <li>Complete Vault and migration engine</li>
-              <li>Local search, export, encrypted backup, and recovery</li>
-              <li>Selective skills export</li>
-              <li>Local progress dashboard</li>
-              <li>Pause, resume, backup, and verification</li>
-              <li>Community support on GitHub</li>
-            </ul>
+          <article class="price-card free-card">
+            <p class="plan-name">Open-source CLI</p><p class="price">$0</p><p class="price-note">MIT licensed · same safety engine</p>
+            <p>Comfortable with Terminal? Run the Vault and migration workflows yourself, inspect the implementation, or contribute.</p>
             <a class="button button-secondary full" data-analytics-event="select_free_cli" href="https://github.com/jsegeren/codex-migrate">View the source and CLI</a>
           </article>
         </div>
       </section>
 
-      <section class="origin shell">
-        <blockquote>“I changed Macs, signed in, and discovered the working environment I depended on had not followed me. Migration Assistant stalled. So I built the missing migration path, used it on a 400+ GB workspace, and opened the engine.”</blockquote>
-        <p>— Joshua Segeren, creator of Codex Migrate</p>
-        <aside class="founder-note" aria-labelledby="founder-note-heading">
-          <h2 id="founder-note-heading">Also from Joshua: You.one</h2>
-          <p>I’m building You.one, with Ava at its heart—an AI guide for life and work. For the days when there’s too much to juggle and you need a clearer next move.</p>
-          <a data-analytics-event="select_you_one" href="https://you.one/">Meet Ava at You.one <span aria-hidden="true">↗</span></a>
-        </aside>
-      </section>
-
-      <section class="guides shell" aria-labelledby="guides-heading">
-        <div class="section-intro"><p class="eyebrow">Plan your move</p><h2 id="guides-heading">Know what comes with you.</h2></div>
-        <div class="guide-grid">
-          <article><h3><a href="/codex-vault">Back up and search Codex history</a></h3><p>Protect local conversations with encrypted, versioned backups, then search or recover one missing thread without overwriting the rest.</p></article>
-          <article><h3><a href="/moving-to-a-new-mac">Moving Codex to a new Mac</a></h3><p>Conversations, skills, repositories, and unfinished work: what to select and what to check before retiring the old Mac.</p></article>
-          <article><h3><a href="/codex-history-missing-new-mac">Codex history missing on a new Mac?</a></h3><p>What may still be local, what to check first, and how to recover without replacing the new Mac’s login.</p></article>
-          <article><h3><a href="/backup-and-recovery">Backups, space, and recovery</a></h3><p>What happens before existing files are replaced—and why the app stops if it cannot make a verified backup.</p></article>
-          <article><h3><a href="/compare-codex-migration-tools">Compare Codex migration tools</a></h3><p>Choose between a guided Mac move, selective history repair, manual copying, and ongoing cross-device synchronization.</p></article>
-          <article><h3><a href="/access-codex-from-another-machine">Access Codex from another machine</a></h3><p>When to use Codex Remote, Remote SSH, a one-time Mac migration, or a synchronization workflow.</p></article>
-        </div>
-      </section>
-
       <section class="faq shell">
-        <div class="section-intro"><p class="eyebrow">Straight answers</p><h2>Before you move anything.</h2></div>
-        <div class="faq-grid">
-          <details><summary>Is this for Codex in the ChatGPT app?</summary><p>Yes—this is for local Codex work, including Codex in the ChatGPT desktop app. You may know it as OpenAI Codex or the Codex app. It does not transfer ordinary ChatGPT cloud chats between accounts or migrate all ChatGPT modes. Supported local data and compatibility limits are explained in the <a href="/moving-to-a-new-mac">Mac migration guide</a>.</p></details>
-          <details><summary>Is this made by OpenAI?</summary><p>No. Codex Migrate is an independent compatibility project. It is not affiliated with, supported by, or endorsed by OpenAI.</p></details>
-          <details><summary>Does it copy my Codex login?</summary><p>No. Authentication and installation identity are deliberately excluded. You sign in on the new Mac first; the migration preserves that new identity.</p></details>
-          <details><summary>How do I copy Codex to a different Mac?</summary><p>Install and sign in to Codex on the new Mac, then use Codex Migrate to inspect and transfer the local Codex data and project folders you select. It preserves the new Mac’s login instead of copying your old credentials. Destination data is backed up before replacement; separate active workspaces are not merged. Follow the <a href="/moving-to-a-new-mac">step-by-step Mac migration guide</a>.</p></details>
-          <details><summary>Can I access Codex from another machine without moving it?</summary><p>Yes, but that is a different task. OpenAI’s Remote experience can let an authorized phone control work that remains on an awake, online host; Remote SSH can use projects on a remote computer. Codex Migrate moves local work from one Mac to another and is not continuous sync. <a href="/access-codex-from-another-machine">Compare the remote-access and migration paths</a>.</p></details>
-          <details><summary>Can I transfer over Wi-Fi or a cable?</summary><p>Yes. Use Wi-Fi or a compatible USB-C/Thunderbolt network connection between your Macs; Ethernet works too. The transfer uses secure SSH in each case. After verifying the new Mac, Codex Migrate checks its reachable private network addresses and selects the faster verified route. USB-C cables vary in capability and speed, so the cable setup must provide a working network connection—not just charging. Enable Remote Login on the new Mac, then follow the <a href="/moving-to-a-new-mac">connection guide</a>.</p></details>
-          <details><summary>Can I try the Mac beta?</summary><p id="purchase-faq">The signed, notarized Mac beta is $49 one time for Apple silicon Macs, with best-effort support and a 30-day refund policy. See the Mac edition above for checkout availability and the remaining testing limitations. The complete open-source CLI stays free.</p></details>
-          <details><summary>What does Codex Vault back up?</summary><p>Vault backs up active and archived local Codex conversation transcripts. It deliberately excludes your Codex login, installation identity, SSH keys, logs, caches, settings, skills, and repositories. Full Mac-to-Mac migration handles the broader working environment. <a href="/codex-vault">See the complete Vault boundary</a>.</p></details>
-          <details><summary>Where are Vault backups stored?</summary><p>In an empty local or cloud-sync folder you choose. Conversation content is encrypted on your Mac before it is written there. Segeren Studio does not host or receive the backup. Save the recovery key shown during the first backup in your password manager.</p></details>
-          <details><summary>Does it work on Windows?</summary><p>Not yet. Codex Migrate currently supports Mac-to-Mac migration only, including the open-source CLI. A Windows version is feasible, but it needs its own work on file locations, permissions, backups, packaging, and recovery testing. Windows and cross-platform transfers are not supported today, and there is no announced release date.</p></details>
-          <details><summary>What if the transfer is interrupted?</summary><p>Rerun it. Staging uses resumable transfer semantics, so completed data is reused. The source Mac is never deleted or modified.</p></details>
-          <details><summary>Can I recover only one conversation?</summary><p>Yes. Open a verified Vault snapshot, search it privately, and restore one missing conversation. If the same conversation identity already exists with different content, Vault stops instead of overwriting or merging it. Personal and repository-scoped skills can also be migrated independently.</p></details>
-          <details><summary>What support and refunds are included?</summary><p>Best-effort support, with an initial response target of a few business days, not a guaranteed fix or service level. The 30-day refund guarantee provides a full refund if the supported Vault or Mac-to-Mac migration workflow does not work for you—or you decide it is not right for you. See the <a href="/refunds.html">refund policy</a>.</p></details>
+        <div class="section-intro compact-intro"><p class="eyebrow">Straight answers</p><h2>Before you buy.</h2></div>
+        <div class="faq-grid compact-faq">
+          <details><summary>Is the backup really automatic?</summary><p>Yes. During your first backup, daily automatic backup is selected by default; you can choose manual-only instead. After that first snapshot verifies, a private macOS LaunchAgent adds one encrypted snapshot every 24 hours—even when the app is closed—while the Mac and chosen Vault folder are available. Existing snapshots are kept. This is scheduled backup, not continuous sync.</p></details>
+          <details><summary>Where does my data go?</summary><p>Vault writes encrypted snapshots to the local, OneDrive, Google Drive, Dropbox, or other cloud-sync folder you choose. Segeren Studio does not host or receive them. Website analytics never receives your Codex conversations. The app itself has no telemetry.</p></details>
+          <details><summary>What is backed up versus migrated?</summary><p>Vault protects active and archived conversation transcripts. Full Mac migration also moves selected configuration, skills, automations, repositories, branches, worktrees, and unfinished files. Authentication and installation identity are deliberately excluded.</p></details>
+          <details><summary>Can I try the Mac beta?</summary><p id="purchase-faq">Yes. The signed, notarized beta is $49 one time for Apple silicon Macs, with best-effort support and a 30-day refund policy. The complete CLI and source remain free. Windows and cross-platform transfers are not supported today.</p></details>
         </div>
       </section>
 
-      <section class="closing">
-        <div class="shell closing-inner">
-          <div><p class="eyebrow">Your history. Your folder. Your recovery key.</p><h2>Find it. Back it up. Move it safely.</h2></div>
-          <div class="actions"><a class="button button-primary" data-analytics-event="select_paid_beta" href="#founding-edition">Get Vault + migration — $49</a><a class="button button-secondary light" data-analytics-event="select_free_cli" href="https://github.com/jsegeren/codex-migrate">Use the free CLI</a></div>
-        </div>
-      </section>
+      <section class="closing"><div class="shell closing-inner"><div><p class="eyebrow">Don’t lose the work between the commits.</p><h2>Back it up. Find it. Move it.</h2></div><div class="actions"><a class="button button-primary" data-analytics-event="select_paid_beta" href="#founding-edition">Get the Mac app — $49</a><a class="button button-secondary light" data-analytics-event="select_free_cli" href="https://github.com/jsegeren/codex-migrate">Use the free CLI</a></div></div></section>
     </main>
 
     <footer>
-      <div class="shell footer-grid">
-        <div><a class="brand" href="/"><span class="brand-mark" aria-hidden="true">CM</span><span>Codex Migrate</span></a><p>Independent software by Segeren Studio.</p></div>
-        <div><h2>Project</h2><a href="https://github.com/jsegeren/codex-migrate">GitHub</a><a href="https://github.com/jsegeren/codex-migrate/issues">Support</a><a href="https://github.com/jsegeren/codex-migrate/blob/main/SECURITY.md">Security</a></div>
-        <div><h2>Legal</h2><a href="/privacy.html">Privacy</a><a href="/privacy.html#website-analytics" data-analytics-preferences>Analytics choices</a><a href="/terms.html">Terms</a><a href="/refunds.html">Refunds</a></div>
-      </div>
+      <div class="shell footer-grid"><div><a class="brand" href="/"><span class="brand-mark" aria-hidden="true">CM</span><span>Codex Migrate</span></a><p>Independent software by <a href="https://x.com/JoshuaSegeren">Joshua Segeren</a>. Not affiliated with or endorsed by OpenAI.</p></div><div><h2>Learn</h2><a href="/codex-vault">Codex Vault</a><a href="/moving-to-a-new-mac">Mac migration</a><a href="/backup-and-recovery">Recovery safety</a><a href="/compare-codex-migration-tools">Compare options</a></div><div><h2>Project</h2><a href="https://github.com/jsegeren/codex-migrate">GitHub</a><a href="https://github.com/jsegeren/codex-migrate/issues">Support</a><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a><a href="/refunds.html">Refunds</a></div></div>
       <div class="shell footer-bottom"><p>© 2026 Segeren Studio.</p><p>Codex product icon and OpenAI marks belong to OpenAI.</p></div>
     </footer>
   </body>
