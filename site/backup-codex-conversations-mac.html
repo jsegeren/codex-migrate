@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <link rel="canonical" href="https://migrate.segeren.com/backup-codex-conversations-mac">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Automatically back up local OpenAI Codex conversations on your Mac with encrypted, versioned snapshots in a folder you control.">
+    <meta property="og:title" content="Back up Codex conversations on Mac">
+    <meta property="og:description" content="Keep encrypted, versioned copies of local Codex conversations in your own local or cloud-sync folder.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://migrate.segeren.com/backup-codex-conversations-mac">
+    <meta property="og:image" content="https://migrate.segeren.com/og.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Back up Codex conversations on Mac">
+    <meta name="twitter:description" content="Encrypted, versioned local Codex backups in a folder you control.">
+    <meta name="twitter:image" content="https://migrate.segeren.com/og.png">
+    <title>Back up Codex conversations on Mac — Codex Vault</title>
+    <link rel="icon" href="/assets/mark.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css?v=20260918-vault">
+    <script src="/analytics.js?v=20260911-ecommerce" defer></script>
+  </head>
+  <body>
+    <header class="site-header"><a class="brand" href="/"><span class="brand-mark" aria-hidden="true">CM</span><span>Codex Migrate</span></a><nav aria-label="Primary navigation"><a href="/codex-vault">Codex Vault</a><a href="/moving-to-a-new-mac">Mac migration</a><a href="/#founding-edition">Get the Mac beta</a></nav></header>
+    <main class="legal comparison-guide shell">
+      <p class="eyebrow">Codex Vault · automatic backup</p>
+      <h1>Back up your Codex conversations on Mac.</h1>
+      <p class="guide-lede">Important decisions, research, commands, and unfinished work can live only in local Codex transcript files. Codex Vault keeps encrypted, versioned copies in a folder you choose.</p>
+      <div class="actions"><a class="button button-primary" data-analytics-event="select_paid_beta" href="/#founding-edition">Get Vault + migration — $49</a><a class="button button-secondary" data-analytics-event="select_free_cli" href="https://github.com/jsegeren/codex-migrate">Use the free CLI</a></div>
+
+      <h2>Daily protection by default</h2>
+      <p>During the first backup, choose daily automatic backup or manual-only backup. Daily is the recommended default. After the first snapshot verifies, Vault installs a private macOS schedule that creates another verified snapshot every 24 hours, even when the app is closed.</p>
+
+      <h2>Your storage, not ours</h2>
+      <p>Pick an empty local folder or a folder synced by OneDrive, Google Drive, Dropbox, or another provider. Segeren Studio does not host or receive your conversations. Vault encrypts transcript content on your Mac before writing it to the destination.</p>
+      <p>Vault identifies common cloud-sync locations and explains whether a selected folder appears local-only, cloud-synced, or uncertain. That is guidance—not a guarantee that the provider has finished uploading every file—so keep the sync client healthy and retain the recovery key.</p>
+
+      <h2>Versioned and verified</h2>
+      <p>Each snapshot is published only after every encrypted object verifies. New versions do not silently replace the last good copy. The encryption key stays in macOS Keychain, and the first backup displays a recovery key once for you to save in a password manager.</p>
+
+      <h2>What gets backed up</h2>
+      <p>Vault protects supported active and archived local Codex conversation transcript trees. It deliberately excludes authentication, installation identity, SSH keys, repositories, settings, logs, caches, and runtime locks. Use the <a href="/moving-to-a-new-mac">migration workflow</a> when you need the broader working environment.</p>
+
+      <p class="notice"><strong>Important:</strong> Vault can protect only content Codex actually wrote to disk. It cannot reconstruct turns that were never persisted. Keep an independent backup until you have verified your setup.</p>
+      <div class="actions"><a class="button button-primary" href="/codex-vault">See Codex Vault</a><a class="button button-secondary" href="/recover-missing-codex-chats">How recovery works</a></div>
+    </main>
+    <footer><div class="shell"><p>Independent software by <a href="https://x.com/JoshuaSegeren">Joshua Segeren</a>. Not affiliated with or endorsed by OpenAI.</p><div class="footer-bottom"><a href="/">Codex Migrate</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/refunds">Refunds</a></div></div></footer>
+  </body>
+</html>

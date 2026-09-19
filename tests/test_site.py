@@ -85,11 +85,38 @@ class SiteTests(unittest.TestCase):
         self.assertIn("does not transfer ordinary ChatGPT cloud chats", readme)
 
     def test_indexed_pages_have_canonical_urls(self):
-        for name in ("privacy", "terms", "refunds", "codex-vault", "moving-to-a-new-mac", "codex-history-missing-new-mac", "backup-and-recovery", "compare-codex-migration-tools", "access-codex-from-another-machine"):
+        for name in ("privacy", "terms", "refunds", "codex-vault", "backup-codex-conversations-mac", "search-codex-conversation-history", "recover-missing-codex-chats", "moving-to-a-new-mac", "codex-history-missing-new-mac", "backup-and-recovery", "compare-codex-migration-tools", "access-codex-from-another-machine"):
             self.assertIn('<link rel="canonical" href="https://migrate.segeren.com/' + name + '">',
                           (SITE / (name + ".html")).read_text())
         self.assertIn('<link rel="canonical" href="https://migrate.segeren.com/ja/codex-new-mac">',
                       (SITE / "ja/codex-new-mac.html").read_text())
+
+    def test_vault_search_pages_are_focused_truthful_and_discoverable(self):
+        sitemap = (SITE / "sitemap.xml").read_text()
+        backup = " ".join(self.parse("backup-codex-conversations-mac.html").text)
+        search = " ".join(self.parse("search-codex-conversation-history.html").text)
+        recovery = " ".join(self.parse("recover-missing-codex-chats.html").text)
+        for slug in ("backup-codex-conversations-mac", "search-codex-conversation-history", "recover-missing-codex-chats"):
+            self.assertIn(f"https://migrate.segeren.com/{slug}", sitemap)
+        self.assertIn("Daily protection by default", backup)
+        self.assertIn("Segeren Studio does not host or receive your conversations", backup)
+        self.assertIn("guidance—not a guarantee", backup)
+        self.assertIn("active and archived local threads", search)
+        self.assertIn("does not require uploading your conversation history", search)
+        self.assertIn("It does not search ordinary ChatGPT cloud chats", search)
+        self.assertIn("recover one missing local Codex conversation without replacing unrelated history", (SITE / "recover-missing-codex-chats.html").read_text())
+        self.assertIn("No tool can recover data that was never saved", recovery)
+        self.assertIn("preserving the new Mac’s authentication and installation identity", recovery)
+
+    def test_comparison_distinguishes_search_backup_and_migration(self):
+        source = (SITE / "compare-codex-migration-tools.html").read_text()
+        text = " ".join(self.parse("compare-codex-migration-tools.html").text)
+        self.assertIn("Search is not backup; backup is not migration", text)
+        self.assertIn("Codex Migrate + Vault", text)
+        self.assertIn("Inventory", text)
+        self.assertIn("Contextify", text)
+        self.assertIn("https://www.myinventory.site/", source)
+        self.assertIn("https://contextify.sh/", source)
 
     def test_japanese_migration_guide_is_discoverable_and_preserves_safety_scope(self):
         english = (SITE / "moving-to-a-new-mac.html").read_text()
