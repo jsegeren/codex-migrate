@@ -5,22 +5,24 @@ remaining acceptance checks continue. This is not full release certification.
 The [paid-beta launch record](paid-beta-launch-2026-09-07.md) controls the current
 distribution decision; the dated entries below preserve their original status.
 
-## September 18 Codex Vault beta release
+## September 18 Codex Vault build 13 release
 
-The current distributed artifact is signed and notarized build 12, produced
-from clean pushed source `b1a16e6b49ac7910770e577f8819800ca506d11e`.
-Apple accepted submission `2b45f672-324a-4bbf-b3a6-cf0ec5eb7e34`; the stapled
+The current distributed artifact is signed and notarized build 13, produced
+from clean pushed source `5cdd05875c25b3c3099ac17c5e5717798f4e4c41`.
+Apple accepted submission `7feb2dad-5827-4bfe-a98d-0290df7f4933`; the stapled
 app passed strict deep signature verification, staple validation and Gatekeeper
-assessment. Its 8,494,419-byte private archive has SHA-256
-`c63f4478e07fdd41bca2b09fac5c5521c1b0ace2bf1326cc6583ee950097943c`,
-and the private-store readback matched all 8,494,419 bytes.
+assessment. Its 8,492,847-byte private archive has SHA-256
+`fcd4590583ca676d1e16b6fb1349c1ab3fbcd1b6fddd0e9eaa682de60213b6c7`,
+and the private-store readback matched all 8,492,847 bytes.
 
-Build 12 adds local history browsing and search, Markdown/PDF/share export,
-client-side encrypted versioned backups, opt-in daily backup, separate-folder
-recovery, complete-history installation with rollback, and additive recovery
-of one missing verified conversation. The release source passed 791 Python
-tests with 12 expected skips, 291 Node tests with one expected skip, both
-GitHub Actions Python matrices, Swift typechecks, and packaged-engine/UI checks.
+Build 13 keeps build 12's local history browsing and search, Markdown/PDF/share
+export, client-side encrypted versioned backups, recovery paths, and migration
+machinery. It makes daily automatic backup the recommended default during the
+first backup, retains a clear manual-only choice, and shortens the public page
+around backup, search, and migration. The release source passed the complete
+local Python suite, 293 Node tests with one expected skip, both GitHub Actions
+Python matrices, Swift typechecks, packaged-engine/UI checks, and an independent
+desktop/mobile user-facing review.
 The packaged Vault page exposed the intended backup, recovery, search and
 selected-conversation controls; its summary endpoint read counts only, and a
 request without the loopback control token returned HTTP 403.
@@ -150,15 +152,15 @@ IPv6 path.
 
 ## Current release boundary — September 18
 
-The current distributed artifact is **signed and notarized build 12**, $49 USD,
+The current distributed artifact is **signed and notarized build 13**, $49 USD,
 Apple silicon, beta channel. Production checkout is open and the live Stripe
 webhook is active. Exact source/artifact identifiers, private delivery readback,
-and pre-payment disclosures are in the paid-beta launch record above. Build 12
-keeps the proven migration behavior and adds the bounded Codex Vault features
-described above.
+and pre-payment disclosures are in the paid-beta launch record above. Build 13
+keeps the proven migration and Vault behavior, makes daily automatic backup the
+recommended first-backup default, and retains a clear manual-only choice.
 Existing build 5, build 7, build 8, build 9 and build 10
-purchases, plus build 11 purchases, remain bound to their original artifacts;
-new purchases receive build 12. A fresh
+purchases, plus build 11 and build 12 purchases, remain bound to their original
+artifacts; new purchases receive build 13. A fresh
 read of `/api/availability` returned `available:true`, `priceUSD:49`,
 `architecture:arm64`, `channel:beta` during the post-launch audit.
 
@@ -706,11 +708,11 @@ release certification remains open while the named native/hardware gates remain.
 | Full and selective migration, pause/resume and recovery | Real packaged cross-Mac full installation, browser-driven skills-only repair, Pause/Stop/Resume after 409,413,176 staged bytes, unexpected SSH-child loss and helper restart with 677,848,813 staged bytes retained, protected-phase restore, and a physical destination-Wi-Fi interruption/resume with an exact 256 MiB hash match all passed. Verified backups, newer files and out-of-scope files were preserved. | Physically interrupt a working USB-C/Thunderbolt network route during disposable staging. A truly space-constrained destination and broader installer interruption timing remain useful hardware coverage. Never use Joshua's active workspace. |
 | Git and old-home paths remain usable | Different-user packaged two-Mac acceptance verified the direct old-home compatibility path and the selected Git baseline before reopening the real project conversation. Local linked-worktree, stash, alternate-storage, uncommitted and untracked cases have deterministic coverage. | Run representative destination development commands with the source Mac disconnected. Existing checks do not prove every project-specific toolchain or absolute path. |
 | Browser-first local-data experience and clear status/help | Loopback-only helper, SSH transfer, one guided browser setup, saved setup, contextual Help, bounded private diagnostic events, operation-specific controls, strict host verification and multi-address speed selection are implemented. Desktop and 1440/390/320px keyboard/reflow checks passed. Exact build 9 key setup/recovery controls produced correct spoken VoiceOver labels and roles; its engine failed closed on a real TCC-protected workspace; physical Wi-Fi interruption/resume passed. | Complete the guided permission-recovery journey and direct-cable route acceptance. Automatic updating is not implemented. |
-| Public website, useful guides, screenshots, price and launch intake | Canonical site is live with paid signed Mac beta as the primary CTA, exact $49 checkout, a concise one-minute product demo, two informative indexed guides, launch intake and personal-support disclosures. Build 12 availability and the live Stripe webhook are active. | Watch actual buyer behavior and support load; preserve rate limiting, accurate beta limits and the free-source path. A real-sale buyer/owner inbox receipt remains unverified until the first sale. |
+| Public website, useful guides, screenshots, price and launch intake | Canonical site is live with paid signed Mac beta as the primary CTA, exact $49 checkout, separate real-product Vault and migration walkthroughs, informative indexed guides, launch intake and personal-support disclosures. Build 13 availability and the live Stripe webhook are active. | Watch actual buyer behavior and support load; preserve rate limiting, accurate beta limits and the free-source path. A real-sale buyer/owner inbox receipt remains unverified until the first sale. |
 | Website accessibility and performance | Fresh production Lighthouse: mobile 97 performance and 100 accessibility/best practices/SEO; desktop 98 performance and 100 in the other categories. Keyboard, narrow-width reflow, text enlargement, contrast and semantics have automated/browser evidence. Exact build 9's browser-first setup passed a spoken VoiceOver walkthrough of key controls. | Broader screen-reader/state coverage remains useful; no blanket WCAG conformance claim is made. Field Core Web Vitals require real traffic. |
 | Domain, search discovery, analytics and cross-promotion | Live canonical domain/robots/sitemap; recorded Search Console ownership, successful sitemap submission and accepted homepage request; separate GA4 property with region-aware default/full measurement, consent-mode handling for the EEA/UK/Switzerland, 14-month retention, returning-user continuity, aggregate Google Signals reporting, granular location/device reporting, ads personalization and user-provided data disabled, launch-request key event and Search Console link; live U.S. edge returned default mode with no banner and both host-only GA cookies; browser-forced consent mode showed the compact control, set no cookies before choice, produced a denied cookieless measurement, and correctly allowed or declined; You.one link on the live homepage; fresh HTTP 200 check of segeren.com confirms its “Explore Codex Migrate” link to the canonical domain | Watch native reports after real visits. A request originating from an actual EEA/UK/Swiss edge remains useful additional confirmation, but endpoint unit tests and browser-boundary simulation cover the branch. Actual demographics depend on consent, Google eligibility and reporting thresholds; indexing, ranking and traffic are not guaranteed. No repeated indexing request needed. |
-| Reproducible identifiable packaged app | Build 12 is produced from pushed source `b1a16e6b49ac7910770e577f8819800ca506d11e`, Developer ID signed, Apple Accepted, stapled and Gatekeeper accepted. The private archive is 8,494,419 bytes with SHA-256 `c63f4478e07fdd41bca2b09fac5c5521c1b0ace2bf1326cc6583ee950097943c`; its private-store readback and packaged-engine/UI checks passed. Prior receiving-Mac, VoiceOver, interruption and TCC observations remain applicable to the unchanged migration machinery; the new selected-thread recovery path has its own bounded physical two-Mac receipt. | A pristine receiving Mac without prior test state or developer tooling remains stronger installation evidence. The complete guided permission-recovery journey remains open. |
-| Paid purchase, delivery, support and refunds | Production checkout and webhook are live for build 12. Ordinary Stripe sandbox payment, signed-app delivery, email recovery, refreshed private download, refund and post-refund denial passed. Private links remain entitlement-bound and short lived; merchant successful-payment email is enabled. | Confirm buyer delivery and merchant notification from the first real sale. This is an operational observation for the live beta, not a reason to close the revenue path. |
+| Reproducible identifiable packaged app | Build 13 is produced from pushed source `5cdd05875c25b3c3099ac17c5e5717798f4e4c41`, Developer ID signed, Apple Accepted, stapled and Gatekeeper accepted. The private archive is 8,492,847 bytes with SHA-256 `fcd4590583ca676d1e16b6fb1349c1ab3fbcd1b6fddd0e9eaa682de60213b6c7`; its private-store readback and packaged-engine/UI checks passed. Prior receiving-Mac, VoiceOver, interruption and TCC observations remain applicable to the unchanged migration machinery; selected-thread recovery has its own bounded physical two-Mac receipt. | A pristine receiving Mac without prior test state or developer tooling remains stronger installation evidence. The complete guided permission-recovery journey remains open. |
+| Paid purchase, delivery, support and refunds | Production checkout and webhook are live for build 13. Ordinary Stripe sandbox payment, signed-app delivery, email recovery, refreshed private download, refund and post-refund denial passed. Private links remain entitlement-bound and short lived; merchant successful-payment email is enabled. | Confirm buyer delivery and merchant notification from the first real sale. This is an operational observation for the live beta, not a reason to close the revenue path. |
 
 ### Earlier device chronology (historical evidence)
 

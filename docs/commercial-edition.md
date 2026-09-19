@@ -7,7 +7,8 @@ user's own data or recovery from an artificial lock.
 ## Paid direction (not all implemented)
 
 The current desktop shell provides Codex Vault search, export, encrypted
-versioned backup, optional daily backup, guarded recovery, folder selection,
+versioned backup, daily backup selected by default during first-backup setup
+with a manual-only option, guarded recovery, folder selection,
 setup guidance, the local dashboard, skills-only export, and trusted multi-route benchmarking. Broader
 automatic discovery and update checks below are planned, not shipped. Release
 readiness is tracked in [the desktop guide](desktop-setup.md).
@@ -32,9 +33,10 @@ best-effort help with setup, Vault backup, migration, verification, and recovery
 On September 7 the Founder explicitly authorized opening self-service paid beta
 downloads while the remaining acceptance checks continue. This supersedes the
 earlier manual-only beta policy below. The current approved artifact is signed
-and notarized build 12 for Apple silicon. Build 12 keeps the tested migration
-machinery and adds Codex Vault search, export, encrypted versioned backup,
-optional daily backup, complete recovery, and selected-thread recovery. The
+and notarized build 13 for Apple silicon. Build 13 keeps the tested migration
+and Vault machinery, makes daily automatic backup the recommended initial
+choice while retaining manual-only backup, and includes complete and
+selected-thread recovery. The
 migration path has passed VoiceOver, a real macOS permission-denial check, and
 physical Wi-Fi interruption/resume testing. Guided permission recovery,
 direct-cable interruption, pristine-Mac installation, and broader hardware

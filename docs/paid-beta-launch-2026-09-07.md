@@ -26,20 +26,21 @@ receipts rather than descriptions of the current offer.
 
 ## Current exact artifact
 
-- Release ID: `beta-build12-arm64`, explicit `beta` channel.
-- Filename: `Codex-Migrate-0.1.0-build12-arm64.zip`; 8,494,419 bytes.
-- Source: `b1a16e6b49ac7910770e577f8819800ca506d11e`.
-- SHA-256: `c63f4478e07fdd41bca2b09fac5c5521c1b0ace2bf1326cc6583ee950097943c`.
-- Notarization: `2b45f672-324a-4bbf-b3a6-cf0ec5eb7e34`, Accepted.
+- Release ID: `beta-build13-arm64`, explicit `beta` channel.
+- Filename: `Codex-Migrate-0.1.0-build13-arm64.zip`; 8,492,847 bytes.
+- Source: `5cdd05875c25b3c3099ac17c5e5717798f4e4c41`.
+- SHA-256: `fcd4590583ca676d1e16b6fb1349c1ab3fbcd1b6fddd0e9eaa682de60213b6c7`.
+- Notarization: `7feb2dad-5827-4bfe-a98d-0290df7f4933`, Accepted.
 - Private live-store upload and full readback matched exact size and digest.
 
 The catalog's `accepted: true` records this specific distribution approval, not
 full clean-Mac or WCAG certification. Sandbox entries remain ineligible for live
-sale. Build 12 retains the established migration, recovery and atomic
-destination Codex-identity behavior and adds Codex Vault: local history search,
-encrypted versioned backup, separate-folder recovery, complete-history
-installation with rollback, and additive recovery of one missing conversation.
-Its selected-thread physical-device evidence is recorded in the
+sale. Build 13 retains the established migration, recovery, atomic destination
+Codex-identity behavior, and build 12 Vault machinery. It makes daily automatic
+backup the recommended initial choice while preserving manual-only backup, and
+adds the focused backup/search/migration landing experience and real Vault demo.
+The selected-thread physical-device evidence applies to the unchanged recovery
+path and is recorded in the
 [September 18 acceptance receipt](vault-selected-thread-acceptance-2026-09-18.md).
 
 ## Remaining validation

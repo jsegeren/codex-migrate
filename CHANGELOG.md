@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.0 paid beta build 13 — 2026-09-18
+
 - Make daily automatic backup the explicit recommended default during the first
   Vault backup, while keeping a clear manual-only choice.
 - Shorten the homepage around three customer jobs: encrypted backup, local
