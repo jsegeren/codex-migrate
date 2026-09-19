@@ -168,7 +168,7 @@ class DashboardTests(unittest.TestCase):
         self.assertIn('"close_source_codex","close_target_codex"', HTML)
 
     def test_control_token_is_removed_from_visible_url(self):
-        self.assertIn('history.replaceState(null,"",location.pathname)', HTML)
+        self.assertIn('history.replaceState(null,"",location.pathname+location.search)', HTML)
 
     def test_controls_are_disabled_until_authenticated_state_loads(self):
         for control in ("inspect", "start", "pause", "resume", "finalize", "cancel"):
