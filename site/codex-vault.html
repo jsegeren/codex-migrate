@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <link rel="canonical" href="https://migrate.segeren.com/codex-vault">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Search, export, encrypt, back up, and recover local OpenAI Codex conversations on your Mac with Codex Vault.">
+    <meta property="og:title" content="Codex Vault — Don’t lose your Codex history">
+    <meta property="og:description" content="Search old Codex threads, keep encrypted versioned backups in a folder you control, and recover one conversation or a complete snapshot.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://migrate.segeren.com/codex-vault">
+    <meta property="og:image" content="https://migrate.segeren.com/og.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Codex Vault — Don’t lose your Codex history">
+    <meta name="twitter:description" content="Search, back up, and recover local OpenAI Codex conversations on your Mac.">
+    <meta name="twitter:image" content="https://migrate.segeren.com/og.png">
+    <title>Codex Vault — Back up, search, and recover Codex conversations</title>
+    <link rel="icon" href="/assets/mark.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css?v=20260918-vault">
+    <script src="/analytics.js?v=20260911-ecommerce" defer></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">CM</span><span>Codex Migrate</span></a>
+      <nav aria-label="Primary navigation"><a href="/">Home</a><a href="/#founding-edition">Get the Mac beta</a><a href="https://github.com/jsegeren/codex-migrate">GitHub</a></nav>
+    </header>
+
+    <main class="legal comparison-guide vault-guide shell">
+      <p class="eyebrow">Codex Vault</p>
+      <h1>Don’t lose your Codex history.</h1>
+      <p class="guide-lede">Search the conversations stored on this Mac, keep encrypted versions in a folder you control, and recover one missing thread—or a complete verified snapshot.</p>
+      <div class="actions"><a class="button button-primary" data-analytics-event="select_paid_beta" href="/#founding-edition">Get Vault + migration — $49</a><a class="button button-secondary" data-analytics-event="select_free_cli" href="https://github.com/jsegeren/codex-migrate">Use the free CLI</a></div>
+      <p class="notice"><strong>Your conversations do not go through our servers.</strong> Segeren Studio does not host or receive the backup. Vault encrypts transcript content on your Mac before writing it to the local or cloud-sync folder you choose.</p>
+
+      <h2>Find the work you already did</h2>
+      <p>Search message text across active and archived local Codex conversations. Open a thread, download it as Markdown, print or save it as PDF, or use the browser’s share sheet when available. Search reads the transcript files directly and does not build a separate content index.</p>
+
+      <h2>Keep versioned, encrypted backups</h2>
+      <p>Choose an empty local folder or a folder synced by OneDrive, Google Drive, Dropbox, or another provider. Vault creates a client-side encrypted snapshot, verifies every encrypted object, and publishes the version only after verification succeeds. After the first verified backup, you can turn on a private macOS schedule that adds another verified snapshot every day—even when the app is closed.</p>
+      <p>The encryption key stays in macOS Keychain. The first backup shows a recovery key once; save it in your password manager. If you lose both the Keychain item and that recovery key, the backup cannot be decrypted.</p>
+
+      <figure class="vault-demo vault-guide-demo">
+        <a href="/assets/codex-vault-dashboard.png">
+          <picture>
+            <source srcset="/assets/codex-vault-dashboard-720.avif 720w, /assets/codex-vault-dashboard-1120.avif 1120w" sizes="(max-width: 760px) calc(100vw - 30px), 980px" type="image/avif">
+            <img src="/assets/codex-vault-dashboard.png" width="1440" height="1610" loading="lazy" decoding="async" alt="Codex Vault interface showing local history counts, encrypted backup, automatic backup, recovery, and conversation search controls">
+          </picture>
+        </a>
+        <figcaption><strong>Real build 12 interface; staged sample data.</strong> Select the image to view it at full size.</figcaption>
+      </figure>
+
+      <h2>Recover without guessing</h2>
+      <p>Open a verified snapshot privately and search it before changing live data. You can add one missing conversation while proving every pre-existing transcript remains unchanged. If the same thread identity already exists with different content, Vault stops instead of overwriting or inventing a merge.</p>
+      <p>Complete recovery first decrypts the selected version into an empty folder for inspection. Installing it into Codex is a separate confirmation: Codex must be closed, Vault creates and verifies a rollback backup, and authentication and installation identity remain untouched.</p>
+
+      <h2>Exactly what Vault protects</h2>
+      <div class="decision-grid">
+        <section><h3>Included</h3><p>Active and archived local Codex conversation transcript trees, their relative paths, and the encrypted snapshot metadata required to verify and recover them.</p></section>
+        <section><h3>Deliberately excluded</h3><p><code>auth.json</code>, <code>installation_id</code>, SSH keys, settings, skills, repositories, worktrees, logs, caches, and runtime locks. Use the migration workflow for the broader working environment.</p></section>
+      </div>
+
+      <h2>What Vault is not</h2>
+      <p>Vault is not continuous synchronization between two active Macs, not a hosted Segeren Studio cloud, and not ordinary ChatGPT cloud-chat backup. It protects the supported local Codex transcript trees used by Codex, including Codex in the ChatGPT desktop app.</p>
+
+      <h2>Current beta boundary</h2>
+      <p>Build 12 is signed, Apple-notarized, and available for Apple silicon Macs. Selected-thread recovery has passed a physical two-Mac test. Retention controls, cloud-folder health monitoring, broader Codex-version coverage, guided permission recovery, direct-cable interruption, pristine-Mac installation, and broader hardware coverage remain ongoing. Keep an independent backup and the old Mac until you verify your result.</p>
+
+      <div class="actions"><a class="button button-primary" data-analytics-event="select_paid_beta" href="/#founding-edition">Protect my Codex work — $49</a><a class="button button-secondary" href="mailto:joshua@segeren.com?subject=Question%20about%20Codex%20Vault">Ask Joshua a question</a></div>
+      <p>The complete Vault and migration engine is MIT licensed and free to run from source. The $49 Mac beta covers the packaged app and personal, best-effort help, with a 30-day refund policy.</p>
+    </main>
+
+    <footer>
+      <div class="shell footer-grid">
+        <div><a class="brand" href="/"><span class="brand-mark" aria-hidden="true">CM</span><span>Codex Migrate</span></a><p>Independent software by <a href="https://x.com/JoshuaSegeren">Joshua Segeren</a> at Segeren Studio.</p></div>
+        <div><h2>Product</h2><a href="/codex-vault">Codex Vault</a><a href="/moving-to-a-new-mac">Mac migration</a><a href="https://github.com/jsegeren/codex-migrate">GitHub</a></div>
+        <div><h2>Legal</h2><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a><a href="/refunds.html">Refunds</a></div>
+      </div>
+      <div class="shell footer-bottom"><p>© 2026 Segeren Studio.</p><p>Independent software. Not affiliated with or endorsed by OpenAI.</p></div>
+    </footer>
+  </body>
+</html>

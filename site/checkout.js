@@ -63,11 +63,11 @@
       document.getElementById('edition-signed').textContent = 'Signed and notarized Mac app';
       if (disclosure) disclosure.hidden = true;
       if (launch) launch.hidden = true;
-      document.getElementById('hero-availability').textContent = beta ? 'Signed & notarized Mac beta' : 'Mac app available';
-      document.getElementById('purchase-faq').textContent = `Yes. The signed, notarized ${beta ? 'beta ' : ''}app is $49 USD for ${platform}, including best-effort support and a 30-day refund policy. ${beta ? 'The current build has passed VoiceOver, a real macOS permission-denial check, and physical Wi-Fi interruption/resume testing. Guided permission recovery, direct-cable interruption, pristine-Mac installation, and broader hardware coverage remain ongoing. Keep your old Mac and an independent backup. ' : ''}The CLI and source remain free.`;
+      document.getElementById('hero-availability').textContent = beta ? 'Signed & notarized Mac beta · Now with Vault' : 'Mac app available';
+      document.getElementById('purchase-faq').textContent = `Yes. The signed, notarized ${beta ? 'beta ' : ''}app is $49 USD for ${platform}, including Codex Vault, guided migration, best-effort support, and a 30-day refund policy. ${beta ? 'Selected-thread Vault recovery has passed a physical two-Mac test. The migration path has passed VoiceOver, a real macOS permission-denial check, and physical Wi-Fi interruption/resume testing. Retention controls, cloud-folder health monitoring, broader Codex-version coverage, guided permission recovery, direct-cable interruption, pristine-Mac installation, and broader hardware coverage remain ongoing. Keep your old Mac and an independent backup. ' : ''}The CLI and source remain free.`;
       const hero = document.getElementById('hero-paid-link');
-      hero.href = '#founding-edition'; hero.textContent = 'Move my Codex work — $49';
-      button.textContent = 'Move my Codex work + help — $49';
+      hero.href = '#founding-edition'; hero.textContent = 'Protect my Codex work — $49';
+      button.textContent = 'Protect and move my Codex work — $49';
       panel.hidden = false;
     }).catch(() => { /* Launch-email fallback stays usable when readiness cannot be checked. */ });
 })();

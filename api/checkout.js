@@ -41,7 +41,7 @@ function makeHandler(load = runtime, env = process.env, configure = configuratio
         } : {}),
         ...(standard ? {} : { managed_payments: { enabled: true } }),
         ...(config.release.channel === 'beta' ? { custom_text: { submit: { message:
-          'Beta software for Apple silicon Macs. Keep your old Mac and an independent backup until you verify the move. A 30-day refund policy applies.' } } } : {}),
+          'Beta software for Apple silicon Macs. Vault protects supported local conversation history; migration replaces selected destination data. Keep an independent backup and your old Mac until you verify the result. A 30-day refund policy applies.' } } } : {}),
         metadata: { product: 'codex-migrate', release: config.release.id,
           ...(config.release.channel === 'beta' ? { release_channel: 'beta' } : {}),
           checkout_provider: standard ? 'stripe' : 'managed' },

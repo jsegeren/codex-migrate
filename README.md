@@ -1,11 +1,14 @@
 # Codex Migrate
 
-**Unofficial Mac-to-Mac migration for OpenAI Codex, including Codex in the ChatGPT desktop app.**
+**Search, back up, recover, and safely move local OpenAI Codex work on Mac, including Codex in the ChatGPT desktop app.**
 
-Codex Migrate moves the local working state that does not magically appear when
-you sign into Codex on a new Mac: conversations, project organization,
-configuration, skills, automations, repositories, branches, worktrees, stashes,
-and unfinished files.
+Codex Migrate now includes Codex Vault. Vault searches active and archived
+local conversations, exports them, creates client-side encrypted versioned
+backups in a folder you control, and recovers one missing conversation or a
+complete verified snapshot. The migration workflow moves the broader working
+state that does not magically appear when you sign into Codex on a new Mac:
+conversations, project organization, configuration, skills, automations,
+repositories, branches, worktrees, stashes, and unfinished files.
 
 ### Using Codex in the ChatGPT app?
 
@@ -18,17 +21,18 @@ selected workspace folders described below; compatibility testing is ongoing.
 ## Get the Mac app — $49 one time
 
 Prefer a packaged app to cloning and running the source? **The paid Mac Founding
-Edition includes the downloadable Mac app and personal, best-effort migration
-help directly from Joshua.** It opens the guided local browser workflow for
-setup, transfer progress,
-pause/resume, verification, and recovery. Your workspace moves directly between
-your Macs, not through our servers.
+Edition includes Codex Vault, the guided migration app, and personal,
+best-effort help directly from Joshua.** It opens the local browser workflow for
+conversation search, export, encrypted backup, recovery, migration setup,
+transfer progress, pause/resume, and verification. Vault backups are encrypted
+before they are written to the local or cloud-sync folder you choose. Migration
+data moves directly between your Macs. Neither goes through our servers.
 
 **[Get the signed Mac beta — $49 →](https://migrate.segeren.com/#founding-edition)**
 
 For Apple silicon Macs. Developer ID signed and Apple notarized, with
-best-effort support and a 30-day migration guarantee: if the app does not
-successfully move your supported Mac-to-Mac setup, contact Joshua within 30
+best-effort support and a 30-day refund guarantee: if the supported Vault or
+Mac-to-Mac migration workflow does not work for you, contact Joshua within 30
 days for a full refund. The current build has passed
 VoiceOver, a real macOS permission-denial check, and physical Wi-Fi
 interruption/resume testing. Guided permission recovery, direct-cable
@@ -64,7 +68,7 @@ guaranteed response time or guarantee that every migration issue can be solved.
 This is the real local dashboard with staged sample data. Actual transfer time
 depends on data size and the connection between the Macs.
 
-## Codex Vault foundation
+## Codex Vault
 
 This repository now includes the first open-source Codex Vault primitives for
 local conversation history: read-only inspection, streaming search, a local
@@ -104,9 +108,9 @@ Physical-device acceptance on September 18, 2026 verified that a Codex-created
 thread could be encrypted on one Mac, installed on a second Mac, and resumed by
 the actual Codex binary there while destination authentication, installation
 identity, and the displaced history remained protected. Retention controls,
-cloud-folder health monitoring, and broader Codex
-version coverage are still underway, so this remains an engineering foundation
-rather than the public Vault subscription. See the
+cloud-folder health monitoring, and broader Codex version coverage are still
+underway. These features ship in the current packaged beta and open-source
+engine; this is not a hosted Vault subscription. See the
 [physical-device acceptance receipt](docs/vault-physical-device-acceptance-2026-09-18.md).
 
 The equivalent schedule commands are explicit and reversible:
@@ -444,19 +448,20 @@ file-content and directory-tree snapshot. Rerunning the command is safe.
 Additional independently selectable
 components will follow the same stage → backup → install → verify contract.
 
-## Experimental local history search
+## Local history search and Vault backup
 
-The first read-only Codex Vault foundation can inspect and search locally stored
-active and archived conversation transcripts. It does not create an index,
-backup, cloud copy or restore point, and it never opens Codex authentication or
-installation identity files.
+Codex Vault can inspect and search locally stored active and archived
+conversation transcripts without creating a separate content index. Its backup
+workflow creates client-side encrypted, versioned snapshots in a local or
+cloud-sync folder you choose. Search and backup never open Codex authentication
+or installation identity files.
 
 ```bash
 ./codex-migrate vault inspect
 ./codex-migrate vault search "launch checklist" --limit 25
 ```
 
-The packaged local helper also exposes an experimental history browser with
+The packaged local helper exposes a history browser with
 per-thread Markdown download, print-to-PDF and the browser's native share sheet
 when supported, opt-in daily encrypted backups after the first verified manual
 snapshot, and recovery of a chosen backup version into a separate inspection

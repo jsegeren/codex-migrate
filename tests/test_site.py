@@ -45,10 +45,11 @@ class SiteTests(unittest.TestCase):
     def test_home_offer_and_migration_search_copy_are_current(self):
         home = (SITE / "index.html").read_text()
         self.assertIn("Signed &amp; notarized Mac beta", home)
-        self.assertIn("<h1>Change the Mac. <br>", home)
-        self.assertIn("Don’t lose your Codex work when you change or upgrade your Mac", home)
-        self.assertIn("pick up exactly where you left off", home)
-        self.assertIn("30-day migration guarantee", home)
+        self.assertIn("<h1>Don’t lose your <br>", home)
+        self.assertIn("Search old threads", home)
+        self.assertIn("safely move everything to a new Mac", home)
+        self.assertIn("Recover one conversation or a complete snapshot", home)
+        self.assertIn("30-day refund guarantee", home)
         self.assertIn("Questions before buying? Ask Joshua", home)
         self.assertIn("full refund", home)
         self.assertNotIn("Setup takes minutes; transfer time varies", home)
@@ -66,6 +67,7 @@ class SiteTests(unittest.TestCase):
         self.assertIn("Codex history is missing. What now?", missing)
         self.assertIn("Do not blindly replace the new Mac’s Codex folder", missing)
         self.assertIn('href="/codex-history-missing-new-mac"', home)
+        self.assertIn('href="/codex-vault"', home)
         self.assertIn('href="/compare-codex-migration-tools"', home)
         self.assertIn('href="/access-codex-from-another-machine"', home)
         guide_actions = guide.split('<div class="actions">', 1)[1].split("</div>", 1)[0]
@@ -86,7 +88,7 @@ class SiteTests(unittest.TestCase):
         self.assertIn("does not transfer ordinary ChatGPT cloud chats", readme)
 
     def test_indexed_pages_have_canonical_urls(self):
-        for name in ("privacy", "terms", "refunds", "moving-to-a-new-mac", "codex-history-missing-new-mac", "backup-and-recovery", "compare-codex-migration-tools", "access-codex-from-another-machine"):
+        for name in ("privacy", "terms", "refunds", "codex-vault", "moving-to-a-new-mac", "codex-history-missing-new-mac", "backup-and-recovery", "compare-codex-migration-tools", "access-codex-from-another-machine"):
             self.assertIn('<link rel="canonical" href="https://migrate.segeren.com/' + name + '">',
                           (SITE / (name + ".html")).read_text())
         self.assertIn('<link rel="canonical" href="https://migrate.segeren.com/ja/codex-new-mac">',
@@ -164,7 +166,7 @@ class SiteTests(unittest.TestCase):
         self.assertIn('poster="/assets/codex-migrate-demo-poster.jpg"', source)
         self.assertIn('src="/assets/codex-migrate-demo.webm" type="video/webm"', source)
         self.assertIn('aria-describedby="demo-caption"', source)
-        self.assertIn("Watch a migration in 1 minute.", text)
+        self.assertIn("Watch the move in 1 minute.", text)
         self.assertIn("Real product interface; staged sample data.", text)
         self.assertIn("Transfer time depends on data size and your connection.", text)
         self.assertTrue((SITE / "assets/codex-migrate-demo.webm").is_file())
@@ -195,7 +197,10 @@ class SiteTests(unittest.TestCase):
         self.assertIn("Request Mac beta access — $49", text)
         self.assertIn("If checkout is unavailable, email Joshua", text)
         self.assertIn("physical Wi-Fi interruption/resume testing", text)
-        self.assertIn("Guided permission recovery, direct-cable interruption, pristine-Mac installation, and broader hardware coverage remain ongoing", text)
+        for limitation in ("Retention controls", "cloud-folder health monitoring",
+                           "guided permission recovery", "direct-cable interruption",
+                           "pristine-Mac installation", "broader hardware coverage remain ongoing"):
+            self.assertIn(limitation, text)
         self.assertIn("Keep your old Mac and an independent backup", text)
         self.assertIn("it does not merge two active workspaces", text)
         self.assertIn('<div id="checkout-panel">', source)
@@ -262,8 +267,8 @@ class SiteTests(unittest.TestCase):
         self.assertIn('srcset="/assets/codex-product-dark-80.avif" type="image/avif"', header)
         self.assertIn('src="/assets/codex-product-dark-80.png" width="40" height="40"', header)
         heading_row = source.split('<div class="hero-heading">', 1)[1].split('<div class="product-reference">', 1)[0]
-        self.assertIn('<h1>Change the Mac.', heading_row)
-        self.assertIn('<span class="accent">Keep the work.</span>', heading_row)
+        self.assertIn('<h1>Don’t lose your', heading_row)
+        self.assertIn('<span class="accent">Codex work.</span>', heading_row)
         self.assertIn('class="hero-inline-icon"', heading_row)
         self.assertNotIn('class="terminal-card"', source)
 
@@ -361,7 +366,7 @@ class SiteTests(unittest.TestCase):
     def test_paid_mac_beta_is_primary_but_free_cli_remains_prominent(self):
         source = (SITE / "index.html").read_text()
         hero = source.split('<div class="actions">', 1)[1].split("</div>", 1)[0]
-        self.assertLess(hero.index("Move my Codex work — $49"), hero.index("Get the free CLI"))
+        self.assertLess(hero.index("Protect my Codex work — $49"), hero.index("Get the free CLI"))
         self.assertIn('class="button button-primary" id="hero-paid-link" data-analytics-event="select_paid_beta"', hero)
         self.assertIn('class="button button-secondary" data-analytics-event="select_free_cli"', hero)
         self.assertIn('id="checkout-button" class="button button-primary full" data-analytics-event="begin_checkout"', source)
@@ -369,14 +374,14 @@ class SiteTests(unittest.TestCase):
         self.assertIn('<div id="edition-disclosure" hidden>', source)
 
         closing = source.split('<section class="closing">', 1)[1].split("</section>", 1)[0]
-        self.assertLess(closing.index("Get the Mac beta — $49"), closing.index("Use the free CLI"))
+        self.assertLess(closing.index("Get Vault + migration — $49"), closing.index("Use the free CLI"))
         self.assertIn('class="button button-primary" data-analytics-event="select_paid_beta" href="#founding-edition"', closing)
         self.assertIn('class="button button-secondary light" data-analytics-event="select_free_cli"', closing)
 
         editions = source.split('<section class="editions shell"', 1)[1].split("</section>", 1)[0]
         self.assertIn("The Mac app is the easy way.", editions)
         self.assertLess(editions.index('id="founding-edition"'), editions.index("Open source CLI"))
-        self.assertLess(editions.index("Move my Codex work + help — $49"), editions.index("View the source and CLI"))
+        self.assertLess(editions.index("Protect and move my Codex work — $49"), editions.index("View the source and CLI"))
 
     def test_launch_interest_preserves_consent_and_separate_beta_help_email(self):
         page = self.parse("index.html")
@@ -397,10 +402,29 @@ class SiteTests(unittest.TestCase):
     def test_guides_are_discoverable_and_do_not_promise_unsafe_backup_bypass(self):
         home = (SITE / "index.html").read_text()
         sitemap = (SITE / "sitemap.xml").read_text()
-        for path in ("moving-to-a-new-mac", "codex-history-missing-new-mac", "backup-and-recovery", "compare-codex-migration-tools", "access-codex-from-another-machine"):
+        for path in ("codex-vault", "moving-to-a-new-mac", "codex-history-missing-new-mac", "backup-and-recovery", "compare-codex-migration-tools", "access-codex-from-another-machine"):
             self.assertIn('href="/' + path + '"', home)
             self.assertIn("https://migrate.segeren.com/" + path, sitemap)
         self.assertIn("no skip-backup switch", (SITE / "backup-and-recovery.html").read_text())
+
+    def test_vault_page_matches_the_shipped_local_product_boundary(self):
+        source = (SITE / "codex-vault.html").read_text()
+        text = " ".join(self.parse("codex-vault.html").text)
+        for phrase in ("Search the conversations stored on this Mac",
+                       "client-side encrypted snapshot",
+                       "adds another verified snapshot every day",
+                       "add one missing conversation",
+                       "not continuous synchronization",
+                       "does not host or receive the backup"):
+            self.assertIn(phrase, text)
+        for excluded in ("auth.json", "installation_id", "SSH keys", "repositories"):
+            self.assertIn(excluded, text)
+        self.assertIn("$49", text)
+        self.assertIn("30-day refund policy", text)
+        self.assertIn('src="/assets/codex-vault-dashboard.png"', source)
+        self.assertIn('srcset="/assets/codex-vault-dashboard-720.avif 720w, /assets/codex-vault-dashboard-1120.avif 1120w"', source)
+        for name in ("codex-vault-dashboard.png", "codex-vault-dashboard-720.avif", "codex-vault-dashboard-1120.avif"):
+            self.assertTrue((SITE / "assets" / name).is_file())
 
     def test_comparison_guide_is_disclosed_and_fair(self):
         source = (SITE / "compare-codex-migration-tools.html").read_text()
