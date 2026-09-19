@@ -163,17 +163,17 @@ class SiteTests(unittest.TestCase):
         self.assertIn('role="tablist" aria-label="Product walkthroughs"', source)
         self.assertIn('role="tab" id="vault-demo-tab" aria-selected="true"', source)
         self.assertIn('role="tab" id="migration-demo-tab" aria-selected="false"', source)
-        self.assertIn('poster="/assets/codex-vault-demo-poster.jpg"', source)
-        self.assertIn('src="/assets/codex-vault-demo.webm" type="video/webm"', source)
-        self.assertIn('poster="/assets/codex-migrate-demo-poster.jpg"', source)
-        self.assertIn('src="/assets/codex-migrate-demo.webm" type="video/webm"', source)
-        self.assertIn("Both recordings use the shipped interface with staged sample data.", text)
+        self.assertIn('poster="/assets/codex-vault-demo-build14-poster.jpg"', source)
+        self.assertIn('src="/assets/codex-vault-demo-build14.webm" type="video/webm"', source)
+        self.assertIn('poster="/assets/codex-migrate-demo-build14-poster.jpg"', source)
+        self.assertIn('src="/assets/codex-migrate-demo-build14.webm" type="video/webm"', source)
+        self.assertIn("Both walkthroughs use the shipped build 14 interface with staged sample data.", text)
         self.assertIn("Watch a migration in 1 minute.", text)
         self.assertIn("Transfer time depends on data size and your connection.", text)
-        for name in ("codex-vault-demo.webm", "codex-vault-demo-poster.jpg",
-                     "codex-migrate-demo.webm", "codex-migrate-demo-poster.jpg"):
+        for name in ("codex-vault-demo-build14.webm", "codex-vault-demo-build14-poster.jpg",
+                     "codex-migrate-demo-build14.webm", "codex-migrate-demo-build14-poster.jpg"):
             self.assertTrue((SITE / "assets" / name).is_file())
-        for name in ("codex-vault-demo.webm", "codex-migrate-demo.webm"):
+        for name in ("codex-vault-demo-build14.webm", "codex-migrate-demo-build14.webm"):
             self.assertLess((SITE / "assets" / name).stat().st_size, 2_000_000)
 
     def test_support_is_best_effort_not_an_sla(self):
@@ -414,9 +414,9 @@ class SiteTests(unittest.TestCase):
             self.assertIn(excluded, text)
         self.assertIn("$49", text)
         self.assertIn("30-day refund policy", text)
-        self.assertIn('src="/assets/codex-vault-demo-poster.jpg"', source)
+        self.assertIn('src="/assets/codex-vault-demo-build14-poster.jpg"', source)
         self.assertIn("daily automatic backup selected by default", source)
-        self.assertTrue((SITE / "assets" / "codex-vault-demo-poster.jpg").is_file())
+        self.assertTrue((SITE / "assets" / "codex-vault-demo-build14-poster.jpg").is_file())
 
     def test_comparison_guide_is_disclosed_and_fair(self):
         source = (SITE / "compare-codex-migration-tools.html").read_text()
