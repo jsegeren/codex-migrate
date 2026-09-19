@@ -63,7 +63,7 @@ guaranteed response time or guarantee that every migration issue can be solved.
 
 ## See the app in one minute
 
-[![Codex Migrate local dashboard during a staged sample migration](site/assets/codex-migrate-demo-poster.jpg)](https://migrate.segeren.com/assets/codex-migrate-demo.webm)
+[![Codex Migrate build 14 migration setup with staged sample data](site/assets/codex-migrate-demo-build14-poster.jpg)](https://migrate.segeren.com/assets/codex-migrate-demo-build14.webm)
 
 This is the real local dashboard with staged sample data. Actual transfer time
 depends on data size and the connection between the Macs.
