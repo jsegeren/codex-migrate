@@ -26,20 +26,21 @@ receipts rather than descriptions of the current offer.
 
 ## Current exact artifact
 
-- Release ID: `beta-build11-arm64`, explicit `beta` channel.
-- Filename: `Codex-Migrate-0.1.0-build11-arm64.zip`; 8,307,040 bytes.
-- Source: `5fbbf6abd3ee7d30c8e4436b3bb09468bfef5f9e`.
-- SHA-256: `b5fd8546c2d8d4cf285de2fab3d75b71778897da02f750ae6368cf2c25831c0c`.
-- Notarization: `30dee211-1265-4357-9606-08bd68f283a2`, Accepted.
+- Release ID: `beta-build12-arm64`, explicit `beta` channel.
+- Filename: `Codex-Migrate-0.1.0-build12-arm64.zip`; 8,494,419 bytes.
+- Source: `b1a16e6b49ac7910770e577f8819800ca506d11e`.
+- SHA-256: `c63f4478e07fdd41bca2b09fac5c5521c1b0ace2bf1326cc6583ee950097943c`.
+- Notarization: `2b45f672-324a-4bbf-b3a6-cf0ec5eb7e34`, Accepted.
 - Private live-store upload and full readback matched exact size and digest.
 
 The catalog's `accepted: true` records this specific distribution approval, not
 full clean-Mac or WCAG certification. Sandbox entries remain ineligible for live
-sale. Build 11 retains build 9's migration, recovery and atomic destination
-Codex-identity behavior while simplifying the interface and using Joshua's
-public name consistently. Its fault-injection, complete-suite, exact packaged
-executable, signature, staple and Gatekeeper evidence is recorded in
-[installer interruption validation](identity-interruption-validation-2026-09-07.md).
+sale. Build 12 retains the established migration, recovery and atomic
+destination Codex-identity behavior and adds Codex Vault: local history search,
+encrypted versioned backup, separate-folder recovery, complete-history
+installation with rollback, and additive recovery of one missing conversation.
+Its selected-thread physical-device evidence is recorded in the
+[September 18 acceptance receipt](vault-selected-thread-acceptance-2026-09-18.md).
 
 ## Remaining validation
 

@@ -23,7 +23,7 @@ implementation.
 
 ## Current live state
 
-As of September 13, 2026:
+As of September 18, 2026:
 
 - Public site: <https://migrate.segeren.com/>
 - Source repository: <https://github.com/jsegeren/codex-migrate>
@@ -33,15 +33,22 @@ As of September 13, 2026:
 - Support: best effort at `joshua@segeren.com`
 - Public analytics: the separate Codex Migrate GA4 property; no app or workspace
   analytics
-- Current paid artifact: `beta-build11-arm64`
-- Artifact filename: `Codex-Migrate-0.1.0-build11-arm64.zip`
-- Source commit: `5fbbf6abd3ee7d30c8e4436b3bb09468bfef5f9e`
-- Archive size: 8,307,040 bytes
+- Current paid artifact: `beta-build12-arm64`
+- Artifact filename: `Codex-Migrate-0.1.0-build12-arm64.zip`
+- Source commit: `b1a16e6b49ac7910770e577f8819800ca506d11e`
+- Archive size: 8,494,419 bytes
 - Archive SHA-256:
-  `b5fd8546c2d8d4cf285de2fab3d75b71778897da02f750ae6368cf2c25831c0c`
+  `c63f4478e07fdd41bca2b09fac5c5521c1b0ace2bf1326cc6583ee950097943c`
 - Apple notarization submission:
-  `30dee211-1265-4357-9606-08bd68f283a2` (`Accepted`)
+  `2b45f672-324a-4bbf-b3a6-cf0ec5eb7e34` (`Accepted`)
 - Acceptance label: `founder-approved-paid-beta-2026-09-07`
+
+Build 12 adds the Codex Vault history browser, encrypted versioned backup,
+manual and daily backup paths, separate-folder recovery, complete-history
+installation with rollback, and additive recovery of one missing conversation.
+The selected-thread path passed bounded physical two-Mac acceptance while the
+receiving Mac remained in use; see
+[the selected-thread acceptance receipt](vault-selected-thread-acceptance-2026-09-18.md).
 
 `commerce/releases.json` is the executable release catalog. Do not replace an
 existing artifact or remove an old catalog entry: existing purchases remain
