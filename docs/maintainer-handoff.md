@@ -33,19 +33,22 @@ As of September 18, 2026:
 - Support: best effort at `joshua@segeren.com`
 - Public analytics: the separate Codex Migrate GA4 property; no app or workspace
   analytics
-- Current paid artifact: `beta-build12-arm64`
-- Artifact filename: `Codex-Migrate-0.1.0-build12-arm64.zip`
-- Source commit: `b1a16e6b49ac7910770e577f8819800ca506d11e`
-- Archive size: 8,494,419 bytes
+- Current paid artifact: `beta-build13-arm64`
+- Artifact filename: `Codex-Migrate-0.1.0-build13-arm64.zip`
+- Source commit: `5cdd05875c25b3c3099ac17c5e5717798f4e4c41`
+- Archive size: 8,492,847 bytes
 - Archive SHA-256:
-  `c63f4478e07fdd41bca2b09fac5c5521c1b0ace2bf1326cc6583ee950097943c`
+  `fcd4590583ca676d1e16b6fb1349c1ab3fbcd1b6fddd0e9eaa682de60213b6c7`
 - Apple notarization submission:
-  `2b45f672-324a-4bbf-b3a6-cf0ec5eb7e34` (`Accepted`)
+  `7feb2dad-5827-4bfe-a98d-0290df7f4933` (`Accepted`)
 - Acceptance label: `founder-approved-paid-beta-2026-09-07`
 
-Build 12 adds the Codex Vault history browser, encrypted versioned backup,
-manual and daily backup paths, separate-folder recovery, complete-history
-installation with rollback, and additive recovery of one missing conversation.
+Build 13 includes the build 12 Codex Vault history browser, encrypted versioned
+backup, separate-folder recovery, complete-history installation with rollback,
+and additive recovery of one missing conversation. It makes daily automatic
+backup the recommended default during the first backup while retaining a clear
+manual-only choice, and focuses the public homepage on backup, search, and
+migration with real-product walkthroughs.
 The selected-thread path passed bounded physical two-Mac acceptance while the
 receiving Mac remained in use; see
 [the selected-thread acceptance receipt](vault-selected-thread-acceptance-2026-09-18.md).

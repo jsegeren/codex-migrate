@@ -414,10 +414,9 @@ class SiteTests(unittest.TestCase):
             self.assertIn(excluded, text)
         self.assertIn("$49", text)
         self.assertIn("30-day refund policy", text)
-        self.assertIn('src="/assets/codex-vault-dashboard.png"', source)
-        self.assertIn('srcset="/assets/codex-vault-dashboard-720.avif 720w, /assets/codex-vault-dashboard-1120.avif 1120w"', source)
-        for name in ("codex-vault-dashboard.png", "codex-vault-dashboard-720.avif", "codex-vault-dashboard-1120.avif"):
-            self.assertTrue((SITE / "assets" / name).is_file())
+        self.assertIn('src="/assets/codex-vault-demo-poster.jpg"', source)
+        self.assertIn("daily automatic backup selected by default", source)
+        self.assertTrue((SITE / "assets" / "codex-vault-demo-poster.jpg").is_file())
 
     def test_comparison_guide_is_disclosed_and_fair(self):
         source = (SITE / "compare-codex-migration-tools.html").read_text()
