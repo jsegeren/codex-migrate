@@ -23,6 +23,8 @@ Product: https://openai.com/codex/
 `site/og-white-v1.png` is the earlier light alternative. Each
 includes a generated depiction of the Codex product icon, labelled “For Codex,”
 separate from Codex Migrate's name and accompanied by a non-affiliation notice.
+The Founder explicitly reaffirmed retaining this social-card depiction on
+September 18, 2026.
 It is not an original, pixel-identical copy of the product icon. The depiction
 does not make OpenAI's underlying artwork or trademarks MIT-licensed, and the
 card is not this project's app icon or favicon.

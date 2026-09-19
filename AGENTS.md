@@ -23,3 +23,8 @@ unmodified Codex product icon as a separate compatibility reference labelled
 “For Codex,” subordinate to our branding with a nearby non-affiliation notice.
 Never use it as our app icon, favicon, or combined logo. Record its provenance
 and third-party rights. “Codex” describes compatibility with the Codex product.
+The Founder separately reaffirmed on September 18, 2026 that the selected
+social card may retain its larger Codex compatibility depiction when it remains
+visually separate, labelled “For Codex,” and paired with the card's explicit
+non-affiliation statement. This social-card exception does not extend to the
+site identity, app icon, favicon, or any claim of endorsement.
