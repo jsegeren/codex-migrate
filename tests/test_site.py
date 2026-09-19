@@ -232,13 +232,13 @@ class SiteTests(unittest.TestCase):
     def test_codex_icon_is_a_separate_attributed_product_reference(self):
         source = (SITE / "index.html").read_text()
         self.assertIn('class="header-compatibility"', source)
-        self.assertIn('alt="Codex product icon"', source)
-        self.assertIn('<span>For Codex</span>', source)
+        self.assertIn('src="/assets/codex-product-dark-80.png" width="40" height="40" alt=""', source)
+        self.assertIn('<strong>For Codex</strong>', source)
         self.assertIn('Not affiliated with or endorsed by OpenAI.', source)
         self.assertIn('Codex product icon and OpenAI marks belong to OpenAI.', source)
         self.assertIn('href="/assets/mark.svg"', source)
         self.assertTrue((SITE / "assets/codex-product-dark.png").is_file())
-        for size in (80, 288, 560):
+        for size in (80,):
             self.assertTrue((SITE / f"assets/codex-product-dark-{size}.png").is_file())
             self.assertTrue((SITE / f"assets/codex-product-dark-{size}.avif").is_file())
         self.assertIn("not licensed under", (ROOT / "THIRD_PARTY_NOTICES.md").read_text())
@@ -251,36 +251,31 @@ class SiteTests(unittest.TestCase):
         self.assertIn("--purple: #6042a6", styles)
         self.assertNotIn("var(--green", styles)
 
-    def test_product_reference_is_prominent_in_hero_and_separate_in_header(self):
+    def test_product_reference_is_small_subordinate_and_disclosed(self):
         source = (SITE / "index.html").read_text()
         header = source.split('<header class="site-header">', 1)[1].split('</header>', 1)[0]
         self.assertIn('class="header-compatibility"', header)
         self.assertIn('For Codex — independent migration tool', header)
-        self.assertIn('>For Codex</span>', header)
-        self.assertIn('width="280" height="280" fetchpriority="high" decoding="async" alt="Codex product icon"', source)
-        self.assertIn('srcset="/assets/codex-product-dark-288.png 288w, /assets/codex-product-dark-560.png 560w"', source)
-        self.assertIn('srcset="/assets/codex-product-dark-288.avif 288w, /assets/codex-product-dark-560.avif 560w"', source)
-        self.assertIn('sizes="(max-width: 760px) 144px, (max-width: 980px) 160px, 280px"', source)
+        self.assertIn('>For Codex</strong>', header)
+        self.assertIn('Independent · not affiliated', header)
         self.assertIn('srcset="/assets/codex-product-dark-80.avif" type="image/avif"', header)
         self.assertIn('src="/assets/codex-product-dark-80.png" width="40" height="40"', header)
-        heading_row = source.split('<div class="hero-heading">', 1)[1].split('<div class="product-reference">', 1)[0]
+        heading_row = source.split('<div class="hero-heading">', 1)[1].split('</div>\n          </div>', 1)[0]
         self.assertIn('<h1>Keep your', heading_row)
         self.assertIn('<span class="accent">Codex work safe.</span>', heading_row)
-        self.assertIn('class="hero-inline-icon"', heading_row)
+        self.assertNotIn('class="hero-inline-icon"', source)
+        self.assertIn('Independent tool. Not affiliated with or endorsed by OpenAI.', heading_row)
         self.assertNotIn('class="terminal-card"', source)
 
-    def test_hero_copy_gap_is_not_inflated_by_taller_icon(self):
+    def test_hero_is_a_simple_single_column_message(self):
         styles = (SITE / "styles.css").read_text()
         layout = styles.split("\n.hero-copy {", 1)[1].split("}", 1)[0]
         heading = styles.split("\n.hero-heading {", 1)[1].split("}", 1)[0]
         title = styles.split("\n.hero-heading h1 {", 1)[1].split("}", 1)[0]
-        icon = styles.split("\n.hero-inline-icon {", 1)[1].split("}", 1)[0]
         self.assertIn("display: block", layout)
-        self.assertIn("display: grid", heading)
-        self.assertIn("minmax(0, 690px) 280px", heading)
-        self.assertIn("justify-content: space-between", heading)
-        self.assertIn("grid-row: 1", icon)
-        self.assertIn("align-self: start", icon)
+        self.assertIn("display: block", heading)
+        self.assertIn("max-width: 820px", heading)
+        self.assertNotIn("hero-inline-icon", styles)
         self.assertNotIn("align-items: flex-end", styles)
         self.assertIn("margin: 0 0 16px", title)
         self.assertIn('<div class="hero-message">', (SITE / "index.html").read_text())
@@ -410,7 +405,7 @@ class SiteTests(unittest.TestCase):
         text = " ".join(self.parse("codex-vault.html").text)
         for phrase in ("Search the conversations stored on this Mac",
                        "client-side encrypted snapshot",
-                       "adds another verified snapshot every day",
+            "adds another verified snapshot every 24 hours",
                        "add one missing conversation",
                        "not continuous synchronization",
                        "does not host or receive the backup"):
