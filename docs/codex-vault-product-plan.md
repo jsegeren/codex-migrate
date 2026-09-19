@@ -31,28 +31,25 @@ product. That is a different synchronization and conflict-resolution problem.
 
 ## Editions and pricing
 
-Keep the offer modular while the market is being proven:
+Keep the first offer simple while the market is being proven:
 
 - **Open source:** portable archive format, manual CLI inspection/export,
   verification and recovery primitives.
-- **Codex Vault — $5/month or $49/year:** continuously maintained automatic
-  backup to a customer-owned folder, browse/search, verified restore, updates
-  and best-effort support. Cancellation stops automation and support but leaves
-  portable existing backups readable and exportable.
-- **Codex Migrate for Mac — $49 one time:** the current complete Mac migration.
-- **Complete annual plan:** Vault plus one full migration during the paid year;
-  validate willingness to pay before fixing a permanent bundle price.
+- **Codex Migrate for Mac — $49 one time:** the current packaged beta, including
+  automatic encrypted backup to a customer-owned folder, browse/search,
+  verified recovery, the complete Mac migration, updates during the beta, and
+  best-effort support.
+- **Possible Vault Cloud subscription:** later client-side encrypted managed
+  storage, off-device monitoring, and cross-device web access. Validate demand,
+  storage costs, and willingness to pay before setting a price.
 
-Existing paid Codex Migrate buyers should receive the first Vault beta or a
-nominal upgrade rather than being asked to buy the same foundation twice.
+Existing paid Codex Migrate buyers receive the current local Vault beta rather
+than being asked to buy the same foundation twice.
 
-The recurring value is the continuously maintained backup agent, health checks,
-format compatibility, version retention and viewer/restore path—not ownership
-of the customer's storage bytes. Do not promise lifetime maintenance for a
-one-time price. A later **Vault Cloud** tier adds client-side encrypted managed
-storage, off-device monitoring and cross-device web access at a higher recurring
-price with an explicit storage allowance. Prefer monthly or annual billing over
-literal weekly charges.
+The present app does not promise lifetime maintenance. A later **Vault Cloud**
+tier can earn recurring revenue through managed storage, off-device health
+monitoring, and cross-device web access with an explicit storage allowance.
+Prefer monthly or annual billing over literal weekly charges.
 
 ## Delivery sequence
 
