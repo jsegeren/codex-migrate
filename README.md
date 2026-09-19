@@ -89,10 +89,12 @@ and displays its recovery key once. Save that recovery key in a password
 manager; losing both the Mac Keychain item and recovery key makes the encrypted
 backup unrecoverable. The packaged app's local Vault page can create the same
 verified backup in an empty local or cloud-sync folder and guides the customer
-through saving the recovery key. After that first verified backup, it can install
-a private macOS LaunchAgent that adds a verified encrypted snapshot every day,
-even when the app is closed. Turning automatic backup off removes only the local
-schedule; existing Vault snapshots remain. The local Vault page can also show
+through saving the recovery key. During that first backup, daily automatic
+backup is selected by default and manual-only remains available. After the first
+snapshot verifies, the daily option installs a private macOS LaunchAgent that
+adds a verified encrypted snapshot every 24 hours, even when the app is closed.
+Turning automatic backup off removes only the local schedule; existing Vault
+snapshots remain. The local Vault page can also show
 the published backup history and recover a chosen verified snapshot into a
 separate empty folder for inspection without changing live Codex data. A
 separately confirmed install action can replace only the two local conversation
@@ -463,9 +465,9 @@ or installation identity files.
 
 The packaged local helper exposes a history browser with
 per-thread Markdown download, print-to-PDF and the browser's native share sheet
-when supported, opt-in daily encrypted backups after the first verified manual
-snapshot, and recovery of a chosen backup version into a separate inspection
-folder.
+when supported, daily encrypted backup selected by default during the first
+backup (with a manual-only option), and recovery of a chosen backup version into
+a separate inspection folder.
 See [the Codex Vault product plan](docs/codex-vault-product-plan.md) for the
 product boundary, safety sequence and proposed editions.
 

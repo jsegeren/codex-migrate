@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Make daily automatic backup the explicit recommended default during the first
+  Vault backup, while keeping a clear manual-only choice.
+- Shorten the homepage around three customer jobs: encrypted backup, local
+  conversation search/export, and guarded Mac-to-Mac migration.
+- Add a real-product Vault demo and explain why the guarded workflow is safer
+  than manually copying local Codex files.
+
 ## 0.1.0 paid beta build 12 — 2026-09-18
 
 - Open a verified encrypted Vault snapshot in private temporary staging,
