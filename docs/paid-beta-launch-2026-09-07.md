@@ -26,19 +26,20 @@ receipts rather than descriptions of the current offer.
 
 ## Current exact artifact
 
-- Release ID: `beta-build13-arm64`, explicit `beta` channel.
-- Filename: `Codex-Migrate-0.1.0-build13-arm64.zip`; 8,492,847 bytes.
-- Source: `5cdd05875c25b3c3099ac17c5e5717798f4e4c41`.
-- SHA-256: `fcd4590583ca676d1e16b6fb1349c1ab3fbcd1b6fddd0e9eaa682de60213b6c7`.
-- Notarization: `7feb2dad-5827-4bfe-a98d-0290df7f4933`, Accepted.
+- Release ID: `beta-build14-arm64`, explicit `beta` channel.
+- Filename: `Codex-Migrate-0.1.0-build14-arm64.zip`; 8,500,913 bytes.
+- Source: `cc767efd77081c9a15fe5656a4713b3ee04f001e`.
+- SHA-256: `256ea14e4eb132c9c10e16f20bb722d9f921e7b43fda2c165da792a3cf300c05`.
+- Notarization: `54785df0-5d68-483f-a15b-4d6964d0ad65`, Accepted.
 - Private live-store upload and full readback matched exact size and digest.
 
 The catalog's `accepted: true` records this specific distribution approval, not
 full clean-Mac or WCAG certification. Sandbox entries remain ineligible for live
-sale. Build 13 retains the established migration, recovery, atomic destination
-Codex-identity behavior, and build 12 Vault machinery. It makes daily automatic
-backup the recommended initial choice while preserving manual-only backup, and
-adds the focused backup/search/migration landing experience and real Vault demo.
+sale. Build 14 retains the established migration, recovery, atomic destination
+Codex-identity behavior, and Vault machinery. It reorganizes the packaged app
+around focused overview, backup, conversations, recovery and Move Macs views;
+keeps daily automatic backup as the recommended initial choice; and identifies
+common cloud-synced destination folders without claiming verified provider sync.
 The selected-thread physical-device evidence applies to the unchanged recovery
 path and is recorded in the
 [September 18 acceptance receipt](vault-selected-thread-acceptance-2026-09-18.md).

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.1.0 paid beta build 14 — 2026-09-18
+
+- Redesign the packaged app around four focused activities: overview, backup,
+  conversation search/recovery, and moving Macs.
+- Add conservative recognition of common cloud-synced backup folders without
+  claiming that a provider has finished syncing.
+- Improve desktop and narrow-mobile hierarchy, backup status, navigation, and
+  conversation browsing while retaining the guarded migration engine.
+
 ## 0.1.0 paid beta build 13 — 2026-09-18
 
 - Make daily automatic backup the explicit recommended default during the first
