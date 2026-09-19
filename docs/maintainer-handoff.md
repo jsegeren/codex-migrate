@@ -33,22 +33,22 @@ As of September 18, 2026:
 - Support: best effort at `joshua@segeren.com`
 - Public analytics: the separate Codex Migrate GA4 property; no app or workspace
   analytics
-- Current paid artifact: `beta-build13-arm64`
-- Artifact filename: `Codex-Migrate-0.1.0-build13-arm64.zip`
-- Source commit: `5cdd05875c25b3c3099ac17c5e5717798f4e4c41`
-- Archive size: 8,492,847 bytes
+- Current paid artifact: `beta-build14-arm64`
+- Artifact filename: `Codex-Migrate-0.1.0-build14-arm64.zip`
+- Source commit: `cc767efd77081c9a15fe5656a4713b3ee04f001e`
+- Archive size: 8,500,913 bytes
 - Archive SHA-256:
-  `fcd4590583ca676d1e16b6fb1349c1ab3fbcd1b6fddd0e9eaa682de60213b6c7`
+  `256ea14e4eb132c9c10e16f20bb722d9f921e7b43fda2c165da792a3cf300c05`
 - Apple notarization submission:
-  `7feb2dad-5827-4bfe-a98d-0290df7f4933` (`Accepted`)
+  `54785df0-5d68-483f-a15b-4d6964d0ad65` (`Accepted`)
 - Acceptance label: `founder-approved-paid-beta-2026-09-07`
 
-Build 13 includes the build 12 Codex Vault history browser, encrypted versioned
-backup, separate-folder recovery, complete-history installation with rollback,
-and additive recovery of one missing conversation. It makes daily automatic
-backup the recommended default during the first backup while retaining a clear
-manual-only choice, and focuses the public homepage on backup, search, and
-migration with real-product walkthroughs.
+Build 14 includes the established Codex Vault history browser, encrypted
+versioned backup, recovery and migration machinery. It reorganizes the packaged
+app around overview, backup, conversations, recovery and Move Macs views; adds
+conservative recognition of common cloud-synced destination folders; and keeps
+daily automatic backup as the recommended default without claiming that a
+storage provider has completed synchronization.
 The selected-thread path passed bounded physical two-Mac acceptance while the
 receiving Mac remained in use; see
 [the selected-thread acceptance receipt](vault-selected-thread-acceptance-2026-09-18.md).
