@@ -6,7 +6,7 @@ VAULT_HTML = r'''<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" href="data:,">
-<title>Codex Vault — Local history</title>
+<title>Codex Migrate — Vault + Migration</title>
 <style>
 :root{color-scheme:dark;--bg:#080b10;--panel:#111722;--line:#344057;--text:#f7f8fa;--muted:#bdc7d8;--purple:#6042a6;--light:#d9cdff}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 20% 0,#172038 0,transparent 36%),var(--bg);color:var(--text);font:500 16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}

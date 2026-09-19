@@ -106,12 +106,17 @@ The Vault page can also open a verified encrypted snapshot privately, search
 it, and add one missing conversation without replacing unrelated history. An
 identical local thread is left alone; the operation stops if the same thread
 identity has different content rather than overwriting or merging it.
-Physical-device acceptance on September 18, 2026 verified that a Codex-created
+The app recognizes common OneDrive, Google Drive, Dropbox, Box, Proton Drive,
+and iCloud Drive locations and distinguishes them from local-only or external
+folders. This is guidance, not a false guarantee: Codex Migrate cannot confirm
+that a provider has finished syncing, so the app tells the customer to verify
+the provider's status before relying on the off-device copy. Physical-device
+acceptance on September 18, 2026 verified that a Codex-created
 thread could be encrypted on one Mac, installed on a second Mac, and resumed by
 the actual Codex binary there while destination authentication, installation
 identity, and the displaced history remained protected. Retention controls,
-cloud-folder health monitoring, and broader Codex version coverage are still
-underway. These features ship in the current packaged beta and open-source
+active provider sync-health monitoring, and broader Codex version coverage are
+still underway. These features ship in the current packaged beta and open-source
 engine; this is not a hosted Vault subscription. See the
 [physical-device acceptance receipt](docs/vault-physical-device-acceptance-2026-09-18.md).
 

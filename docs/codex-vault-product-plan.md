@@ -2,14 +2,14 @@
 
 ## Decision
 
-Codex Vault is the planned umbrella product for preserving local Codex work.
-It extends this repository, engine and Mac app; it is not a second competing
-application or a rewrite. **Migrate** remains a named, independently purchasable
-job inside Vault and remains an important search/landing-page term.
+**Codex Migrate** remains the umbrella product and public name. **Vault +
+Migration** describes its expanded category, while Backups, Conversations,
+Recovery, and Move Macs are explicit jobs inside the same app. This extends the
+existing repository and engine; it is not a second application or a rewrite.
 
-Do not rename the public app, repository or website until the backup and browser
-experience is usable. Existing Codex Migrate links and customers must continue
-to work after the umbrella name changes.
+Do not rename the public app, repository, or website to Codex Vault, Codex
+Guard, or Codex Guardian. Those names collide with existing developer tools,
+and the established Codex Migrate name preserves customer and search continuity.
 
 The product promise is:
 
@@ -107,8 +107,11 @@ snapshot in an existing Vault verifies with a key already present in the local
 Keychain. It runs every 24 hours by default, reuses the same backup lock and
 publish-after-verification contract, and records only content-free run health.
 Disabling it removes the schedule but leaves every snapshot intact. Unattended
-runs never create or display a recovery key. Retention controls and richer
-cloud-folder health reporting remain the next backup milestone.
+runs never create or display a recovery key. The UI now recognizes common
+cloud-sync folder locations and clearly distinguishes them from local-only or
+external folders, without pretending it can verify a provider's current sync
+state. Retention controls and active provider sync-health reporting remain the
+next backup milestone.
 
 ### 3. Verified restore
 
