@@ -2,24 +2,26 @@
 <html lang="en">
   <head>
     <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Codex Migrate vs Codex Sync and other migration tools</title>
-    <meta name="description" content="Compare Codex Migrate, Codex Sync at codexsync.org, history repair tools, manual copying, and cross-device sync for moving OpenAI Codex to another Mac.">
+    <title>Compare Codex backup, search, recovery, and migration tools</title>
+    <meta name="description" content="Compare tools for Codex conversation search, encrypted backup, recovery, Mac migration, cross-platform repair, and ongoing sync.">
     <link rel="canonical" href="https://migrate.segeren.com/compare-codex-migration-tools">
-    <meta property="og:title" content="Which Codex migration tool fits your move?"><meta property="og:description" content="A practical comparison of Mac migration, selective history repair, cross-platform tools, and ongoing Codex sync."><meta property="og:type" content="article"><meta property="og:url" content="https://migrate.segeren.com/compare-codex-migration-tools"><meta property="og:image" content="https://migrate.segeren.com/og.png">
-    <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Compare Codex migration and sync tools"><meta name="twitter:description" content="Choose the right approach for a new Mac, missing Codex history, or ongoing cross-device continuity."><meta name="twitter:image" content="https://migrate.segeren.com/og.png">
+    <meta property="og:title" content="Which Codex history or migration tool fits your job?"><meta property="og:description" content="A practical comparison of Codex search, backup, recovery, Mac migration, cross-platform repair, and sync."><meta property="og:type" content="article"><meta property="og:url" content="https://migrate.segeren.com/compare-codex-migration-tools"><meta property="og:image" content="https://migrate.segeren.com/og.png">
+    <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Compare Codex history and migration tools"><meta name="twitter:description" content="Choose the right approach for local search, backups, missing history, a new Mac, or ongoing cross-device continuity."><meta name="twitter:image" content="https://migrate.segeren.com/og.png">
     <link rel="icon" href="/assets/mark.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css?v=20260910-comparison"><script src="/analytics.js?v=20260911-ecommerce" defer></script>
   </head>
   <body>
     <header class="site-header"><a class="brand" href="/"><span class="brand-mark" aria-hidden="true">CM</span><span>Codex Migrate</span></a><nav aria-label="Primary navigation"><a href="/moving-to-a-new-mac">Migration guide</a><a href="/backup-and-recovery">Backup &amp; recovery</a><a href="/#founding-edition">Mac beta</a></nav></header>
     <main class="legal comparison-guide shell">
-      <p class="eyebrow">Independent comparison · checked September 10, 2026</p>
-      <h1>Choose the right Codex migration tool.</h1>
-      <p class="lede">Changing Macs, recovering missing conversations, and keeping two computers in sync are different jobs. The best option depends on what you need to move and whether both computers will remain active.</p>
+      <p class="eyebrow">Independent comparison · checked September 19, 2026</p>
+      <h1>Choose the right Codex history or migration tool.</h1>
+      <p class="lede">Searching old conversations, backing them up, changing Macs, repairing history, and keeping two computers in sync are different jobs. The best option depends on what you need to protect and whether multiple computers will remain active.</p>
 
       <p><strong>Disclosure:</strong> this page is published by Joshua Segeren, the developer of Codex Migrate. Competing projects are linked directly and described from their public documentation. Verify their current releases and safety guidance before using them. None of these independent tools is made by or endorsed by OpenAI.</p>
 
       <h2>Short answer</h2>
       <div class="decision-grid">
+        <section><h3>Want Codex backup, recovery, and Mac migration together?</h3><p>Use <strong>Codex Migrate + Vault</strong> for encrypted versioned backups in a folder you control, active and archived history search, selected-thread recovery, and a guided Mac-to-Mac move.</p></section>
+        <section><h3>Search several AI coding tools?</h3><p>Consider <strong>Inventory</strong> for on-device keyword and semantic search across Codex, Claude Code, Cursor, Zed, Kiro, and Antigravity, or <strong>Contextify</strong> for a searchable Claude Code and Codex timeline with optional cloud sync.</p></section>
         <section><h3>Changing from one Mac to another?</h3><p>Use <strong>Codex Migrate</strong> when you want a guided Mac-to-Mac transfer of local Codex state and selected workspace folders, with resumable staging and a verified destination backup.</p></section>
         <section><h3>Recovering or merging selected history?</h3><p>Consider <strong>ChenglongLi777/codex-migrate</strong> when selective session import, path repair, HTML export, or Windows and Linux support matters more than a signed Mac release.</p></section>
         <section><h3>Want a small Mac history runbook?</h3><p>Consider <strong>codex-history-migrator</strong> when you are comfortable running shell and Python scripts and primarily need to archive, restore, reindex, and remap local Codex history.</p></section>
@@ -32,7 +34,9 @@
         <table class="comparison-table">
           <thead><tr><th scope="col">Option</th><th scope="col">Best fit</th><th scope="col">Platforms</th><th scope="col">Delivery</th><th scope="col">Important limit</th></tr></thead>
           <tbody>
-            <tr><th scope="row"><a href="https://github.com/jsegeren/codex-migrate">Codex Migrate</a></th><td>One-time transfer of local Codex state plus selected workspaces</td><td>Mac to Mac; paid app is Apple silicon</td><td>Free MIT CLI; signed and notarized $49 beta with best-effort support</td><td>Not continuous sync; does not merge two independently active workspaces</td></tr>
+            <tr><th scope="row"><a href="https://github.com/jsegeren/codex-migrate">Codex Migrate + Vault</a></th><td>Local Codex search, encrypted versioned backup, recovery, and one-time transfer of state plus selected workspaces</td><td>Mac to Mac; paid app is Apple silicon</td><td>Free MIT CLI; signed and notarized $49 beta with best-effort support</td><td>Codex-focused; not cross-tool search or continuous sync between active Macs</td></tr>
+            <tr><th scope="row"><a href="https://www.myinventory.site/">Inventory</a></th><td>Fast on-device keyword and semantic search across six AI coding tools</td><td>Apple silicon Mac</td><td>$19.99 desktop app; no subscription or account</td><td>Its published scope is search and agent access, not versioned transcript backup or whole-workspace Mac migration</td></tr>
+            <tr><th scope="row"><a href="https://contextify.sh/">Contextify</a></th><td>Searchable Claude Code and Codex timeline, summaries, and optional cross-device cloud sync</td><td>macOS, Windows, and Linux</td><td>Local app with optional cloud and self-hosted offerings</td><td>Broader monitoring and sync product; compare its storage and service options with a user-owned encrypted backup workflow</td></tr>
             <tr><th scope="row"><a href="https://github.com/ChenglongLi777/codex-migrate">ChenglongLi777/codex-migrate</a></th><td>Selective sessions, repair, backup, rollback, and HTML export</td><td>macOS, Windows, Linux, and WSL</td><td>Free MIT GUI and CLI builds</td><td>Its documentation says current releases are not commercially signed or Apple-notarized</td></tr>
             <tr><th scope="row"><a href="https://github.com/ademozsayin/codex-history-migrator">codex-history-migrator</a></th><td>Scripted Mac history backup, restore, path rewrite, and reindex</td><td>macOS</td><td>Shell and Python source</td><td>Focuses on Codex history rather than transferring complete project folders</td></tr>
             <tr><th scope="row"><a href="https://codexsync.org/">Codex Sync (codexsync.org)</a></th><td>AirDrop-friendly transfer of conversations, titles, project records, and indexes</td><td>Apple-silicon Macs</td><td>Mac installer sold through Gumroad</td><td>Its documentation says it does not transfer repositories, arbitrary documents, or generated files</td></tr>
@@ -48,6 +52,9 @@
         <p><strong>Codex Migrate is for a broader new-Mac move.</strong> It transfers portable Codex state plus the workspace folders you select, including complete Git repositories, local branches, worktrees, stashes, and unfinished files. It stages a resumable copy directly over SSH, preserves the new Mac's authentication and installation identity, verifies a destination backup before replacement, and performs post-transfer checks.</p>
         <p>Both are independent, local-first Apple-silicon Mac tools. Choose Codex Sync for a small AirDrop record bundle. Choose Codex Migrate when the project files and Git state behind those conversations need to arrive too.</p>
       </section>
+
+      <h2>Search is not backup; backup is not migration</h2>
+      <p>A search index helps you find work that still exists. A backup preserves recoverable versions when the live files disappear or change. A migration moves the supported Codex state—and, in some tools, the repositories behind it—to another computer. Check which of these jobs a product actually performs before trusting it with the only copy.</p>
 
       <h2>Why “just copy the folder” is incomplete</h2>
       <p>Local Codex work can span conversations, configuration, skills, memories, automations, project folders, Git metadata, worktrees, unpushed branches, stashes, and unfinished files. Some runtime state is machine-specific. A blanket copy can also carry authentication, installation identity, live databases, locks, sockets, logs, or caches that should not replace the destination computer’s state.</p>
@@ -69,9 +76,9 @@
       </ul>
       <p class="notice"><strong>Keep the old computer intact and maintain an independent backup.</strong> No community migration or synchronization tool can guarantee compatibility with every Codex release, filesystem layout, or machine configuration.</p>
 
-      <h2>For a guided Mac-to-Mac move</h2>
-      <p>Codex Migrate transfers portable OpenAI Codex state and explicitly selected workspaces directly between Macs over SSH. The source Mac is left intact. The free CLI and paid app use the same migration engine and safety checks; the $49 beta provides a signed, Apple-notarized package and personal, best-effort support.</p>
-      <div class="actions"><a class="button button-primary" data-analytics-event="select_paid_beta" href="/#founding-edition">Get the Mac beta — $49</a><a class="button button-secondary" data-analytics-event="select_free_cli" href="https://github.com/jsegeren/codex-migrate#quick-start">Inspect the free CLI</a></div>
+      <h2>For Codex backup, recovery, and a guided Mac-to-Mac move</h2>
+      <p>Codex Vault searches active and archived local conversations, keeps client-side encrypted versions in a folder the user controls, and supports selected-thread or complete-snapshot recovery. Codex Migrate transfers portable OpenAI Codex state and explicitly selected workspaces directly between Macs over SSH. The source Mac is left intact. The free CLI and paid app use the same engine and safety checks; the $49 beta provides a signed, Apple-notarized package and personal, best-effort support.</p>
+      <div class="actions"><a class="button button-primary" data-analytics-event="select_paid_beta" href="/#founding-edition">Get Vault + migration — $49</a><a class="button button-secondary" data-analytics-event="select_free_cli" href="https://github.com/jsegeren/codex-migrate#quick-start">Inspect the free CLI</a></div>
     </main>
     <footer><div class="shell"><p>Independent software by <a href="https://x.com/JoshuaSegeren">Joshua Segeren</a>. Not affiliated with or endorsed by OpenAI.</p><div class="footer-bottom"><a href="/">Codex Migrate</a><a href="/privacy">Privacy</a><a href="/privacy#website-analytics" data-analytics-preferences>Analytics choices</a><a href="/terms">Terms</a></div></div></footer>
   </body>
