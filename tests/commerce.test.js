@@ -99,7 +99,8 @@ test('beta delivery email includes the remaining checks and both operator alerts
   { LAUNCH_FROM_EMAIL: 'sender@example.invalid', SENDGRID_API_KEY: 'fixture' },
   async (url, options) => { mail = JSON.parse(options.body); return { status: 202 }; }), 'accepted');
   assert.match(mail.content[0].value, /signed, notarized beta/);
-  assert.match(mail.content[0].value, /testing are ongoing/);
+  assert.match(mail.content[0].value, /Codex Vault search/);
+  assert.match(mail.content[0].value, /Current beta limits/);
   assert.equal(mail.personalizations.length, 3);
   assert.deepEqual(mail.personalizations.slice(1).map(item => item.to[0].email), PURCHASE_NOTIFY_EMAILS);
   assert.equal(mail.personalizations[0].subject, 'Your Codex Migrate download');

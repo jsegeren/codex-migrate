@@ -63,7 +63,7 @@ test('paid beta checkout discloses limits before payment and records the beta ch
   assert.equal(data.metadata.checkout_provider, 'stripe');
   assert.equal(data.managed_payments, undefined);
   assert.equal(data.billing_address_collection, undefined);
-  for (const text of ['Beta software', 'Apple silicon', 'independent backup', 'verify the move', '30-day refund']) {
+  for (const text of ['Beta software', 'Apple silicon', 'Vault protects', 'independent backup', 'verify the result', '30-day refund']) {
     assert(data.custom_text.submit.message.includes(text));
   }
   assert(!data.custom_text.submit.message.includes('testing are ongoing'));

@@ -6,8 +6,9 @@ user's own data or recovery from an artificial lock.
 
 ## Paid direction (not all implemented)
 
-The current desktop shell provides folder selection, setup guidance, the local
-dashboard, skills-only export, and trusted multi-route benchmarking. Broader
+The current desktop shell provides Codex Vault search, export, encrypted
+versioned backup, optional daily backup, guarded recovery, folder selection,
+setup guidance, the local dashboard, skills-only export, and trusted multi-route benchmarking. Broader
 automatic discovery and update checks below are planned, not shipped. Release
 readiness is tracked in [the desktop guide](desktop-setup.md).
 
@@ -25,18 +26,22 @@ readiness is tracked in [the desktop guide](desktop-setup.md).
 ## Founding Edition
 
 The downloadable Mac beta costs **$49 one time**, including personal,
-best-effort help with setup, migration, verification, and recovery, plus a
+best-effort help with setup, Vault backup, migration, verification, and recovery, plus a
 30-day refund policy. No subscription or pre-order.
 
 On September 7 the Founder explicitly authorized opening self-service paid beta
 downloads while the remaining acceptance checks continue. This supersedes the
-earlier manual-only beta policy below. The approved artifact is signed and
-notarized build 11 for Apple silicon, not an unsigned early build. Build 11 keeps
-the tested migration machinery from build 9 and ships its simpler dashboard. Build 9 has
-passed VoiceOver, a real macOS permission-denial check, and physical Wi-Fi
-interruption/resume testing. Guided permission recovery, direct-cable
-interruption, pristine-Mac installation, and broader hardware coverage remain
-unfinished and are disclosed before payment. See the
+earlier manual-only beta policy below. The current approved artifact is signed
+and notarized build 12 for Apple silicon. Build 12 keeps the tested migration
+machinery and adds Codex Vault search, export, encrypted versioned backup,
+optional daily backup, complete recovery, and selected-thread recovery. The
+migration path has passed VoiceOver, a real macOS permission-denial check, and
+physical Wi-Fi interruption/resume testing. Guided permission recovery,
+direct-cable interruption, pristine-Mac installation, and broader hardware
+coverage remain unfinished. Vault selected-thread recovery has passed bounded
+physical two-Mac acceptance; retention controls, cloud-folder health
+monitoring, and broader Codex-version coverage remain ongoing. These limits are
+disclosed before payment. See the
 [paid-beta launch record](paid-beta-launch-2026-09-07.md) for exact scope.
 
 ### Historical policy: paid beta by request (superseded September 7)

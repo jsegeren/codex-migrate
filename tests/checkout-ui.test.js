@@ -47,9 +47,9 @@ test('beta availability keeps the beta state visible while the CTA leads with th
   const f = fixture({ available: true, priceUSD: 49, architecture: 'arm64', channel: 'beta' });
   await tick();
   assert.equal(f.get('checkout-panel').hidden, false);
-  assert.equal(f.get('checkout-button').textContent, 'Move my Codex work + help — $49');
+  assert.equal(f.get('checkout-button').textContent, 'Protect and move my Codex work — $49');
   assert.match(f.get('edition-state').textContent, /beta/);
-  assert.equal(f.get('hero-availability').textContent, 'Signed & notarized Mac beta');
+  assert.equal(f.get('hero-availability').textContent, 'Signed & notarized Mac beta · Now with Vault');
 });
 test('launch fallback starts hidden and stays hidden when checkout is ready', async () => {
   const f = fixture();
