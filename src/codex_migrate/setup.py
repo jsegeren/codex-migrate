@@ -40,6 +40,7 @@ from codex_migrate.vault_schedule import (
     remove_schedule as remove_vault_schedule,
     schedule_status as vault_schedule_status,
 )
+from codex_migrate.vault_storage import classify_vault_storage
 
 FOLDER_PICKER_ERROR = (
     "Folder selection could not finish. Close any open folder dialog and try again, "
@@ -48,76 +49,227 @@ FOLDER_PICKER_ERROR = (
 )
 
 SETUP_HTML = r'''<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="icon" href="data:,"><title>Set up your migration — Codex Migrate</title>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Set up your migration — Codex Migrate</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#080b10;color:#f7f8fa;font:500 17px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow-wrap:anywhere}
 main{width:min(800px,calc(100% - 32px));margin:40px auto}h1{font-size:clamp(32px,6vw,48px);line-height:1.1}h2{font-size:24px}p{color:#cbd2df}section,fieldset{background:#111722;border:1px solid #465268;border-radius:16px;padding:24px;margin:24px 0;min-width:0}
 label{display:block;margin:16px 0 6px}input,textarea,button,select{font:inherit}input:not([type=checkbox]),textarea,select{display:block;width:100%;padding:12px;border:1px solid #8996ad;border-radius:8px;color:#f7f8fa;background:#080b10}textarea{min-height:120px}button,a.button{display:inline-block;padding:12px 18px;border:1px solid #a08bd3;border-radius:9px;background:#6042a6;color:white;font-weight:700;cursor:pointer;text-decoration:none;max-width:100%;white-space:normal}button:disabled{opacity:.6;cursor:wait}.controls{display:flex;gap:12px;flex-wrap:wrap}.check{display:flex;gap:12px;align-items:flex-start}.check input{width:22px;height:22px;flex:none;margin-top:4px}a{color:#d9cdff}:focus-visible{outline:3px solid #d9cdff;outline-offset:4px}#error{color:#ffc3c8}#message{color:#cbd2df}footer{font-size:15px;color:#cbd2df}legend{font-weight:700;font-size:24px}[hidden]{display:none!important}@media(max-width:480px){section,fieldset{padding:16px}main{margin:24px auto}}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.setup-step h2{margin-top:0}button.secondary{background:transparent;border-color:#8996ad}#step-progress{color:#d9cdff;font-weight:700}#review dt{font-size:15px;color:#cbd2df}#review dd{margin:0 0 16px;font-weight:700}details{margin:18px 0}summary{cursor:pointer;font-weight:650}#message:empty{display:none}#folder-message:empty,#folder-error:empty{margin:0}#folder-error{color:#ffc3c8}#folder-message{color:#cbd2df}
-</style></head><body><main>
-<a class="support-link" href="#migration-help">Help / Email support</a>
-<h1>Let’s move your Codex.</h1><p>Your conversations, skills, and unfinished work. Directly from this Mac to your new one.</p>
-<a class="button secondary" id="open-vault" href="/vault">Browse and search this Mac’s Codex history</a>
-<button type="button" class="secondary" id="receiver-toggle">I’m on the new Mac</button>
-<div id="error" role="alert"></div><p id="message" role="status" aria-live="polite">Connecting to your local helper…</p>
-<section id="receiver" hidden><h2 tabindex="-1">Prepare this new Mac</h2>
-<p>First, install Codex and sign in. In System Settings → General → Sharing, enable Remote Login for your account.</p>
-<div id="receiver-request-area"><label for="request-card">Paste the connection card from your old Mac</label><textarea id="request-card" spellcheck="false" autocomplete="off"></textarea>
-<p>Approve only a card you just created on your own old Mac. This grants that Mac SSH access to read and change files in this account for seven days. It does not start a migration.</p>
-<button type="button" id="approve-card">Approve this connection for seven days</button></div>
-<div id="reply-area" hidden><p>Approved. Copy the reply and paste it into Codex Migrate on your old Mac.</p><button type="button" id="copy-reply">Copy reply</button><details><summary>View reply card</summary><label for="reply-card">Reply for your old Mac</label><textarea id="reply-card" readonly spellcheck="false"></textarea></details></div>
-<details><summary>Remove connection access</summary><p>After your migration is complete, remove the access granted by this helper. Other SSH connections are kept. Do not do this during migration or recovery.</p><button type="button" class="secondary" id="revoke-pair">Remove this connection’s access</button></details>
+.app{min-height:100vh;display:grid;grid-template-columns:238px 1fr}.sidebar{position:sticky;top:0;height:100vh;padding:28px 18px 24px;border-right:1px solid #273145;background:#0c1018;display:flex;flex-direction:column}.brand{display:flex;gap:12px;align-items:center;padding:0 8px 26px}.brand-mark{width:36px;height:36px;display:grid;place-items:center;border-radius:11px;background:linear-gradient(145deg,#9475ff,#5735d6);font-size:14px;font-weight:850;box-shadow:0 10px 30px #6f4cff44}.brand strong,.brand small{display:block}.brand small{color:#aeb8ca;font-size:12px}.nav{display:grid;gap:8px}.nav a{display:flex;align-items:center;gap:12px;padding:12px 14px;color:#aeb8ca;border-radius:11px;text-decoration:none;font-weight:700}.nav a:hover,.nav a.active{color:white;background:#1d2434}.nav-icon{width:18px;text-align:center;color:#a991ff}.protection{margin-top:auto;border-top:1px solid #273145;padding:18px 8px 0;font-size:13px;color:#aeb8ca}.protection strong{color:#f7f8fa}.content{min-width:0}.overview-head{margin:16px 0 28px}.overview-head h1{font-size:clamp(40px,6vw,64px);letter-spacing:-.045em;line-height:1;margin:10px 0}.overview-head p{font-size:18px;max-width:720px}.health{display:flex;align-items:center;justify-content:space-between;gap:20px;border:1px solid #344057;border-radius:18px;padding:22px;background:#111722}.health-copy{display:flex;gap:15px;align-items:center}.health-icon{width:44px;height:44px;display:grid;place-items:center;border-radius:14px;background:#103b2d;color:#57e1a5;font-size:24px}.health span,.health strong{display:block}.health span{color:#9eabc0;font-size:13px;text-transform:uppercase;letter-spacing:.12em}.health strong{font-size:22px}.job-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:18px 0}.job-card{display:block;min-height:190px;padding:22px;border:1px solid #344057;border-radius:18px;background:#111722;color:#f7f8fa;text-decoration:none}.job-card small{color:#c3adff;font-weight:800;letter-spacing:.12em}.job-card h2{margin:24px 0 8px}.job-card p{font-size:15px}.job-card strong{display:block;margin-top:18px}.move-head{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}.move-head h1{margin:8px 0}.move-kicker{color:#a991ff;font-weight:750}.view-overview #move-view{display:none}.view-move #overview-view{display:none}.view-move main{width:min(900px,calc(100% - 48px))}.view-move #move-view>h1{font-size:clamp(38px,6vw,58px);letter-spacing:-.045em;margin-bottom:4px}.view-move #move-view>p{font-size:18px}.view-move section,.view-move fieldset{border-color:#344057;background:#111722}.view-move #step-progress{margin:28px 0 8px;text-transform:uppercase;letter-spacing:.12em;font-size:14px}
+@media(max-width:820px){.app{display:block}.sidebar{position:static;width:auto;height:auto;padding:16px}.brand{padding-bottom:12px}.nav{display:flex;overflow-x:auto}.nav a{white-space:nowrap}.protection{display:none}.job-grid{grid-template-columns:1fr}.job-card{min-height:0}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="sidebar">
+<div class="brand"><div class="brand-mark">CM</div><div><strong>Codex Migrate</strong><small>Vault + Migration</small></div></div>
+<nav class="nav" aria-label="Product">
+<a data-route="overview" href="/?view=overview"><span class="nav-icon">⌂</span>Overview</a>
+<a data-route="backup" href="/vault?view=backup"><span class="nav-icon">⟳</span>Backups</a>
+<a data-route="conversations" href="/vault?view=conversations"><span class="nav-icon">⌕</span>Conversations</a>
+<a data-route="recovery" href="/vault?view=recovery"><span class="nav-icon">↺</span>Recovery</a>
+<a data-route="move" href="/?view=move"><span class="nav-icon">⇢</span>Move Macs</a>
+</nav>
+<div class="protection"><strong>This Mac stays local</strong><br>Conversation content is not sent to Codex Migrate servers.</div>
+</aside>
+<div class="content">
+<main>
+<section id="overview-view">
+<header class="overview-head"><div class="move-kicker">Overview</div><h1>Your Codex work,<br>safe and searchable.</h1><p>One place to protect your history, find old conversations, and move to another Mac without breaking your setup.</p></header>
+<div class="health"><div class="health-copy"><div class="health-icon">✓</div><div><span>Backup health</span><strong id="overview-health">Checking protection…</strong><p id="overview-health-detail">Reading this Mac’s local Vault status.</p></div></div><a class="button secondary" data-overview-route="backup" href="/vault?view=backup">Back up now</a></div>
+<div class="job-grid">
+<a class="job-card" data-overview-route="backup" href="/vault?view=backup"><small>01</small><h2>Back up this Mac</h2><p>Encrypted, versioned backups in a folder you control.</p><strong>Manage backups →</strong></a>
+<a class="job-card" data-overview-route="conversations" href="/vault?view=conversations"><small>02</small><h2>Find a conversation</h2><p>Search active and archived Codex threads from one clean library.</p><strong>Search history →</strong></a>
+<a class="job-card" data-overview-route="move" href="/?view=move"><small>03</small><h2>Move to another Mac</h2><p>Carry over your Codex environment and pick up where you stopped.</p><strong>Start a migration →</strong></a>
+</div>
 </section>
-<section id="attached" hidden><h2>Your migration is configured</h2><p>Continue to its status, backup checks, pause/resume controls and recovery guidance. Keep the same destination and scope when resuming. Changing scope while staged data exists requires reviewing that migration’s recovery instructions; restarting alone does not adopt it.</p><a class="button" id="continue" href="/migration">Open migration dashboard</a></section>
-<p id="step-progress" aria-live="polite">Step 1 of 3 · Your new Mac</p>
-<form id="setup" novalidate><fieldset id="fields" disabled><legend class="sr-only">Migration setup</legend>
-<div id="step-1" class="setup-step"><h2 tabindex="-1">Your new Mac</h2>
-<p>Connect both Macs to Wi-Fi, or use a compatible USB-C/Thunderbolt connection.</p>
-<div id="pair-source"><p>Open Codex Migrate on both Macs. Create a card here, then approve it in the new Mac’s browser. No Terminal commands or passwords.</p>
-<button type="button" id="create-card">Create connection card</button>
-<div id="request-area" hidden><p>On the new Mac, choose “I’m on the new Mac” and paste this card.</p><button type="button" id="copy-request">Copy card</button><details><summary>View connection card</summary><label for="source-card">Connection card for your new Mac</label><textarea id="source-card" readonly spellcheck="false"></textarea></details>
-<label for="accepted-card">Paste the reply from your new Mac</label><textarea id="accepted-card" spellcheck="false" autocomplete="off"></textarea>
-<p>Use only the reply shown on your own new Mac. It supplies that Mac’s verified local SSH identity—not an identity discovered on the network.</p><button type="button" id="accept-card">Use this new Mac</button></div></div>
-<p id="paired-status" role="status" hidden></p>
-<details id="manual-connection"><summary>Use an existing SSH connection instead</summary>
-<label for="computer">New Mac’s name or address</label><input id="computer" autocomplete="off" placeholder="e.g. Joshuas-MacBook-Pro.local" required>
-<label for="username">Your username on the new Mac</label><input id="username" autocomplete="off" placeholder="e.g. joshua" required>
-<input id="target" type="hidden">
-<details><summary>Help finding and connecting your Mac</summary><p>On the new Mac, open System Settings → General → Sharing → Remote Login. Turn it on for your account; the login address shown there contains your username and Mac’s address. Install Codex there and sign in once.</p>
-<p>The current build needs SSH key login set up between the Macs. Connect once in Terminal using <code>ssh new-user@new-mac.local</code> and verify the host fingerprint. An interactive password prompt is not supported yet. A charging-only cable cannot carry the transfer.</p></details>
-<details><summary>Advanced connection settings</summary>
-<label for="target-home">New Mac’s home folder</label><input id="target-home" autocomplete="off" placeholder="/Users/username" required>
-<label for="identity">Existing SSH key path (optional)</label><input id="identity" autocomplete="off" spellcheck="false" aria-describedby="key-help"><p id="key-help">Leave empty to use your SSH configuration. Selecting a key does not add it to the migration, and this selection is not saved. A key stored inside a selected workspace is copied with that workspace.</p></details>
+<div id="move-view">
+<a class="support-link" href="#migration-help">Help / Email support</a>
+<div class="move-kicker">Move Macs</div>
+<h1>Move your Codex work.</h1>
+<p>Your conversations, skills, and unfinished work. Directly from this Mac to your new one.</p>
+<button type="button" class="secondary" id="receiver-toggle">I’m on the new Mac</button>
+<div id="error" role="alert">
+</div>
+<p id="message" role="status" aria-live="polite">Connecting to your local helper…</p>
+<section id="receiver" hidden>
+<h2 tabindex="-1">Prepare this new Mac</h2>
+<p>First, install Codex and sign in. In System Settings → General → Sharing, enable Remote Login for your account.</p>
+<div id="receiver-request-area">
+<label for="request-card">Paste the connection card from your old Mac</label>
+<textarea id="request-card" spellcheck="false" autocomplete="off">
+</textarea>
+<p>Approve only a card you just created on your own old Mac. This grants that Mac SSH access to read and change files in this account for seven days. It does not start a migration.</p>
+<button type="button" id="approve-card">Approve this connection for seven days</button>
+</div>
+<div id="reply-area" hidden>
+<p>Approved. Copy the reply and paste it into Codex Migrate on your old Mac.</p>
+<button type="button" id="copy-reply">Copy reply</button>
+<details>
+<summary>View reply card</summary>
+<label for="reply-card">Reply for your old Mac</label>
+<textarea id="reply-card" readonly spellcheck="false">
+</textarea>
 </details>
-<details><summary>Start a fresh connection</summary><p>Use this if your seven-day connection has expired. Previous local connection files are kept. On the new Mac, remove the previous connection’s access before approving the new card.</p><button type="button" class="secondary" id="restart-pair">Start a new connection</button></details>
-<div class="controls"><button type="button" id="next-1">Continue</button></div></div>
-<div id="step-2" class="setup-step" hidden><h2 tabindex="-1">What would you like to move?</h2>
-<label for="mode">What do you want to move?</label><select id="mode"><option value="full">Full Codex migration</option><option value="skills">Custom skills only</option></select>
-<fieldset id="skill-components" hidden><legend>Skills to include</legend><label class="check"><input type="checkbox" id="personal-skills" checked><span>Personal custom skills (.agents/skills and legacy .codex/skills)</span></label><label class="check"><input type="checkbox" id="workspace-skills"><span>Workspace skills inside the project folders selected below</span></label><p>Skills only: conversations, configuration and whole repositories are not copied. Other destination skills are kept. Inspect the list, stage it, then confirm Finalize separately.</p></fieldset>
+</div>
+<details>
+<summary>Remove connection access</summary>
+<p>After your migration is complete, remove the access granted by this helper. Other SSH connections are kept. Do not do this during migration or recovery.</p>
+<button type="button" class="secondary" id="revoke-pair">Remove this connection’s access</button>
+</details>
+</section>
+<section id="attached" hidden>
+<h2>Your migration is configured</h2>
+<p>Continue to its status, backup checks, pause/resume controls and recovery guidance. Keep the same destination and scope when resuming. Changing scope while staged data exists requires reviewing that migration’s recovery instructions; restarting alone does not adopt it.</p>
+<a class="button" id="continue" href="/migration">Open migration dashboard</a>
+</section>
+<p id="step-progress" aria-live="polite">Step 1 of 3 · Your new Mac</p>
+<form id="setup" novalidate>
+<fieldset id="fields" disabled>
+<legend class="sr-only">Migration setup</legend>
+<div id="step-1" class="setup-step">
+<h2 tabindex="-1">Your new Mac</h2>
+<p>Connect both Macs to Wi-Fi, or use a compatible USB-C/Thunderbolt connection.</p>
+<div id="pair-source">
+<p>Open Codex Migrate on both Macs. Create a card here, then approve it in the new Mac’s browser. No Terminal commands or passwords.</p>
+<button type="button" id="create-card">Create connection card</button>
+<div id="request-area" hidden>
+<p>On the new Mac, choose “I’m on the new Mac” and paste this card.</p>
+<button type="button" id="copy-request">Copy card</button>
+<details>
+<summary>View connection card</summary>
+<label for="source-card">Connection card for your new Mac</label>
+<textarea id="source-card" readonly spellcheck="false">
+</textarea>
+</details>
+<label for="accepted-card">Paste the reply from your new Mac</label>
+<textarea id="accepted-card" spellcheck="false" autocomplete="off">
+</textarea>
+<p>Use only the reply shown on your own new Mac. It supplies that Mac’s verified local SSH identity—not an identity discovered on the network.</p>
+<button type="button" id="accept-card">Use this new Mac</button>
+</div>
+</div>
+<p id="paired-status" role="status" hidden>
+</p>
+<details id="manual-connection">
+<summary>Use an existing SSH connection instead</summary>
+<label for="computer">New Mac’s name or address</label>
+<input id="computer" autocomplete="off" placeholder="e.g. Joshuas-MacBook-Pro.local" required>
+<label for="username">Your username on the new Mac</label>
+<input id="username" autocomplete="off" placeholder="e.g. joshua" required>
+<input id="target" type="hidden">
+<details>
+<summary>Help finding and connecting your Mac</summary>
+<p>On the new Mac, open System Settings → General → Sharing → Remote Login. Turn it on for your account; the login address shown there contains your username and Mac’s address. Install Codex there and sign in once.</p>
+<p>The current build needs SSH key login set up between the Macs. Connect once in Terminal using <code>ssh new-user@new-mac.local</code> and verify the host fingerprint. An interactive password prompt is not supported yet. A charging-only cable cannot carry the transfer.</p>
+</details>
+<details>
+<summary>Advanced connection settings</summary>
+<label for="target-home">New Mac’s home folder</label>
+<input id="target-home" autocomplete="off" placeholder="/Users/username" required>
+<label for="identity">Existing SSH key path (optional)</label>
+<input id="identity" autocomplete="off" spellcheck="false" aria-describedby="key-help">
+<p id="key-help">Leave empty to use your SSH configuration. Selecting a key does not add it to the migration, and this selection is not saved. A key stored inside a selected workspace is copied with that workspace.</p>
+</details>
+</details>
+<details>
+<summary>Start a fresh connection</summary>
+<p>Use this if your seven-day connection has expired. Previous local connection files are kept. On the new Mac, remove the previous connection’s access before approving the new card.</p>
+<button type="button" class="secondary" id="restart-pair">Start a new connection</button>
+</details>
+<div class="controls">
+<button type="button" id="next-1">Continue</button>
+</div>
+</div>
+<div id="step-2" class="setup-step" hidden>
+<h2 tabindex="-1">What would you like to move?</h2>
+<label for="mode">What do you want to move?</label>
+<select id="mode">
+<option value="full">Full Codex migration</option>
+<option value="skills">Custom skills only</option>
+</select>
+<fieldset id="skill-components" hidden>
+<legend>Skills to include</legend>
+<label class="check">
+<input type="checkbox" id="personal-skills" checked>
+<span>Personal custom skills (.agents/skills and legacy .codex/skills)</span>
+</label>
+<label class="check">
+<input type="checkbox" id="workspace-skills">
+<span>Workspace skills inside the project folders selected below</span>
+</label>
+<p>Skills only: conversations, configuration and whole repositories are not copied. Other destination skills are kept. Inspect the list, stage it, then confirm Finalize separately.</p>
+</fieldset>
 <p id="folder-summary" aria-live="polite">No project folders selected.</p>
-<div class="controls"><button type="button" id="folders">Choose folders on this Mac…</button><button type="button" id="suggest" class="secondary">Suggest common folders</button></div>
-<p id="folder-error" role="alert"></p><p id="folder-message" role="status" aria-live="polite"></p>
-<details><summary>Review or edit folder paths</summary><label for="workspaces" id="workspace-label">Workspace folders on this Mac, one per line</label><textarea id="workspaces" spellcheck="false" aria-describedby="scope-help"></textarea></details>
+<div class="controls">
+<button type="button" id="folders">Choose folders on this Mac…</button>
+<button type="button" id="suggest" class="secondary">Suggest common folders</button>
+</div>
+<p id="folder-error" role="alert">
+</p>
+<p id="folder-message" role="status" aria-live="polite">
+</p>
+<details>
+<summary>Review or edit folder paths</summary>
+<label for="workspaces" id="workspace-label">Workspace folders on this Mac, one per line</label>
+<textarea id="workspaces" spellcheck="false" aria-describedby="scope-help">
+</textarea>
+</details>
 <p id="scope-help">Selected folders include unfinished work and any secrets stored inside them. Full migration includes Codex state and personal skills; other folders are not automatically included.</p>
-<div class="controls"><button type="button" class="secondary" id="back-2">Back</button><button type="button" id="next-2">Review migration</button></div></div>
-<div id="step-3" class="setup-step" hidden><h2 tabindex="-1">Ready to check both Macs</h2>
-<dl id="review"></dl><p>We’ll check the connection and available space before you start. A verified backup is required before replacing destination data.</p>
+<div class="controls">
+<button type="button" class="secondary" id="back-2">Back</button>
+<button type="button" id="next-2">Review migration</button>
+</div>
+</div>
+<div id="step-3" class="setup-step" hidden>
+<h2 tabindex="-1">Ready to check both Macs</h2>
+<dl id="review">
+</dl>
+<p>We’ll check the connection and available space before you start. A verified backup is required before replacing destination data.</p>
 <p id="replacement-note">This replaces selected destination data; it does not merge separate work. Keep your old Mac intact.</p>
-<details><summary>What gets saved between runs?</summary><p>Your destination and folder selection are saved privately on this Mac. Changes reset to disabled on each launch; SSH key selections are not saved.</p></details>
-<label class="check"><input id="apply" type="checkbox"><span>Allow this migration to copy files to my new Mac. I’ll review the checks before starting.</span></label>
-<div class="controls"><button type="button" class="secondary" id="back-3">Back</button><button type="submit" id="open">Continue to migration</button></div>
-</div></fieldset></form>
-<details><summary>Resuming a migration or only restoring skills?</summary><p>For migrations started in this browser setup, reopen the helper after interruption, review the restored setup, enable changes if appropriate, and use Resume in the dashboard. Staged data and backup receipts remain on your Macs. Never delete them just because a progress bar reaches 100%.</p><p>Already started with the CLI or native setup? Resume using that same entry point and configuration. This browser setup does not import those older migration records, and it will not adopt or overwrite their staging.</p><p>Choose Custom skills only above for a smaller repair. It has its own saved staging, pause/resume controls and verified destination backups; a full migration’s staging is left alone.</p></details>
+<details>
+<summary>What gets saved between runs?</summary>
+<p>Your destination and folder selection are saved privately on this Mac. Changes reset to disabled on each launch; SSH key selections are not saved.</p>
+</details>
+<label class="check">
+<input id="apply" type="checkbox">
+<span>Allow this migration to copy files to my new Mac. I’ll review the checks before starting.</span>
+</label>
+<div class="controls">
+<button type="button" class="secondary" id="back-3">Back</button>
+<button type="submit" id="open">Continue to migration</button>
+</div>
+</div>
+</fieldset>
+</form>
+<details>
+<summary>Resuming a migration or only restoring skills?</summary>
+<p>For migrations started in this browser setup, reopen the helper after interruption, review the restored setup, enable changes if appropriate, and use Resume in the dashboard. Staged data and backup receipts remain on your Macs. Never delete them just because a progress bar reaches 100%.</p>
+<p>Already started with the CLI or native setup? Resume using that same entry point and configuration. This browser setup does not import those older migration records, and it will not adopt or overwrite their staging.</p>
+<p>Choose Custom skills only above for a smaller repair. It has its own saved staging, pause/resume controls and verified destination backups; a full migration’s staging is left alone.</p>
+</details>
+</div>
 <footer>Codex Migrate is independent software. Not affiliated with or endorsed by OpenAI. Mac-to-Mac only.</footer>
-</main><script>
+</main>
+</div>
+</div>
+<script>
 const $=id=>document.getElementById(id);
 const storageKey="codex-migrate-token:"+location.origin;
 const incoming=new URLSearchParams(location.hash.slice(1)).get("token");
 if(incoming)sessionStorage.setItem(storageKey,incoming);
 const token=incoming||sessionStorage.getItem(storageKey)||"";
-history.replaceState(null,"",location.pathname);
-$("open-vault").href="/vault#token="+encodeURIComponent(token);
+history.replaceState(null,"",location.pathname+location.search);
+const requestedView=new URLSearchParams(location.search).get("view");
+const view=requestedView==="move"?"move":"overview";
+document.body.classList.add("view-"+view);
+for(const link of document.querySelectorAll("[data-route]")){link.classList.toggle("active",link.dataset.route===view);link.href=link.getAttribute("href")+"#token="+encodeURIComponent(token)}
+for(const link of document.querySelectorAll("[data-overview-route]")){link.href=link.getAttribute("href")+"#token="+encodeURIComponent(token)}
 const roots=()=>$("workspaces").value.split("\n").map(x=>x.trim()).filter(Boolean);
 const fullScopeHelp=$("scope-help").textContent;
 const fullKeyHelp=$("key-help").textContent;
@@ -141,6 +293,7 @@ $("next-2").onclick=()=>{const skills=$("mode").value==="skills";$("review").rep
 function modeChanged(){const skills=$("mode").value==="skills";$("key-help").textContent=skills?"Selecting an SSH key does not add it to the migration, and the selection is not saved. Only selected skill contents are copied; review them for private files. Protected SSH and Codex login files are rejected.":fullKeyHelp;$("skill-components").hidden=!skills;$("workspace-label").textContent=skills?"Project folders to search for workspace skills, one per line":"Workspace folders on this Mac, one per line";$("scope-help").textContent=skills?"These folders are searched only when Workspace skills is checked. Only discovered .agents/skills directories are copied, not the whole project. Personal skills need no project-folder selection. Skill contents can include private files; review the discovered list before transfer.":fullScopeHelp;}
 $("mode").onchange=modeChanged;
 async function api(path,body){const r=await fetch(path,{method:body?"POST":"GET",headers:{"X-Codex-Migrate-Token":token,"Content-Type":"application/json"},...(body?{body:JSON.stringify(body)}:{})});const result=await r.json();if(!r.ok)throw Error(result.error||"The request failed");return result}
+async function loadOverview(){try{const [summary,schedule,backup]=await Promise.all([api("/api/vault/summary"),api("/api/vault/schedule"),api("/api/vault/backup-status")]);const conversations=(summary.active_transcripts||0)+(summary.archived_transcripts||0);const conversationLabel=`${conversations.toLocaleString()} ${conversations===1?"conversation":"conversations"}`;if(schedule.enabled&&schedule.healthy){$("overview-health").textContent="Automatic backup is on";$("overview-health-detail").textContent=`${conversationLabel} · Daily encrypted backup`;}else if(backup.status==="completed"){$("overview-health").textContent="Latest backup verified";$("overview-health-detail").textContent=`${conversationLabel} · Automatic backup is off`;}else{$("overview-health").textContent="Backup protection is not set up";$("overview-health-detail").textContent=`${conversationLabel} found on this Mac`;}}catch(error){$("overview-health").textContent="Protection status unavailable";$("overview-health-detail").textContent="Open Backups to check this Mac without changing anything.";}}
 function receiverView(receiving){$("receiver").hidden=!receiving;$("setup").hidden=receiving;$("step-progress").hidden=receiving;$("receiver-toggle").textContent=receiving?"Back to the old Mac setup":"I’m on the new Mac";}
 $("receiver-toggle").onclick=()=>{const receiving=$("receiver").hidden;receiverView(receiving);if(receiving)$("receiver").querySelector("h2").focus();else showStep(step)};
 function selectPaired(r){const split=r.target.lastIndexOf("@");$("username").value=r.target.slice(0,split);$("computer").value=r.target.slice(split+1);$("target").value=r.target;$("target-home").value=r.target_home;$("target-home").dataset.custom="true";$("identity").value="";paired=true;connectionBlocked=false;pairingView();$("manual-connection").open=false;}
@@ -204,15 +357,23 @@ async function folders(path){
 $("folders").onclick=()=>folders("/api/folders");$("suggest").onclick=()=>folders("/api/suggestions");
 $("setup").onsubmit=async e=>{e.preventDefault();if(step<3){$(step===1?"next-1":"next-2").click();return}if(!connectionValid())return;$("open").disabled=true;$("error").textContent="";try{await api("/api/setup",{target:$("target").value.trim(),target_home:$("target-home").value.trim(),workspace_roots:roots(),identity_file:$("identity").value.trim(),apply:$("apply").checked,paired,mode:$("mode").value,components:$("mode").value==="skills"?["personal-skills","workspace-skills"].filter(id=>$(id).checked):[]});location.href="/migration#token="+encodeURIComponent(token)}catch(e){$("error").textContent=e.message;$("open").disabled=false}};
 load();
-</script></body></html>'''
+loadOverview();
+</script>
+</body>
+</html>'''
 SETUP_HTML = with_support(SETUP_HTML)
-SETUP_HTML = SETUP_HTML.replace(SUPPORT_HTML, '<details id="setup-help"><summary>Help and diagnostic report</summary>' + SUPPORT_HTML + '</details>')
+SETUP_HTML = SETUP_HTML.replace(
+    SUPPORT_HTML,
+    '<details id="setup-help"><summary>Help and diagnostic report</summary>'
+    + SUPPORT_HTML + '</details>',
+)
 SETUP_HTML = SETUP_HTML.replace('href="#migration-help"', 'href="#setup-help"')
 SETUP_HTML = SETUP_HTML.replace('</body>', '''<script>
 document.querySelector('.support-link').addEventListener('click',()=>{
   document.getElementById('setup-help').open=true;
 });
-</script></body>''')
+</script>
+</body>''')
 
 
 class SetupDashboard(Dashboard):
@@ -418,7 +579,15 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
             return dict(self._vault_status)
 
     def vault_schedule(self):
-        return vault_schedule_status(self.source_home)
+        result = vault_schedule_status(self.source_home)
+        if result.get("vault"):
+            result["storage"] = self.vault_storage(result["vault"])
+        return result
+
+    def vault_storage(self, path):
+        if not isinstance(path, str) or not path or len(path) > 4096:
+            raise MigrationError("Choose a valid Vault folder")
+        return classify_vault_storage(path, self.source_home).as_dict()
 
     def enable_vault_schedule(self, destination, interval_hours):
         if not isinstance(destination, str) or len(destination) > 4096:
@@ -751,6 +920,7 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                 raise MigrationError("Wait for Vault recovery to finish before backing up")
             if self._install_thread and self._install_thread.is_alive():
                 raise MigrationError("Wait for Vault installation to finish before backing up")
+        storage = self.vault_storage(destination)
         planned = plan_vault_backup(self.source_home, destination)
 
         def progress(completed_files, total_files, completed_bytes, total_bytes):
@@ -765,7 +935,10 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                 result = backup_vault(
                     self.source_home, planned.destination, progress=progress)
                 with self._vault_lock:
-                    self._vault_status = {"status": "completed", **result.as_dict()}
+                    self._vault_status = {
+                        "status": "completed", "storage": storage,
+                        **result.as_dict(),
+                    }
             except Exception:
                 # A first backup can fail after its new Keychain key and Vault
                 # metadata are durable but before a verified snapshot exists.
@@ -780,6 +953,7 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                     self._vault_status = {
                         "status": "failed",
                         "destination": planned.destination,
+                        "storage": storage,
                         "error": "Encrypted backup stopped safely. The previous verified snapshot and local Codex data were not changed.",
                     }
                     if recovery_key:
@@ -801,6 +975,7 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
             self._vault_status = {
                 "status": "running",
                 "destination": planned.destination,
+                "storage": storage,
                 "completed_files": 0,
                 "total_files": planned.transcript_files,
                 "completed_bytes": 0,
@@ -846,6 +1021,11 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                             return
                         if parsed.path == "/api/vault/schedule" and not query:
                             self._json(200, setup.vault_schedule())
+                            return
+                        if (parsed.path == "/api/vault/storage"
+                                and set(query) == {"path"}
+                                and len(query["path"]) == 1):
+                            self._json(200, setup.vault_storage(query["path"][0]))
                             return
                         if parsed.path == "/api/vault/restore-status" and not query:
                             self._json(200, setup.vault_restore_status())
@@ -922,7 +1102,7 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                                 result["connection_error"] = "Saved connection could not be verified. Files were kept; use connection recovery or contact support."
                     self._json(200, result)
                     return
-                if self.path == "/":
+                if parsed.path == "/":
                     self._html(SETUP_HTML)
                     return
                 if self.path == "/api/support-report":
@@ -975,7 +1155,10 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                             raise MigrationError("Invalid Vault request")
                         if self.path == "/api/vault/folder":
                             path = setup.choose_vault_folder()
-                            self._json(200, {"path": path})
+                            self._json(200, {
+                                "path": path,
+                                "storage": setup.vault_storage(path) if path else None,
+                            })
                         elif self.path == "/api/vault/restore-folder":
                             path = setup.choose_restore_folder()
                             self._json(200, {"path": path})

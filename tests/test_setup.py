@@ -6,6 +6,7 @@ import tempfile
 import threading
 import unittest
 from unittest.mock import patch
+from urllib.parse import quote
 
 from codex_migrate.dashboard import LoopbackHTTPServer
 from codex_migrate.errors import MigrationError
@@ -98,6 +99,7 @@ class SetupTests(unittest.TestCase):
                      "/api/vault/thread?collection=active&transcript=2026/09/thread.jsonl",
                      "/api/vault/export?collection=active&transcript=2026/09/thread.jsonl",
                      "/api/vault/backup-status", "/api/vault/schedule",
+                     "/api/vault/storage?path=/private/tmp/vault",
                      "/api/vault/restore-status",
                      "/api/vault/install-status",
                      "/api/vault/browse-status",
@@ -560,12 +562,28 @@ class SetupTests(unittest.TestCase):
             code, result = self.request("/api/vault/folder", {})
         self.assertEqual(code, 200)
         self.assertEqual(result["path"], str(self.home / "Vault"))
+        self.assertEqual(result["storage"]["kind"], "local")
+        self.assertEqual(result["storage"]["off_device_protection"],
+                         "not_detected")
         self.assertEqual(run.call_args.args[0][:3], ["/usr/bin/osascript", "-l", "JavaScript"])
         self.assertNotIn(str(self.home), run.call_args.args[0][-1])
 
         cancelled = subprocess.CompletedProcess([], 1, stdout="", stderr="User canceled. (-128)")
         with patch("codex_migrate.setup.subprocess.run", return_value=cancelled):
             self.assertEqual(self.request("/api/vault/folder", {})[1]["path"], None)
+
+    def test_vault_storage_endpoint_reports_cloud_folder_without_promising_sync(self):
+        destination = (self.home / "Library/CloudStorage/OneDrive-Personal"
+                       / "Codex Vault")
+        destination.mkdir(parents=True)
+        code, result = self.request(
+            "/api/vault/storage?path=" + quote(str(destination), safe=""))
+        self.assertEqual(code, 200)
+        self.assertEqual(result["kind"], "cloud_sync")
+        self.assertEqual(result["provider"], "OneDrive")
+        self.assertEqual(result["off_device_protection"],
+                         "possible_unverified")
+        self.assertIn("cannot confirm", result["detail"])
 
     def test_vault_search_open_and_markdown_export_are_read_only(self):
         transcript = self.home / ".codex/sessions/2026/09/thread.jsonl"

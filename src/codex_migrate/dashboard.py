@@ -74,15 +74,28 @@ HTML = r"""<!doctype html>
     code { color:#dbe5ff; overflow-wrap:anywhere; }
     #path-command pre { white-space:pre-wrap; overflow-wrap:anywhere; font-size:15px; }
     footer { margin:20px 4px; color:var(--muted); font-size:14px; }
-    @media (max-width:680px) { main{margin:24px auto}.grid{grid-template-columns:1fr}.status-row{align-items:flex-end}.panel{padding:18px}header{flex-direction:column;gap:24px}.tag{display:inline-block;margin-top:16px} }
+    .app{min-height:100vh;display:grid;grid-template-columns:238px 1fr}.sidebar{position:sticky;top:0;height:100vh;padding:28px 18px 24px;border-right:1px solid var(--line);background:#0c1018;display:flex;flex-direction:column}.brand{display:flex;gap:12px;align-items:center;padding:0 8px 26px}.brand-mark{width:36px;height:36px;display:grid;place-items:center;border-radius:11px;background:linear-gradient(145deg,#9475ff,#5735d6);font-size:14px;font-weight:850;box-shadow:0 10px 30px #6f4cff44}.brand strong,.brand small{display:block}.brand small{color:var(--muted);font-size:12px}.nav{display:grid;gap:8px}.nav a{display:flex;align-items:center;gap:12px;padding:12px 14px;color:#aeb8ca;border-radius:11px;text-decoration:none;font-weight:700}.nav a:hover,.nav a.active{color:white;background:#1d2434}.nav-icon{width:18px;text-align:center;color:#a991ff}.sidebar-note{margin-top:auto;border-top:1px solid var(--line);padding:18px 8px 0;color:var(--muted);font-size:13px}.sidebar-note strong{color:var(--text)}.content{min-width:0}main{width:min(1080px,calc(100% - 48px));margin:46px auto}.page-kicker{color:var(--muted);font-weight:750;margin-bottom:34px}.migration-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:28px}.migration-heading header{display:block;margin:0}.migration-heading .eyebrow{color:#a991ff}.migration-heading h1{margin-top:8px}.panel{box-shadow:none}.status-row{align-items:flex-start}.grid{margin-top:26px}.safety-grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;margin-top:18px}.safety-grid #backup-safety{margin-top:0}.advanced{border-top:1px solid var(--line);margin-top:22px;padding-top:6px}
+    @media (max-width:860px){.app{display:block}.sidebar{position:static;width:auto;height:auto;padding:16px}.brand{padding-bottom:12px}.nav{display:flex;overflow-x:auto}.nav a{white-space:nowrap}.sidebar-note{display:none}.safety-grid{grid-template-columns:1fr}}
+    @media (max-width:680px) { main{width:min(100% - 24px,1080px);margin:24px auto}.grid{grid-template-columns:1fr}.status-row{align-items:flex-end}.panel{padding:18px}.migration-heading{align-items:flex-start;flex-direction:column;gap:16px}.tag{display:inline-block;margin-top:16px}.nav a{padding:10px}.nav-icon{display:none} }
   </style>
 </head>
 <body>
+<div class="app">
+<aside class="sidebar">
+  <div class="brand"><div class="brand-mark">CM</div><div><strong>Codex Migrate</strong><small>Vault + Migration</small></div></div>
+  <nav class="nav" aria-label="Product">
+    <a data-route href="/?view=overview"><span class="nav-icon">⌂</span>Overview</a>
+    <a data-route href="/vault?view=backup"><span class="nav-icon">⟳</span>Backups</a>
+    <a data-route href="/vault?view=conversations"><span class="nav-icon">⌕</span>Conversations</a>
+    <a data-route href="/vault?view=recovery"><span class="nav-icon">↺</span>Recovery</a>
+    <a class="active" href="/migration"><span class="nav-icon">⇢</span>Move Macs</a>
+  </nav>
+  <div class="sidebar-note"><strong>Your Macs stay in control</strong><br>The old Mac is never changed. Transfer data does not pass through our servers.</div>
+</aside>
+<div class="content">
 <main>
-  <header>
-    <div><h1>Codex Migrate</h1><p class="lede">Move your Codex work safely to another Mac.</p></div>
-    <a class="support-link" href="#migration-help">Help / Email support</a>
-  </header>
+  <div class="page-kicker">Move Macs / In progress</div>
+  <div class="migration-heading"><header><div class="eyebrow">Migration</div><h1>Moving your Codex work.</h1><p class="lede">Keep this page open, or safely pause during a resumable transfer.</p></header><a class="support-link" href="#migration-help">Help</a></div>
   <section class="panel">
     <div class="status-row"><div><div class="eyebrow" id="phase">Not started</div><div id="status">Ready</div></div><div id="percent">0%</div></div>
     <div class="track" role="progressbar" aria-label="Migration progress" aria-valuemin="0" aria-valuemax="100"><div id="bar"></div></div>
@@ -102,6 +115,7 @@ HTML = r"""<!doctype html>
       <div class="metric"><span class="eyebrow" id="size-heading">Transferred</span><strong id="bytes">—</strong></div>
       <div class="metric"><span class="eyebrow" id="item-heading">Now moving</span><strong id="item">—</strong></div>
     </div>
+    <div class="advanced">
     <details class="scope scope-card">
       <summary>What’s moving</summary>
       <div class="scope-body">
@@ -151,16 +165,20 @@ HTML = r"""<!doctype html>
       </details>
     </details>
     <details><summary>What is protected?</summary><p id="protection-explanation">The source is never modified. Destination Codex account authentication and installation identity are excluded from transfer and checked after installation. The destination receives a timestamped backup before replacement. Interrupted rsync staging is kept so Resume can continue.</p></details>
+    </div>
   </section>
   <details class="scope"><summary>Recent migration events</summary><p>Up to 60 phase, status, and failure-category changes. Times are UTC. This is not raw command output.</p><ol id="migration-events"><li>No events recorded yet.</li></ol></details>
   <footer>Codex Migrate is an independent open-source project. It is not made by, affiliated with, or endorsed by OpenAI.</footer>
 </main>
+</div>
+</div>
 <script>
 const tokenKey="codex-migrate-token:"+location.origin;
 const incomingToken=new URLSearchParams(location.hash.slice(1)).get("token");
 if(incomingToken)sessionStorage.setItem(tokenKey,incomingToken);
 const token=incomingToken||sessionStorage.getItem(tokenKey)||"";
-history.replaceState(null,"",location.pathname);
+history.replaceState(null,"",location.pathname+location.search);
+for(const link of document.querySelectorAll("[data-route]"))link.href=link.getAttribute("href")+"#token="+encodeURIComponent(token);
 const $=id=>document.getElementById(id);
 const setAction=(id,visible,enabled=visible)=>{const action=$(id);action.hidden=!visible;action.disabled=!enabled};
 let latestState={};
