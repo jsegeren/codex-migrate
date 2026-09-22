@@ -94,6 +94,11 @@ checkpoint. A disposable app-server `thread/compact/start` test with an
 untrusted hook did not run it; that is a trust-configuration result, not proof
 that app-server compaction bypasses hooks. A one-turn low-threshold automatic
 probe did not observe a hook receipt, so automatic protection remains unproven.
+The current upstream source calls `run_pre_compact_hooks` from local Responses,
+remote-v2, and token-budget compaction paths before their context mutation.
+That improves confidence in current hook coverage but does not establish the
+behavior of the older desktop build or the separate on-disk rewrite reported
+in the issue.
 
 No PreCompact protection is installed or advertised in the customer build.
 The release guarantee remains the last successfully verified scheduled
