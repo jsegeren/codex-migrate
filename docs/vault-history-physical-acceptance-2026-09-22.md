@@ -85,6 +85,12 @@ Do not resume local Keychain, signing, or notarization tests until the exact
 prompting operation is identified and a noninteractive, explicitly authorized
 verification path is established. An unknown Keychain password is never a
 reason to request a credential from the Founder in chat.
+The source helper now supplies a noninteractive Local Authentication context
+for its Keychain operations, so an interaction requirement should fail with an
+explicit error instead of opening a helper password dialog. This change has
+passed Swift typechecking only; it does not identify the source of the earlier
+prompt or clear the signed-release gate. Signing and notarization can invoke
+Keychain independently of this helper.
 
 ## Claim boundary
 

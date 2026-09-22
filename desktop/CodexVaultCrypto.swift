@@ -1,9 +1,11 @@
 import CryptoKit
 import Darwin
 import Foundation
+import LocalAuthentication
 import Security
 
 private let keychainService = "com.segeren.codex-vault"
+private let keychainInteractionError = "Vault could not access its key without interactive Keychain approval. No backup was published. Contact support if this persists"
 private let formatVersion = 1
 private let snapshotFormatVersion = 2
 
@@ -132,10 +134,15 @@ private func canonicalKeyID(_ value: String) throws -> String {
 }
 
 private func keyQuery(_ keyID: String) -> [CFString: Any] {
-    [
+    // Backup and scheduled runs must fail closed rather than summon a password
+    // dialog from a helper process. The app can report the failure explicitly.
+    let authentication = LAContext()
+    authentication.interactionNotAllowed = true
+    return [
         kSecClass: kSecClassGenericPassword,
         kSecAttrService: keychainService,
         kSecAttrAccount: keyID,
+        kSecUseAuthenticationContext: authentication,
     ]
 }
 
@@ -148,6 +155,9 @@ private func storeKey(_ data: Data, keyID: String) throws {
     query[kSecAttrAccessible] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
     let status = SecItemAdd(query as CFDictionary, nil)
     guard status == errSecSuccess else {
+        if status == errSecInteractionNotAllowed {
+            throw VaultError.message(keychainInteractionError)
+        }
         if status == errSecDuplicateItem {
             throw VaultError.message("that key identifier already exists in Keychain")
         }
@@ -161,6 +171,9 @@ private func loadKey(_ keyID: String) throws -> SymmetricKey {
     query[kSecMatchLimit] = kSecMatchLimitOne
     var item: CFTypeRef?
     let status = SecItemCopyMatching(query as CFDictionary, &item)
+    if status == errSecInteractionNotAllowed {
+        throw VaultError.message(keychainInteractionError)
+    }
     guard status == errSecSuccess, let data = item as? Data, data.count == 32 else {
         throw VaultError.message("the encryption key is unavailable; import its recovery key on this Mac")
     }
@@ -169,6 +182,9 @@ private func loadKey(_ keyID: String) throws -> SymmetricKey {
 
 private func deleteKey(_ keyID: String) throws {
     let status = SecItemDelete(keyQuery(keyID) as CFDictionary)
+    if status == errSecInteractionNotAllowed {
+        throw VaultError.message(keychainInteractionError)
+    }
     guard status == errSecSuccess || status == errSecItemNotFound else {
         throw VaultError.message("the encryption key could not be removed from Keychain")
     }
