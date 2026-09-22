@@ -4,7 +4,7 @@ import tempfile
 import unittest
 
 from codex_migrate.errors import MigrationError
-from codex_migrate.vault import inspect, markdown, read_thread, search
+from codex_migrate.vault import inspect, markdown, markdown_chunks, read_thread, read_thread_page, search
 
 
 class VaultTests(unittest.TestCase):
@@ -109,6 +109,39 @@ class VaultTests(unittest.TestCase):
             transcript.write_text(json.dumps({"text": "1234567890"}) + "\n", encoding="utf-8")
             with self.assertRaisesRegex(MigrationError, "too large"):
                 read_thread(str(root), "active", "large.jsonl", max_text_bytes=5)
+
+    def test_saved_thread_markdown_can_stream_beyond_browser_preview_limit(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            transcript = root / ".codex/sessions/large.jsonl"
+            transcript.parent.mkdir(parents=True)
+            body = "Z" * (25 * 1024 * 1024 + 1)
+            transcript.write_text(json.dumps({"payload": {"role": "assistant", "text": body}}) + "\n")
+            with self.assertRaisesRegex(MigrationError, "too large"):
+                read_thread(str(root), "active", "large.jsonl")
+            chunks = markdown_chunks(str(root), "active", "large.jsonl")
+            self.assertIn(b"Codex conversation", next(chunks))
+            self.assertEqual(sum(len(chunk) for chunk in chunks), len(body) + len("## Assistant\n\n\n\n"))
+
+    def test_saved_thread_preview_pages_without_losing_entries(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            transcript = root / ".codex/sessions/paged.jsonl"
+            transcript.parent.mkdir(parents=True)
+            transcript.write_text("".join(
+                json.dumps({"payload": {"role": "assistant", "text": "entry-%d" % index}}) + "\n"
+                for index in range(5)), encoding="utf-8")
+            cursor = 0
+            found = []
+            while True:
+                page, next_cursor = read_thread_page(
+                    str(root), "active", "paged.jsonl", cursor, max_entries=2)
+                found.extend(entry.text for entry in page.entries)
+                if next_cursor is None:
+                    break
+                self.assertGreater(next_cursor, cursor)
+                cursor = next_cursor
+            self.assertEqual(found, ["entry-%d" % index for index in range(5)])
 
 
 if __name__ == "__main__":

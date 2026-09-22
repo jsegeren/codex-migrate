@@ -21,6 +21,7 @@ from codex_migrate.errors import MigrationError
 from codex_migrate.processes import codex_running
 from codex_migrate.source_availability import check_info, require_local
 from codex_migrate.vault import TRANSCRIPT_FOLDERS
+from codex_migrate.vault_identity import peek_identity
 from codex_migrate.vault_backup import (
     _atomic_json,
     _canonical_macos_path,
@@ -256,7 +257,19 @@ def _selected_source(
     records = _tree_records(recovered, strict_root=True)
     if logical not in records:
         raise MigrationError("The selected conversation is not present in this Vault snapshot.")
-    return folder, relative, recovered / folder / Path(*relative.parts), records[logical]
+    source = recovered / folder / Path(*relative.parts)
+    source_id, source_state = peek_identity(source, relative.as_posix())
+    if source_state == "verified" and source_id:
+        for other in records:
+            if other == logical:
+                continue
+            other_id, other_state = peek_identity(recovered / other, other)
+            if other_state != "needs_review" and other_id == source_id:
+                raise MigrationError(
+                    "This backup contains more than one file for the same thread ID. "
+                    "Open or export the versions for review; copy-back is refused."
+                )
+    return folder, relative, source, records[logical]
 
 
 def _selected_action(
@@ -264,13 +277,28 @@ def _selected_action(
     folder: str,
     relative: PurePosixPath,
     source_record: Tuple[int, str],
+    source: Path,
+    live_root: Path,
 ) -> Tuple[str, str]:
     target = folder + "/" + relative.as_posix()
-    identity = relative.name
-    collisions = {
-        logical: record for logical, record in live_records.items()
-        if PurePosixPath(logical).name == identity
-    }
+    source_id, source_state = peek_identity(source, relative.as_posix())
+    if source_state != "verified" or source_id is None:
+        raise MigrationError(
+            "This saved conversation has no verified thread ID. Open or export it from Vault; "
+            "automatic copy-back into Codex needs identity review."
+        )
+    collisions = {}
+    for logical, record in live_records.items():
+        if PurePosixPath(logical).name == relative.name:
+            collisions[logical] = record
+            continue
+        live_id, live_state = peek_identity(live_root / logical, logical)
+        if live_state == "needs_review":
+            raise MigrationError(
+                "A local conversation identity needs review before selected recovery."
+            )
+        if live_state == "verified" and live_id == source_id:
+            collisions[logical] = record
     if not collisions:
         return "add", target
     if all(record == source_record for record in collisions.values()):
@@ -422,9 +450,10 @@ def plan_thread_install(
         verified, temporary, selected = _selected_stage(
             home, vault, snapshot, collection, transcript, crypto_helper)
         try:
-            folder, relative, _, source_record = selected
+            folder, relative, source, source_record = selected
             action, target = _selected_action(
-                _tree_records(codex), folder, relative, source_record)
+                _tree_records(codex), folder, relative, source_record,
+                source, codex)
             return ThreadInstallPlan(
                 vault=verified.vault,
                 snapshot_id=verified.snapshot_id,
@@ -468,7 +497,7 @@ def install_thread(
                 folder, relative, source, source_record = selected
                 before = _tree_records(codex)
                 action, logical_target = _selected_action(
-                    before, folder, relative, source_record)
+                    before, folder, relative, source_record, source, codex)
                 if action == "already_present":
                     return ThreadInstallResult(
                         vault=verified.vault,

@@ -217,6 +217,14 @@ def _last_run(path: Path) -> Dict[str, object]:
             and isinstance(value.get("snapshot_id"), str) \
             and all(isinstance(value.get(key), int) and value[key] >= 0
                     for key in ("transcript_files", "transcript_bytes"))
+    elif status == "needs_attention":
+        valid = set(value) == {
+            "status", "completed_at", "snapshot_id", "transcript_files",
+            "transcript_bytes", "at_risk_threads",
+        } and isinstance(value.get("completed_at"), str) \
+            and isinstance(value.get("snapshot_id"), str) \
+            and all(isinstance(value.get(key), int) and value[key] >= 0
+                    for key in ("transcript_files", "transcript_bytes", "at_risk_threads"))
     elif status == "failed":
         valid = set(value) == {"status", "failed_at", "error"} \
             and isinstance(value.get("failed_at"), str) \
@@ -354,8 +362,11 @@ def schedule_status(source_home: str) -> Dict[str, object]:
     }
     if status is not None:
         result["last_run"] = status
+        if status.get("status") in ("needs_attention", "failed", "unknown"):
+            result["healthy"] = False
+            result["error"] = "The latest automatic backup needs attention. Earlier snapshots remain available."
     if not result["healthy"]:
-        result["error"] = "The automatic backup service is not loaded. Turn it on again."
+        result.setdefault("error", "The automatic backup service is not loaded. Turn it on again.")
     return result
 
 
@@ -379,11 +390,12 @@ def run_scheduled_backup(config_path: str) -> int:
         if result.recovery_key is not None:
             raise MigrationError("Automatic backup cannot create an unacknowledged recovery key.")
         _atomic_json(status_path, {
-            "status": "completed",
+            "status": "needs_attention" if result.needs_attention else "completed",
             "completed_at": _now(),
             "snapshot_id": result.snapshot_id,
             "transcript_files": result.transcript_files,
             "transcript_bytes": result.transcript_bytes,
+            **({"at_risk_threads": result.at_risk_threads} if result.needs_attention else {}),
         }, replace=True)
         return 0
     except Exception:

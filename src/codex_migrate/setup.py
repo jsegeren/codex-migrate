@@ -9,9 +9,11 @@ import hashlib
 import json
 from pathlib import Path
 import platform
+import secrets
 import subprocess
 import tempfile
 import threading
+import time
 import uuid
 from urllib.parse import parse_qs, urlsplit
 
@@ -24,12 +26,14 @@ from codex_migrate.support import with_support, SUPPORT_HTML
 from codex_migrate.pairing import Pairing
 from codex_migrate.vault import inspect as inspect_vault
 from codex_migrate.vault import markdown as vault_markdown
-from codex_migrate.vault import read_thread, search as search_vault
+from codex_migrate.vault import _find_transcript, markdown_chunks, read_thread, read_thread_page, search as search_vault
 from codex_migrate.vault_backup import backup as backup_vault
 from codex_migrate.vault_backup import plan as plan_vault_backup
 from codex_migrate.vault_dashboard import VAULT_HTML
+from codex_migrate.vault_history import search_titles, thread_timeline
 from codex_migrate.vault_recovery import export_recovery_key
 from codex_migrate.vault_recovery import list_snapshots as list_vault_snapshots
+from codex_migrate.vault_recovery import snapshot_catalog
 from codex_migrate.vault_recovery import restore_snapshot as restore_vault_snapshot
 from codex_migrate.vault_install import install_snapshot as install_vault_snapshot
 from codex_migrate.vault_install import install_thread as install_vault_thread
@@ -294,7 +298,40 @@ $("next-2").onclick=()=>{const skills=$("mode").value==="skills";$("review").rep
 function modeChanged(){const skills=$("mode").value==="skills";$("key-help").textContent=skills?"Selecting an SSH key does not add it to the migration, and the selection is not saved. Only selected skill contents are copied; review them for private files. Protected SSH and Codex login files are rejected.":fullKeyHelp;$("skill-components").hidden=!skills;$("workspace-label").textContent=skills?"Project folders to search for workspace skills, one per line":"Workspace folders on this Mac, one per line";$("scope-help").textContent=skills?"These folders are searched only when Workspace skills is checked. Only discovered .agents/skills directories are copied, not the whole project. Personal skills need no project-folder selection. Skill contents can include private files; review the discovered list before transfer.":fullScopeHelp;}
 $("mode").onchange=modeChanged;
 async function api(path,body){const r=await fetch(path,{method:body?"POST":"GET",headers:{"X-Codex-Migrate-Token":token,"Content-Type":"application/json"},...(body?{body:JSON.stringify(body)}:{})});const result=await r.json();if(!r.ok)throw Error(result.error||"The request failed");return result}
-async function loadOverview(){try{const [summary,schedule,backup]=await Promise.all([api("/api/vault/summary"),api("/api/vault/schedule"),api("/api/vault/backup-status")]);const conversations=(summary.active_transcripts||0)+(summary.archived_transcripts||0);const conversationLabel=`${conversations.toLocaleString()} ${conversations===1?"conversation":"conversations"}`;if(schedule.enabled&&schedule.healthy){$("overview-health-card").classList.remove("attention");$("overview-health-icon").textContent="✓";$("overview-health").textContent="Automatic backup is on";$("overview-health-detail").textContent=`${conversationLabel} · Daily encrypted backup`;}else if(backup.status==="completed"){$("overview-health-card").classList.remove("attention");$("overview-health-icon").textContent="✓";$("overview-health").textContent="Latest backup verified";$("overview-health-detail").textContent=`${conversationLabel} · Automatic backup is off`;}else{$("overview-health-card").classList.add("attention");$("overview-health-icon").textContent="!";$("overview-health").textContent="Backup protection is not set up";$("overview-health-detail").textContent=`${conversationLabel} found on this Mac`;}}catch(error){$("overview-health-card").classList.add("attention");$("overview-health-icon").textContent="!";$("overview-health").textContent="Protection status unavailable";$("overview-health-detail").textContent="Open Backups to check this Mac without changing anything.";}}
+async function loadOverview(){
+  try{
+    const [summary,schedule,backup]=await Promise.all([
+      api("/api/vault/summary"),api("/api/vault/schedule"),api("/api/vault/backup-status")
+    ]);
+    const conversations=(summary.active_transcripts||0)+(summary.archived_transcripts||0);
+    const label=`${conversations.toLocaleString()} ${conversations===1?"conversation":"conversations"}`;
+    const verifiedScheduled=schedule.enabled&&schedule.healthy&&schedule.last_run?.status==="completed";
+    const attention=schedule.last_run?.status==="needs_attention"||backup.status==="needs_attention";
+    $("overview-health-card").classList.toggle("attention",!verifiedScheduled||attention);
+    $("overview-health-icon").textContent=verifiedScheduled&&!attention?"✓":"!";
+    if(attention){
+      $("overview-health").textContent="Conversation backup needs review";
+      $("overview-health-detail").textContent="An earlier verified version may hold missing content.";
+    }else if(verifiedScheduled){
+      $("overview-health").textContent="Automatic backup verified";
+      $("overview-health-detail").textContent=`${label} · Daily encrypted backup`;
+    }else if(schedule.enabled){
+      $("overview-health").textContent="First scheduled backup pending";
+      $("overview-health-detail").textContent=`${label} · Initial snapshot alone is not scheduled protection`;
+    }else if(backup.status==="completed"){
+      $("overview-health").textContent="Snapshot verified";
+      $("overview-health-detail").textContent=`${label} · Automatic backup is off`;
+    }else{
+      $("overview-health").textContent="Backup protection is not set up";
+      $("overview-health-detail").textContent=`${label} found on this Mac`;
+    }
+  }catch(error){
+    $("overview-health-card").classList.add("attention");
+    $("overview-health-icon").textContent="!";
+    $("overview-health").textContent="Protection status unavailable";
+    $("overview-health-detail").textContent="Open Backups to check this Mac without changing anything.";
+  }
+}
 function receiverView(receiving){$("receiver").hidden=!receiving;$("setup").hidden=receiving;$("step-progress").hidden=receiving;$("receiver-toggle").textContent=receiving?"Back to the old Mac setup":"I’m on the new Mac";}
 $("receiver-toggle").onclick=()=>{const receiving=$("receiver").hidden;receiverView(receiving);if(receiving)$("receiver").querySelector("h2").focus();else showStep(step)};
 function selectPaired(r){const split=r.target.lastIndexOf("@");$("username").value=r.target.slice(0,split);$("computer").value=r.target.slice(split+1);$("target").value=r.target;$("target-home").value=r.target_home;$("target-home").dataset.custom="true";$("identity").value="";paired=true;connectionBlocked=false;pairingView();$("manual-connection").open=false;}
@@ -403,7 +440,10 @@ class SetupDashboard(Dashboard):
         self._browse_status = {"status": "idle"}
         self._browse_temporary = None
         self._browse_home = None
+        self._browse_catalog = None
         self._browse_data_lock = threading.RLock()
+        self._export_ticket_lock = threading.Lock()
+        self._export_tickets = {}
         self._thread_install_thread = None
         self._thread_install_status = {"status": "idle"}
         self._closing = False
@@ -505,6 +545,7 @@ class SetupDashboard(Dashboard):
                 self._browse_temporary.cleanup()
                 self._browse_temporary = None
                 self._browse_home = None
+                self._browse_catalog = None
         self.registry.release_process_lock()
 
     def choose_folders(self):
@@ -617,7 +658,7 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
         if not isinstance(vault, str) or len(vault) > 4096:
             raise MigrationError("Choose a valid existing Vault folder")
         return {"snapshots": [
-            item.as_dict() for item in list_vault_snapshots(vault, limit=100)
+            item.as_dict() for item in list_vault_snapshots(vault, limit=1000)
         ]}
 
     @staticmethod
@@ -649,10 +690,12 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                     self.source_home, vault, str(browse_home / ".codex"),
                     snapshot=snapshot,
                 )
+                catalog = snapshot_catalog(vault, snapshot=result.snapshot_id)
                 with self._browse_data_lock:
                     old = self._browse_temporary
                     self._browse_temporary = temporary
                     self._browse_home = browse_home
+                    self._browse_catalog = catalog
                     if old is not None:
                         old.cleanup()
                 with self._vault_lock:
@@ -700,10 +743,46 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
             return function(str(self._browse_home), *args)
 
     def search_vault_backup(self, phrase, limit):
-        return self._browse(search_vault, phrase, limit)
+        with self._browse_data_lock:
+            if self._browse_home is None or self._browse_catalog is None:
+                raise MigrationError("Open a verified Vault backup before searching it")
+            return search_vault(str(self._browse_home), phrase, limit,
+                                catalog=self._browse_catalog)
 
     def read_vault_backup_thread(self, collection, transcript):
         return self._browse(read_thread, collection, transcript)
+
+    def read_vault_backup_thread_page(self, collection, transcript, cursor):
+        return self._browse(read_thread_page, collection, transcript, cursor)
+
+    def issue_vault_export_ticket(self, collection, transcript):
+        if collection not in ("active", "archived") or not isinstance(transcript, str) \
+                or not transcript or len(transcript) > 4096:
+            raise MigrationError("Choose an opened conversation to export")
+        with self._browse_data_lock:
+            if self._browse_home is None:
+                raise MigrationError("Open a verified Vault backup before exporting it")
+            _find_transcript(str(self._browse_home), collection, transcript)
+            browse_home = str(self._browse_home)
+            expected_bytes = sum(len(chunk) for chunk in markdown_chunks(
+                browse_home, collection, transcript))
+        ticket = secrets.token_urlsafe(32)
+        with self._export_ticket_lock:
+            now = time.monotonic()
+            self._export_tickets = {key: value for key, value in self._export_tickets.items()
+                                    if value[0] > now}
+            if len(self._export_tickets) >= 16:
+                raise MigrationError("Too many pending exports. Retry in one minute.")
+            self._export_tickets[ticket] = (now + 60, browse_home, collection,
+                                            transcript, expected_bytes)
+        return ticket
+
+    def consume_vault_export_ticket(self, ticket):
+        with self._export_ticket_lock:
+            value = self._export_tickets.pop(ticket, None)
+        if value is None or value[0] <= time.monotonic():
+            raise MigrationError("This download link expired. Choose Download Markdown again.")
+        return value[1:]
 
     def vault_thread_install_status(self):
         with self._vault_lock:
@@ -937,7 +1016,8 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                     self.source_home, planned.destination, progress=progress)
                 with self._vault_lock:
                     self._vault_status = {
-                        "status": "completed", "storage": storage,
+                        "status": "needs_attention" if result.needs_attention else "completed",
+                        "storage": storage,
                         **result.as_dict(),
                     }
             except Exception:
@@ -1008,6 +1088,49 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                 if parsed.path == "/vault":
                     self._html(VAULT_HTML)
                     return
+                if parsed.path == "/api/vault/download":
+                    query = parse_qs(parsed.query)
+                    if set(query) != {"ticket"} or len(query["ticket"]) != 1 \
+                            or len(query["ticket"][0]) > 128:
+                        self._json(400, {"error": "Invalid download link"})
+                        return
+                    stream_started = False
+                    try:
+                        browse_home, collection, transcript, expected_bytes = setup.consume_vault_export_ticket(
+                            query["ticket"][0])
+                        with setup._browse_data_lock:
+                            if setup._browse_home is None or str(setup._browse_home) != browse_home:
+                                raise MigrationError("The opened backup changed before export")
+                            chunks = markdown_chunks(browse_home, collection, transcript)
+                            first = next(chunks)
+                            self.send_response(200)
+                            self.send_header("Content-Type", "text/markdown; charset=utf-8")
+                            self.send_header("Content-Disposition", 'attachment; filename="codex-conversation.md"')
+                            self.send_header("Content-Length", str(expected_bytes))
+                            self.send_header("Cache-Control", "no-store")
+                            self.send_header("X-Content-Type-Options", "nosniff")
+                            self.send_header("Referrer-Policy", "no-referrer")
+                            self.send_header("Connection", "close")
+                            self.end_headers()
+                            stream_started = True
+                            written = len(first)
+                            self.wfile.write(first)
+                            for chunk in chunks:
+                                written += len(chunk)
+                                if written > expected_bytes:
+                                    raise MigrationError("The saved conversation changed during export")
+                                self.wfile.write(chunk)
+                            if written != expected_bytes:
+                                raise MigrationError("The saved conversation changed during export")
+                            self.close_connection = True
+                    except MigrationError:
+                        if stream_started:
+                            self.close_connection = True
+                        else:
+                            self._json(409, {"error": "The selected backup could not be exported safely."})
+                    except (BrokenPipeError, ConnectionResetError):
+                        self.close_connection = True
+                    return
                 if parsed.path.startswith("/api/vault/"):
                     if not self._authorized():
                         self._json(403, {"error": "Missing or invalid local control token"})
@@ -1044,6 +1167,22 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                                 and set(query) == {"vault"} and len(query["vault"]) == 1):
                             self._json(200, setup.vault_snapshots(query["vault"][0]))
                             return
+                        if (parsed.path == "/api/vault/history-search"
+                                and set(query) == {"vault", "q"}
+                                and all(len(value) == 1 for value in query.values())):
+                            vault, phrase = query["vault"][0], query["q"][0]
+                            if len(vault) > 4096 or len(phrase) > 500:
+                                raise ValueError("invalid Vault history search")
+                            self._json(200, {"results": search_titles(vault, phrase)})
+                            return
+                        if (parsed.path == "/api/vault/thread-history"
+                                and set(query) == {"vault", "key"}
+                                and all(len(value) == 1 for value in query.values())):
+                            vault, key = query["vault"][0], query["key"][0]
+                            if len(vault) > 4096 or len(key) > 4096:
+                                raise ValueError("invalid Vault thread history")
+                            self._json(200, {"versions": thread_timeline(vault, key)})
+                            return
                         if parsed.path == "/api/vault/search" and set(query) <= {"q", "limit", "source"}:
                             phrase = query.get("q", [""])[0]
                             raw_limit = query.get("limit", ["50"])[0]
@@ -1057,13 +1196,24 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                             self._json(200, {"results": [item.as_dict() for item in results]})
                             return
                         if (parsed.path in ("/api/vault/thread", "/api/vault/export")
-                                and set(query) <= {"collection", "transcript", "source"}):
+                                and set(query) <= {"collection", "transcript", "source", "cursor"}):
                             collection = query.get("collection", [""])[0]
                             transcript = query.get("transcript", [""])[0]
                             source = query.get("source", ["local"])[0]
                             if (len(collection) > 16 or len(transcript) > 4096
-                                    or source not in ("local", "backup")):
+                                    or source not in ("local", "backup")
+                                    or ("cursor" in query and (source != "backup"
+                                        or parsed.path != "/api/vault/thread"
+                                        or len(query["cursor"]) != 1
+                                        or len(query["cursor"][0]) > 20))):
                                 raise ValueError("invalid conversation identifier")
+                            if source == "backup" and parsed.path == "/api/vault/thread":
+                                cursor = int(query.get("cursor", ["0"])[0])
+                                thread, next_cursor = setup.read_vault_backup_thread_page(
+                                    collection, transcript, cursor)
+                                self._json(200, {**thread.as_dict(),
+                                                 "next_cursor": next_cursor})
+                                return
                             thread = (setup.read_vault_backup_thread(collection, transcript)
                                       if source == "backup" else
                                       read_thread(setup.source_home, collection, transcript))
@@ -1136,6 +1286,20 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                     setup._closing = True
                     self._json(200, {"closing": True})
                     threading.Thread(target=self.server.shutdown, daemon=True).start()
+                    return
+                if self.path == "/api/vault/export-ticket":
+                    try:
+                        length = int(self.headers.get("Content-Length", "0"))
+                        if not 0 < length <= 8192:
+                            raise MigrationError("Invalid export request size")
+                        payload = json.loads(self.rfile.read(length))
+                        if not isinstance(payload, dict) or set(payload) != {"collection", "transcript"}:
+                            raise MigrationError("Choose a saved conversation to export")
+                        ticket = setup.issue_vault_export_ticket(
+                            payload["collection"], payload["transcript"])
+                        self._json(200, {"url": "/api/vault/download?ticket=" + ticket})
+                    except (MigrationError, ValueError, TypeError):
+                        self._json(400, {"error": "The saved conversation could not be prepared for export."})
                     return
                 if self.path in ("/api/vault/folder", "/api/vault/backup",
                                  "/api/vault/recovery-saved", "/api/vault/schedule",

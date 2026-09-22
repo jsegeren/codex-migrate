@@ -20,6 +20,7 @@ from codex_migrate.vault_backup import (
     _require_unlinked_path,
     _run_helper,
 )
+from codex_migrate.vault_identity import canonical_id
 
 
 @dataclass(frozen=True)
@@ -145,6 +146,67 @@ def verify_snapshot(
         transcript_files=verified["files"], transcript_bytes=verified["bytes"],
         chunks=verified["chunks"], output=None,
     )
+
+
+def snapshot_catalog(
+    vault: str,
+    *,
+    snapshot: str = "latest",
+    crypto_helper: Optional[str] = None,
+) -> List[Dict[str, object]]:
+    """Read authenticated private metadata, not transcript bodies or plaintext files."""
+    root, key_id, snapshot_id, manifest, objects = _snapshot(vault, snapshot)
+    helper = _helper_path(crypto_helper)
+    catalog = _run_helper(
+        helper,
+        ["catalog", "--key-id", key_id, "--snapshot-id", snapshot_id,
+         "--object-dir", str(objects), "--manifest", str(manifest)],
+    )
+    files = catalog.get("files")
+    if catalog.get("snapshot_id") != snapshot_id or catalog.get("version") not in (1, 2) \
+            or not isinstance(files, list) or len(files) > 100000:
+        raise MigrationError("The Vault conversation catalog is invalid.")
+    result: List[Dict[str, object]] = []
+    seen = set()
+    for file in files:
+        if not isinstance(file, dict):
+            raise MigrationError("The Vault conversation catalog is invalid.")
+        collection, path = file.get("collection"), file.get("path")
+        if (collection not in ("active", "archived") or not isinstance(path, str)
+                or not path or len(path) > 4096 or path.startswith("/") or "\\" in path
+                or any(part in ("", ".", "..") for part in path.split("/"))):
+            raise MigrationError("The Vault conversation catalog has an unsafe path.")
+        logical = (collection, path)
+        if logical in seen:
+            raise MigrationError("The Vault conversation catalog contains a duplicate path.")
+        seen.add(logical)
+        size = file.get("size")
+        digest = file.get("sha256")
+        if (not isinstance(size, int) or size < 0 or not isinstance(digest, str)
+                or len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest)):
+            raise MigrationError("The Vault conversation catalog has invalid file metadata.")
+        thread_id = file.get("thread_id")
+        if thread_id is not None and canonical_id(thread_id) != thread_id:
+            raise MigrationError("The Vault conversation catalog has an invalid thread identity.")
+        state = file.get("identity_state") or "unverified"
+        titles = file.get("titles") or []
+        if (state not in ("verified", "unverified", "needs_review")
+                or not isinstance(titles, list) or len(titles) > 64
+                or any(not isinstance(title, str) or len(title) > 500 for title in titles)):
+            raise MigrationError("The Vault conversation catalog has invalid identity metadata.")
+        at_risk = file.get("at_risk", False)
+        if not isinstance(at_risk, bool):
+            raise MigrationError("The Vault conversation catalog has invalid risk metadata.")
+        result.append({
+            "collection": collection, "path": path, "size": size,
+            "sha256": digest, "thread_id": thread_id,
+            "identity_state": state, "titles": titles,
+            "records": file.get("records"),
+            "assistant_messages": file.get("assistant_messages"),
+            "user_messages": file.get("user_messages"),
+            "at_risk": at_risk,
+        })
+    return result
 
 
 def list_snapshots(vault: str, *, limit: int = 100) -> List[SnapshotInfo]:

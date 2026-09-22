@@ -141,6 +141,8 @@ class SetupTests(unittest.TestCase):
         )
         with patch("codex_migrate.setup.restore_vault_snapshot",
                    side_effect=restored), patch(
+                "codex_migrate.setup.snapshot_catalog",
+                return_value=[]), patch(
                 "codex_migrate.setup.persistent_install_status",
                 return_value={"status": "idle"}), patch(
                 "codex_migrate.setup.install_vault_thread",
@@ -165,6 +167,14 @@ class SetupTests(unittest.TestCase):
                 "transcript=2026%2F09%2Frecovered.jsonl&source=backup")
             self.assertEqual(code, 200)
             self.assertEqual(thread["entries"][0]["text"], "RECOVER ME")
+
+            code, grant = self.request("/api/vault/export-ticket", {
+                "collection": "active", "transcript": item["transcript"],
+            })
+            self.assertEqual(code, 200)
+            self.assertNotIn("RECOVER ME", json.dumps(grant))
+            self.assertEqual(self.request(grant["url"], authorized=False)[0], 200)
+            self.assertEqual(self.request(grant["url"], authorized=False)[0], 409)
 
             code, running = self.request("/api/vault/install-thread", {
                 "collection": "active", "transcript": item["transcript"],
@@ -383,7 +393,7 @@ class SetupTests(unittest.TestCase):
                 "/api/vault/snapshots?vault=" + vault)
         self.assertEqual(code, 200)
         self.assertEqual(body, {"snapshots": [snapshot.as_dict()]})
-        listed.assert_called_once_with(vault, limit=100)
+        listed.assert_called_once_with(vault, limit=1000)
         self.assertNotIn("content", json.dumps(body).lower())
 
     def test_vault_backup_waits_for_active_restore(self):

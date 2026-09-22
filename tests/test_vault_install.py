@@ -16,6 +16,17 @@ from codex_migrate.vault_recovery import RestorePlan, RestoreResult
 
 
 class VaultInstallTests(unittest.TestCase):
+    ARCHIVE_ID = "22222222-2222-4222-8222-222222222222"
+    ACTIVE_ID = "33333333-3333-4333-8333-333333333333"
+
+    def archived_content(self):
+        return (json.dumps({"type": "session_meta", "payload": {"id": self.ARCHIVE_ID}}) + "\n"
+                + json.dumps({"payload": {"text": "NEW ARCHIVE"}}) + "\n")
+
+    def active_content(self):
+        return (json.dumps({"type": "session_meta", "payload": {"id": self.ACTIVE_ID}}) + "\n"
+                + json.dumps({"payload": {"text": "NEW PRIVATE HISTORY"}}) + "\n")
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
@@ -42,8 +53,8 @@ class VaultInstallTests(unittest.TestCase):
         root = Path(output)
         (root / "sessions/new").mkdir(parents=True)
         (root / "archived_sessions").mkdir()
-        active = json.dumps({"payload": {"text": "NEW PRIVATE HISTORY"}}) + "\n"
-        archived = json.dumps({"payload": {"text": "NEW ARCHIVE"}}) + "\n"
+        active = self.active_content()
+        archived = self.archived_content()
         (root / "sessions/new/thread.jsonl").write_text(active, encoding="utf-8")
         (root / "archived_sessions/new.jsonl").write_text(archived, encoding="utf-8")
         (root / "restore-receipt.json").write_text("{}", encoding="utf-8")
@@ -88,7 +99,7 @@ class VaultInstallTests(unittest.TestCase):
         self.assertEqual(result.snapshot_id, self.snapshot)
         self.assertEqual(
             (self.codex / "sessions/new/thread.jsonl").read_text(),
-            json.dumps({"payload": {"text": "NEW PRIVATE HISTORY"}}) + "\n",
+            self.active_content(),
         )
         self.assertFalse((self.codex / "sessions/old/thread.jsonl").exists())
         self.assertEqual((self.codex / "auth.json").read_text(), "AUTH MUST STAY")
@@ -193,7 +204,7 @@ class VaultInstallTests(unittest.TestCase):
         self.assertTrue(result.applied)
         self.assertEqual(
             (self.codex / "archived_sessions/new.jsonl").read_text(),
-            json.dumps({"payload": {"text": "NEW ARCHIVE"}}) + "\n",
+            self.archived_content(),
         )
         self.assertEqual(
             (self.codex / "sessions/old/thread.jsonl").read_bytes(), before_active)
@@ -224,7 +235,7 @@ class VaultInstallTests(unittest.TestCase):
         self.assertFalse((self.codex / "archived_sessions/new.jsonl").exists())
 
     def test_selected_install_reports_identical_thread_already_present(self):
-        content = json.dumps({"payload": {"text": "NEW ARCHIVE"}}) + "\n"
+        content = self.archived_content()
         (self.codex / "sessions/already").mkdir()
         (self.codex / "sessions/already/new.jsonl").write_text(content)
 
@@ -245,6 +256,69 @@ class VaultInstallTests(unittest.TestCase):
         self.assertEqual(
             (self.codex / "archived_sessions/new.jsonl").read_text(), "different\n")
         self.assertFalse(any(self.home.glob("Codex-Vault-Thread-Restore-Receipt-*")))
+
+    def test_selected_install_refuses_embedded_id_collision_under_other_filename(self):
+        renamed = self.codex / "sessions/old/renamed.jsonl"
+        renamed.write_text(
+            json.dumps({"type": "session_meta", "payload": {"id": self.ARCHIVE_ID}})
+            + "\n" + json.dumps({"payload": {"text": "DIVERGED"}}) + "\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(MigrationError, "never overwrites or merges"):
+            self.install_selected()
+        self.assertFalse((self.codex / "archived_sessions/new.jsonl").exists())
+
+    def test_selected_install_recognizes_identical_id_under_other_filename(self):
+        renamed = self.codex / "sessions/old/renamed.jsonl"
+        renamed.write_text(self.archived_content(), encoding="utf-8")
+        result = self.install_selected(process_states=(False,))
+        self.assertEqual(result.status, "already_present")
+        self.assertEqual(result.target, "sessions/old/renamed.jsonl")
+
+    def test_selected_install_refuses_unverified_source_identity(self):
+        def missing_id(*args, **kwargs):
+            result = self.restored(*args, **kwargs)
+            replacement = json.dumps({"payload": {"text": "NO ID"}}) + "\n"
+            (Path(result.output) / "archived_sessions/new.jsonl").write_text(
+                replacement, encoding="utf-8")
+            return RestoreResult(
+                vault=result.vault, snapshot_id=result.snapshot_id,
+                transcript_files=result.transcript_files,
+                transcript_bytes=result.transcript_bytes - len(self.archived_content().encode())
+                + len(replacement.encode()), output=result.output,
+            )
+
+        with patch("codex_migrate.vault_install.verify_snapshot",
+                   return_value=self.verified()), \
+                patch("codex_migrate.vault_install.restore_snapshot",
+                      side_effect=missing_id), \
+                patch("codex_migrate.vault_install.codex_running",
+                      return_value=False):
+            with self.assertRaisesRegex(MigrationError, "no verified thread ID"):
+                install_thread(str(self.home), str(self.vault), "archived", "new.jsonl",
+                               snapshot=self.snapshot)
+        self.assertFalse((self.codex / "archived_sessions/new.jsonl").exists())
+
+    def test_selected_install_refuses_duplicate_id_within_backup(self):
+        def duplicated(*args, **kwargs):
+            result = self.restored(*args, **kwargs)
+            duplicate = Path(result.output) / "sessions/new/duplicate.jsonl"
+            duplicate.write_text(self.archived_content(), encoding="utf-8")
+            return RestoreResult(
+                vault=result.vault, snapshot_id=result.snapshot_id,
+                transcript_files=result.transcript_files + 1,
+                transcript_bytes=result.transcript_bytes + len(self.archived_content().encode()),
+                output=result.output,
+            )
+
+        with patch("codex_migrate.vault_install.verify_snapshot",
+                   return_value=self.verified()), \
+                patch("codex_migrate.vault_install.restore_snapshot",
+                      side_effect=duplicated):
+            with self.assertRaisesRegex(MigrationError, "more than one file"):
+                plan_thread_install(str(self.home), str(self.vault), "archived", "new.jsonl",
+                                    snapshot=self.snapshot)
+        self.assertFalse((self.codex / "archived_sessions/new.jsonl").exists())
 
     def test_selected_install_rolls_back_if_receipt_write_fails(self):
         with patch("codex_migrate.vault_install.verify_snapshot",

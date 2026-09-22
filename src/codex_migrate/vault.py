@@ -16,6 +16,7 @@ from typing import Dict, Iterable, Iterator, List, Optional, Tuple
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.source_availability import check_info, require_local
+from codex_migrate.vault_identity import filename_id, title_index
 
 
 TRANSCRIPT_FOLDERS = ("sessions", "archived_sessions")
@@ -181,7 +182,12 @@ def _snippet(text: str, start: int, query_length: int, width: int = 220) -> str:
     return prefix + compact[left:right] + suffix
 
 
-def search(source_home: str, query: str, limit: int = 25) -> List[VaultMatch]:
+def search(
+    source_home: str,
+    query: str,
+    limit: int = 25,
+    catalog: Optional[List[Dict[str, object]]] = None,
+) -> List[VaultMatch]:
     """Search message-like JSON values without retaining a local index."""
     needle = query.strip().casefold()
     if not needle:
@@ -189,7 +195,28 @@ def search(source_home: str, query: str, limit: int = 25) -> List[VaultMatch]:
     if limit < 1 or limit > 500:
         raise ValueError("search limit must be between 1 and 500")
     matches: List[VaultMatch] = []
+    indexed = title_index(source_home) if catalog is None else {}
+    catalog_by_path = {
+        (item["collection"], item["path"]): item
+        for item in (catalog or [])
+    }
     for folder, path, relative in _transcripts(source_home):
+        collection = "active" if folder == "sessions" else "archived"
+        metadata = catalog_by_path.get((collection, relative))
+        aliases = (metadata.get("titles", []) if metadata is not None
+                   else indexed.get(filename_id(relative), []))
+        title_match = next((title for title in reversed(aliases)
+                            if needle in title.casefold()), None)
+        if title_match:
+            matches.append(VaultMatch(
+                collection=collection, transcript=relative, line=0,
+                timestamp=None,
+                snippet="Title: " + _snippet(title_match,
+                                              title_match.casefold().find(needle),
+                                              len(query.strip())),
+            ))
+            if len(matches) >= limit:
+                return matches
         try:
             descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
             with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
@@ -209,8 +236,10 @@ def search(source_home: str, query: str, limit: int = 25) -> List[VaultMatch]:
                         position = text.casefold().find(needle)
                         if position < 0:
                             continue
+                        if title_match:
+                            continue
                         matches.append(VaultMatch(
-                            collection="active" if folder == "sessions" else "archived",
+                            collection=collection,
                             transcript=relative,
                             line=line_number,
                             timestamp=_timestamp(record),
@@ -279,6 +308,69 @@ def read_thread(
     return VaultThread(collection, transcript, entries)
 
 
+def read_thread_page(
+    source_home: str, collection: str, transcript: str, cursor: int = 0,
+    max_entries: int = 100, max_text_bytes: int = 1024 * 1024,
+):
+    """Read one bounded page of a verified Vault browse copy by byte offset."""
+    if not isinstance(cursor, int) or cursor < 0 or cursor > 1 << 63:
+        raise ValueError("invalid conversation cursor")
+    if not 1 <= max_entries <= 100 or not 1 <= max_text_bytes <= 1024 * 1024:
+        raise ValueError("invalid conversation page budget")
+    path = _find_transcript(source_home, collection, transcript)
+    entries: List[ThreadEntry] = []
+    total = 0
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(descriptor, "rb") as handle:
+            before = os.fstat(handle.fileno())
+            if not stat.S_ISREG(before.st_mode) or cursor > before.st_size:
+                raise MigrationError("A saved conversation changed while opening it.")
+            handle.seek(cursor)
+            while True:
+                start = handle.tell()
+                raw = handle.readline(32 * 1024 * 1024 + 1)
+                if not raw:
+                    next_cursor = None
+                    break
+                if len(raw) > 32 * 1024 * 1024:
+                    raise MigrationError("A conversation record is too large to preview. Export it instead.")
+                try:
+                    record = json.loads(raw)
+                except (UnicodeError, json.JSONDecodeError) as error:
+                    raise MigrationError("A conversation transcript contains unreadable JSON.") from error
+                seen = set()
+                new_entries = []
+                new_bytes = 0
+                for body in _strings(record):
+                    if body in seen:
+                        continue
+                    seen.add(body)
+                    new_bytes += len(body.encode("utf-8"))
+                    new_entries.append(ThreadEntry(
+                        timestamp=_timestamp(record),
+                        role=_first_named_string(record, "role"), text=body,
+                    ))
+                if (len(entries) + len(new_entries) > max_entries
+                        or total + new_bytes > max_text_bytes):
+                    if not entries:
+                        raise MigrationError("This message is too large to preview. Export the saved conversation instead.")
+                    next_cursor = start
+                    break
+                entries.extend(new_entries)
+                total += new_bytes
+            after = os.fstat(handle.fileno())
+            if (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns,
+                    before.st_ctime_ns) != (after.st_dev, after.st_ino, after.st_size,
+                    after.st_mtime_ns, after.st_ctime_ns):
+                raise MigrationError("A saved conversation changed while opening it.")
+    except MigrationError:
+        raise
+    except (OSError, UnicodeError) as error:
+        raise MigrationError("A saved conversation could not be read safely.") from error
+    return VaultThread(collection, transcript, entries), next_cursor
+
+
 def markdown(thread: VaultThread) -> str:
     """Create a portable, plain Markdown representation of a thread."""
     lines = [
@@ -295,3 +387,54 @@ def markdown(thread: VaultThread) -> str:
             lines.extend(("_%s_" % entry.timestamp, ""))
         lines.extend((entry.text, ""))
     return "\n".join(lines).rstrip() + "\n"
+
+
+def markdown_chunks(source_home: str, collection: str, transcript: str):
+    """Stream an exact transcript as Markdown without buffering its full body.
+
+    Intended for an already verified, private Vault browse copy. The caller
+    must keep that copy alive until the iterator is exhausted.
+    """
+    path = _find_transcript(source_home, collection, transcript)
+    header = "# Codex conversation\n\n- Collection: %s\n- Transcript: `%s`\n\n" % (
+        collection, transcript.replace("`", "\\`"))
+    yield header.encode("utf-8")
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(descriptor, "rb") as handle:
+            before = os.fstat(handle.fileno())
+            if not stat.S_ISREG(before.st_mode):
+                raise MigrationError("A conversation transcript changed during export.")
+            index = 0
+            while True:
+                raw = handle.readline(32 * 1024 * 1024 + 1)
+                if not raw:
+                    break
+                if len(raw) > 32 * 1024 * 1024:
+                    raise MigrationError("A conversation record is too large for safe export.")
+                try:
+                    record = json.loads(raw)
+                except (UnicodeError, json.JSONDecodeError) as error:
+                    raise MigrationError("A conversation transcript contains unreadable JSON.") from error
+                seen = set()
+                for body in _strings(record):
+                    if body in seen:
+                        continue
+                    seen.add(body)
+                    index += 1
+                    role = _first_named_string(record, "role")
+                    heading = role.strip().title() if role and role.strip() else "Entry %d" % index
+                    timestamp = _timestamp(record)
+                    prefix = "## %s\n\n" % heading
+                    if timestamp:
+                        prefix += "_%s_\n\n" % timestamp
+                    yield (prefix + body + "\n\n").encode("utf-8")
+            after = os.fstat(handle.fileno())
+            if (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns,
+                    before.st_ctime_ns) != (after.st_dev, after.st_ino, after.st_size,
+                    after.st_mtime_ns, after.st_ctime_ns):
+                raise MigrationError("A conversation changed during export.")
+    except MigrationError:
+        raise
+    except (OSError, UnicodeError) as error:
+        raise MigrationError("A conversation could not be exported safely.") from error

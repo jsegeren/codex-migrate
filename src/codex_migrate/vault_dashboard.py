@@ -177,12 +177,17 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 <select id="search-source">
 <option value="local">This Mac</option>
 <option value="backup" disabled>Opened backup</option>
+<option value="history">All saved titles</option>
 </select>
+<div id="history-location" class="actions" hidden>
+<input id="history-vault" readonly placeholder="Choose your encrypted Vault" aria-label="Vault for saved title search">
+<button id="choose-history-vault" type="button" class="secondary">Choose Vault…</button>
+</div>
 <label class="muted" for="query">Words or phrase</label>
 <input id="query" required autocomplete="off">
 <button type="submit">Search</button>
 </form>
-<p class="muted">Search reads transcript files directly and keeps no separate content index.</p>
+<p class="muted">Search this Mac or an opened backup by title and content. All saved titles searches dated encrypted snapshots; open a version to search its full text.</p>
 </section>
 <section class="panel" id="results-panel" hidden>
 <h2>Results</h2>
@@ -203,8 +208,13 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 </p>
 <p class="muted" id="thread-meta">
 </p>
+<div id="thread-timeline" class="subsection" hidden>
+<h3>Saved versions</h3>
+<div id="versions"></div>
+</div>
 <div id="entries">
 </div>
+<button id="load-more" class="secondary" hidden>Load more messages</button>
 </section>
 <p id="status" role="status" aria-live="polite">Loading history…</p>
 <p id="error" role="alert">
@@ -228,12 +238,143 @@ for(const link of document.querySelectorAll("[data-route]")){link.classList.togg
 const fmt=n=>{const units=["B","KB","MB","GB","TB"];let i=0;while(n>=1000&&i<units.length-1){n/=1000;i++}return `${n.toFixed(n>=100?0:n>=10?1:2)} ${units[i]}`};
 async function api(path,data){const response=await fetch(path,{method:data===undefined?"GET":"POST",headers:{"X-Codex-Migrate-Token":token,"Content-Type":"application/json"},...(data===undefined?{}:{body:JSON.stringify(data)})});const type=response.headers.get("Content-Type")||"";const body=type.includes("application/json")?await response.json():await response.text();if(!response.ok)throw Error(body.error||"The local request failed");return body}
 function fail(error){$("error").textContent=error.message;$("status").textContent=""}
+const chosenVault=()=>$("history-vault").value||$("restore-vault").value;
+$("search-source").onchange=()=>{$("history-location").hidden=$("search-source").value!=="history"};
+$("choose-history-vault").onclick=async()=>{
+  try{
+    const result=await api("/api/vault/folder",{});
+    if(result.path){$("history-vault").value=result.path;$("restore-vault").value=result.path;await refreshSnapshots()}
+  }catch(error){fail(error)}
+};
 let selected=null;
 function params(item){return new URLSearchParams({collection:item.collection,transcript:item.transcript,source:item.source||"local"})}
-async function openThread(item){$("error").textContent="";$("status").textContent="Opening conversation…";try{const thread=await api("/api/vault/thread?"+params(item));selected=item;const fromBackup=item.source==="backup";$("restore-thread").hidden=!fromBackup;$("thread-restore-note").hidden=!fromBackup;$("thread-restore-status").textContent="";$("thread-restore-error").textContent="";$("thread-meta").textContent=`${fromBackup?"Opened backup":"This Mac"} · ${thread.collection} · ${thread.entries.length} readable entries`;$("entries").replaceChildren(...thread.entries.map((entry,index)=>{const article=document.createElement("article");article.className="entry";const h=document.createElement("h3");h.textContent=entry.role||`Entry ${index+1}`;article.append(h);if(entry.timestamp){const time=document.createElement("time");time.textContent=entry.timestamp;article.append(time)}const p=document.createElement("p");p.textContent=entry.text;article.append(p);return article}));$("thread").hidden=false;$("status").textContent="";$("thread").scrollIntoView({behavior:"smooth"})}catch(error){fail(error)}}
-$("search").onsubmit=async event=>{event.preventDefault();$("error").textContent="";const source=$("search-source").value;$("status").textContent=source==="backup"?"Searching the opened backup…":"Searching this Mac…";$("thread").hidden=true;try{const query=$("query").value.trim();const data=await api("/api/vault/search?"+new URLSearchParams({q:query,limit:"50",source}));$("results").replaceChildren(...data.results.map(item=>{item.source=source;const button=document.createElement("button");button.type="button";button.className="result";const small=document.createElement("small");small.textContent=`${item.collection}${item.timestamp?" · "+item.timestamp:""}`;const text=document.createElement("span");text.textContent=item.snippet;button.append(small,text);button.onclick=()=>openThread(item);return button}));$("results-panel").hidden=false;$("status").textContent=data.results.length?`${data.results.length} result${data.results.length===1?"":"s"}. Select one to open it.`:"No matching conversation text found."}catch(error){fail(error)}};
+function appendEntries(entries){$("entries").append(...entries.map((entry,index)=>{
+  const article=document.createElement("article");article.className="entry";
+  const h=document.createElement("h3");h.textContent=entry.role||`Entry ${$("entries").children.length+index+1}`;article.append(h);
+  if(entry.timestamp){const time=document.createElement("time");time.textContent=entry.timestamp;article.append(time)}
+  const p=document.createElement("p");p.textContent=entry.text;article.append(p);return article;
+}))}
+async function openThread(item){
+  $("error").textContent="";$("status").textContent="Opening conversation…";
+  try{
+    const thread=await api("/api/vault/thread?"+params(item));selected=item;
+    const fromBackup=item.source==="backup";
+    $("restore-thread").hidden=!fromBackup;
+    $("thread-restore-note").hidden=!fromBackup;
+    $("thread-restore-status").textContent="";$("thread-restore-error").textContent="";
+    $("thread-meta").textContent=`${fromBackup?"Opened backup":"This Mac"} · ${thread.collection} · ${thread.entries.length} readable entries${thread.next_cursor!==null&&thread.next_cursor!==undefined?" so far. Download Markdown includes the full saved version.":""}`;
+    $("entries").replaceChildren();appendEntries(thread.entries);
+    $("load-more").dataset.cursor=thread.next_cursor===null||thread.next_cursor===undefined?"":String(thread.next_cursor);
+    $("load-more").hidden=!$("load-more").dataset.cursor;
+    $("print").hidden=fromBackup&&Boolean($("load-more").dataset.cursor);
+    $("share").hidden=fromBackup&&Boolean($("load-more").dataset.cursor);
+    $("thread-timeline").hidden=true;$("versions").replaceChildren();
+    if(fromBackup&&item.key&&chosenVault()){
+      const data=await api("/api/vault/thread-history?"+new URLSearchParams({vault:chosenVault(),key:item.key}));
+      $("versions").replaceChildren(...data.versions.map(version=>{
+        const button=document.createElement("button");button.type="button";button.className="result";
+        const when=new Date(version.created_at);
+        const label=Number.isNaN(when.getTime())?version.created_at:when.toLocaleString();
+        button.textContent=`${label} · ${version.titles.at(-1)||"Untitled"} · ${fmt(version.size)}${version.at_risk?" · Needs review":""}`;
+        button.onclick=()=>openSavedResult({matching_snapshot:version.snapshot_id,
+          matching_collection:version.collection,matching_transcript:version.transcript,key:item.key});
+        return button;
+      }));
+      $("thread-timeline").hidden=data.versions.length<2;
+    }
+    $("thread").hidden=false;$("status").textContent="";$("thread").scrollIntoView({behavior:"smooth"});
+  }catch(error){
+    if(item.source==="backup"){
+      selected=item;$("entries").replaceChildren();$("load-more").hidden=true;
+      $("print").hidden=true;$("share").hidden=true;$("restore-thread").hidden=false;
+      $("thread-meta").textContent="This saved conversation cannot be previewed here. Download its full Markdown export, or review another version.";
+      $("thread").hidden=false;
+    }
+    fail(error)
+  }
+}
+$("load-more").onclick=async()=>{
+  if(!selected||!$("load-more").dataset.cursor)return;
+  $("load-more").disabled=true;
+  try{
+    const query=params(selected);query.set("cursor",$("load-more").dataset.cursor);
+    const page=await api("/api/vault/thread?"+query);appendEntries(page.entries);
+    $("load-more").dataset.cursor=page.next_cursor===null?"":String(page.next_cursor);
+    $("load-more").hidden=!$("load-more").dataset.cursor;
+    $("thread-meta").textContent=`Opened backup · ${page.collection} · ${$("entries").children.length} readable entries${page.next_cursor!==null?" so far. Download Markdown includes the full saved version.":""}`;
+    $("print").hidden=Boolean($("load-more").dataset.cursor);
+    $("share").hidden=Boolean($("load-more").dataset.cursor);
+  }catch(error){fail(error)}finally{$("load-more").disabled=false}
+};
+async function openSavedResult(item){
+  const vault=chosenVault();
+  if(!vault){$("status").textContent="Choose your Vault in Recovery first.";return}
+  $("restore-vault").value=vault;
+  $("status").textContent="Verifying and opening saved version…";
+  try{
+    $("restore-snapshot").dataset.requested=item.matching_snapshot;
+    await refreshSnapshots();
+    if(![...$("restore-snapshot").options].some(option=>option.value===item.matching_snapshot))
+      throw Error("This version is outside the visible snapshot list. Open it from Recovery.");
+    $("restore-snapshot").value=item.matching_snapshot;
+    invalidateOpenedChoice();
+    await api("/api/vault/browse",{vault,snapshot:item.matching_snapshot,apply:true});
+    for(let attempt=0;attempt<300;attempt++){
+      await new Promise(resolve=>setTimeout(resolve,1000));
+      const state=await api("/api/vault/browse-status");
+      if(state.status==="failed")throw Error(state.error||"The saved version could not be opened.");
+      if(state.status==="ready"&&state.snapshot_id===item.matching_snapshot){
+        browseView(state);
+        await openThread({collection:item.matching_collection,transcript:item.matching_transcript,
+          source:"backup",key:item.key});
+        return;
+      }
+    }
+    throw Error("The saved version is still opening. Check Recovery before retrying.");
+  }catch(error){fail(error)}
+}
+$("search").onsubmit=async event=>{
+  event.preventDefault();$("error").textContent="";$("thread").hidden=true;
+  const source=$("search-source").value,query=$("query").value.trim();
+  $("status").textContent=source==="history"?"Searching saved titles…":
+    source==="backup"?"Searching the opened backup…":"Searching this Mac…";
+  try{
+    let data;
+    if(source==="history"){
+      const vault=chosenVault();
+      if(!vault)throw Error("Choose your Vault before searching saved titles.");
+      data=await api("/api/vault/history-search?"+new URLSearchParams({vault,q:query}));
+    }else data=await api("/api/vault/search?"+new URLSearchParams({q:query,limit:"50",source}));
+    $("results").replaceChildren(...data.results.map(item=>{
+      const button=document.createElement("button");button.type="button";button.className="result";
+      const small=document.createElement("small"),text=document.createElement("span");
+      if(source==="history"){
+        small.textContent=`${item.version_count} saved ${item.version_count===1?"version":"versions"} · ${item.identity_state}${item.at_risk?" · Needs review":""}`;
+        text.textContent=item.matching_title;
+        button.onclick=()=>openSavedResult(item);
+      }else{
+        item.source=source;
+        small.textContent=`${item.collection}${item.timestamp?" · "+item.timestamp:""}`;
+        text.textContent=item.snippet;button.onclick=()=>openThread(item);
+      }
+      button.append(small,text);return button;
+    }));
+    $("results-panel").hidden=false;
+    $("status").textContent=data.results.length?`${data.results.length} result${data.results.length===1?"":"s"}. Select one to open it.`:
+      source==="history"?"No matching saved title found. Choose one dated backup to search its full text.":"No matching conversation text found.";
+  }catch(error){fail(error)}
+};
 async function markdownFile(){if(!selected)throw Error("Open a conversation first");const text=await api("/api/vault/export?"+params(selected));return new File([text],"codex-conversation.md",{type:"text/markdown"})}
-$("download").onclick=async()=>{try{const file=await markdownFile(),url=URL.createObjectURL(file),link=document.createElement("a");link.href=url;link.download=file.name;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}catch(error){fail(error)}};
+$("download").onclick=async()=>{try{
+  if(!selected)throw Error("Open a conversation first");
+  const link=document.createElement("a");link.download="codex-conversation.md";
+  if(selected.source==="backup"){
+    const grant=await api("/api/vault/export-ticket",{collection:selected.collection,transcript:selected.transcript});
+    link.href=grant.url;link.click();$("status").textContent="Downloading the verified saved conversation…";
+  }else{
+    const file=await markdownFile(),url=URL.createObjectURL(file);link.href=url;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000)
+  }
+}catch(error){fail(error)}};
 $("print").onclick=()=>window.print();
 $("share").onclick=async()=>{try{const file=await markdownFile();if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}))){await navigator.share({title:"Codex conversation",files:[file]});$("status").textContent="Share sheet opened."}else{$("status").textContent="This browser cannot open the share sheet. Use Download Markdown, then share or email the file."}}catch(error){if(error.name!=="AbortError")fail(error)}};
 let backupTimer=null;
@@ -243,7 +384,7 @@ let pendingAutomaticBackup=false;
 function storageView(storage){const panel=$("storage-assessment");if(!storage){panel.hidden=true;return}panel.hidden=false;panel.className="storage-assessment "+storage.kind;$("storage-heading").textContent=storage.heading;$("storage-detail").textContent=storage.detail}
 async function refreshStorage(path){if(!path){storageView(null);return}try{storageView(await api("/api/vault/storage?path="+encodeURIComponent(path)))}catch(error){storageView({kind:"external_or_network",heading:"Storage protection unverified",detail:"Codex Migrate could not classify this location. Confirm how it is backed up before relying on it after loss of the Mac."})}}
 function backupFrequencyView(){const daily=$("backup-frequency-daily").checked;$("backup").textContent=daily?"Create backup + turn on daily backup":"Create encrypted backup"}
-function backupView(data){const running=data.status==="running";if(data.storage)storageView(data.storage);if(data.destination&&!$("vault-folder").value){$("vault-folder").value=data.destination;if(!data.storage)refreshStorage(data.destination)}if(data.destination&&!$("restore-vault").value){$("restore-vault").value=data.destination;refreshSnapshots()}verifiedBackup=data.status==="completed"&&!data.recovery_key;$("choose-vault").disabled=running||installRunning;$("backup-frequency-daily").disabled=running||installRunning||scheduleEnabled;$("backup-frequency-manual").disabled=running||installRunning||scheduleEnabled;$("backup").disabled=running||installRunning||!$("vault-folder").value||Boolean(data.recovery_key);$("backup-error").textContent=data.status==="failed"?(data.error||"Encrypted backup stopped safely."):"";if(running){const files=`${data.completed_files||0} of ${data.total_files||0} files`;const bytes=data.total_bytes?` · ${Math.round(100*(data.completed_bytes||0)/data.total_bytes)}% of ${fmt(data.total_bytes)}`:"";$("backup-status").textContent="Encrypting and verifying… "+files+bytes}else if(data.status==="completed"){$("backup-status").textContent=`Verified snapshot complete · ${data.transcript_files.toLocaleString()} files · ${fmt(data.transcript_bytes)}`}else if(data.status==="failed"){$("backup-status").textContent=""}else{$("backup-status").textContent="No backup is running."}if(data.recovery_key){$("recovery-key").value=data.recovery_key;$("recovery").hidden=false}else{$("recovery-key").value="";$("recovery").hidden=true}if(running&&!backupTimer)backupTimer=setInterval(refreshBackup,1500);if(!running&&backupTimer){clearInterval(backupTimer);backupTimer=null}refreshScheduleButton();refreshRestoreButton();if(verifiedBackup&&pendingAutomaticBackup&&!scheduleEnabled)void enableRequestedSchedule()}
+function backupView(data){const running=data.status==="running";if(data.storage)storageView(data.storage);if(data.destination&&!$("vault-folder").value){$("vault-folder").value=data.destination;if(!data.storage)refreshStorage(data.destination)}if(data.destination&&!$("restore-vault").value){$("restore-vault").value=data.destination;refreshSnapshots()}verifiedBackup=["completed","needs_attention"].includes(data.status)&&!data.recovery_key;$("choose-vault").disabled=running||installRunning;$("backup-frequency-daily").disabled=running||installRunning||scheduleEnabled;$("backup-frequency-manual").disabled=running||installRunning||scheduleEnabled;$("backup").disabled=running||installRunning||!$("vault-folder").value||Boolean(data.recovery_key);$("backup-error").textContent=data.status==="failed"?(data.error||"Encrypted backup stopped safely."):"";if(running){const files=`${data.completed_files||0} of ${data.total_files||0} files`;const bytes=data.total_bytes?` · ${Math.round(100*(data.completed_bytes||0)/data.total_bytes)}% of ${fmt(data.total_bytes)}`:"";$("backup-status").textContent="Encrypting and verifying… "+files+bytes}else if(data.status==="completed"){$("backup-status").textContent=`Verified snapshot complete · ${data.transcript_files.toLocaleString()} files · ${fmt(data.transcript_bytes)}`}else if(data.status==="needs_attention"){$("backup-status").textContent=`Verified snapshot saved, but ${data.at_risk_threads} conversation${data.at_risk_threads===1?"":"s"} may have lost content. Open an earlier saved version for review.`}else if(data.status==="failed"){$("backup-status").textContent=""}else{$("backup-status").textContent="No backup is running."}if(data.recovery_key){$("recovery-key").value=data.recovery_key;$("recovery").hidden=false}else{$("recovery-key").value="";$("recovery").hidden=true}if(running&&!backupTimer)backupTimer=setInterval(refreshBackup,1500);if(!running&&backupTimer){clearInterval(backupTimer);backupTimer=null}refreshScheduleButton();refreshRestoreButton();if(verifiedBackup&&data.status!=="needs_attention"&&pendingAutomaticBackup&&!scheduleEnabled)void enableRequestedSchedule()}
 async function refreshBackup(){try{backupView(await api("/api/vault/backup-status"))}catch(error){$("backup-error").textContent=error.message}}
 $("choose-vault").onclick=async()=>{try{$("backup-error").textContent="";const result=await api("/api/vault/folder",{});if(result.path){$("vault-folder").value=result.path;$("restore-vault").value=result.path;storageView(result.storage);verifiedBackup=false;$("backup").disabled=false;$("backup-status").textContent="Folder selected. Review its protection, then create the backup when ready.";refreshScheduleButton();await refreshSnapshots()}}catch(error){$("backup-error").textContent=error.message}};
 $("backup-frequency-daily").onchange=backupFrequencyView;
