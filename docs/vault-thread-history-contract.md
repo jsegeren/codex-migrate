@@ -92,8 +92,14 @@ build. It does **not** prove that the destructive desktop rollout rewrite in
 openai/codex#44363 uses that hook or leaves enough time to verify an encrypted
 checkpoint. A disposable app-server `thread/compact/start` test with an
 untrusted hook did not run it; that is a trust-configuration result, not proof
-that app-server compaction bypasses hooks. A one-turn low-threshold automatic
-probe did not observe a hook receipt, so automatic protection remains unproven.
+that app-server compaction bypasses hooks. An earlier one-turn automatic probe
+used an unsupported threshold override, so its absent receipt is inconclusive;
+it did not establish that automatic compaction actually began. The documented
+configuration key is `model_auto_compact_token_limit`, not
+`model_post_turn_compact_threshold_percent`. Automatic protection remains
+unproven until a controlled auto trigger yields a pre-compaction receipt and
+completed checkpoint. See the [official hook contract](https://learn.chatgpt.com/docs/hooks)
+and [sample configuration](https://learn.chatgpt.com/docs/config-file/config-sample).
 The current upstream source calls `run_pre_compact_hooks` from local Responses,
 remote-v2, and token-budget compaction paths before their context mutation.
 That improves confidence in current hook coverage but does not establish the
