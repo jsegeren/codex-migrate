@@ -55,6 +55,25 @@ ephemeral GUI test jobs were unloaded. The signed-in GUI context was necessary
 for Keychain use on the larger Mac; plain SSH returned “User interaction is not
 allowed.” No user workflow was interrupted.
 
+## Packaged-browser check on the original Mac
+
+A freshly built, local-test-only app at source `5e70ad0` opened its bundled
+engine against a disposable synthetic Codex home through the real loopback
+browser UI. The browser found a missing conversation using its old title,
+showed three distinct saved versions, labelled the shrunken version “Needs
+review,” and opened an intact earlier version. A narrow 390-pixel viewport
+kept the search and recovery actions readable. The folder chooser was not
+exercised: the test supplied the disposable Vault path to the read-only field
+in the browser, then used the ordinary UI controls. No live Codex home or
+schedule was changed. This is packaged-engine and browser evidence, not
+Gatekeeper acceptance or a complete buyer installation.
+
+An initial isolated launch changed `HOME`, making the login Keychain
+unavailable to the packaged helper. That test setup was discarded; the
+successful pass retained the signed-in account's normal `HOME` while pointing
+`--source-home` and `--state-dir` only at synthetic paths. Both disposable
+test Keychain entries were removed afterward.
+
 ## Claim boundary
 
 This is evidence for the tested Codex Vault engine on these two Macs, not every
