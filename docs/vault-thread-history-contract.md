@@ -102,7 +102,11 @@ one receipt with `trigger: auto`, a readable `transcript_path`, and a 59,367-byt
 pre-compaction transcript SHA-256. The tiny context could not hold the task's
 normal instructions; the turn did not reach a useful completion and was
 interrupted. This proves hook invocation before the automatic TUI path, not a
-successful encrypted checkpoint or desktop coverage. See the [official hook contract](https://learn.chatgpt.com/docs/hooks)
+successful encrypted checkpoint or desktop coverage. In a third disposable TUI
+task, the same hook returned `continue: false` for manual `/compact`; Codex
+displayed `Hook stopped` with the test stop reason and did not complete that
+compaction. This establishes manual CLI veto behavior on this build, not veto
+behavior for automatic or desktop compaction. See the [official hook contract](https://learn.chatgpt.com/docs/hooks)
 and [sample configuration](https://learn.chatgpt.com/docs/config-file/config-sample).
 The current upstream source calls `run_pre_compact_hooks` from local Responses,
 remote-v2, and token-budget compaction paths before their context mutation.
