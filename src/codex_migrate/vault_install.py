@@ -338,6 +338,7 @@ def _copy_selected(source: Path, target: Path, expected: Tuple[int, str]) -> Non
     temporary = target.parent / ("." + target.name + ".vault-" + secrets.token_hex(8) + ".tmp")
     source_descriptor = -1
     target_descriptor = -1
+    published = False
     try:
         source_descriptor = os.open(source, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         source_info = os.fstat(source_descriptor)
@@ -356,8 +357,35 @@ def _copy_selected(source: Path, target: Path, expected: Tuple[int, str]) -> Non
             _summary({"selected": expected}),
             "The selected conversation changed while it was staged for recovery.",
         )
-        os.replace(temporary, target)
+        # Hard-linking the verified staging file publishes it atomically but
+        # fails if another process created the destination after our check.
+        # os.replace would silently overwrite that newly created file.
+        try:
+            os.link(temporary, target, follow_symlinks=False)
+        except FileExistsError:
+            raise MigrationError(
+                "The selected conversation appeared locally before recovery finished."
+            ) from None
+        published = True
         _fsync_directory(target.parent)
+    except Exception:
+        if published:
+            try:
+                staged_info = os.fstat(target_descriptor)
+                target_info = target.lstat()
+                if (target_info.st_dev, target_info.st_ino) != (
+                        staged_info.st_dev, staged_info.st_ino):
+                    raise MigrationError(
+                        "The selected conversation changed during publication and needs review."
+                    )
+                target.unlink()
+                _fsync_directory(target.parent)
+            except (OSError, MigrationError) as rollback_error:
+                raise MigrationError(
+                    "Selected recovery could not verify cleanup after publication. "
+                    "Keep Codex closed and review this conversation."
+                ) from rollback_error
+        raise
     finally:
         if source_descriptor >= 0:
             os.close(source_descriptor)
@@ -521,8 +549,9 @@ def install_thread(
                     _fsync_directory(codex)
                 target_parent = _safe_target_parent(
                     collection_root, PurePosixPath(*relative.parts[:-1]))
-                added_target = target_parent / relative.name
-                _copy_selected(source, added_target, source_record)
+                target = target_parent / relative.name
+                _copy_selected(source, target, source_record)
+                added_target = target
 
                 after = _tree_records(codex)
                 expected = dict(before)

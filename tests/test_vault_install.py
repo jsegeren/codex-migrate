@@ -340,6 +340,66 @@ class VaultInstallTests(unittest.TestCase):
         self.assertTrue((self.codex / "sessions/old/thread.jsonl").is_file())
         self.assertFalse(any(self.home.glob(".codex-vault-selected-*")))
 
+    def test_selected_install_never_replaces_file_created_during_publication(self):
+        real_link = os.link
+        target = self.codex / "archived_sessions/new.jsonl"
+        foreign_content = "created by another process\n"
+
+        def create_before_link(source, destination, *, follow_symlinks=True):
+            if Path(destination) == target:
+                target.write_text(foreign_content, encoding="utf-8")
+            return real_link(source, destination, follow_symlinks=follow_symlinks)
+
+        with patch("codex_migrate.vault_install.verify_snapshot",
+                   return_value=self.verified()), \
+                patch("codex_migrate.vault_install.restore_snapshot",
+                      side_effect=self.restored), \
+                patch("codex_migrate.vault_install.codex_running",
+                      side_effect=(False, False)), \
+                patch("codex_migrate.vault_install.os.link",
+                      side_effect=create_before_link):
+            with self.assertRaisesRegex(MigrationError, "appeared locally"):
+                install_thread(
+                    str(self.home), str(self.vault), "archived", "new.jsonl",
+                    snapshot=self.snapshot,
+                )
+
+        self.assertEqual(target.read_text(encoding="utf-8"), foreign_content)
+        self.assertFalse(any(self.home.glob("Codex-Vault-Thread-Restore-Receipt-*")))
+        self.assertFalse(any((self.codex / "archived_sessions").glob(".*.vault-*.tmp")))
+
+    def test_selected_install_removes_only_its_own_file_if_publish_fsync_fails(self):
+        from codex_migrate.vault_install import _fsync_directory
+
+        target = self.codex / "archived_sessions/new.jsonl"
+        failed = False
+
+        def fail_once_after_link(directory):
+            nonlocal failed
+            if Path(directory) == target.parent and target.exists() and not failed:
+                failed = True
+                raise OSError("simulated directory sync failure")
+            return _fsync_directory(directory)
+
+        with patch("codex_migrate.vault_install.verify_snapshot",
+                   return_value=self.verified()), \
+                patch("codex_migrate.vault_install.restore_snapshot",
+                      side_effect=self.restored), \
+                patch("codex_migrate.vault_install.codex_running",
+                      side_effect=(False, False)), \
+                patch("codex_migrate.vault_install._fsync_directory",
+                      side_effect=fail_once_after_link):
+            with self.assertRaisesRegex(MigrationError, "could not start safely"):
+                install_thread(
+                    str(self.home), str(self.vault), "archived", "new.jsonl",
+                    snapshot=self.snapshot,
+                )
+
+        self.assertTrue(failed)
+        self.assertFalse(target.exists())
+        self.assertTrue((self.codex / "archived_sessions/old.jsonl").is_file())
+        self.assertFalse(any((self.codex / "archived_sessions").glob(".*.vault-*.tmp")))
+
     def test_selected_install_rejects_unsafe_or_missing_selection(self):
         with patch("codex_migrate.vault_install.verify_snapshot",
                    return_value=self.verified()), \
