@@ -93,12 +93,16 @@ openai/codex#44363 uses that hook or leaves enough time to verify an encrypted
 checkpoint. A disposable app-server `thread/compact/start` test with an
 untrusted hook did not run it; that is a trust-configuration result, not proof
 that app-server compaction bypasses hooks. An earlier one-turn automatic probe
-used an unsupported threshold override, so its absent receipt is inconclusive;
-it did not establish that automatic compaction actually began. The documented
-configuration key is `model_auto_compact_token_limit`, not
-`model_post_turn_compact_threshold_percent`. Automatic protection remains
-unproven until a controlled auto trigger yields a pre-compaction receipt and
-completed checkpoint. See the [official hook contract](https://learn.chatgpt.com/docs/hooks)
+used an unsupported threshold override, so its absent receipt was inconclusive.
+The documented key is `model_auto_compact_token_limit`, not
+`model_post_turn_compact_threshold_percent`. A corrected disposable TUI probe
+set that key to 1,000 tokens with a 4,096-token test context. On the second
+turn, the UI displayed `Compacting context` and the active trusted hook emitted
+one receipt with `trigger: auto`, a readable `transcript_path`, and a 59,367-byte
+pre-compaction transcript SHA-256. The tiny context could not hold the task's
+normal instructions; the turn did not reach a useful completion and was
+interrupted. This proves hook invocation before the automatic TUI path, not a
+successful encrypted checkpoint or desktop coverage. See the [official hook contract](https://learn.chatgpt.com/docs/hooks)
 and [sample configuration](https://learn.chatgpt.com/docs/config-file/config-sample).
 The current upstream source calls `run_pre_compact_hooks` from local Responses,
 remote-v2, and token-budget compaction paths before their context mutation.
