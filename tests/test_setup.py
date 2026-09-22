@@ -114,6 +114,17 @@ class SetupTests(unittest.TestCase):
                      "/api/vault/install-recover", "/api/vault/browse",
                      "/api/vault/install-thread"):
             self.assertEqual(self.request(path, {}, authorized=False)[0], 403)
+        code, page = self.request(
+            "/api/vault/thread?collection=active&transcript=2026%2F09%2Fthread.jsonl")
+        self.assertEqual(code, 200)
+        self.assertEqual(page["entries"][0]["text"], "PRIVATE VAULT FIXTURE")
+        self.assertIsNone(page["next_cursor"])
+        code, grant = self.request("/api/vault/export-ticket", {
+            "collection": "active", "transcript": "2026/09/thread.jsonl", "source": "local",
+        })
+        self.assertEqual(code, 200)
+        self.assertIn("PRIVATE VAULT FIXTURE", self.request(grant["url"], authorized=False)[1])
+        self.assertEqual(self.request(grant["url"], authorized=False)[0], 409)
 
     def test_vault_backup_can_be_opened_searched_and_selected_thread_installed(self):
         (self.home / ".codex").mkdir()
@@ -170,6 +181,7 @@ class SetupTests(unittest.TestCase):
 
             code, grant = self.request("/api/vault/export-ticket", {
                 "collection": "active", "transcript": item["transcript"],
+                "source": "backup",
             })
             self.assertEqual(code, 200)
             self.assertNotIn("RECOVER ME", json.dumps(grant))

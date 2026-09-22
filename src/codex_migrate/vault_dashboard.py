@@ -262,12 +262,12 @@ async function openThread(item){
     $("restore-thread").hidden=!fromBackup;
     $("thread-restore-note").hidden=!fromBackup;
     $("thread-restore-status").textContent="";$("thread-restore-error").textContent="";
-    $("thread-meta").textContent=`${fromBackup?"Opened backup":"This Mac"} · ${thread.collection} · ${thread.entries.length} readable entries${thread.next_cursor!==null&&thread.next_cursor!==undefined?" so far. Download Markdown includes the full saved version.":""}`;
+    $("thread-meta").textContent=`${fromBackup?"Opened backup":"This Mac"} · ${thread.collection} · ${thread.entries.length} readable entries${thread.next_cursor!==null&&thread.next_cursor!==undefined?" so far. Download Markdown includes the full conversation.":""}`;
     $("entries").replaceChildren();appendEntries(thread.entries);
     $("load-more").dataset.cursor=thread.next_cursor===null||thread.next_cursor===undefined?"":String(thread.next_cursor);
     $("load-more").hidden=!$("load-more").dataset.cursor;
-    $("print").hidden=fromBackup&&Boolean($("load-more").dataset.cursor);
-    $("share").hidden=fromBackup&&Boolean($("load-more").dataset.cursor);
+    $("print").hidden=Boolean($("load-more").dataset.cursor);
+    $("share").hidden=Boolean($("load-more").dataset.cursor);
     $("thread-timeline").hidden=true;$("versions").replaceChildren();
     if(fromBackup&&item.key&&chosenVault()){
       const data=await api("/api/vault/thread-history?"+new URLSearchParams({vault:chosenVault(),key:item.key}));
@@ -284,10 +284,10 @@ async function openThread(item){
     }
     $("thread").hidden=false;$("status").textContent="";$("thread").scrollIntoView({behavior:"smooth"});
   }catch(error){
-    if(item.source==="backup"){
+    if(item.source==="backup"||item.source==="local"){
       selected=item;$("entries").replaceChildren();$("load-more").hidden=true;
-      $("print").hidden=true;$("share").hidden=true;$("restore-thread").hidden=false;
-      $("thread-meta").textContent="This saved conversation cannot be previewed here. Download its full Markdown export, or review another version.";
+      $("print").hidden=true;$("share").hidden=true;$("restore-thread").hidden=item.source!=="backup";
+      $("thread-meta").textContent="This conversation cannot be previewed here. Try its Markdown export or another saved version.";
       $("thread").hidden=false;
     }
     fail(error)
@@ -301,7 +301,7 @@ $("load-more").onclick=async()=>{
     const page=await api("/api/vault/thread?"+query);appendEntries(page.entries);
     $("load-more").dataset.cursor=page.next_cursor===null?"":String(page.next_cursor);
     $("load-more").hidden=!$("load-more").dataset.cursor;
-    $("thread-meta").textContent=`Opened backup · ${page.collection} · ${$("entries").children.length} readable entries${page.next_cursor!==null?" so far. Download Markdown includes the full saved version.":""}`;
+    $("thread-meta").textContent=`${selected.source==="backup"?"Opened backup":"This Mac"} · ${page.collection} · ${$("entries").children.length} readable entries${page.next_cursor!==null?" so far. Download Markdown includes the full conversation.":""}`;
     $("print").hidden=Boolean($("load-more").dataset.cursor);
     $("share").hidden=Boolean($("load-more").dataset.cursor);
   }catch(error){fail(error)}finally{$("load-more").disabled=false}
@@ -368,12 +368,8 @@ async function markdownFile(){if(!selected)throw Error("Open a conversation firs
 $("download").onclick=async()=>{try{
   if(!selected)throw Error("Open a conversation first");
   const link=document.createElement("a");link.download="codex-conversation.md";
-  if(selected.source==="backup"){
-    const grant=await api("/api/vault/export-ticket",{collection:selected.collection,transcript:selected.transcript});
-    link.href=grant.url;link.click();$("status").textContent="Downloading the verified saved conversation…";
-  }else{
-    const file=await markdownFile(),url=URL.createObjectURL(file);link.href=url;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000)
-  }
+  const grant=await api("/api/vault/export-ticket",{collection:selected.collection,transcript:selected.transcript,source:selected.source||"local"});
+  link.href=grant.url;link.click();$("status").textContent="Downloading the full conversation…";
 }catch(error){fail(error)}};
 $("print").onclick=()=>window.print();
 $("share").onclick=async()=>{try{const file=await markdownFile();if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}))){await navigator.share({title:"Codex conversation",files:[file]});$("status").textContent="Share sheet opened."}else{$("status").textContent="This browser cannot open the share sheet. Use Download Markdown, then share or email the file."}}catch(error){if(error.name!=="AbortError")fail(error)}};

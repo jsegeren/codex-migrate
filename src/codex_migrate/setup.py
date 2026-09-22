@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from contextlib import nullcontext
 from pathlib import Path
 import platform
 import secrets
@@ -755,17 +756,17 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
     def read_vault_backup_thread_page(self, collection, transcript, cursor):
         return self._browse(read_thread_page, collection, transcript, cursor)
 
-    def issue_vault_export_ticket(self, collection, transcript):
+    def issue_vault_export_ticket(self, collection, transcript, source="backup"):
         if collection not in ("active", "archived") or not isinstance(transcript, str) \
-                or not transcript or len(transcript) > 4096:
+                or not transcript or len(transcript) > 4096 or source not in ("backup", "local"):
             raise MigrationError("Choose an opened conversation to export")
-        with self._browse_data_lock:
-            if self._browse_home is None:
+        with self._browse_data_lock if source == "backup" else nullcontext():
+            if source == "backup" and self._browse_home is None:
                 raise MigrationError("Open a verified Vault backup before exporting it")
-            _find_transcript(str(self._browse_home), collection, transcript)
-            browse_home = str(self._browse_home)
+            export_home = str(self._browse_home) if source == "backup" else str(self.source_home)
+            _find_transcript(export_home, collection, transcript)
             expected_bytes = sum(len(chunk) for chunk in markdown_chunks(
-                browse_home, collection, transcript))
+                export_home, collection, transcript))
         ticket = secrets.token_urlsafe(32)
         with self._export_ticket_lock:
             now = time.monotonic()
@@ -773,8 +774,8 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                                     if value[0] > now}
             if len(self._export_tickets) >= 16:
                 raise MigrationError("Too many pending exports. Retry in one minute.")
-            self._export_tickets[ticket] = (now + 60, browse_home, collection,
-                                            transcript, expected_bytes)
+            self._export_tickets[ticket] = (now + 60, source, export_home,
+                                            collection, transcript, expected_bytes)
         return ticket
 
     def consume_vault_export_ticket(self, ticket):
@@ -1096,12 +1097,15 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                         return
                     stream_started = False
                     try:
-                        browse_home, collection, transcript, expected_bytes = setup.consume_vault_export_ticket(
+                        source, export_home, collection, transcript, expected_bytes = setup.consume_vault_export_ticket(
                             query["ticket"][0])
-                        with setup._browse_data_lock:
-                            if setup._browse_home is None or str(setup._browse_home) != browse_home:
+                        with setup._browse_data_lock if source == "backup" else nullcontext():
+                            if source == "backup" and (setup._browse_home is None or
+                                                       str(setup._browse_home) != export_home):
                                 raise MigrationError("The opened backup changed before export")
-                            chunks = markdown_chunks(browse_home, collection, transcript)
+                            if source == "local" and export_home != str(setup.source_home):
+                                raise MigrationError("The local source changed before export")
+                            chunks = markdown_chunks(export_home, collection, transcript)
                             first = next(chunks)
                             self.send_response(200)
                             self.send_header("Content-Type", "text/markdown; charset=utf-8")
@@ -1202,15 +1206,16 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                             source = query.get("source", ["local"])[0]
                             if (len(collection) > 16 or len(transcript) > 4096
                                     or source not in ("local", "backup")
-                                    or ("cursor" in query and (source != "backup"
-                                        or parsed.path != "/api/vault/thread"
+                                    or ("cursor" in query and (parsed.path != "/api/vault/thread"
                                         or len(query["cursor"]) != 1
                                         or len(query["cursor"][0]) > 20))):
                                 raise ValueError("invalid conversation identifier")
-                            if source == "backup" and parsed.path == "/api/vault/thread":
+                            if parsed.path == "/api/vault/thread":
                                 cursor = int(query.get("cursor", ["0"])[0])
-                                thread, next_cursor = setup.read_vault_backup_thread_page(
-                                    collection, transcript, cursor)
+                                thread, next_cursor = (
+                                    setup.read_vault_backup_thread_page(collection, transcript, cursor)
+                                    if source == "backup" else
+                                    read_thread_page(setup.source_home, collection, transcript, cursor))
                                 self._json(200, {**thread.as_dict(),
                                                  "next_cursor": next_cursor})
                                 return
@@ -1293,10 +1298,11 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                         if not 0 < length <= 8192:
                             raise MigrationError("Invalid export request size")
                         payload = json.loads(self.rfile.read(length))
-                        if not isinstance(payload, dict) or set(payload) != {"collection", "transcript"}:
+                        if (not isinstance(payload, dict) or
+                                set(payload) != {"collection", "transcript", "source"}):
                             raise MigrationError("Choose a saved conversation to export")
                         ticket = setup.issue_vault_export_ticket(
-                            payload["collection"], payload["transcript"])
+                            payload["collection"], payload["transcript"], payload["source"])
                         self._json(200, {"url": "/api/vault/download?ticket=" + ticket})
                     except (MigrationError, ValueError, TypeError):
                         self._json(400, {"error": "The saved conversation could not be prepared for export."})
