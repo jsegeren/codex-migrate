@@ -74,6 +74,18 @@ successful pass retained the signed-in account's normal `HOME` while pointing
 `--source-home` and `--state-dir` only at synthetic paths. Both disposable
 test Keychain entries were removed afterward.
 
+## Interactive Keychain interruption
+
+A later local verification rerun produced an unexpected macOS Keychain password
+prompt. The run was stopped without asking the Founder to enter or disclose a
+password. No signing, notarization, customer-data migration, or release switch
+was performed. The interrupted rerun is **not** a passing release check; the
+pull request's Python 3.9 and 3.12 CI checks remain separate passing evidence.
+Do not resume local Keychain, signing, or notarization tests until the exact
+prompting operation is identified and a noninteractive, explicitly authorized
+verification path is established. An unknown Keychain password is never a
+reason to request a credential from the Founder in chat.
+
 ## Claim boundary
 
 This is evidence for the tested Codex Vault engine on these two Macs, not every
