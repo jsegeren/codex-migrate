@@ -127,3 +127,7 @@ missing-thread lookup, v1 read, export, key recovery, and divergent-ID refusal.
 Test a long thread and a simulated 851 MB to 7 MB rewrite. Do not alter live
 customer transcripts for acceptance. No cross-Mac sync, hosted storage,
 subscription, or DevOS transcript import is part of this release.
+
+The [September 22 two-Mac acceptance receipt](vault-history-physical-acceptance-2026-09-22.md)
+records the v2 engine proof and its remaining claim limits. It does not satisfy
+the separate desktop `PreCompact` proof gate above.
