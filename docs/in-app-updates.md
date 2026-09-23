@@ -32,6 +32,14 @@ automatic updater on the website or in buyer email before that test passes.
 
 ## Required acceptance before release
 
+The September 23 signing-key rotation is a one-time exception to the ZIP
+archive steps below: Sparkle requires a separately Developer ID signed and
+Apple-notarized DMG because this app enables
+`SUVerifyUpdateBeforeExtraction`. Follow
+[the rotation runbook](sparkle-key-rotation-2026-09-23.md), then perform the
+same paid physical installation and failure-path checks. Build 16 remains live
+until those checks pass.
+
 1. Bump the app's build number; commit the exact source before release build.
    Build with the Developer ID identity, obtain Apple's Accepted notarization
    receipt, staple, and verify Gatekeeper. Keep the prior release available.

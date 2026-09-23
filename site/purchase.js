@@ -66,7 +66,7 @@
       if (url.protocol !== 'https:' || !/^[a-z0-9]{8,64}\.private\.blob\.vercel-storage\.com$/.test(url.hostname) ||
           url.port || url.username || url.password || url.hash || !url.search ||
           !/^[a-f0-9]{64}$/.test(result.sha256) ||
-          !/^[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.zip$/.test(result.filename) ||
+          !/^[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.(?:zip|dmg)$/.test(result.filename) ||
           !['live', 'sandbox'].some(mode => url.pathname === `/${mode}/${result.sha256}/${result.filename}`) ||
           !Number.isSafeInteger(result.expiresAt) || result.expiresAt <= 0 ||
           !Number.isSafeInteger(result.expiresInMs) || result.expiresInMs <= 0 || result.expiresInMs > 300000) {

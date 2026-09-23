@@ -50,6 +50,26 @@ test('buyer download streams latest and original through the first-party endpoin
   }
 });
 
+test('buyer download sends a notarized rotation disk image with its correct type', async () => {
+  const disk = { ...release, filename: release.filename.replace(/\.zip$/, '.dmg'),
+    pathname: release.pathname.replace(/\.zip$/, '.dmg'),
+    diskImageNotarization: { id: 'abcdef12-1234-1234-1234-123456789abc', status: 'Accepted' } };
+  const diskConfig = { ...config, release: disk, catalog: { [disk.id]: disk } };
+  const bytes = Buffer.alloc(disk.size, 0x5a);
+  const handler = makeHandler(async () => ({ config: diskConfig, service: {
+    downloadLatest: async () => ({ release: disk.id, sha256: disk.sha256,
+      filename: disk.filename, size: disk.size, url: signed(disk) })
+  } }), async () => ({ status: 200, headers: { get: () => String(disk.size) },
+    body: new ReadableStream({ start(controller) { controller.enqueue(bytes); controller.close(); } })
+  }), {}, () => diskConfig);
+  const res = response();
+  res.on('data', () => {});
+  await handler(request('latest'), res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.headers['Content-Type'], 'application/x-apple-diskimage');
+  assert.equal(res.headers['Content-Disposition'], `attachment; filename="${disk.filename}"`);
+});
+
 test('buyer archive rejects bad origin, forged authority and URL query before runtime access', async () => {
   let loads = 0;
   const handler = makeHandler(async () => { loads++; throw Error('unexpected'); }, fetch, {}, () => config);

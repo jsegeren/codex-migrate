@@ -33,6 +33,15 @@ test('appcast advertises only an approved, signed, compatible archive', () => {
     assert.equal(failed.statusCode, 503);
   }
 });
+test('a signed disk-image update is advertised with the disk-image media type', () => {
+  const disk = { ...release, filename: release.filename.replace(/\.zip$/, '.dmg'),
+    pathname: release.pathname.replace(/\.zip$/, '.dmg'),
+    diskImageNotarization: { id: 'abcdef12-1234-1234-1234-123456789abc', status: 'Accepted' } };
+  const response = plainResponse();
+  appcast(() => ({ ...config, release: disk }))({ method: 'GET' }, response);
+  assert.equal(response.statusCode, 200);
+  assert.match(response.data, /type="application\/x-apple-diskimage"/);
+});
 
 test('update archive rejects missing bearer authority before opening runtime', async () => {
   let loads = 0;
@@ -79,6 +88,30 @@ test('update archive streams the approved private build without exposing its blo
   assert.equal(requested, signedURL);
   assert.equal(Buffer.concat(output).toString(), bytes.toString());
   assert.equal(JSON.stringify(response.headers).includes('signed=fixture'), false);
+});
+
+test('paid updater streams a notarized rotation disk image with its correct type', async () => {
+  const disk = { ...release, filename: release.filename.replace(/\.zip$/, '.dmg'),
+    pathname: release.pathname.replace(/\.zip$/, '.dmg'),
+    diskImageNotarization: { id: 'abcdef12-1234-1234-1234-123456789abc', status: 'Accepted' } };
+  const diskConfig = { ...config, release: disk };
+  const bytes = Buffer.from('synthetic disk-image response');
+  disk.size = bytes.length;
+  const handler = archive(async () => ({ config: diskConfig, service: {
+    downloadLatest: async () => ({ release: disk.id, sha256: disk.sha256,
+      filename: disk.filename, size: disk.size,
+      url: `https://fixturestore.private.blob.vercel-storage.com/${disk.pathname}?signed=fixture` })
+  } }), async () => ({ status: 200, headers: { get: () => String(bytes.length) },
+    body: new ReadableStream({ start(controller) { controller.enqueue(bytes); controller.close(); } })
+  }), {}, () => diskConfig);
+  const response = new PassThrough();
+  response.headers = {};
+  response.setHeader = (key, value) => { response.headers[key] = value; };
+  response.on('data', () => {});
+  await handler({ method: 'GET', url: '/api/update-archive',
+    headers: { authorization: `Bearer ${token}` } }, response);
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.headers['Content-Type'], 'application/x-apple-diskimage');
 });
 
 test('update archive streams an app-sized release without buffering or changing bytes', async () => {

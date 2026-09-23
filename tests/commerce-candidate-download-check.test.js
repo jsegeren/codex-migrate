@@ -4,6 +4,7 @@ const { main } = require('../ops/commerce-candidate-download-check');
 const origin = 'https://ksz4f7goih2qru9i.private.blob.vercel-storage.com';
 function fixture() {
   const candidate = { id: 'test', accepted: false, kind: 'signed-notarized', size: 50,
+    filename: 'candidate.zip',
     pathname: 'live/digest/candidate.zip' };
   const calls = [];
   return { candidate, calls, plan: async () => ({ planOnly: true, uploaded: false, candidate }),
@@ -39,4 +40,11 @@ test('mismatched metadata or origin fails before browser navigation', async () =
     await assert.rejects(main([], enabled, f.sdk, f.browser, f.plan));
     assert.ok(!f.calls.includes('browser'));
   }
+});
+test('disk-image candidate requires matching remote media type', async () => {
+  const f = fixture();
+  f.candidate.filename = 'candidate.dmg';
+  f.candidate.pathname = 'live/digest/candidate.dmg';
+  await assert.rejects(main([], enabled, f.sdk, f.browser, f.plan));
+  assert.deepEqual(f.calls, []);
 });

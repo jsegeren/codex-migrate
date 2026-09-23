@@ -34,7 +34,7 @@ function tokenSession(token, config) {
   return id;
 }
 function releaseVersion(release) {
-  const match = /^Codex-Migrate-(\d+)\.(\d+)\.(\d+)-build(\d+)-(arm64|x86_64)\.zip$/.exec(release?.filename || '');
+  const match = /^Codex-Migrate-(\d+)\.(\d+)\.(\d+)-build(\d+)-(arm64|x86_64)\.(?:zip|dmg)$/.exec(release?.filename || '');
   if (!match) return null;
   const numbers = match.slice(1, 5).map(Number);
   if (numbers.some(value => !Number.isSafeInteger(value))) return null;

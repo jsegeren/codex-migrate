@@ -34,6 +34,12 @@ and [in-app update acceptance](in-app-updates.md).
 
 ## Release blockers for this candidate
 
+The Founder approved a Sparkle key rotation. A new local signing seed and
+public key exist, and the source now supports a Developer ID signed DMG for
+the rotation. The private seed still needs a secure second copy. The separate
+Apple notarization Keychain is locked, so no new DMG has been notarized or
+distributed. See [the rotation runbook](sparkle-key-rotation-2026-09-23.md).
+
 1. Confirm an actual browser file save from the first-party download page in
    an ordinary customer browser, and inspect the remaining operator-alert inbox.
    Both authenticated Production server streams have already matched build 16.

@@ -11,6 +11,7 @@ import Sparkle
     private var quitting = false
     private var idleInstallTimer: Timer?
     private var idleProbeInFlight = false
+    private var automaticInstallQuitPending = false
     private var automaticChecksItem: NSMenuItem!
     private var automaticInstallItem: NSMenuItem!
     private lazy var updaterController = SPUStandardUpdaterController(
@@ -159,10 +160,7 @@ import Sparkle
             idleInstallTimer = nil
             return
         }
-        guard let child = process else {
-            NSApplication.shared.terminate(nil)
-            return
-        }
+        guard let child = process else { startHelper(); return }
         guard child.isRunning, let request = helperRequest("/api/update-idle", method: "GET") else { return }
         idleProbeInFlight = true
         URLSession.shared.dataTask(with: request) { _, response, _ in
@@ -173,6 +171,7 @@ import Sparkle
                     // The final POST in applicationShouldTerminate rechecks
                     // idleness under the action lock, closing the race with a
                     // migration or Vault operation that starts after this GET.
+                    self.automaticInstallQuitPending = true
                     NSApplication.shared.terminate(nil)
                 }
             }
@@ -247,6 +246,11 @@ import Sparkle
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if automaticInstallQuitPending && (process == nil || process?.isRunning != true) {
+            automaticInstallQuitPending = false
+            if process == nil { startHelper() }
+            return .terminateCancel
+        }
         guard let child = process, child.isRunning else { return .terminateNow }
         guard !quitting else { return .terminateCancel }
         guard let request = helperRequest("/api/shutdown", method: "POST") else { return .terminateCancel }
@@ -256,6 +260,7 @@ import Sparkle
                 guard self.quitting, self.process != nil else { return }
                 guard (response as? HTTPURLResponse)?.statusCode == 200 else {
                     self.quitting = false
+                    self.automaticInstallQuitPending = false
                     NSApplication.shared.reply(toApplicationShouldTerminate: false)
                     self.openMigration()
                     return

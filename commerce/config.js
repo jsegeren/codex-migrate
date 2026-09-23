@@ -26,7 +26,9 @@ function validRelease(release, live) {
     (release.channel === undefined || release.channel === 'beta' &&
       release.acceptance === 'founder-approved-paid-beta-2026-09-07') &&
     /^[a-f0-9]{40}$/.test(release.source || '') && /^[A-Za-z0-9._-]{1,100}$/.test(release.id || '') &&
-    release.url === undefined && /^[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.zip$/.test(release.filename || '') &&
+    release.url === undefined && /^[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.(zip|dmg)$/.test(release.filename || '') &&
+    (!release.filename.endsWith('.dmg') || release.diskImageNotarization?.status === 'Accepted' &&
+      /^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(release.diskImageNotarization.id || '')) &&
     Number.isSafeInteger(release.size) && release.size > 0 && release.size <= 100 * 1024 * 1024 &&
     release.pathname === `${live ? 'live' : 'sandbox'}/${release.sha256}/${release.filename}` &&
     (live ? release.kind === 'signed-notarized' && release.accepted === true && release.testingOnly === undefined
@@ -63,5 +65,8 @@ function configuration(env = process.env, catalog = releases) {
     account: env.COMMERCE_STRIPE_ACCOUNT, product: env.COMMERCE_PRODUCT,
     price: env.COMMERCE_PRICE, webhookSecret: env.COMMERCE_WEBHOOK_SECRET };
 }
+function releaseContentType(release) {
+  return release.filename.endsWith('.dmg') ? 'application/x-apple-diskimage' : 'application/zip';
+}
 module.exports = { configuration, CommerceError, SITE, PRICE_USD, PRICE_CENTS, SANDBOX_PRICE_CENTS,
-  currentPriceCents, validRelease, commerceSite };
+  currentPriceCents, validRelease, releaseContentType, commerceSite };
