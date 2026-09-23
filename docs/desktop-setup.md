@@ -266,7 +266,7 @@ and writing its completion metadata succeed. A failed packaging step must not
 be distributed as a partial download.
 
 Release requires an existing Developer ID Application identity and either an
-existing notarytool Keychain profile or an App Store Connect API key. Never put
+existing notarytool Keychain profile or an App Store Connect Team API key. Never put
 signing credentials in Git or command output. A locked Keychain profile can
 prompt; use the API-key form when an authorized key already exists and the
 Keychain password is unavailable. This bypasses only the notarization
@@ -284,8 +284,8 @@ For a dedicated unlocked build Keychain, add
 build receipt.
 
 Alternatively, use an owner-only (`0600`) absolute-path `.p8` App Store Connect
-API key and its key ID. Add `--notary-issuer ISSUER-UUID` for a Team API key;
-omit it for an Individual API key. The key file is read by Apple's `notarytool`,
+Team API key, its key ID, and its issuer UUID. Apple's Individual API keys do
+not support `notarytool`. The key file is read by Apple's `notarytool`,
 not copied into the app or receipt. These flags cannot be combined with a
 Keychain profile.
 
@@ -316,7 +316,7 @@ Resume the existing build directory with the same Keychain profile or API key:
 
 For API-key authentication, replace the `--notary-profile` and
 `--notary-keychain` arguments with the same `--notary-api-key`,
-`--notary-key-id`, and optional `--notary-issuer` arguments used for submission.
+`--notary-key-id`, and `--notary-issuer` arguments used for submission.
 
 The resume path accepts only a direct `build/desktop-*` directory containing a
 clean release-mode app, its embedded build receipt, an available source commit,

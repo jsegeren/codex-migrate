@@ -107,7 +107,7 @@ the release without prompting; Developer ID signing and notarization remain
 unverified for build 15.
 
 The release builder now also accepts an existing, owner-only App Store Connect
-API key for notarization, avoiding the locked notary-profile Keychain. This is
+Team API key for notarization, avoiding the locked notary-profile Keychain. This is
 an unexercised route until a real authorized `.p8` key is available. It does
 not solve Developer ID signing or establish a prompt-free release by itself.
 

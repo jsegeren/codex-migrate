@@ -174,25 +174,30 @@ class ReleaseBuildTests(unittest.TestCase):
             key = Path(temporary) / "AuthKey_TEST.p8"
             key.write_text("test fixture")
             key.chmod(0o600)
-            self.assertEqual(build.notary_auth_options(None, api_key=key, key_id="TESTKEY123"),
-                             ["--key", str(key), "--key-id", "TESTKEY123"])
+            issuer = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+            self.assertEqual(build.notary_auth_options(None, api_key=key, key_id="TESTKEY123",
+                                                        issuer=issuer),
+                             ["--key", str(key), "--key-id", "TESTKEY123", "--issuer", issuer])
             for arguments in (
-                {"profile": "profile", "api_key": key, "key_id": "TESTKEY123"},
-                {"profile": None, "keychain": key, "api_key": key, "key_id": "TESTKEY123"},
-                {"profile": None, "api_key": key},
-                {"profile": None, "key_id": "TESTKEY123"},
-                {"profile": None, "api_key": "relative.p8", "key_id": "TESTKEY123"},
+                {"profile": "profile", "api_key": key, "key_id": "TESTKEY123", "issuer": issuer},
+                {"profile": None, "keychain": key, "api_key": key, "key_id": "TESTKEY123",
+                 "issuer": issuer},
+                {"profile": None, "api_key": key, "issuer": issuer},
+                {"profile": None, "key_id": "TESTKEY123", "issuer": issuer},
+                {"profile": None, "api_key": key, "key_id": "TESTKEY123"},
+                {"profile": None, "api_key": key, "key_id": "TESTKEY123", "issuer": "bad"},
+                {"profile": None, "api_key": "relative.p8", "key_id": "TESTKEY123", "issuer": issuer},
             ):
                 with self.subTest(arguments=arguments), self.assertRaises(ValueError):
                     build.notary_auth_options(**arguments)
             key.chmod(0o644)
             with self.assertRaisesRegex(ValueError, "owned by this user and private"):
-                build.notary_auth_options(None, api_key=key, key_id="TESTKEY123")
+                build.notary_auth_options(None, api_key=key, key_id="TESTKEY123", issuer=issuer)
             key.chmod(0o600)
             alias = Path(temporary) / "alias.p8"
             alias.symlink_to(key)
             with self.assertRaisesRegex(ValueError, "regular file"):
-                build.notary_auth_options(None, api_key=alias, key_id="TESTKEY123")
+                build.notary_auth_options(None, api_key=alias, key_id="TESTKEY123", issuer=issuer)
 
     def test_notary_rejection_ambiguity_and_failure_never_pass(self):
         for result in (response("Invalid"), response("Rejected"), response("In Progress"),

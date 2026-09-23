@@ -91,18 +91,19 @@ def artifact_name(receipt):
 def notary_auth_options(profile, keychain=None, api_key=None, key_id=None, issuer=None):
     """Select exactly one notarytool authentication method without reading secrets."""
     if api_key is not None or key_id is not None or issuer is not None:
-        if profile or keychain or not api_key or not key_id:
-            raise ValueError("use either a Keychain profile or an API key and key ID")
+        if profile or keychain or not api_key or not key_id or not issuer:
+            raise ValueError("use either a Keychain profile or a Team API key, key ID, and issuer")
+        try:
+            issuer = str(uuid.UUID(issuer))
+        except (TypeError, ValueError, AttributeError):
+            raise ValueError("notarization Team API key issuer must be a UUID") from None
         key = Path(api_key)
         if not key.is_absolute() or key.is_symlink() or not key.is_file():
             raise ValueError("notarization API key must be an existing absolute regular file")
         details = key.stat()
         if details.st_uid != os.getuid() or details.st_mode & 0o077:
             raise ValueError("notarization API key must be owned by this user and private")
-        options = ["--key", str(key), "--key-id", key_id]
-        if issuer:
-            options += ["--issuer", issuer]
-        return options
+        return ["--key", str(key), "--key-id", key_id, "--issuer", issuer]
     if not profile:
         raise ValueError("notarization requires a Keychain profile or API key")
     options = ["--keychain-profile", profile]
@@ -301,9 +302,9 @@ def main():
     parser.add_argument("--notary-profile", help="Existing notarytool Keychain profile")
     parser.add_argument("--notary-keychain",
                         help="Optional explicit Keychain file containing the notary profile")
-    parser.add_argument("--notary-api-key", help="Private App Store Connect .p8 API key file")
+    parser.add_argument("--notary-api-key", help="Private App Store Connect Team .p8 API key file")
     parser.add_argument("--notary-key-id", help="App Store Connect API key ID")
-    parser.add_argument("--notary-issuer", help="Issuer UUID for a Team API key")
+    parser.add_argument("--notary-issuer", help="Required issuer UUID for a Team API key")
     parser.add_argument("--resume-notarization", metavar="BUILD_DIRECTORY",
                         help="finish the saved Apple submission in a partial release build")
     args = parser.parse_args()
