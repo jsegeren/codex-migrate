@@ -144,6 +144,17 @@ creates a disposable renamed-title fixture, and finds it through the bundled
 HTTP search route. This checks the packaged source path, not Developer ID
 signing, Apple notarization, Gatekeeper acceptance, or buyer delivery.
 
+The same local-test-only build was rebuilt from `8fdfc77` after the packaged
+smoke assertion landed. Its ZIP SHA-256 was
+`bbd4416668cd7d9c5714f1bd982a0c2d9e92e1b290a1ffe56b90ba9c092cc6f1`
+on **both** physical Macs after authenticated SSH transfer. On the larger Mac,
+the extracted app passed strict ad-hoc signature verification. Its bundled
+engine launched against an isolated synthetic home and returned the same
+active conversation for both an old title and a word in its appended message,
+with the current title attached to each result. The loopback helper shut down
+cleanly; the disposable test copy was not installed as the user's app. This
+does not prove notarization, quarantined first launch, or a live buyer restore.
+
 ## Claim boundary
 
 This is evidence for the tested Codex Vault engine on these two Macs, not every
