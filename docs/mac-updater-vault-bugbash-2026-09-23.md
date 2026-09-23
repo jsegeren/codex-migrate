@@ -17,7 +17,7 @@ and [in-app update acceptance](in-app-updates.md).
 
 | Area | Current evidence | Boundary |
 | --- | --- | --- |
-| Python regression | The idle-install candidate ran 830 tests: 818 passed, 12 skipped. | Opt-in physical filesystem and clean-account tests are separate; a green unit suite is not buyer acceptance. |
+| Python regression | The key-rotation candidate ran 832 tests: 820 passed, 12 skipped; the additional submission-resume integrity test passed separately. | Opt-in physical filesystem and clean-account tests are separate; a green unit suite is not buyer acceptance. |
 | Website/commerce regression | 309 passed, 1 skipped after the first-party archive change; 84 focused checkout, entitlement, and update-archive tests passed on merged `main`. | Does not substitute for a browser file save or real in-app installation. |
 | App-size archive stream | A 9.6 MB synthetic ZIP-sized response streamed with exact byte count and SHA-256 | Local handler test, not the hosted Production proxy |
 | Backup scheduling | Found that a loaded schedule could look healthy with a days-old last success or stalled run; candidate now marks overdue runs unhealthy and disregards receipts from before reinstallation | 12 focused tests pass; must check the rendered customer status and a real scheduled run |
@@ -43,10 +43,11 @@ distributed. See [the rotation runbook](sparkle-key-rotation-2026-09-23.md).
 1. Confirm an actual browser file save from the first-party download page in
    an ordinary customer browser, and inspect the remaining operator-alert inbox.
    Both authenticated Production server streams have already matched build 16.
-2. Resolve Sparkle private-key access without bypassing Keychain security, or
-   explicitly approve a key rotation and one-time manual update from build 16.
-   Rebuild and notarize the final build-17 source; sign its final ZIP for Sparkle,
-   upload/read back exact bytes, and test build 16 → 17 with a real paid entitlement.
+2. The Founder approved rotating the inaccessible Sparkle key. Rebuild and
+   notarize the clean final build-17 source, then create the separately signed
+   and notarized rotation DMG while retaining the live build-16 Apple signing
+   certificate. Sign that final DMG with the new Sparkle key, upload/read back
+   exact bytes, and test build 16 → 17 with a real paid entitlement.
    Relaunch the app and prove periodic checks still run. If the customer opts
    into automatic installation, prove it waits for an idle helper and does not
    interrupt migration, Vault backup, or restore.
