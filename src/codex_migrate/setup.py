@@ -533,9 +533,20 @@ class SetupDashboard(Dashboard):
                          and self._thread_install_thread.is_alive())
                 and not self._vault_status.get("recovery_key")
             )
-        return vault_idle and (self.engine is None or (
+        if not vault_idle:
+            return False
+        try:
+            schedule = vault_schedule_status(self.source_home)
+        except (MigrationError, OSError, ValueError):
+            return False
+        last_run = schedule.get("last_run")
+        if isinstance(last_run, dict) and last_run.get("status") in ("running", "unknown"):
+            # LaunchAgent backups run outside this helper's worker threads and
+            # may still be using the packaged engine during an app update.
+            return False
+        return self.engine is None or (
             self.state.read().get("status") not in ("running", "paused")
-            and not (self.engine._thread and self.engine._thread.is_alive())))
+            and not (self.engine._thread and self.engine._thread.is_alive()))
 
     def close(self):
         if self.engine is not None:
@@ -1087,6 +1098,19 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                     self._json(403, {"error": "Local origin required"})
                     return
                 parsed = urlsplit(self.path)
+                if parsed.path == "/api/update-idle":
+                    if parsed.query or not self._authorized():
+                        self._json(403, {"error": "Missing or invalid local control token"})
+                        return
+                    if not setup._request_lock.acquire(blocking=False):
+                        self._json(409, {"idle": False})
+                        return
+                    try:
+                        idle = not setup._closing and setup._idle_for_shutdown()
+                    finally:
+                        setup._request_lock.release()
+                    self._json(200 if idle else 409, {"idle": idle})
+                    return
                 if parsed.path == "/vault":
                     self._html(VAULT_HTML)
                     return

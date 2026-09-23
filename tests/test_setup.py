@@ -556,6 +556,7 @@ class SetupTests(unittest.TestCase):
             self.assertEqual(status["status"], "completed")
             self.assertEqual(status["recovery_key"], "CV1-PRIVATE-RECOVERY")
             self.assertEqual(status["transcript_files"], 2)
+            self.assertEqual(self.request("/api/update-idle"), (409, {"idle": False}))
             self.assertEqual(self.request("/api/shutdown", {})[0], 409)
             code, acknowledged = self.request("/api/vault/recovery-saved", {})
             self.assertEqual(code, 200)
@@ -837,10 +838,35 @@ class SetupTests(unittest.TestCase):
         self.assertFalse(self.thread.is_alive())
         self.assertTrue(self.helper._closing)
 
+    def test_update_idle_probe_is_private_and_does_not_close_helper(self):
+        self.assertEqual(self.request("/api/update-idle", authorized=False)[0], 403)
+        self.assertEqual(self.request("/api/update-idle?probe=1")[0], 403)
+        self.assertEqual(self.request("/api/update-idle", extra_headers={
+            "Origin": "https://example.com"})[0], 403)
+        self.assertEqual(self.request("/api/update-idle"), (200, {"idle": True}))
+        self.assertFalse(self.helper._closing)
+        with self.helper._request_lock:
+            # The endpoint must not wait behind an operation that could start
+            # changing Codex or Vault state before an updater quits the app.
+            self.assertEqual(self.request("/api/update-idle"), (409, {"idle": False}))
+        self.assertFalse(self.helper._closing)
+
+    def test_scheduled_vault_backup_blocks_update_and_quit(self):
+        with patch("codex_migrate.setup.vault_schedule_status", return_value={
+            "enabled": True, "last_run": {"status": "running"}}):
+            self.assertEqual(self.request("/api/update-idle"), (409, {"idle": False}))
+            self.assertEqual(self.request("/api/shutdown", {})[0], 409)
+        with patch("codex_migrate.setup.vault_schedule_status", side_effect=MigrationError("unsafe")):
+            self.assertEqual(self.request("/api/update-idle"), (409, {"idle": False}))
+            self.assertEqual(self.request("/api/shutdown", {})[0], 409)
+        self.assertFalse(self.helper._closing)
+        self.assertEqual(self.request("/api/update-idle"), (200, {"idle": True}))
+
     def test_browser_shutdown_cannot_interrupt_running_paused_or_worker(self):
         self.helper.configure(self.config())
         for status in ("running", "paused"):
             self.helper.state.update(status=status)
+            self.assertEqual(self.request("/api/update-idle"), (409, {"idle": False}))
             self.assertEqual(self.request("/api/shutdown", {})[0], 409)
             self.assertFalse(self.helper._closing)
         self.helper.state.update(status="idle")
@@ -848,10 +874,34 @@ class SetupTests(unittest.TestCase):
         self.helper.engine._thread = threading.Thread(target=lambda: release.wait(3))
         self.helper.engine._thread.start()
         try:
+            self.assertEqual(self.request("/api/update-idle"), (409, {"idle": False}))
             self.assertEqual(self.request("/api/shutdown", {})[0], 409)
         finally:
             release.set()
             self.helper.engine._thread.join(timeout=3)
+
+    def test_browser_shutdown_cannot_interrupt_any_vault_worker(self):
+        # The Mac updater uses this same endpoint before replacing the app.
+        for field in ("_vault_thread", "_restore_thread", "_install_thread",
+                      "_browse_thread", "_thread_install_thread"):
+            with self.subTest(worker=field):
+                release = threading.Event()
+                worker = threading.Thread(target=lambda: release.wait(3), daemon=True)
+                setattr(self.helper, field, worker)
+                worker.start()
+                try:
+                    self.assertFalse(self.helper.can_shutdown())
+                    self.assertEqual(self.request("/api/update-idle"), (409, {"idle": False}))
+                    self.assertEqual(self.request("/api/shutdown", {})[0], 409)
+                    self.assertFalse(self.helper._closing)
+                finally:
+                    release.set()
+                    worker.join(timeout=3)
+                    setattr(self.helper, field, None)
+                self.assertFalse(worker.is_alive())
+        self.assertEqual(self.request("/api/shutdown", {})[0], 200)
+        self.thread.join(timeout=2)
+        self.assertFalse(self.thread.is_alive())
 
     def test_suggestions_only_use_existing_common_folders(self):
         code, result = self.request("/api/suggestions", {})
