@@ -205,6 +205,39 @@ commit and `local-test`; ZIP SHA-256 is
 `d2531f81467fa8081f05cea184d86dfd3e2ddec067d5cc5b1123d757563074c0`.
 This artifact is not Developer ID signed or notarized and is not for customers.
 
+## Developer ID release build 15
+
+The clean, pushed source revision `929e65c0b2f24e1b84ca7305895c4312520c720c`
+produced `Codex-Migrate-0.1.0-build15-arm64.zip` through the release builder.
+Apple notarization submission `bfeca634-8fcc-4356-b792-0487653e8470`
+returned `Accepted`. The builder stapled the app and passed strict deep
+signature verification, staple validation, and Gatekeeper assessment as
+`Notarized Developer ID`. The release receipt and an independent archive hash
+agree on SHA-256
+`e8a578b4f6a0e58de17325671eb6015d8379f46c5bc55063fdee9fed2f99c8fc`
+and size 8,538,406 bytes. The extracted ZIP independently passed the same
+signature, staple, and Gatekeeper checks; its bundled engine reported `0.1.0`
+and passed the nine-case packaged desktop suite (eight passes, one filesystem
+skip).
+
+The identical ZIP was transferred over authenticated SSH to the larger Mac.
+Its SHA-256 matched there. The extracted app was marked quarantined, then
+passed strict deep signature verification, staple validation, and Gatekeeper
+assessment as `Notarized Developer ID`; its engine reported `0.1.0`. This was
+noninteractive and did not install or launch the app, access that Mac's live
+Codex data, or interrupt the Founder's work. It is independent second-Mac
+Gatekeeper evidence, **not** a clean-account first-launch or end-to-end paid
+buyer test. The existing source-level two-Mac functional acceptance above
+remains separate evidence.
+
+The private release operator uploaded the exact ZIP to the product's private
+Blob store without overwrite and streamed it back, independently verifying
+all 8,538,406 bytes and the SHA-256 above. Upload alone did not activate the
+checkout. The release catalog retains build 14 and adds the verified build 15;
+the live version still requires a reviewed deploy and an explicit production
+`COMMERCE_RELEASE` switch. The website's 299 Node tests passed (298 passes,
+one skip) after the catalog change.
+
 ## Claim boundary
 
 This is evidence for the tested Codex Vault engine on these two Macs, not every
