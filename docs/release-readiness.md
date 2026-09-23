@@ -5,9 +5,39 @@ remaining acceptance checks continue. This is not full release certification.
 The [paid-beta launch record](paid-beta-launch-2026-09-07.md) controls the current
 distribution decision; the dated entries below preserve their original status.
 
+## September 23 build 16 in-app update beta release
+
+The current paid artifact is `beta-build16-arm64`, from clean source
+`c6d2bdf81e7093a044886dd35e1b97ed8ce40ea3`. Apple accepted notarization
+submission `3a23652e-c7f7-4591-ba9e-60fbf42d3cd9`. The 9,591,579-byte ZIP
+has SHA-256
+`60eff4dcb07088d01c966587e808f21d5fa74b8afb4eba45ed326543f07241f7`.
+Private storage returned the exact uploaded bytes. The archive's Sparkle
+signature verifies against the app's embedded public key. An isolated older
+app copy installed this exact archive in place and relaunched on the first Mac;
+strict signing and Gatekeeper checks passed on both Macs without launching the
+app or interrupting work on the second. See [the exact updater receipt](in-app-updates.md).
+
+PR #21 merged as `e26b36f34befb430798a6ec15deca7baf90abc9b`, with all four
+Python 3.9/3.12 CI checks passing. Production deployment
+`dpl_FrTLLoFy2bh4VQmfJcP5RK8ELQ7c` is READY and serves
+`COMMERCE_RELEASE=beta-build16-arm64`. Public availability remained open at
+$49; `/api/appcast` advertises build 16 and its exact archive signature without
+exposing private storage, while missing and forged archive credentials return
+403. The site now lists the specific Vault/search/migration features and the
+purchase page offers the current build plus the original-build fallback.
+Earlier releases remain in the catalog and private storage.
+
+This is still paid beta, not full release certification. The local in-place
+update test does not prove a real paid purchase-link transfer through the
+Production proxy or a clean-user-account first launch. Customers on build 15
+or earlier must retrieve build 16 from their original purchase link once;
+build 16 is the first updater-capable app. No new payment was made for this
+release verification.
+
 ## September 22 Codex Vault build 15 beta release
 
-The current paid artifact is `beta-build15-arm64`, built from clean source
+The then-current paid artifact was `beta-build15-arm64`, built from clean source
 `929e65c0b2f24e1b84ca7305895c4312520c720c`. Apple accepted notarization
 submission `bfeca634-8fcc-4356-b792-0487653e8470`; the 8,538,406-byte ZIP
 has SHA-256

@@ -24,7 +24,27 @@ change. The checkout still permits one item, no subscription and no discount;
 tax may be added separately. The dated $50 observations below remain historical
 receipts rather than descriptions of the current offer.
 
-## Current exact artifact
+## Current exact artifact — September 23
+
+- Release ID: `beta-build16-arm64`, explicit `beta` channel.
+- Filename: `Codex-Migrate-0.1.0-build16-arm64.zip`; 9,591,579 bytes.
+- Source: `c6d2bdf81e7093a044886dd35e1b97ed8ce40ea3`.
+- SHA-256: `60eff4dcb07088d01c966587e808f21d5fa74b8afb4eba45ed326543f07241f7`.
+- Notarization: `3a23652e-c7f7-4591-ba9e-60fbf42d3cd9`, Accepted.
+- Private live-store upload and full readback matched exact size and digest.
+- Production deployment: `dpl_FrTLLoFy2bh4VQmfJcP5RK8ELQ7c`, READY at
+  `migrate.segeren.com` with `COMMERCE_RELEASE=beta-build16-arm64`.
+
+Build 16 adds the first signed in-app update capability. Previous buyers can
+retrieve it from their original purchase link and then link that purchase once
+inside the app for future updates. A local in-place update to build 16 and a
+second-Mac signature/Gatekeeper check passed; the real Production paid-token
+download and clean-user-account first launch remain unverified. See
+[the physical update receipt](in-app-updates.md) and
+[release readiness](release-readiness.md). No payment was made during this
+release verification. Full general-release certification is still open.
+
+## Historical build 14 exact artifact
 
 - Release ID: `beta-build14-arm64`, explicit `beta` channel.
 - Filename: `Codex-Migrate-0.1.0-build14-arm64.zip`; 8,500,913 bytes.

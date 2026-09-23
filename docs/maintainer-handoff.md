@@ -23,7 +23,7 @@ implementation.
 
 ## Current live state
 
-As of September 22, 2026 (Pacific time):
+As of September 23, 2026 (Pacific time):
 
 - Public site: <https://migrate.segeren.com/>
 - Source repository: <https://github.com/jsegeren/codex-migrate>
@@ -33,20 +33,24 @@ As of September 22, 2026 (Pacific time):
 - Support: best effort at `joshua@segeren.com`
 - Public analytics: the separate Codex Migrate GA4 property; no app or workspace
   analytics
-- Current paid artifact: `beta-build15-arm64`
-- Artifact filename: `Codex-Migrate-0.1.0-build15-arm64.zip`
-- Source commit: `929e65c0b2f24e1b84ca7305895c4312520c720c`
-- Archive size: 8,538,406 bytes
+- Current paid artifact: `beta-build16-arm64`
+- Artifact filename: `Codex-Migrate-0.1.0-build16-arm64.zip`
+- Source commit: `c6d2bdf81e7093a044886dd35e1b97ed8ce40ea3`
+- Archive size: 9,591,579 bytes
 - Archive SHA-256:
-  `e8a578b4f6a0e58de17325671eb6015d8379f46c5bc55063fdee9fed2f99c8fc`
+  `60eff4dcb07088d01c966587e808f21d5fa74b8afb4eba45ed326543f07241f7`
 - Apple notarization submission:
-  `bfeca634-8fcc-4356-b792-0487653e8470` (`Accepted`)
+  `3a23652e-c7f7-4591-ba9e-60fbf42d3cd9` (`Accepted`)
 - Acceptance label: `founder-approved-paid-beta-2026-09-07`
 
-Build 15 retains the established guided migration and Vault backup views. It
-adds thread-identity-aware history, old-title and active-message search,
+Build 16 retains the established guided migration and Vault backup views,
+including thread-identity-aware history, old-title and active-message search,
 verified version timelines, guarded selected-thread copy-back, and recovery-key
-import. Protection begins after a verified backup, not at installation; the
+import. It adds signed in-app updates after a buyer links the original purchase
+URL once; build 15 and earlier require a one-time manual download of build 16
+from that link. [The update receipt](in-app-updates.md) distinguishes the verified
+local in-place installation from the not-yet-tested Production paid-token flow.
+Protection begins after a verified backup, not at installation; the
 automatic-protection state also requires a successful scheduled run. Local
 backup is not Mac-loss insurance, and the `PreCompact` hook is not shipped.
 See [the exact release and physical-test receipt](vault-history-physical-acceptance-2026-09-22.md).
