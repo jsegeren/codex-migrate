@@ -17,7 +17,7 @@ and [in-app update acceptance](in-app-updates.md).
 
 | Area | Current evidence | Boundary |
 | --- | --- | --- |
-| Python regression | Current candidate ran 842 tests: 828 passed, 14 skipped, including the new native install-location check, scheduled external-Vault safeguards, and existing notarization/rotation resume fixtures. | Release/notarization results printed by mocked fixture tests are not real Apple receipts. Opt-in physical filesystem and clean-account tests are separate; a green suite is not buyer acceptance. |
+| Python regression | Current candidate ran 843 tests: 829 passed, 14 skipped, including the new native install-location check, scheduled external-Vault safeguards, and existing notarization/rotation resume fixtures. | Release/notarization results printed by mocked fixture tests are not real Apple receipts. Opt-in physical filesystem and clean-account tests are separate; a green suite is not buyer acceptance. |
 | Website/commerce regression | 309 passed, 1 skipped after the first-party archive change; 84 focused checkout, entitlement, and update-archive tests passed on merged `main`. | Does not substitute for a browser file save or real in-app installation. |
 | App-size archive stream | A 9.6 MB synthetic ZIP-sized response streamed with exact byte count and SHA-256 | Local handler test, not the hosted Production proxy |
 | Backup scheduling | Found that a loaded schedule could look healthy with a days-old last success or stalled run; candidate now marks overdue runs unhealthy and disregards receipts from before reinstallation | 12 focused tests pass; must check the rendered customer status and a real scheduled run |
