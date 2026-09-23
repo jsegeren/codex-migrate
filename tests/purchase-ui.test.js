@@ -132,6 +132,20 @@ test('page strips bearer fragment and posts a verified buyer download to the sam
   assert.equal(f.get('purchase-retry').hidden, false);
   assert.equal(f.get('purchase-retry').textContent, 'Get a fresh link');
 });
+test('purchase page explains installation for ZIP and DMG, then hides guidance on failed recheck', async () => {
+  const zip = fixture(); await zip.finish();
+  assert.equal(zip.get('purchase-install').hidden, false);
+  assert.match(zip.get('purchase-install').textContent, /Unzip.*Applications.*Downloads/);
+
+  const dmg = fixture();
+  await dmg.finish({ ...good, filename: 'fixture.dmg', url: good.url.replace('fixture.zip', 'fixture.dmg') });
+  assert.equal(dmg.get('purchase-install').hidden, false);
+  assert.match(dmg.get('purchase-install').textContent, /disk image.*Applications.*eject/);
+  dmg.get('purchase-download').events.click({ preventDefault() {} });
+  dmg.get('purchase-retry').events.click();
+  await dmg.finish({ error: 'release_unavailable' }, false);
+  assert.equal(dmg.get('purchase-install').hidden, true);
+});
 for (const [name, wall, mono] of [['ordinary expiry', 300000, 300000],
   ['sleep pauses monotonic clock', 300000, 0], ['wall clock moves backward', -300000, 300000]]) {
   test(`${name} refreshes without navigating to the stale URL`, async () => {

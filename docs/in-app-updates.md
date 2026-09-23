@@ -48,8 +48,11 @@ until those checks pass.
    archive SHA-256, byte length, embedded version, and accepted Apple receipt.
 3. Upload the exact ZIP to private storage and independently read it back;
    verify its byte length and SHA-256. Promote only that catalog entry.
-4. On a test Mac with an older updater-capable app, link a paid test purchase;
-   check manually and via automatic check. Confirm download, signature
+4. Install the buyer download in Applications and open it from there. Check
+   that the purchase page and delivery email give the correct ZIP/DMG steps;
+   do not count an app launched from Downloads or a mounted disk image as an
+   updater acceptance test. On a test Mac with an older updater-capable app,
+   link a paid test purchase; check manually and via automatic check. Confirm download, signature
    verification, helper shutdown, in-place installation, relaunch, and new
    version. Confirm an active migration, Vault backup, restore, or scheduled
    backup makes shutdown refuse the update safely rather than interrupting
