@@ -862,6 +862,20 @@ class SetupTests(unittest.TestCase):
         self.assertFalse(self.helper._closing)
         self.assertEqual(self.request("/api/update-idle"), (200, {"idle": True}))
 
+    def test_scheduled_backup_starting_after_idle_probe_cancels_update_quit(self):
+        # The updater probes first, then requests shutdown. The second check
+        # must catch a LaunchAgent backup that started between those requests.
+        schedule = {"enabled": True, "last_run": {"status": "completed"}}
+        with patch("codex_migrate.setup.vault_schedule_status", side_effect=lambda _: schedule):
+            self.assertEqual(self.request("/api/update-idle"), (200, {"idle": True}))
+            schedule["last_run"] = {"status": "running"}
+            self.assertEqual(self.request("/api/shutdown", {})[0], 409)
+            self.assertFalse(self.helper._closing)
+            schedule["last_run"] = {"status": "completed"}
+            self.assertEqual(self.request("/api/shutdown", {})[0], 200)
+        self.thread.join(timeout=2)
+        self.assertFalse(self.thread.is_alive())
+
     def test_browser_shutdown_cannot_interrupt_running_paused_or_worker(self):
         self.helper.configure(self.config())
         for status in ("running", "paused"):
