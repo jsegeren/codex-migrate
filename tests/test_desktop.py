@@ -315,7 +315,7 @@ class DesktopTests(unittest.TestCase):
         result = subprocess.run([sys.executable, str(root / "desktop/build.py"), "--release"],
                                 capture_output=True, text=True)
         self.assertEqual(result.returncode, 2)
-        self.assertIn("release requires --identity and --notary-profile", result.stderr)
+        self.assertIn("release requires a Developer ID identity", result.stderr)
 
     def test_release_requires_clean_source_and_records_revision(self):
         root = Path(__file__).resolve().parents[1]
