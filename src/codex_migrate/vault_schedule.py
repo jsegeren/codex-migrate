@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import platform
 import plistlib
+import pwd
 import stat
 import subprocess
 import sys
@@ -313,6 +314,12 @@ def install_schedule(
         "vault", "--source-home", str(home), "scheduled-run",
         "--config", str(config_path),
     ]
+    # Keychain access belongs to the signed-in macOS account, not necessarily
+    # to the Codex source folder selected for this backup.
+    try:
+        account_home = pwd.getpwuid(os.getuid()).pw_dir
+    except KeyError as error:
+        raise MigrationError("The macOS account home folder is unavailable.") from error
     plist = plistlib.dumps({
         "Label": LABEL,
         "ProgramArguments": program,
@@ -321,7 +328,7 @@ def install_schedule(
         "ProcessType": "Background",
         "LowPriorityIO": True,
         "ThrottleInterval": 60,
-        "EnvironmentVariables": {"HOME": str(home)},
+        "EnvironmentVariables": {"HOME": account_home},
         "StandardOutPath": "/dev/null",
         "StandardErrorPath": "/dev/null",
     }, fmt=plistlib.FMT_XML, sort_keys=True)

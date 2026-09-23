@@ -3,14 +3,19 @@ from datetime import datetime, timedelta, timezone
 import os
 from pathlib import Path
 import plistlib
+import pwd
 import shutil
+import subprocess
+import sys
 import tempfile
+import time
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_backup import BackupResult
+from codex_migrate.vault_recovery import verify_snapshot
 from codex_migrate.vault_schedule import (
     LABEL,
     install_schedule,
@@ -23,6 +28,74 @@ from codex_migrate.vault_schedule import (
 
 class VaultScheduleTests(unittest.TestCase):
     key_id = "55555555-5555-4555-8555-555555555555"
+
+    @unittest.skipUnless(sys.platform == "darwin" and
+                         os.environ.get("CODEX_MIGRATE_LAUNCHAGENT_TEST") == "yes",
+                         "opt in to a real macOS LaunchAgent test")
+    def test_packaged_engine_runs_through_real_launch_agent(self):
+        binary = os.environ.get("CODEX_MIGRATE_TEST_ENGINE")
+        if not binary:
+            self.skipTest("set CODEX_MIGRATE_TEST_ENGINE to a packaged engine")
+        engine = Path(binary).resolve()
+        helper = engine.parents[1] / "CodexVaultCrypto"
+        self.assertTrue(engine.is_file() and helper.is_file())
+        service = "gui/%d/%s" % (os.getuid(), LABEL)
+        if subprocess.run(["/bin/launchctl", "print", service],
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+            self.skipTest("the account already has a Vault backup agent")
+        if (Path.home() / "Library/LaunchAgents" / (LABEL + ".plist")).exists():
+            self.skipTest("the account already has a Vault backup configuration")
+        env = {key: value for key, value in os.environ.items()
+               if not key.startswith(("PYTHON", "DYLD_"))}
+        env["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin"
+        with tempfile.TemporaryDirectory(prefix="codex-vault-launch-agent-") as temporary:
+            root = Path(temporary)
+            home = root / "source"
+            sessions = home / ".codex/sessions"
+            sessions.mkdir(parents=True)
+            transcript = sessions / "fixture.jsonl"
+            transcript.write_text('{"payload":{"message":{"content":"LaunchAgent fixture"}}}\n')
+            vault = root / "vault"
+            initial = subprocess.run(
+                [str(engine), "vault", "--source-home", str(home), "backup",
+                 "--destination", str(vault), "--apply", "--json"],
+                env=env, capture_output=True, text=True, timeout=60)
+            self.assertEqual(initial.returncode, 0, "initial packaged backup failed")
+            first_snapshot = json.loads(initial.stdout)["snapshot_id"]
+            key_id = json.loads((vault / "vault.json").read_text())["key_id"]
+            installed = False
+            try:
+                install_schedule(str(home), str(vault), crypto_helper=str(helper),
+                                 engine_command=[str(engine)])
+                installed = True
+                kickstart = subprocess.run(["/bin/launchctl", "kickstart", "-k", service],
+                                           capture_output=True, text=True, timeout=15)
+                self.assertEqual(kickstart.returncode, 0, "macOS did not start the test agent")
+                status_path = home / "Library/Application Support/Codex Vault/last-run.json"
+                deadline = time.monotonic() + 60
+                receipt = None
+                while time.monotonic() < deadline:
+                    if status_path.exists():
+                        receipt = json.loads(status_path.read_text())
+                        if receipt.get("status") in ("completed", "needs_attention", "failed"):
+                            break
+                    time.sleep(0.25)
+                self.assertIsNotNone(receipt, "the LaunchAgent produced no run receipt")
+                self.assertEqual(receipt["status"], "completed", "scheduled backup failed")
+                self.assertNotEqual(receipt["snapshot_id"], first_snapshot)
+                self.assertEqual(
+                    verify_snapshot(str(vault), crypto_helper=str(helper)).snapshot_id,
+                    receipt["snapshot_id"],
+                )
+                self.assertTrue(schedule_status(str(home))["healthy"])
+                self.assertIn("LaunchAgent fixture", transcript.read_text())
+            finally:
+                try:
+                    if installed:
+                        remove_schedule(str(home))
+                finally:
+                    subprocess.run([str(helper), "delete-key", "--key-id", key_id],
+                                   env=env, check=True, capture_output=True, timeout=15)
 
     def fixture(self, root: Path):
         home = root / "home"
@@ -79,6 +152,8 @@ class VaultScheduleTests(unittest.TestCase):
             plist = plistlib.loads(plist_path.read_bytes())
             self.assertEqual(plist["Label"], LABEL)
             self.assertEqual(plist["StartInterval"], 12 * 3600)
+            self.assertEqual(plist["EnvironmentVariables"]["HOME"],
+                             pwd.getpwuid(os.getuid()).pw_dir)
             self.assertEqual(plist["ProgramArguments"], [
                 str(engine), "vault", "--source-home", str(home.resolve()),
                 "scheduled-run", "--config", str(config_path.resolve()),
@@ -86,6 +161,22 @@ class VaultScheduleTests(unittest.TestCase):
             launchctl.assert_called_once_with([
                 "bootstrap", "gui/%d" % os.getuid(), str(plist_path.resolve()),
             ])
+
+    def test_install_refuses_when_account_home_cannot_be_resolved(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            home, vault, helper, verified = self.fixture(root)
+            engine = root / "engine"
+            engine.write_text("fixture", encoding="utf-8")
+            with patch("codex_migrate.vault_schedule.verify_snapshot",
+                       return_value=verified), \
+                    patch("codex_migrate.vault_schedule.pwd.getpwuid",
+                          side_effect=KeyError("fixture")), \
+                    patch("codex_migrate.vault_schedule._loaded", return_value=False):
+                with self.assertRaisesRegex(MigrationError, "account home folder"):
+                    install_schedule(str(home), str(vault), crypto_helper=str(helper),
+                                     engine_command=[str(engine)])
+            self.assertFalse((home / "Library").exists())
 
     def test_status_reports_loaded_schedule_and_last_completed_run(self):
         with tempfile.TemporaryDirectory() as temporary:
