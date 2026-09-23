@@ -137,6 +137,13 @@ the only title match in 0.16 seconds. The title-only behavior passed focused
 tests on both physical Macs. Full-text search remains available, but large
 histories may take longer and are not claimed to have instant indexed search.
 
+A fresh **local-test-only** build 15 from `c1c8705` passed strict ad-hoc
+signature verification and the packaged-engine desktop suite (8 passes,
+1 filesystem skip). That suite now requests the actual bundled Vault page,
+creates a disposable renamed-title fixture, and finds it through the bundled
+HTTP search route. This checks the packaged source path, not Developer ID
+signing, Apple notarization, Gatekeeper acceptance, or buyer delivery.
+
 ## Claim boundary
 
 This is evidence for the tested Codex Vault engine on these two Macs, not every
