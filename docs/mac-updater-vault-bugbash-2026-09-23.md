@@ -71,5 +71,8 @@ The current local Vault guarantees the last verified capture, not zero loss
 between snapshots, completed off-device cloud sync, or every Codex UI resume.
 The separate desktop pre-compaction proof remains open; a tested Codex hook
 timed out fail-open. See [thread history contract](vault-thread-history-contract.md).
-On this Mac, `vault schedule-status` currently reports that automatic Vault
-backups are disabled; do not describe this Mac as protected by a schedule.
+On this Mac, `vault schedule-status` reports that automatic Vault backups are
+disabled. A read-only check on the other Mac found no Vault backup LaunchAgent
+plist or loaded job there either. Neither account should be described as
+protected by scheduled Vault backups; setup requires a chosen destination,
+verified first snapshot, and recovery-key custody.
