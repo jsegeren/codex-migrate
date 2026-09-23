@@ -743,12 +743,12 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                 raise MigrationError("Open a verified Vault backup before searching it")
             return function(str(self._browse_home), *args)
 
-    def search_vault_backup(self, phrase, limit):
+    def search_vault_backup(self, phrase, limit, offset=0):
         with self._browse_data_lock:
             if self._browse_home is None or self._browse_catalog is None:
                 raise MigrationError("Open a verified Vault backup before searching it")
             return search_vault(str(self._browse_home), phrase, limit,
-                                catalog=self._browse_catalog)
+                                catalog=self._browse_catalog, offset=offset)
 
     def read_vault_backup_thread(self, collection, transcript):
         return self._browse(read_thread, collection, transcript)
@@ -1187,17 +1187,25 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                                 raise ValueError("invalid Vault thread history")
                             self._json(200, {"versions": thread_timeline(vault, key)})
                             return
-                        if parsed.path == "/api/vault/search" and set(query) <= {"q", "limit", "source"}:
+                        if parsed.path == "/api/vault/search" and set(query) <= {"q", "limit", "source", "offset"}:
                             phrase = query.get("q", [""])[0]
                             raw_limit = query.get("limit", ["50"])[0]
+                            raw_offset = query.get("offset", ["0"])[0]
                             source = query.get("source", ["local"])[0]
                             if (len(phrase) > 500 or len(raw_limit) > 4
+                                    or len(raw_offset) > 6
                                     or source not in ("local", "backup")):
                                 raise ValueError("invalid history search")
-                            results = (setup.search_vault_backup(phrase, int(raw_limit))
+                            page_size = int(raw_limit)
+                            if not 1 <= page_size <= 499:
+                                raise ValueError("invalid history search page size")
+                            offset = int(raw_offset)
+                            results = (setup.search_vault_backup(phrase, page_size + 1, offset)
                                        if source == "backup" else
-                                       search_vault(setup.source_home, phrase, int(raw_limit)))
-                            self._json(200, {"results": [item.as_dict() for item in results]})
+                                       search_vault(setup.source_home, phrase, page_size + 1,
+                                                    offset=offset))
+                            self._json(200, {"results": [item.as_dict() for item in results[:page_size]],
+                                             "has_more": len(results) > page_size})
                             return
                         if (parsed.path in ("/api/vault/thread", "/api/vault/export")
                                 and set(query) <= {"collection", "transcript", "source", "cursor"}):

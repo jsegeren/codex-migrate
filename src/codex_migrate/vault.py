@@ -40,6 +40,7 @@ class VaultMatch:
     line: int
     timestamp: Optional[str]
     snippet: str
+    title: Optional[str] = None
 
     def as_dict(self) -> Dict[str, object]:
         return asdict(self)
@@ -187,70 +188,92 @@ def search(
     query: str,
     limit: int = 25,
     catalog: Optional[List[Dict[str, object]]] = None,
+    offset: int = 0,
 ) -> List[VaultMatch]:
-    """Search message-like JSON values without retaining a local index."""
+    """Find recent matching conversations without retaining a local index."""
     needle = query.strip().casefold()
     if not needle:
         raise ValueError("search query must not be empty")
     if limit < 1 or limit > 500:
         raise ValueError("search limit must be between 1 and 500")
+    if not isinstance(offset, int) or isinstance(offset, bool) or offset < 0 or offset > 100000:
+        raise ValueError("search offset must be between 0 and 100000")
     matches: List[VaultMatch] = []
+    matched_threads = 0
     indexed = title_index(source_home) if catalog is None else {}
     catalog_by_path = {
         (item["collection"], item["path"]): item
         for item in (catalog or [])
     }
+    transcripts = []
     for folder, path, relative in _transcripts(source_home):
+        try:
+            info = check_info(path.lstat())
+        except OSError as error:
+            raise MigrationError("Codex conversation history could not be read safely.") from error
+        if not stat.S_ISREG(info.st_mode):
+            raise MigrationError("A conversation transcript changed while it was being read.")
+        transcripts.append((info.st_mtime_ns, folder, path, relative))
+    transcripts.sort(key=lambda item: (item[0], item[3]), reverse=True)
+    for _, folder, path, relative in transcripts:
         collection = "active" if folder == "sessions" else "archived"
         metadata = catalog_by_path.get((collection, relative))
         aliases = (metadata.get("titles", []) if metadata is not None
                    else indexed.get(filename_id(relative), []))
+        current_title = aliases[-1] if aliases else None
         title_match = next((title for title in reversed(aliases)
                             if needle in title.casefold()), None)
+        match = None
         if title_match:
-            matches.append(VaultMatch(
+            match = VaultMatch(
                 collection=collection, transcript=relative, line=0,
                 timestamp=None,
+                title=current_title,
                 snippet="Title: " + _snippet(title_match,
                                               title_match.casefold().find(needle),
                                               len(query.strip())),
-            ))
-            if len(matches) >= limit:
-                return matches
-        try:
-            descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-            with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
-                info = os.fstat(handle.fileno())
-                if not stat.S_ISREG(info.st_mode):
-                    raise MigrationError("A conversation transcript changed while it was being read.")
-                for line_number, line in enumerate(handle, start=1):
-                    try:
-                        record = json.loads(line)
-                    except (UnicodeError, json.JSONDecodeError) as error:
-                        raise MigrationError("A conversation transcript contains unreadable JSON; history search stopped.") from error
-                    seen = set()
-                    for text in _strings(record):
-                        if text in seen:
-                            continue
-                        seen.add(text)
-                        position = text.casefold().find(needle)
-                        if position < 0:
-                            continue
-                        if title_match:
-                            continue
-                        matches.append(VaultMatch(
-                            collection=collection,
-                            transcript=relative,
-                            line=line_number,
-                            timestamp=_timestamp(record),
-                            snippet=_snippet(text, position, len(query.strip())),
-                        ))
-                        if len(matches) >= limit:
-                            return matches
-        except MigrationError:
-            raise
-        except (OSError, UnicodeError) as error:
-            raise MigrationError("Codex conversation history could not be read safely.") from error
+            )
+        else:
+            try:
+                descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+                with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
+                    info = os.fstat(handle.fileno())
+                    if not stat.S_ISREG(info.st_mode):
+                        raise MigrationError("A conversation transcript changed while it was being read.")
+                    for line_number, line in enumerate(handle, start=1):
+                        try:
+                            record = json.loads(line)
+                        except (UnicodeError, json.JSONDecodeError) as error:
+                            raise MigrationError("A conversation transcript contains unreadable JSON; history search stopped.") from error
+                        seen = set()
+                        for text in _strings(record):
+                            if text in seen:
+                                continue
+                            seen.add(text)
+                            position = text.casefold().find(needle)
+                            if position < 0:
+                                continue
+                            match = VaultMatch(
+                                collection=collection,
+                                transcript=relative,
+                                line=line_number,
+                                timestamp=_timestamp(record),
+                                title=current_title,
+                                snippet=_snippet(text, position, len(query.strip())),
+                            )
+                            break
+                        if match is not None:
+                            break
+            except MigrationError:
+                raise
+            except (OSError, UnicodeError) as error:
+                raise MigrationError("Codex conversation history could not be read safely.") from error
+        if match is not None:
+            if matched_threads >= offset:
+                matches.append(match)
+                if len(matches) >= limit:
+                    return matches
+            matched_threads += 1
     return matches
 
 

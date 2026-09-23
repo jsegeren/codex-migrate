@@ -1,4 +1,5 @@
 import json
+import os
 from http.client import HTTPConnection
 from pathlib import Path
 import subprocess
@@ -621,6 +622,7 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(summary["active_transcripts"], 1)
         code, results = self.request("/api/vault/search?q=launch&limit=10")
         self.assertEqual(code, 200)
+        self.assertFalse(results["has_more"])
         item = results["results"][0]
         self.assertEqual(item["collection"], "active")
         identifier = "2026/09/thread.jsonl"
@@ -632,6 +634,24 @@ class SetupTests(unittest.TestCase):
         self.assertIn("# Codex conversation", document)
         self.assertIn("Portable launch notes", document)
         self.assertEqual(transcript.read_text(encoding="utf-8"), original)
+
+    def test_vault_search_pages_distinct_recent_conversations(self):
+        folder = self.home / ".codex/sessions"
+        folder.mkdir(parents=True)
+        for index in range(4):
+            thread = folder / ("thread-%d.jsonl" % index)
+            thread.write_text(json.dumps({"payload": {"message": {
+                "content": "Clerk setup %d" % index}}}) + "\n", encoding="utf-8")
+            os.utime(thread, (1_000_000_000 + index, 1_000_000_000 + index))
+        first = self.request("/api/vault/search?q=clerk&limit=2&offset=0")[1]
+        second = self.request("/api/vault/search?q=clerk&limit=2&offset=2")[1]
+        self.assertTrue(first["has_more"])
+        self.assertFalse(second["has_more"])
+        self.assertEqual(len(first["results"]), 2)
+        self.assertEqual(len(second["results"]), 2)
+        self.assertFalse({item["transcript"] for item in first["results"]}
+                         & {item["transcript"] for item in second["results"]})
+        self.assertEqual(self.request("/api/vault/search?q=clerk&offset=-1")[0], 400)
 
     def test_vault_rejects_traversal_and_foreign_origin(self):
         path = "/api/vault/thread?collection=active&transcript=../auth.json"
