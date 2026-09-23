@@ -42,6 +42,10 @@ security import "$probe_dir/synthetic.p12" -k "$probe_keychain" \
   -f pkcs12 -P synthetic-ci-only -T /usr/bin/codesign >/dev/null
 security set-key-partition-list -S 'apple-tool:,apple:' -k '' \
   "$probe_keychain" >/dev/null
+# A self-signed synthetic identity has no Apple trust chain. Trust it only in
+# this disposable runner so codesign can find it as a valid identity.
+security add-trusted-cert -r trustAsRoot -p codeSign -k "$probe_keychain" \
+  "$probe_dir/synthetic.crt" >/dev/null
 
 cp /usr/bin/true "$probe_dir/probe-executable"
 codesign --force --sign 'Codex Vault CI Signing Probe' \
