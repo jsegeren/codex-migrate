@@ -23,15 +23,20 @@ and [in-app update acceptance](in-app-updates.md).
 | Backup scheduling | Found that a loaded schedule could look healthy with a days-old last success or stalled run; candidate now marks overdue runs unhealthy and disregards receipts from before reinstallation | 12 focused tests pass; must check the rendered customer status and a real scheduled run |
 | Updater preferences | Candidate has a menu control for periodic checks and opt-in automatic installation; Swift typecheck and local packaged build pass | Not yet a signed build-17 release or a physical unattended installation test |
 | Packaged helper | Local-test-only app's bundled engine passed 8 desktop cases with 1 filesystem skip | Not a clean-account first launch or notarized buyer installation |
-| Paid checkout | One real $49 Founder purchase verified, and the buyer delivery email arrived | Chrome blocked the private-storage download host; candidate routes buyer downloads through a first-party streaming endpoint, still awaiting deployed full-archive proof. Operator alerts not yet verified. |
+| Paid checkout | One real $49 Founder purchase verified, and the buyer delivery email arrived | The buyer was one of the two operator addresses, so that inbox received the buyer delivery rather than a separate operator alert; the other operator inbox has not been inspected. |
+| Browser download | Production now links to the same-origin `/api/purchase-archive` endpoint. Both latest and original requests with the paid credential returned 9,591,579 bytes and the published build-16 SHA-256. | This Chrome session displayed `ERR_BLOCKED_BY_CLIENT` for both the old private-host navigation and the new first-party download navigation. The server path passed, but an ordinary browser file save still needs independent confirmation. |
+| Paid updater proxy | Production `/api/update-archive` accepted the same buyer entitlement and streamed build 16 with the published byte length and SHA-256; unauthenticated access remains denied. | This proves the paid archive path, not automatic installation. |
+| Build-17 candidate | Clean `e1552b340214abf3c5218499ff9880c96b8f3b5d` source produced a signed, Apple-notarized, stapled, Gatekeeper-accepted arm64 app and 9,596,033-byte ZIP (SHA-256 `118fbe0c8560cab663e8ad0678ab92b011a3bbea1dcb27e664c281f24db21406`). Bundled engine passed 8 tests with 1 filesystem skip. | The Sparkle private update-signing key is in the login Keychain and access prompted for a password the Founder does not know. The signing attempt was stopped; build 17 is not in the release catalog or appcast. |
 
 ## Release blockers for this candidate
 
-1. Deploy and verify the first-party buyer download fix. Confirm both operator
-   alerts and a full authenticated Production download whose size and checksum
-   match the current release. Keep the original-purchase download fallback.
-2. Freeze and notarize build 17, sign its final ZIP for Sparkle, upload/read
-   back exact bytes, and test build 16 → 17 with a real paid entitlement.
+1. Confirm an actual browser file save from the first-party download page in
+   an ordinary customer browser, and inspect the remaining operator-alert inbox.
+   Both authenticated Production server streams have already matched build 16.
+2. Resolve Sparkle private-key access without bypassing Keychain security, or
+   explicitly approve a key rotation and one-time manual update from build 16.
+   Build 17 is already signed and notarized; sign its final ZIP for Sparkle,
+   upload/read back exact bytes, and test build 16 → 17 with a real paid entitlement.
    Relaunch the app and prove periodic checks still run. If the customer opts
    into automatic installation, prove it waits for an idle helper and does not
    interrupt migration, Vault backup, or restore.
@@ -54,3 +59,5 @@ The current local Vault guarantees the last verified capture, not zero loss
 between snapshots, completed off-device cloud sync, or every Codex UI resume.
 The separate desktop pre-compaction proof remains open; a tested Codex hook
 timed out fail-open. See [thread history contract](vault-thread-history-contract.md).
+On this Mac, `vault schedule-status` currently reports that automatic Vault
+backups are disabled; do not describe this Mac as protected by a schedule.
