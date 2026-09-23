@@ -190,6 +190,13 @@ source path but with different bytes could otherwise appear as one history.
 The candidate now keeps those captures in distinct review-only groups without
 changing verified-ID grouping or the path hint for a missing ID. The local
 suite passed 823 tests (12 skips), including a regression for this boundary.
+On the larger Mac, an isolated checkout of exact pushed source `7ec3028`
+passed all four identity-only tests under Python 3.9.6. Two encrypted-history
+tests in the same focused file could not create a disposable Keychain key in
+that SSH session; this is a Keychain test-environment failure, not a passing
+two-Mac encrypted-backup result for this exact commit. Earlier physical
+encrypted-history acceptance remains recorded above. The isolated checkout
+was clean and removed; neither Mac's real Vault or Codex history was changed.
 
 ## Claim boundary
 
