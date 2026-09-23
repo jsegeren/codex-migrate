@@ -187,13 +187,21 @@ workspace for destructive or fault-injection tests.
 
 1. Start from clean, pushed source and record the exact commit.
 2. Run the full Python, Swift and Node checks above.
-3. Build in release mode with the existing Keychain identities:
+3. Build in release mode with the existing Developer ID signing identity and
+   either an unlocked notarytool Keychain profile or an authorized App Store
+   Connect Team API key. Do not run a locked profile and ask the Founder to
+   guess its password. The Team-key form avoids the *notarization* Keychain;
+   it does not bypass the Developer ID signing identity:
 
    ```bash
    python3 desktop/build.py --release \
      --identity "<Developer ID Application identity>" \
      --notary-profile "<existing notarytool profile>"
    ```
+
+   The alternative flags are `--notary-api-key <absolute owner-only .p8 path>
+   --notary-key-id <key ID> --notary-issuer <issuer UUID>`. See
+   [desktop setup](desktop-setup.md) for the guarded command and limitations.
 
 4. If Apple submission was already created and the local build record proves
    its identity, resume with `--resume-notarization <build-directory>`; do not

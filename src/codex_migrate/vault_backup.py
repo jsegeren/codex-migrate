@@ -24,10 +24,14 @@ import uuid
 from codex_migrate.errors import MigrationError
 from codex_migrate.source_availability import check_info, require_local
 from codex_migrate.vault import _transcripts
+from codex_migrate.vault_identity import (
+    loss_warnings, mark_simultaneous_conflicts, scan_transcript, title_index,
+)
 from codex_migrate.vault_local_lock import local_history_lock
 
 
 FORMAT_VERSION = 1
+SNAPSHOT_FORMAT_VERSION = 2
 DEFAULT_CHUNK_SIZE = 4 * 1024 * 1024
 METADATA_NAME = "vault.json"
 
@@ -53,6 +57,8 @@ class BackupResult:
     chunks: int
     key_id: str
     recovery_key: Optional[str]
+    needs_attention: bool = False
+    at_risk_threads: int = 0
     applied: bool = True
 
     def as_dict(self) -> Dict[str, object]:
@@ -282,6 +288,35 @@ def _source_files(source_home: str) -> List[Tuple[str, Path, str]]:
     return files
 
 
+def _previous_catalog(root: Path, key_id: str, helper: Path) -> List[Dict[str, object]]:
+    latest = root / "latest.json"
+    if not latest.exists():
+        return []
+    reference = _read_json(latest)
+    if (set(reference) != {"format", "version", "snapshot_id", "created_at", "manifest"}
+            or reference.get("format") != "codex-vault-reference"
+            or reference.get("version") != FORMAT_VERSION):
+        raise MigrationError("The previous Vault reference needs review before backup.")
+    try:
+        snapshot_id = str(uuid.UUID(str(reference.get("snapshot_id")))).lower()
+    except (ValueError, TypeError, AttributeError):
+        raise MigrationError("The previous Vault reference has an invalid identity.") from None
+    expected = "manifests/" + snapshot_id + ".cvmanifest"
+    if reference.get("manifest") != expected:
+        raise MigrationError("The previous Vault reference has an invalid manifest path.")
+    manifest = root / expected
+    _require_unlinked_path(manifest)
+    catalog = _run_helper(
+        helper, ["catalog", "--key-id", key_id, "--snapshot-id", snapshot_id,
+                 "--object-dir", str(root / "objects"), "--manifest", str(manifest)],
+    )
+    files = catalog.get("files")
+    if catalog.get("snapshot_id") != snapshot_id or not isinstance(files, list) \
+            or not all(isinstance(item, dict) for item in files):
+        raise MigrationError("The previous Vault catalog is invalid.")
+    return files
+
+
 def plan(source_home: str, destination: str) -> BackupPlan:
     root = _validate_destination(source_home, destination)
     files = _source_files(source_home)
@@ -322,6 +357,7 @@ def _backup_unlocked(
         raise MigrationError("The Vault destination is not a folder.")
     helper = _helper_path(crypto_helper)
     files = _source_files(source_home)
+    titles = title_index(source_home)
     expected_bytes = sum(check_info(path.lstat()).st_size for _, path, _ in files)
     if progress is not None:
         progress(0, len(files), 0, expected_bytes)
@@ -335,6 +371,7 @@ def _backup_unlocked(
             _require_unlinked_path(directory)
             if not directory.is_dir():
                 raise MigrationError("A Vault storage path is not a folder.")
+        previous_files = _previous_catalog(root, key_id, helper)
 
         snapshot_id = str(uuid.uuid4()).lower()
         created_at = datetime.now(timezone.utc).isoformat()
@@ -343,6 +380,8 @@ def _backup_unlocked(
         total_bytes = 0
         for folder, path, relative in files:
             require_local(path)
+            scanned = check_info(path.lstat())
+            signals = scan_transcript(path, relative, titles)
             descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
             try:
                 before = os.fstat(descriptor)
@@ -359,6 +398,12 @@ def _backup_unlocked(
             finally:
                 os.close(descriptor)
             stable = (
+                scanned.st_dev == before.st_dev
+                and scanned.st_ino == before.st_ino
+                and scanned.st_size == before.st_size
+                and scanned.st_mtime_ns == before.st_mtime_ns
+                and scanned.st_ctime_ns == before.st_ctime_ns
+                and
                 before.st_dev == after.st_dev
                 and before.st_ino == after.st_ino
                 and before.st_size == after.st_size
@@ -392,15 +437,24 @@ def _backup_unlocked(
                 "mtime_ns": before.st_mtime_ns,
                 "sha256": digest,
                 "chunks": chunks,
+                **signals.manifest_fields(),
             })
             total_bytes += stored_size
             total_chunks += len(chunks)
             if progress is not None:
                 progress(len(manifest_files), len(files), total_bytes, expected_bytes)
 
+        mark_simultaneous_conflicts(manifest_files)
+        at_risk = set(loss_warnings(previous_files, manifest_files))
+        for item in manifest_files:
+            if item["identity_state"] == "needs_review":
+                at_risk.add(item["collection"] + "/" + item["path"])
+        for item in manifest_files:
+            item["at_risk"] = (item.get("thread_id") in at_risk or
+                               item["collection"] + "/" + item["path"] in at_risk)
         manifest = {
             "format": "codex-vault-snapshot",
-            "version": FORMAT_VERSION,
+            "version": SNAPSHOT_FORMAT_VERSION,
             "snapshot_id": snapshot_id,
             "created_at": created_at,
             "files": manifest_files,
@@ -439,4 +493,6 @@ def _backup_unlocked(
             chunks=total_chunks,
             key_id=key_id,
             recovery_key=recovery_key,
+            needs_attention=bool(at_risk),
+            at_risk_threads=len(at_risk),
         )

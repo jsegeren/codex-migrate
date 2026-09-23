@@ -1,4 +1,5 @@
 import json
+import os
 from http.client import HTTPConnection
 from pathlib import Path
 import subprocess
@@ -92,6 +93,7 @@ class SetupTests(unittest.TestCase):
         self.assertIn("Recover a backup", shell)
         self.assertIn("Open this backup", shell)
         self.assertIn("Restore this conversation into Codex", shell)
+        self.assertIn("Read from beginning", shell)
         self.assertIn("never overwrites or merges", shell)
         self.assertIn("Replace conversation history", shell)
         self.assertIn("installation identity stay unchanged", shell)
@@ -114,6 +116,37 @@ class SetupTests(unittest.TestCase):
                      "/api/vault/install-recover", "/api/vault/browse",
                      "/api/vault/install-thread"):
             self.assertEqual(self.request(path, {}, authorized=False)[0], 403)
+        code, page = self.request(
+            "/api/vault/thread?collection=active&transcript=2026%2F09%2Fthread.jsonl")
+        self.assertEqual(code, 200)
+        self.assertEqual(page["entries"][0]["text"], "PRIVATE VAULT FIXTURE")
+        self.assertIsNone(page["next_cursor"])
+        code, grant = self.request("/api/vault/export-ticket", {
+            "collection": "active", "transcript": "2026/09/thread.jsonl", "source": "local",
+        })
+        self.assertEqual(code, 200)
+        self.assertIn("PRIVATE VAULT FIXTURE", self.request(grant["url"], authorized=False)[1])
+        self.assertEqual(self.request(grant["url"], authorized=False)[0], 409)
+
+    def test_vault_search_opens_active_conversation_at_matching_message(self):
+        transcript = self.home / ".codex/sessions/2026/09/active.jsonl"
+        transcript.parent.mkdir(parents=True)
+        transcript.write_text(
+            json.dumps({"payload": {"message": {"content": "Earlier work"}}}) + "\n"
+            + json.dumps({"payload": {"message": {"content": "Set up Clerk now"}}}) + "\n",
+            encoding="utf-8",
+        )
+        code, results = self.request("/api/vault/search?q=clerk")
+        self.assertEqual(code, 200)
+        match = results["results"][0]
+        self.assertEqual(match["collection"], "active")
+        self.assertGreater(match["cursor"], 0)
+        path = ("/api/vault/thread?collection=active&transcript=2026%2F09%2Factive.jsonl"
+                + "&cursor=%d&match=clerk" % match["cursor"])
+        code, page = self.request(path)
+        self.assertEqual(code, 200)
+        self.assertEqual([entry["text"] for entry in page["entries"]], ["Set up Clerk now"])
+        self.assertEqual(self.request(path.replace("match=clerk", "match=missing"))[0], 400)
 
     def test_vault_backup_can_be_opened_searched_and_selected_thread_installed(self):
         (self.home / ".codex").mkdir()
@@ -126,6 +159,9 @@ class SetupTests(unittest.TestCase):
             content = json.dumps({
                 "timestamp": "2026-09-18T10:00:00Z",
                 "payload": {"message": {"role": "user", "content": "RECOVER ME"}},
+            }) + "\n" + json.dumps({
+                "timestamp": "2026-09-18T10:01:00Z",
+                "payload": {"message": {"role": "user", "content": "TARGET in saved backup"}},
             }) + "\n"
             (root / "sessions/2026/09/recovered.jsonl").write_text(content)
             return RestoreResult(
@@ -141,6 +177,8 @@ class SetupTests(unittest.TestCase):
         )
         with patch("codex_migrate.setup.restore_vault_snapshot",
                    side_effect=restored), patch(
+                "codex_migrate.setup.snapshot_catalog",
+                return_value=[]), patch(
                 "codex_migrate.setup.persistent_install_status",
                 return_value={"status": "idle"}), patch(
                 "codex_migrate.setup.install_vault_thread",
@@ -165,6 +203,26 @@ class SetupTests(unittest.TestCase):
                 "transcript=2026%2F09%2Frecovered.jsonl&source=backup")
             self.assertEqual(code, 200)
             self.assertEqual(thread["entries"][0]["text"], "RECOVER ME")
+            code, later = self.request("/api/vault/search?q=TARGET&source=backup")
+            self.assertEqual(code, 200)
+            self.assertGreater(later["results"][0]["cursor"], 0)
+            cursor = later["results"][0]["cursor"]
+            code, from_match = self.request(
+                "/api/vault/thread?collection=active&"
+                "transcript=2026%2F09%2Frecovered.jsonl&source=backup&"
+                f"cursor={cursor}&match=TARGET")
+            self.assertEqual(code, 200)
+            self.assertEqual([entry["text"] for entry in from_match["entries"]],
+                             ["TARGET in saved backup"])
+
+            code, grant = self.request("/api/vault/export-ticket", {
+                "collection": "active", "transcript": item["transcript"],
+                "source": "backup",
+            })
+            self.assertEqual(code, 200)
+            self.assertNotIn("RECOVER ME", json.dumps(grant))
+            self.assertEqual(self.request(grant["url"], authorized=False)[0], 200)
+            self.assertEqual(self.request(grant["url"], authorized=False)[0], 409)
 
             code, running = self.request("/api/vault/install-thread", {
                 "collection": "active", "transcript": item["transcript"],
@@ -383,7 +441,7 @@ class SetupTests(unittest.TestCase):
                 "/api/vault/snapshots?vault=" + vault)
         self.assertEqual(code, 200)
         self.assertEqual(body, {"snapshots": [snapshot.as_dict()]})
-        listed.assert_called_once_with(vault, limit=100)
+        listed.assert_called_once_with(vault, limit=1000)
         self.assertNotIn("content", json.dumps(body).lower())
 
     def test_vault_backup_waits_for_active_restore(self):
@@ -599,6 +657,7 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(summary["active_transcripts"], 1)
         code, results = self.request("/api/vault/search?q=launch&limit=10")
         self.assertEqual(code, 200)
+        self.assertFalse(results["has_more"])
         item = results["results"][0]
         self.assertEqual(item["collection"], "active")
         identifier = "2026/09/thread.jsonl"
@@ -610,6 +669,47 @@ class SetupTests(unittest.TestCase):
         self.assertIn("# Codex conversation", document)
         self.assertIn("Portable launch notes", document)
         self.assertEqual(transcript.read_text(encoding="utf-8"), original)
+
+    def test_vault_search_pages_distinct_recent_conversations(self):
+        folder = self.home / ".codex/sessions"
+        folder.mkdir(parents=True)
+        for index in range(4):
+            thread = folder / ("thread-%d.jsonl" % index)
+            thread.write_text(json.dumps({"payload": {"message": {
+                "content": "Clerk setup %d" % index}}}) + "\n", encoding="utf-8")
+            os.utime(thread, (1_000_000_000 + index, 1_000_000_000 + index))
+        first = self.request("/api/vault/search?q=clerk&limit=2&offset=0")[1]
+        second = self.request("/api/vault/search?q=clerk&limit=2&offset=2")[1]
+        self.assertTrue(first["has_more"])
+        self.assertFalse(second["has_more"])
+        self.assertEqual(len(first["results"]), 2)
+        self.assertEqual(len(second["results"]), 2)
+        self.assertFalse({item["transcript"] for item in first["results"]}
+                         & {item["transcript"] for item in second["results"]})
+        self.assertEqual(self.request("/api/vault/search?q=clerk&offset=-1")[0], 400)
+
+    def test_vault_search_local_titles_does_not_require_matching_content(self):
+        codex = self.home / ".codex"
+        folder = codex / "sessions"
+        folder.mkdir(parents=True)
+        thread_id = "11111111-1111-4111-8111-111111111111"
+        (folder / ("rollout-" + thread_id + ".jsonl")).write_text(
+            json.dumps({"payload": {"message": {"content": "Clerk setup"}}}) + "\n",
+            encoding="utf-8",
+        )
+        (codex / "session_index.jsonl").write_text(
+            json.dumps({"id": thread_id, "thread_name": "Old project title"}) + "\n"
+            + json.dumps({"id": thread_id, "thread_name": "New project title"}) + "\n",
+            encoding="utf-8",
+        )
+        code, result = self.request(
+            "/api/vault/search?q=Old%20project%20title&source=local_titles")
+        self.assertEqual(code, 200)
+        self.assertEqual(len(result["results"]), 1)
+        self.assertEqual(result["results"][0]["title"], "New project title")
+        self.assertFalse(result["has_more"])
+        self.assertEqual(self.request(
+            "/api/vault/search?q=Clerk&source=local_titles")[1]["results"], [])
 
     def test_vault_rejects_traversal_and_foreign_origin(self):
         path = "/api/vault/thread?collection=active&transcript=../auth.json"

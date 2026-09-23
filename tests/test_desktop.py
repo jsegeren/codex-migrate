@@ -144,6 +144,47 @@ class DesktopTests(unittest.TestCase):
                 self.assertIn('id="folder-error" role="alert"', html)
                 self.assertIn('id="folder-message" role="status" aria-live="polite"', html)
                 self.assertIn('$("folder-message").textContent=r.message', html)
+                with urlopen(base + "/vault?view=conversations", timeout=3) as response:
+                    vault_html = response.read().decode()
+                self.assertIn('<option value="local_titles">This Mac · Current and old titles</option>', vault_html)
+                fixture_id = "11111111-1111-4111-8111-111111111111"
+                codex = Path(temporary) / ".codex"
+                sessions = codex / "sessions"
+                sessions.mkdir(parents=True)
+                (sessions / ("rollout-" + fixture_id + ".jsonl")).write_text(
+                    json.dumps({"payload": {"message": {"content": "Different fixture text"}}}) + "\n"
+                    + json.dumps({"payload": {"message": {"content": "Clerk in active work"}}}) + "\n",
+                    encoding="utf-8",
+                )
+                (codex / "session_index.jsonl").write_text(
+                    json.dumps({"id": fixture_id, "thread_name": "Old fixture title"}) + "\n"
+                    + json.dumps({"id": fixture_id, "thread_name": "New fixture title"}) + "\n",
+                    encoding="utf-8",
+                )
+                title_request = Request(
+                    base + "/api/vault/search?q=Old%20fixture%20title&source=local_titles",
+                    headers={"X-Codex-Migrate-Token": token},
+                )
+                with urlopen(title_request, timeout=3) as response:
+                    title_results = json.load(response)
+                self.assertEqual(len(title_results["results"]), 1)
+                self.assertEqual(title_results["results"][0]["title"], "New fixture title")
+                match_request = Request(
+                    base + "/api/vault/search?q=Clerk&source=local",
+                    headers={"X-Codex-Migrate-Token": token},
+                )
+                with urlopen(match_request, timeout=3) as response:
+                    match = json.load(response)["results"][0]
+                self.assertGreater(match["cursor"], 0)
+                page_request = Request(
+                    base + "/api/vault/thread?collection=active&transcript=rollout-"
+                    + fixture_id + ".jsonl&cursor=" + str(match["cursor"]) + "&match=Clerk",
+                    headers={"X-Codex-Migrate-Token": token},
+                )
+                with urlopen(page_request, timeout=3) as response:
+                    page = json.load(response)
+                self.assertEqual([entry["text"] for entry in page["entries"]],
+                                 ["Clerk in active work"])
                 request = Request(base + "/api/setup", headers={"X-Codex-Migrate-Token": token})
                 with urlopen(request, timeout=3) as response:
                     state = json.load(response)
@@ -315,7 +356,7 @@ class DesktopTests(unittest.TestCase):
         result = subprocess.run([sys.executable, str(root / "desktop/build.py"), "--release"],
                                 capture_output=True, text=True)
         self.assertEqual(result.returncode, 2)
-        self.assertIn("release requires --identity and --notary-profile", result.stderr)
+        self.assertIn("release requires a Developer ID identity", result.stderr)
 
     def test_release_requires_clean_source_and_records_revision(self):
         root = Path(__file__).resolve().parents[1]

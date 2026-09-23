@@ -265,8 +265,12 @@ The final ZIP name appears in the output folder only after archiving, hashing
 and writing its completion metadata succeed. A failed packaging step must not
 be distributed as a partial download.
 
-Release requires an existing Developer ID Application identity and an existing
-notarytool Keychain profile. Never put signing credentials in Git or command output.
+Release requires an existing Developer ID Application identity and either an
+existing notarytool Keychain profile or an App Store Connect Team API key. Never put
+signing credentials in Git or command output. A locked Keychain profile can
+prompt; use the API-key form when an authorized key already exists and the
+Keychain password is unavailable. This bypasses only the notarization
+Keychain, not the separate Developer ID signing-identity requirement.
 
 ```sh
 .venv/bin/python desktop/build.py --release \
@@ -279,6 +283,20 @@ For a dedicated unlocked build Keychain, add
 `notarytool` for both submission and status checks and is never written into the
 build receipt.
 
+Alternatively, use an owner-only (`0600`) absolute-path `.p8` App Store Connect
+Team API key, its key ID, and its issuer UUID. Apple's Individual API keys do
+not support `notarytool`. The key file is read by Apple's `notarytool`,
+not copied into the app or receipt. These flags cannot be combined with a
+Keychain profile.
+
+```sh
+.venv/bin/python desktop/build.py --release \
+  --identity 'Developer ID Application: Your Name (TEAMID)' \
+  --notary-api-key /absolute/private/path/AuthKey_ID.p8 \
+  --notary-key-id YOUR_KEY_ID \
+  --notary-issuer YOUR_TEAM_ISSUER_UUID
+```
+
 The script stops if signing, notarization, stapling, or Gatekeeper assessment
 fails. There is no unsigned fallback. It saves Apple's submission ID in
 `notary-submission.json` beside the app before waiting for processing. Only an
@@ -287,7 +305,7 @@ creation. The completed outer build receipt includes that notarization result;
 the already-signed receipt inside the app records pre-notarization build facts.
 
 If processing is interrupted, do not immediately rebuild or submit another copy.
-Resume the existing build directory with the same Keychain profile:
+Resume the existing build directory with the same Keychain profile or API key:
 
 ```sh
 .venv/bin/python desktop/build.py \
@@ -295,6 +313,10 @@ Resume the existing build directory with the same Keychain profile:
   --notary-profile your-existing-keychain-profile \
   --notary-keychain /absolute/path/to/build.keychain-db
 ```
+
+For API-key authentication, replace the `--notary-profile` and
+`--notary-keychain` arguments with the same `--notary-api-key`,
+`--notary-key-id`, and `--notary-issuer` arguments used for submission.
 
 The resume path accepts only a direct `build/desktop-*` directory containing a
 clean release-mode app, its embedded build receipt, an available source commit,

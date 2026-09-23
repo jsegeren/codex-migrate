@@ -139,6 +139,66 @@ class ReleaseBuildTests(unittest.TestCase):
             self.assertNotIn(str(keychain), saved)
             self.assertNotIn("diagnostic", saved)
 
+    def test_api_key_notarization_never_uses_keychain_or_retains_credentials(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary)
+            key = output / "AuthKey_TEST.p8"
+            key.write_text("test fixture, not an Apple credential")
+            key.chmod(0o600)
+            calls = []
+
+            def invoke(command, **kwargs):
+                calls.append(command)
+                self.assertTrue(kwargs["capture_output"])
+                return response()
+
+            with patch.object(build.subprocess, "run", side_effect=invoke):
+                result = build.notarize(output / "app.zip", None, output,
+                                        api_key=key, key_id="TESTKEY123",
+                                        issuer="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+            self.assertEqual(result["status"], "Accepted")
+            self.assertEqual([command[2] for command in calls], ["submit", "wait"])
+            for command in calls:
+                self.assertEqual(command[command.index("--key") + 1], str(key))
+                self.assertEqual(command[command.index("--key-id") + 1], "TESTKEY123")
+                self.assertIn("--issuer", command)
+                self.assertNotIn("--keychain", command)
+                self.assertNotIn("--keychain-profile", command)
+            saved = (output / "notary-submission.json").read_text()
+            self.assertNotIn(str(key), saved)
+            self.assertNotIn("TESTKEY123", saved)
+            self.assertNotIn("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", saved)
+
+    def test_notary_auth_refuses_ambiguous_or_unsafe_api_key(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            key = Path(temporary) / "AuthKey_TEST.p8"
+            key.write_text("test fixture")
+            key.chmod(0o600)
+            issuer = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+            self.assertEqual(build.notary_auth_options(None, api_key=key, key_id="TESTKEY123",
+                                                        issuer=issuer),
+                             ["--key", str(key), "--key-id", "TESTKEY123", "--issuer", issuer])
+            for arguments in (
+                {"profile": "profile", "api_key": key, "key_id": "TESTKEY123", "issuer": issuer},
+                {"profile": None, "keychain": key, "api_key": key, "key_id": "TESTKEY123",
+                 "issuer": issuer},
+                {"profile": None, "api_key": key, "issuer": issuer},
+                {"profile": None, "key_id": "TESTKEY123", "issuer": issuer},
+                {"profile": None, "api_key": key, "key_id": "TESTKEY123"},
+                {"profile": None, "api_key": key, "key_id": "TESTKEY123", "issuer": "bad"},
+                {"profile": None, "api_key": "relative.p8", "key_id": "TESTKEY123", "issuer": issuer},
+            ):
+                with self.subTest(arguments=arguments), self.assertRaises(ValueError):
+                    build.notary_auth_options(**arguments)
+            key.chmod(0o644)
+            with self.assertRaisesRegex(ValueError, "owned by this user and private"):
+                build.notary_auth_options(None, api_key=key, key_id="TESTKEY123", issuer=issuer)
+            key.chmod(0o600)
+            alias = Path(temporary) / "alias.p8"
+            alias.symlink_to(key)
+            with self.assertRaisesRegex(ValueError, "regular file"):
+                build.notary_auth_options(None, api_key=alias, key_id="TESTKEY123", issuer=issuer)
+
     def test_notary_rejection_ambiguity_and_failure_never_pass(self):
         for result in (response("Invalid"), response("Rejected"), response("In Progress"),
                        response("Accepted", "ffffffff-ffff-ffff-ffff-ffffffffffff"),

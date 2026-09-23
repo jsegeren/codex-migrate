@@ -1,10 +1,13 @@
 import CryptoKit
 import Darwin
 import Foundation
+import LocalAuthentication
 import Security
 
 private let keychainService = "com.segeren.codex-vault"
+private let keychainInteractionError = "Vault could not access its key without interactive Keychain approval. No backup was published. Contact support if this persists"
 private let formatVersion = 1
+private let snapshotFormatVersion = 2
 
 private struct Chunk: Codable {
     let id: String
@@ -24,6 +27,13 @@ private struct ManifestFile: Codable {
     let mtime_ns: Int64
     let sha256: String
     let chunks: [Chunk]
+    let thread_id: String?
+    let identity_state: String?
+    let titles: [String]?
+    let records: Int?
+    let assistant_messages: Int?
+    let user_messages: Int?
+    let at_risk: Bool?
 }
 
 private struct Manifest: Codable {
@@ -32,6 +42,26 @@ private struct Manifest: Codable {
     let snapshot_id: String
     let created_at: String
     let files: [ManifestFile]
+}
+
+private struct CatalogFile: Codable {
+    let collection: String
+    let path: String
+    let size: Int
+    let sha256: String
+    let thread_id: String?
+    let identity_state: String?
+    let titles: [String]
+    let records: Int?
+    let assistant_messages: Int?
+    let user_messages: Int?
+    let at_risk: Bool?
+}
+
+private struct Catalog: Codable {
+    let snapshot_id: String
+    let version: Int
+    let files: [CatalogFile]
 }
 
 private struct Verification: Codable {
@@ -104,10 +134,15 @@ private func canonicalKeyID(_ value: String) throws -> String {
 }
 
 private func keyQuery(_ keyID: String) -> [CFString: Any] {
-    [
+    // Backup and scheduled runs must fail closed rather than summon a password
+    // dialog from a helper process. The app can report the failure explicitly.
+    let authentication = LAContext()
+    authentication.interactionNotAllowed = true
+    return [
         kSecClass: kSecClassGenericPassword,
         kSecAttrService: keychainService,
         kSecAttrAccount: keyID,
+        kSecUseAuthenticationContext: authentication,
     ]
 }
 
@@ -120,6 +155,9 @@ private func storeKey(_ data: Data, keyID: String) throws {
     query[kSecAttrAccessible] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
     let status = SecItemAdd(query as CFDictionary, nil)
     guard status == errSecSuccess else {
+        if status == errSecInteractionNotAllowed {
+            throw VaultError.message(keychainInteractionError)
+        }
         if status == errSecDuplicateItem {
             throw VaultError.message("that key identifier already exists in Keychain")
         }
@@ -133,6 +171,9 @@ private func loadKey(_ keyID: String) throws -> SymmetricKey {
     query[kSecMatchLimit] = kSecMatchLimitOne
     var item: CFTypeRef?
     let status = SecItemCopyMatching(query as CFDictionary, &item)
+    if status == errSecInteractionNotAllowed {
+        throw VaultError.message(keychainInteractionError)
+    }
     guard status == errSecSuccess, let data = item as? Data, data.count == 32 else {
         throw VaultError.message("the encryption key is unavailable; import its recovery key on this Mac")
     }
@@ -141,6 +182,9 @@ private func loadKey(_ keyID: String) throws -> SymmetricKey {
 
 private func deleteKey(_ keyID: String) throws {
     let status = SecItemDelete(keyQuery(keyID) as CFDictionary)
+    if status == errSecInteractionNotAllowed {
+        throw VaultError.message(keychainInteractionError)
+    }
     guard status == errSecSuccess || status == errSecItemNotFound else {
         throw VaultError.message("the encryption key could not be removed from Keychain")
     }
@@ -365,10 +409,9 @@ private func sealManifestCommand(_ arguments: [String]) throws {
     try printJSON(SealResult(bytes: plaintext.count, sealed: true))
 }
 
-private func validatedSnapshot(_ arguments: [String]) throws ->
-    (Manifest, SymmetricKey, SymmetricKey, Verification) {
+private func openedManifest(_ arguments: [String]) throws ->
+    (Manifest, SymmetricKey, SymmetricKey) {
     let keyID = try canonicalKeyID(argument("--key-id", in: arguments))
-    let root = URL(fileURLWithPath: try argument("--object-dir", in: arguments), isDirectory: true)
     let manifestURL = URL(fileURLWithPath: try argument("--manifest", in: arguments))
     let snapshotID = try argument("--snapshot-id", in: arguments).lowercased()
     guard UUID(uuidString: snapshotID) != nil else {
@@ -381,10 +424,19 @@ private func validatedSnapshot(_ arguments: [String]) throws ->
     let manifestData = try opened(safeRegularFile(manifestURL, maxBytes: 128 * 1024 * 1024 + 64),
                                   key: encryption, aad: aad)
     let manifest = try JSONDecoder().decode(Manifest.self, from: manifestData)
-    guard manifest.format == "codex-vault-snapshot", manifest.version == formatVersion,
+    guard manifest.format == "codex-vault-snapshot",
+          (manifest.version == formatVersion || manifest.version == snapshotFormatVersion),
           manifest.snapshot_id.lowercased() == snapshotID else {
         throw VaultError.message("the decrypted manifest has an unsupported identity or format")
     }
+    return (manifest, encryption, identifiers)
+}
+
+private func validatedSnapshot(_ arguments: [String]) throws ->
+    (Manifest, SymmetricKey, SymmetricKey, Verification) {
+    let (manifest, encryption, identifiers) = try openedManifest(arguments)
+    let root = URL(fileURLWithPath: try argument("--object-dir", in: arguments), isDirectory: true)
+    let snapshotID = manifest.snapshot_id
     var totalBytes = 0
     var totalChunks = 0
     var seenPaths = Set<String>()
@@ -396,6 +448,25 @@ private func validatedSnapshot(_ arguments: [String]) throws ->
               }), file.size >= 0,
               file.sha256.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil else {
             throw VaultError.message("the decrypted manifest contains an unsafe transcript record")
+        }
+        if manifest.version == snapshotFormatVersion {
+            guard let state = file.identity_state,
+                  ["verified", "unverified", "needs_review"].contains(state),
+                  let records = file.records, records >= 0,
+                  let assistants = file.assistant_messages, assistants >= 0,
+                  let users = file.user_messages, users >= 0,
+                  let titles = file.titles, titles.count <= 64,
+                  titles.allSatisfy({ $0.count <= 500 && !$0.contains("\u{0}") }) else {
+                throw VaultError.message("the decrypted manifest contains invalid identity metadata")
+            }
+            if let id = file.thread_id {
+                guard UUID(uuidString: id)?.uuidString.lowercased() == id else {
+                    throw VaultError.message("the decrypted manifest contains an invalid thread identity")
+                }
+            }
+            if state == "verified" && file.thread_id == nil {
+                throw VaultError.message("the decrypted manifest has an unbound verified identity")
+            }
         }
         let logicalPath = file.collection + "/" + file.path
         guard seenPaths.insert(logicalPath).inserted else {
@@ -440,6 +511,20 @@ private func validatedSnapshot(_ arguments: [String]) throws ->
 private func verifyCommand(_ arguments: [String]) throws {
     let (_, _, _, verification) = try validatedSnapshot(arguments)
     try printJSON(verification)
+}
+
+private func catalogCommand(_ arguments: [String]) throws {
+    let (manifest, _, _) = try openedManifest(arguments)
+    let files = manifest.files.map { file in
+        CatalogFile(collection: file.collection, path: file.path, size: file.size,
+                    sha256: file.sha256, thread_id: file.thread_id,
+                    identity_state: file.identity_state,
+                    titles: file.titles ?? [], records: file.records,
+                    assistant_messages: file.assistant_messages,
+                    user_messages: file.user_messages, at_risk: file.at_risk)
+    }
+    try printJSON(Catalog(snapshot_id: manifest.snapshot_id,
+                          version: manifest.version, files: files))
 }
 
 private func prepareEmptyRestoreRoot(_ path: String) throws -> URL {
@@ -535,6 +620,7 @@ private func run() throws {
     case "store-chunks": try storeChunksCommand(arguments)
     case "seal-manifest": try sealManifestCommand(arguments)
     case "verify": try verifyCommand(arguments)
+    case "catalog": try catalogCommand(arguments)
     case "restore": try restoreCommand(arguments)
     default: throw VaultError.message("the requested command is not supported")
     }

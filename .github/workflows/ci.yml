@@ -50,6 +50,10 @@ jobs:
           assert path.stat().st_uid == 0
           print("Provisioned the exact Apple-signed Git executable; production guards unchanged.")
           PY
+      - name: Exercise Vault Keychain without interactive prompts
+        run: |
+          xcrun swiftc -parse-as-library desktop/CodexVaultCrypto.swift -o "$RUNNER_TEMP/CodexVaultCryptoSmoke"
+          python tests/keychain_ci_smoke.py "$RUNNER_TEMP/CodexVaultCryptoSmoke"
       - name: Test
         run: PYTHONPATH=src python -m unittest discover -s tests -v
       - name: Check CLI

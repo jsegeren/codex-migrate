@@ -5,6 +5,8 @@ import platform
 import subprocess
 import tempfile
 import unittest
+import uuid
+from datetime import datetime, timezone
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_backup import backup, plan
@@ -199,6 +201,60 @@ class VaultBackupTests(unittest.TestCase):
                     (restored / "restore-receipt.json").read_text(encoding="utf-8"))
                 self.assertEqual(receipt["snapshot_id"], saved.snapshot_id)
                 self.assertEqual(receipt["files"], 2)
+            finally:
+                self.delete_key(destination)
+
+    def test_v1_snapshot_remains_verifiable_and_restorable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            destination = root / "vault"
+            restored = root / "restored"
+            self.fixture(source)
+            try:
+                backup(str(source), str(destination), crypto_helper=str(self.helper))
+                key_id = json.loads((destination / "vault.json").read_text())["key_id"]
+                transcript = source / ".codex/sessions/2026/09/17/active.jsonl"
+                stored = subprocess.run([
+                    str(self.helper), "store-chunks", "--key-id", key_id,
+                    "--object-dir", str(destination / "objects"),
+                    "--chunk-size", str(64 * 1024),
+                ], input=transcript.read_bytes(), check=True,
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                file_info = json.loads(stored.stdout)
+                snapshot_id = str(uuid.uuid4())
+                created_at = datetime.now(timezone.utc).isoformat()
+                manifest = {
+                    "format": "codex-vault-snapshot", "version": 1,
+                    "snapshot_id": snapshot_id, "created_at": created_at,
+                    "files": [{
+                        "collection": "active", "path": "2026/09/17/active.jsonl",
+                        "size": file_info["size"], "mtime_ns": transcript.stat().st_mtime_ns,
+                        "sha256": file_info["sha256"], "chunks": file_info["chunks"],
+                    }],
+                }
+                sealed = destination / "manifests" / (snapshot_id + ".cvmanifest")
+                subprocess.run([
+                    str(self.helper), "seal-manifest", "--key-id", key_id,
+                    "--snapshot-id", snapshot_id, "--output", str(sealed),
+                ], input=json.dumps(manifest).encode(), check=True,
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                reference = {
+                    "format": "codex-vault-reference", "version": 1,
+                    "snapshot_id": snapshot_id, "created_at": created_at,
+                    "manifest": "manifests/" + sealed.name,
+                }
+                (destination / "refs" / (snapshot_id + ".json")).write_text(
+                    json.dumps(reference), encoding="utf-8")
+                (destination / "latest.json").write_text(
+                    json.dumps(reference), encoding="utf-8")
+                self.assertEqual(verify_snapshot(
+                    str(destination), snapshot=snapshot_id,
+                    crypto_helper=str(self.helper)).snapshot_id, snapshot_id)
+                restore_snapshot(str(source), str(destination), str(restored),
+                                 snapshot=snapshot_id, crypto_helper=str(self.helper))
+                self.assertEqual((restored / "sessions/2026/09/17/active.jsonl").read_bytes(),
+                                 transcript.read_bytes())
             finally:
                 self.delete_key(destination)
 
