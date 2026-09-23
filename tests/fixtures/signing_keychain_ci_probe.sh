@@ -22,8 +22,8 @@ trap cleanup EXIT
 
 openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
   -subj '/CN=Codex Vault CI Signing Probe' \
-  -addext 'basicConstraints=critical,CA:FALSE' \
-  -addext 'keyUsage=digitalSignature' \
+  -addext 'basicConstraints=critical,CA:TRUE' \
+  -addext 'keyUsage=digitalSignature,keyCertSign' \
   -addext 'extendedKeyUsage=codeSigning' \
   -keyout "$probe_dir/synthetic.key" -out "$probe_dir/synthetic.crt" \
   >/dev/null 2>&1
@@ -44,7 +44,7 @@ security set-key-partition-list -S 'apple-tool:,apple:' -k '' \
   "$probe_keychain" >/dev/null
 # A self-signed synthetic identity has no Apple trust chain. Trust it only in
 # this disposable runner so codesign can find it as a valid identity.
-security add-trusted-cert -r trustAsRoot -p codeSign -k "$probe_keychain" \
+security add-trusted-cert -r trustRoot -k "$probe_keychain" \
   "$probe_dir/synthetic.crt" >/dev/null
 
 cp /usr/bin/true "$probe_dir/probe-executable"
