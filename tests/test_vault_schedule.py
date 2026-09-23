@@ -325,7 +325,9 @@ class VaultScheduleTests(unittest.TestCase):
             with patch("codex_migrate.vault_schedule._loaded", return_value=True):
                 status = schedule_status(str(home))
             self.assertFalse(status["healthy"])
-            self.assertIn("Turn off automatic backup, then turn on", status["error"])
+            self.assertEqual(status["vault"], str(vault.resolve()))
+            self.assertEqual(status["interval_hours"], 24)
+            self.assertIn("run a verified backup", status["error"])
             with patch("codex_migrate.vault_schedule.backup") as backup:
                 self.assertEqual(run_scheduled_backup(str(config_path)), 1)
             backup.assert_not_called()

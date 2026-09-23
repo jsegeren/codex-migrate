@@ -375,12 +375,14 @@ def schedule_status(source_home: str) -> Dict[str, object]:
         return {"enabled": False, "healthy": False,
                 "error": "Automatic backup setup is incomplete. Turn it on again."}
     configuration = _configuration(config_path)
-    if configuration["version"] == 1:
-        return {"enabled": True, "healthy": False,
-                "error": "Turn off automatic backup, then turn on daily backup again to verify this Vault destination."}
     if configuration["source_home"] != str(_home(source_home)):
         raise MigrationError("The automatic backup configuration belongs to another account.")
     _safe_file(plist_path)
+    if configuration["version"] == 1:
+        return {"enabled": True, "healthy": False,
+                "vault": configuration["vault"],
+                "interval_hours": configuration["interval_seconds"] // 3600,
+                "error": "Turn off automatic backup, run a verified backup in the original Vault folder, then turn on daily backup again."}
     try:
         installed_at = _timestamp(configuration["installed_at"])
     except MigrationError:
