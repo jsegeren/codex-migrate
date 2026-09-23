@@ -33,6 +33,23 @@ function tokenSession(token, config) {
   if (!timingSafeEqual(Buffer.from(mac), Buffer.from(expected))) throw new CommerceError('invalid_link', 403);
   return id;
 }
+function releaseVersion(release) {
+  const match = /^Codex-Migrate-(\d+)\.(\d+)\.(\d+)-build(\d+)-(arm64|x86_64)\.zip$/.exec(release?.filename || '');
+  if (!match) return null;
+  const numbers = match.slice(1, 5).map(Number);
+  if (numbers.some(value => !Number.isSafeInteger(value))) return null;
+  return { numbers, architecture: match[5] };
+}
+function newerCompatibleRelease(original, current, live) {
+  if (!validRelease(current, live)) return false;
+  const old = releaseVersion(original);
+  const next = releaseVersion(current);
+  if (!old || !next || old.architecture !== next.architecture) return false;
+  for (let i = 0; i < old.numbers.length; i++) {
+    if (next.numbers[i] !== old.numbers[i]) return next.numbers[i] > old.numbers[i];
+  }
+  return false;
+}
 function validatePurchase(session, config) {
   const item = session?.line_items?.data?.[0];
   const price = item?.price;
@@ -151,12 +168,31 @@ function service({ config, stripe, store, sendMail, signDownload }) {
     return { ...signed, sha256: purchase.release.sha256, release: purchase.release.id,
       filename: purchase.release.filename, size: purchase.release.size };
   }
+  async function downloadLatest(token) {
+    const id = tokenSession(token, config);
+    const purchase = await verified(id);
+    await store.ensure(purchase);
+    if (typeof signDownload !== 'function') throw new CommerceError('release_unavailable');
+    const updateAvailable = newerCompatibleRelease(purchase.release, config.release, config.live);
+    const selected = updateAvailable ? config.release : purchase.release;
+    const signed = await signDownload(selected);
+    return { ...signed, sha256: selected.sha256, release: selected.id,
+      filename: selected.filename, size: selected.size,
+      originalRelease: purchase.release.id, updateAvailable };
+  }
   async function status(id) {
     const purchase = await verified(id);
     await store.ensure(purchase);
     return { token: tokenFor(id, config), release: purchase.release.id };
   }
-  return { fulfill, download, status };
+  async function entitlement(token) {
+    const id = tokenSession(token, config);
+    const purchase = await verified(id);
+    await store.ensure(purchase);
+    return { release: purchase.release.id, currentRelease: config.release.id,
+      updateAvailable: newerCompatibleRelease(purchase.release, config.release, config.live) };
+  }
+  return { fulfill, download, downloadLatest, entitlement, status };
 }
 function checkoutRecovery({ config, stripe, store, sendMail }) {
   async function recover(id) {
@@ -179,4 +215,4 @@ function checkoutRecovery({ config, stripe, store, sendMail }) {
   return { recover };
 }
 module.exports = { service, checkoutRecovery, validatePurchase, validateCheckoutRecovery,
-  purchasePriceCents, tokenFor, tokenSession, sessionId };
+  purchasePriceCents, tokenFor, tokenSession, sessionId, newerCompatibleRelease, releaseVersion };

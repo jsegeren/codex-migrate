@@ -373,6 +373,9 @@ class ReleaseBuildTests(unittest.TestCase):
                     dict(CFBundleShortVersionString="0.1.0", CFBundleVersion="1")))
                 for name in ("LICENSE", "docs/desktop-setup.md", "docs/recovery.md", "docs/security-model.md", "docs/support.md"):
                     (root / name).write_text("fixture")
+                sparkle = root / "sparkle-fixture"
+                (sparkle / "Sparkle.framework").mkdir(parents=True)
+                (sparkle / "LICENSE").write_text("fixture")
                 calls = []
 
                 def run(*arguments):
@@ -430,6 +433,7 @@ class ReleaseBuildTests(unittest.TestCase):
                      patch.object(build.sys, "argv", ["build.py", "--release", "--identity",
                                                     "Developer ID Application: Fixture", "--notary-profile", "profile"]), \
                      patch.object(build, "source_receipt", side_effect=[receipt, second_receipt]), \
+                     patch.object(build, "sparkle_distribution", return_value=sparkle), \
                      patch.object(build, "run", side_effect=run), \
                      patch.object(build, "notarize", side_effect=notarize), \
                      patch.object(build.hashlib, "sha256", side_effect=checksum), \

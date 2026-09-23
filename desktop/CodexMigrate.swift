@@ -1,13 +1,16 @@
 import AppKit
+import Sparkle
 
 // The Mac app owns only the local helper's lifetime. All setup, migration,
 // progress and recovery decisions belong to the browser.
-@main final class AppDelegate: NSObject, NSApplicationDelegate {
+@main final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
     private var item: NSStatusItem!
     private var process: Process?
     private var dashboardURL: URL?
     private var buffer = Data()
     private var quitting = false
+    private lazy var updaterController = SPUStandardUpdaterController(
+        startingUpdater: true, updaterDelegate: self, userDriverDelegate: nil)
 
     static func main() {
         let app = NSApplication.shared
@@ -22,12 +25,15 @@ import AppKit
         item.button?.image = NSImage(systemSymbolName: "arrow.right.square", accessibilityDescription: "Codex Migrate")
         let menu = NSMenu()
         for (title, action) in [("Open Codex Migrate", #selector(openMigration)),
+                                ("Check for Updates…", #selector(checkForUpdates)),
+                                ("Link Purchase for Updates…", #selector(linkPurchase)),
                                 ("Quit Codex Migrate", #selector(quit))] {
             let entry = NSMenuItem(title: title, action: action, keyEquivalent: "")
             entry.target = self
             menu.addItem(entry)
         }
         item.menu = menu
+        _ = updaterController
         startHelper()
     }
 
@@ -42,6 +48,47 @@ import AppKit
     }
 
     @objc private func quit() { NSApplication.shared.terminate(nil) }
+
+    @objc private func checkForUpdates() {
+        guard UpdateEntitlement.savedToken() != nil else {
+            linkPurchase(); return
+        }
+        updaterController.checkForUpdates(nil)
+    }
+
+    @objc private func linkPurchase() {
+        let alert = NSAlert()
+        alert.messageText = "Link your purchase for updates"
+        alert.informativeText = "Paste the private link from your purchase email once. It is stored only in this Mac’s Keychain and checked against your purchase before an update is downloaded."
+        let field = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 420, height: 26))
+        field.placeholderString = "Private purchase link"
+        alert.accessoryView = field
+        alert.addButton(withTitle: "Link Purchase")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        guard let token = UpdateEntitlement.token(from: field.stringValue) else {
+            showFailure("Paste the complete private link from your Codex Migrate purchase email.", title: "Invalid purchase link")
+            return
+        }
+        UpdateEntitlement.verify(token) { valid in
+            guard valid else {
+                self.showFailure("We could not verify this purchase right now. Check the link or email joshua@segeren.com; do not purchase again.", title: "Purchase not verified")
+                return
+            }
+            guard UpdateEntitlement.save(token) else {
+                self.showFailure("macOS could not save update access in Keychain. Your purchase is unchanged.", title: "Could not link purchase")
+                return
+            }
+            self.updaterController.updater.automaticallyChecksForUpdates = true
+            self.updaterController.checkForUpdates(nil)
+        }
+    }
+
+    func updater(_ updater: SPUUpdater, willDownloadUpdate item: SUAppcastItem, with request: NSMutableURLRequest) {
+        guard request.url?.scheme == "https", request.url?.host == "migrate.segeren.com",
+              request.url?.path == "/api/update-archive", let token = UpdateEntitlement.savedToken() else { return }
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    }
 
     private func startHelper() {
         guard process == nil else { return }

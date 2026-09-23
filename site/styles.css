@@ -86,6 +86,8 @@ h1 .accent { color: var(--purple); }
 .jobs-grid article > span { color: var(--purple); font: 700 14px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .jobs-grid h3 { margin: 12px 0 8px; font-size: 24px; line-height: 1.2; }
 .jobs-grid p { margin: 0; font-size: 16px; line-height: 1.6; }
+.jobs-grid ul { margin: 18px 0 0; padding-left: 21px; font-size: 15px; line-height: 1.55; }
+.jobs-grid li + li { margin-top: 7px; }
 .jobs-note { max-width: 900px; margin: 22px 0 0; font-size: 15px; }
 
 .demo-section { padding: 78px 0 96px; }
@@ -100,6 +102,7 @@ h1 .accent { color: var(--purple); }
 .diy .eyebrow { color: var(--purple-bright); }
 .diy h2 { margin: 10px 0 20px; font-size: clamp(38px, 4.5vw, 60px); font-weight: 800; letter-spacing: -.035em; line-height: 1.06; }
 .diy-grid > div > p:last-child { color: #d8dde7; font-size: 18px; }
+.diy-grid a { color: var(--white); text-underline-offset: 3px; }
 .diy-list { margin: 0; padding: 0; list-style: none; border-top: 1px solid rgba(255,255,255,.18); }
 .diy-list li { padding: 20px 0; border-bottom: 1px solid rgba(255,255,255,.18); }
 .diy-list strong, .diy-list span { display: block; }

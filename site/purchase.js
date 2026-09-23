@@ -2,6 +2,7 @@
   'use strict';
   const status = document.getElementById('purchase-status');
   const download = document.getElementById('purchase-download');
+  const original = document.getElementById('purchase-original');
   const retry = document.getElementById('purchase-retry');
   const checksum = document.getElementById('purchase-checksum');
   const integrity = document.getElementById('purchase-integrity');
@@ -56,18 +57,7 @@
     if (!response.ok) throw new Error(data.error || 'temporarily_unavailable');
     return data;
   }
-  async function check() {
-    if (busy) return;
-    const initiatingControl = document.activeElement;
-    busy = true; download.removeAttribute('href'); download.setAttribute('aria-disabled', 'true'); retry.disabled = true;
-    status.textContent = 'Checking your purchase…';
-    try {
-      if (!token) token = (await call('status', credential.slice('session='.length))).token;
-      // Measure age from before the request, conservatively including network
-      // time. A wrong calendar clock does not invalidate a server-issued link;
-      // wall elapsed time covers sleep, monotonic elapsed time clock rollback.
-      requestWallTime = Date.now(); requestMonotonicTime = performance.now();
-      const result = await call('download', token);
+  function acceptLink(result) {
       const url = new URL(result.url);
       if (url.protocol !== 'https:' || !/^[a-z0-9]{8,64}\.private\.blob\.vercel-storage\.com$/.test(url.hostname) ||
           url.port || url.username || url.password || url.hash || !url.search ||
@@ -79,6 +69,23 @@
         throw new Error('temporarily_unavailable');
       }
       linkLifetime = result.expiresInMs;
+      checksum.textContent = `Archive SHA-256: ${result.sha256}`; integrity.hidden = false;
+      download.setAttribute('href', url.toString()); download.removeAttribute('aria-disabled');
+      download.hidden = false; retry.hidden = true;
+  }
+  async function check(action = 'download_latest') {
+    if (busy) return;
+    const initiatingControl = document.activeElement;
+    busy = true; download.removeAttribute('href'); download.setAttribute('aria-disabled', 'true'); retry.disabled = true;
+    status.textContent = 'Checking your purchase…';
+    try {
+      if (!token) token = (await call('status', credential.slice('session='.length))).token;
+      // Measure age from before the request, conservatively including network
+      // time. A wrong calendar clock does not invalidate a server-issued link;
+      // wall elapsed time covers sleep, monotonic elapsed time clock rollback.
+      requestWallTime = Date.now(); requestMonotonicTime = performance.now();
+      const result = await call(action, token);
+      acceptLink(result);
       if (validToken(token)) {
         try {
           const saved = JSON.parse(sessionStorage.getItem(storageKey));
@@ -86,10 +93,10 @@
           sessionStorage.setItem(storageKey, JSON.stringify({ token, savedAt, analyticsTracked }));
         } catch {}
       }
-      status.textContent = 'Your purchase is verified. Select Download for Mac to save the file.';
-      checksum.textContent = `Archive SHA-256: ${result.sha256}`; integrity.hidden = false;
-      download.setAttribute('href', url.toString()); download.removeAttribute('aria-disabled');
-      download.hidden = false; retry.hidden = true;
+      status.textContent = result.updateAvailable
+        ? 'Your purchase includes this free update. Select Download for Mac to save the latest build.'
+        : 'Your purchase is verified. Select Download for Mac to save the file.';
+      original.hidden = !(action === 'download_latest' && result.updateAvailable === true);
       trackVerifiedPurchase();
     } catch (error) {
       if (['invalid_link', 'purchase_requires_support', 'purchase_not_verified'].includes(error.message)) forget();
@@ -104,6 +111,7 @@
       status.textContent = messages[error.message] || 'We couldn’t check your download right now. Try again or email Joshua. Do not purchase again.';
       download.removeAttribute('href'); download.setAttribute('aria-disabled', 'true');
       download.hidden = true; retry.hidden = false; integrity.hidden = true;
+      original.hidden = true;
       retry.textContent = 'Check again';
     } finally {
       busy = false; retry.disabled = false;
@@ -122,6 +130,7 @@
     retry.textContent = 'Get a fresh link'; retry.hidden = false;
   });
   retry.addEventListener('click', () => check());
+  original.addEventListener('click', () => check('download'));
   // Opening another delivery link in this same tab must consume the new
   // fragment, rather than keep the previous purchase in memory.
   window.addEventListener('hashchange', () => { if (location.hash) location.reload(); });

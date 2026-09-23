@@ -16,9 +16,34 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.request
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
+SPARKLE_VERSION = "2.10.0"
+SPARKLE_ARCHIVE_SHA256 = "c2bf58aa8387266ac179357b1415d6f2635f044da8be41042af32425dae6da0c"
+
+
+def sparkle_distribution(build_root):
+    cache = build_root / ("sparkle-" + SPARKLE_VERSION)
+    archive = cache / ("Sparkle-" + SPARKLE_VERSION + ".tar.xz")
+    framework = cache / "Sparkle.framework"
+    if framework.is_dir() and archive.is_file() and hashlib.sha256(archive.read_bytes()).hexdigest() == SPARKLE_ARCHIVE_SHA256:
+        return cache
+    cache.mkdir(parents=True, exist_ok=True)
+    if not archive.is_file() or hashlib.sha256(archive.read_bytes()).hexdigest() != SPARKLE_ARCHIVE_SHA256:
+        url = "https://github.com/sparkle-project/Sparkle/releases/download/" + SPARKLE_VERSION + "/" + archive.name
+        with urllib.request.urlopen(url, timeout=30) as response:
+            payload = response.read(20 * 1024 * 1024 + 1)
+        if hashlib.sha256(payload).hexdigest() != SPARKLE_ARCHIVE_SHA256:
+            raise ValueError("pinned Sparkle archive checksum mismatch")
+        temporary = cache / (archive.name + ".partial")
+        temporary.write_bytes(payload)
+        temporary.replace(archive)
+    run("tar", "-xf", archive, "-C", cache)
+    if not framework.is_dir() or not (cache / "LICENSE").is_file():
+        raise ValueError("pinned Sparkle distribution is incomplete")
+    return cache
 
 
 def run(*args):
@@ -342,6 +367,7 @@ def main():
         parser.error(str(error))
     build_root = ROOT / "build"
     build_root.mkdir(exist_ok=True)
+    sparkle = sparkle_distribution(build_root)
     output = Path(tempfile.mkdtemp(prefix="desktop-", dir=build_root))
     with tempfile.TemporaryDirectory(prefix="packaging-", dir=build_root) as scratch:
         scratch = Path(scratch)
@@ -356,9 +382,12 @@ def main():
         contents = app / "Contents"
         executable = contents / "MacOS/CodexMigrate"
         resources = contents / "Resources"
+        frameworks = contents / "Frameworks"
         vault_crypto = resources / "CodexVaultCrypto"
         executable.parent.mkdir(parents=True)
         resources.mkdir()
+        shutil.copytree(sparkle / "Sparkle.framework", frameworks / "Sparkle.framework", symlinks=True)
+        shutil.copy2(sparkle / "LICENSE", resources / "Sparkle LICENSE.txt")
         shutil.copytree(scratch / "dist/codex-migrate-engine", resources / "engine", symlinks=True)
         seal_embedded_frameworks(resources / "engine", args.identity)
         verify_embedded_code(resources / "engine")
@@ -369,12 +398,17 @@ def main():
             shutil.copy2(ROOT / "docs" / document, resources / document)
         (resources / "build-info.json").write_text(json.dumps(receipt, indent=2) + "\n")
         run("xcrun", "swiftc", "-parse-as-library", "-O", "-target", arch + "-apple-macos13.0",
-            ROOT / "desktop/CodexMigrate.swift", ROOT / "desktop/SavedSetup.swift", "-o", executable)
+            "-F", frameworks, "-framework", "Sparkle", "-Xlinker", "-rpath",
+            "-Xlinker", "@executable_path/../Frameworks",
+            ROOT / "desktop/CodexMigrate.swift", ROOT / "desktop/UpdateEntitlement.swift",
+            ROOT / "desktop/SavedSetup.swift", "-o", executable)
         run("xcrun", "swiftc", "-parse-as-library", "-O", "-target", arch + "-apple-macos13.0",
             ROOT / "desktop/CodexVaultCrypto.swift", "-o", vault_crypto)
         signing = ["codesign", "--force", "--sign", args.identity or "-"]
         if args.identity:
             signing += ["--options", "runtime", "--timestamp"]
+        run(*signing[:2], "--deep", *signing[2:], frameworks / "Sparkle.framework")
+        run("codesign", "--verify", "--deep", "--strict", frameworks / "Sparkle.framework")
         run(*signing, vault_crypto)
         run("codesign", "--verify", "--strict", vault_crypto)
         run(*signing, app)

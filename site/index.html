@@ -78,9 +78,9 @@
       <section class="jobs shell" id="what-it-does" aria-labelledby="jobs-heading">
         <div class="section-intro compact-intro"><p class="eyebrow">Three jobs. One app.</p><h2 id="jobs-heading">Your Codex work should not live on one fragile Mac.</h2></div>
         <div class="jobs-grid">
-          <article><span>01</span><h3>Back up to Vault</h3><p>Create an encrypted, versioned backup in a folder you control. Daily backup is the recommended default; choose manual backup instead if you prefer.</p></article>
-          <article><span>02</span><h3>Search your history</h3><p>Use the separate local Vault interface to search active and archived conversations, open old threads, and export them as Markdown or PDF—outside Codex.</p></article>
-          <article><span>03</span><h3>Move to another Mac</h3><p>Transfer conversations, settings, skills, repositories, worktrees, and unfinished files. The new Mac keeps its own login and device identity.</p></article>
+          <article><span>01</span><h3>Back up to Vault</h3><p>Keep verified, encrypted versions in a folder you control.</p><ul><li>Daily schedule or manual backup</li><li>Recovery key you keep</li><li>Restore a snapshot without touching live data first</li></ul></article>
+          <article><span>02</span><h3>Search your history</h3><p>Find and read local Codex work outside Codex.</p><ul><li>Search active and archived conversations</li><li>Open and export Markdown or PDF</li><li>Recover one missing conversation without replacing the rest</li></ul></article>
+          <article><span>03</span><h3>Move to another Mac</h3><p>Bring the supported Codex state and selected workspaces with you.</p><ul><li>Git branches, worktrees, and unfinished files</li><li>Resumable transfer over SSH</li><li>Destination backup and post-move checks</li></ul></article>
         </div>
         <p class="jobs-note">Automatic backup runs locally through macOS—even when the app is closed—and needs the Mac and your chosen Vault folder to be available. It is not real-time sync.</p>
       </section>
@@ -113,12 +113,11 @@
 
       <section class="diy" id="why">
         <div class="shell diy-grid">
-          <div><p class="eyebrow">Why not just do it yourself?</p><h2>You can. Don’t gamble with the only copy.</h2><p>The complete engine is MIT licensed and free. The paid app is for people who want the guardrails, automation, packaging, and help—not a mystery box.</p></div>
+          <div><p class="eyebrow">Why not just do it yourself?</p><h2>Three different jobs.</h2><p>Codex is where you work. A separate backup is how you keep a copy you control. The complete engine is MIT licensed and free if you prefer to build the workflow yourself.</p><p><a href="/compare-codex-migration-tools">Compare more options →</a></p></div>
           <ul class="diy-list">
-            <li><strong>Preserves the new Mac’s identity.</strong><span>It deliberately excludes login credentials and installation identity.</span></li>
-            <li><strong>Proves the backup before recovery.</strong><span>Encrypted snapshots are integrity-checked; unsafe or conflicting restores stop.</span></li>
-            <li><strong>Protects unrelated history.</strong><span>Recover one missing conversation without replacing everything else.</span></li>
-            <li><strong>Makes a safe Mac move repeatable.</strong><span>Resumable staging, space checks, destination backup, rollback, and post-move verification are built in.</span></li>
+            <li><strong>Codex itself</strong><span>Open and continue your tasks there. Its working view is not the same as an independently verified, versioned backup of local conversations.</span></li>
+            <li><strong>Do it yourself</strong><span>Use scripts or file-copy tools. You choose what to include, protect the new Mac’s identity, and test that recovery actually works.</span></li>
+            <li><strong>Codex Migrate + Vault</strong><span>Get those guardrails in one workflow: encrypted backups, separate search and export, selected-thread recovery, and a verified Mac move. It is not continuous sync.</span></li>
           </ul>
         </div>
       </section>
