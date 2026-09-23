@@ -4,6 +4,7 @@ const { createHash } = require('node:crypto');
 const { PassThrough } = require('node:stream');
 const { makeHandler: appcast } = require('../api/appcast');
 const { makeHandler: archive } = require('../api/update-archive');
+const { CommerceError } = require('../commerce/config');
 const { tokenFor } = require('../commerce/service');
 const release = { ...require('../commerce/releases.json')['beta-build15-arm64'],
   sparkleSignature: Buffer.alloc(64, 7).toString('base64') };
@@ -60,6 +61,39 @@ test('update archive rejects a forged bearer before opening the runtime', async 
     headers: { authorization: `Bearer cs_live_fixture.${'0'.repeat(64)}` } }, response);
   assert.equal(response.statusCode, 403);
   assert.equal(loads, 0);
+});
+
+test('paid updater sends no archive when entitlement or upstream delivery fails', async () => {
+  const signedURL = `https://fixturestore.private.blob.vercel-storage.com/${release.pathname}?signed=fixture`;
+  const responseFor = async (downloadLatest, request) => {
+    const handler = archive(async () => ({ config,
+      service: { downloadLatest } }), request, {}, () => config);
+    const response = plainResponse();
+    await handler({ method: 'GET', url: '/api/update-archive',
+      headers: { authorization: `Bearer ${token}` } }, response);
+    assert.equal(response.data, '');
+    assert.equal(response.headers['Content-Length'], undefined);
+    assert.equal(response.headers['Content-Disposition'], undefined);
+    return response;
+  };
+  const revoked = await responseFor(async () => {
+    throw new CommerceError('purchase_requires_support', 403);
+  }, async () => { throw Error('revoked purchase reached Blob'); });
+  assert.equal(revoked.statusCode, 403);
+
+  const authorized = async () => ({ release: release.id, sha256: release.sha256,
+    size: release.size, filename: release.filename, url: signedURL });
+  const failures = [
+    async () => { throw Error('network offline'); },
+    async () => ({ status: 403, body: null, headers: { get: () => null } }),
+    async () => ({ status: 200, body: null, headers: { get: () => null } }),
+    async () => ({ status: 200, body: new ReadableStream(),
+      headers: { get: () => String(release.size - 1) } }),
+  ];
+  for (const request of failures) {
+    const response = await responseFor(authorized, request);
+    assert.equal(response.statusCode, 503);
+  }
 });
 
 test('update archive streams the approved private build without exposing its blob URL', async () => {
