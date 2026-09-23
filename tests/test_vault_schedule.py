@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 import os
 from pathlib import Path
 import plistlib
+import shutil
 import tempfile
 import unittest
 from types import SimpleNamespace
@@ -21,12 +22,18 @@ from codex_migrate.vault_schedule import (
 
 
 class VaultScheduleTests(unittest.TestCase):
+    key_id = "55555555-5555-4555-8555-555555555555"
+
     def fixture(self, root: Path):
         home = root / "home"
         vault = root / "vault"
         helper = root / "CodexVaultCrypto"
         home.mkdir(mode=0o700)
         vault.mkdir(mode=0o700)
+        (vault / "vault.json").write_text(json.dumps({
+            "format": "codex-vault", "version": 1, "key_id": self.key_id,
+            "created_at": "2026-09-23T00:00:00+00:00",
+        }), encoding="utf-8")
         helper.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
         helper.chmod(0o700)
         verified = SimpleNamespace(vault=str(vault.resolve()))
@@ -67,6 +74,7 @@ class VaultScheduleTests(unittest.TestCase):
             self.assertEqual(plist_path.stat().st_mode & 0o777, 0o600)
             config = json.loads(config_path.read_text(encoding="utf-8"))
             self.assertEqual(config["vault"], str(vault.resolve()))
+            self.assertEqual(config["vault_key_id"], self.key_id)
             self.assertEqual(config["interval_seconds"], 12 * 3600)
             plist = plistlib.loads(plist_path.read_bytes())
             self.assertEqual(plist["Label"], LABEL)
@@ -242,13 +250,85 @@ class VaultScheduleTests(unittest.TestCase):
                        return_value=completed) as backup:
                 self.assertEqual(run_scheduled_backup(str(config_path)), 0)
             backup.assert_called_once_with(
-                str(home.resolve()), str(vault.resolve()), crypto_helper=str(helper))
+                str(home.resolve()), str(vault.resolve()), crypto_helper=str(helper),
+                require_existing_key_id=self.key_id)
             last_run = json.loads((config_path.parent / "last-run.json").read_text(
                 encoding="utf-8"))
             self.assertEqual(last_run["status"], "completed")
             self.assertEqual(last_run["snapshot_id"], "safe-snapshot")
             self.assertNotIn("key_id", last_run)
             self.assertNotIn("recovery_key", last_run)
+
+    def test_missing_external_vault_fails_without_creating_a_replacement(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            home, vault, helper, verified = self.fixture(root)
+            engine = root / "engine"
+            engine.write_text("fixture", encoding="utf-8")
+            engine.chmod(0o700)
+            with patch("codex_migrate.vault_schedule.verify_snapshot",
+                       return_value=verified), \
+                    patch("codex_migrate.vault_schedule._loaded", return_value=False), \
+                    patch("codex_migrate.vault_schedule._launchctl"):
+                install_schedule(str(home), str(vault), crypto_helper=str(helper),
+                                 engine_command=[str(engine)])
+            config_path = home / "Library/Application Support/Codex Vault/schedule.json"
+            shutil.rmtree(vault)
+            with patch("codex_migrate.vault_schedule._loaded", return_value=True):
+                status = schedule_status(str(home))
+            self.assertFalse(status["healthy"])
+            self.assertIn("missing or changed", status["error"])
+            self.assertEqual(run_scheduled_backup(str(config_path)), 1)
+            self.assertFalse(vault.exists())
+            self.assertEqual(json.loads((config_path.parent / "last-run.json").read_text())["status"], "failed")
+
+    def test_replaced_vault_identity_fails_without_writing_a_snapshot(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            home, vault, helper, verified = self.fixture(root)
+            engine = root / "engine"
+            engine.write_text("fixture", encoding="utf-8")
+            engine.chmod(0o700)
+            with patch("codex_migrate.vault_schedule.verify_snapshot",
+                       return_value=verified), \
+                    patch("codex_migrate.vault_schedule._loaded", return_value=False), \
+                    patch("codex_migrate.vault_schedule._launchctl"):
+                install_schedule(str(home), str(vault), crypto_helper=str(helper),
+                                 engine_command=[str(engine)])
+            metadata = vault / "vault.json"
+            changed = json.loads(metadata.read_text())
+            changed["key_id"] = "66666666-6666-4666-8666-666666666666"
+            metadata.write_text(json.dumps(changed), encoding="utf-8")
+            config_path = home / "Library/Application Support/Codex Vault/schedule.json"
+            self.assertEqual(run_scheduled_backup(str(config_path)), 1)
+            self.assertFalse((vault / "backup.lock").exists())
+            self.assertEqual(json.loads((config_path.parent / "last-run.json").read_text())["status"], "failed")
+
+    def test_legacy_schedule_requires_reenablement_and_does_not_back_up(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            home, vault, helper, verified = self.fixture(root)
+            engine = root / "engine"
+            engine.write_text("fixture", encoding="utf-8")
+            engine.chmod(0o700)
+            with patch("codex_migrate.vault_schedule.verify_snapshot",
+                       return_value=verified), \
+                    patch("codex_migrate.vault_schedule._loaded", return_value=False), \
+                    patch("codex_migrate.vault_schedule._launchctl"):
+                install_schedule(str(home), str(vault), crypto_helper=str(helper),
+                                 engine_command=[str(engine)])
+            config_path = home / "Library/Application Support/Codex Vault/schedule.json"
+            legacy = json.loads(config_path.read_text())
+            legacy["version"] = 1
+            del legacy["vault_key_id"]
+            config_path.write_text(json.dumps(legacy), encoding="utf-8")
+            with patch("codex_migrate.vault_schedule._loaded", return_value=True):
+                status = schedule_status(str(home))
+            self.assertFalse(status["healthy"])
+            self.assertIn("Turn off automatic backup, then turn on", status["error"])
+            with patch("codex_migrate.vault_schedule.backup") as backup:
+                self.assertEqual(run_scheduled_backup(str(config_path)), 1)
+            backup.assert_not_called()
 
     def test_failed_run_exposes_no_exception_or_customer_content(self):
         with tempfile.TemporaryDirectory() as temporary:

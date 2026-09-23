@@ -331,11 +331,13 @@ def backup(
     crypto_helper: Optional[str] = None,
     chunk_size: int = DEFAULT_CHUNK_SIZE,
     progress: Optional[Callable[[int, int, int, int], None]] = None,
+    require_existing_key_id: Optional[str] = None,
 ) -> BackupResult:
     with local_history_lock(source_home):
         return _backup_unlocked(
             source_home, destination, crypto_helper=crypto_helper,
-            chunk_size=chunk_size, progress=progress)
+            chunk_size=chunk_size, progress=progress,
+            require_existing_key_id=require_existing_key_id)
 
 
 def _backup_unlocked(
@@ -345,10 +347,14 @@ def _backup_unlocked(
     crypto_helper: Optional[str] = None,
     chunk_size: int = DEFAULT_CHUNK_SIZE,
     progress: Optional[Callable[[int, int, int, int], None]] = None,
+    require_existing_key_id: Optional[str] = None,
 ) -> BackupResult:
     if chunk_size < 64 * 1024 or chunk_size > 64 * 1024 * 1024:
         raise ValueError("chunk size must be between 64 KiB and 64 MiB")
     root = _validate_destination(source_home, destination)
+    if require_existing_key_id is not None:
+        if not root.is_dir() or _metadata(_read_json(root / METADATA_NAME)) != require_existing_key_id:
+            raise MigrationError("The scheduled Vault destination is missing or has changed. No new Vault was created.")
     if not root.exists():
         root.mkdir(mode=0o700)
         _fsync_directory(root.parent)
@@ -362,6 +368,9 @@ def _backup_unlocked(
     if progress is not None:
         progress(0, len(files), 0, expected_bytes)
     with _repository_lock(root):
+        if require_existing_key_id is not None and \
+                _metadata(_read_json(root / METADATA_NAME)) != require_existing_key_id:
+            raise MigrationError("The scheduled Vault destination changed during backup setup.")
         key_id, recovery_key = _prepare_repository(root, helper)
         objects = root / "objects"
         manifests = root / "manifests"

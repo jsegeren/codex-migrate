@@ -24,6 +24,8 @@ from codex_migrate.vault_backup import (
     _atomic_json,
     _fsync_directory,
     _helper_path,
+    _metadata,
+    _read_json,
     _require_unlinked_path,
     backup,
 )
@@ -32,7 +34,7 @@ from codex_migrate.vault_recovery import verify_snapshot
 
 LABEL = "com.segeren.codex-vault.backup"
 CONFIG_FORMAT = "codex-vault-schedule"
-CONFIG_VERSION = 1
+CONFIG_VERSION = 2
 ALLOWED_INTERVAL_HOURS = (6, 12, 24, 168)
 
 
@@ -199,8 +201,9 @@ def _configuration(path: Path) -> Dict[str, object]:
         "format", "version", "source_home", "vault", "crypto_helper",
         "interval_seconds", "installed_at",
     }
-    if set(value) != required or value.get("format") != CONFIG_FORMAT \
-            or value.get("version") != CONFIG_VERSION:
+    legacy = value.get("version") == 1 and set(value) == required
+    current = value.get("version") == CONFIG_VERSION and set(value) == required | {"vault_key_id"}
+    if not (legacy or current) or value.get("format") != CONFIG_FORMAT:
         raise MigrationError("The automatic backup configuration has an unsupported format.")
     if not all(isinstance(value.get(key), str) for key in (
             "source_home", "vault", "crypto_helper", "installed_at")):
@@ -210,7 +213,22 @@ def _configuration(path: Path) -> Dict[str, object]:
     if not all(Path(str(value[key])).is_absolute() for key in (
             "source_home", "vault", "crypto_helper")):
         raise MigrationError("The automatic backup configuration is invalid.")
+    if current:
+        try:
+            if str(uuid.UUID(value["vault_key_id"])).lower() != value["vault_key_id"]:
+                raise ValueError
+        except (TypeError, ValueError, AttributeError):
+            raise MigrationError("The automatic backup Vault identity is invalid.") from None
     return value
+
+
+def _same_vault(vault: str, key_id: str) -> bool:
+    root = Path(vault)
+    try:
+        _require_unlinked_path(root)
+        return root.is_dir() and _metadata(_read_json(root / "vault.json")) == key_id
+    except (MigrationError, OSError):
+        return False
 
 
 def _last_run(path: Path) -> Dict[str, object]:
@@ -275,6 +293,7 @@ def install_schedule(
     home = _home(source_home)
     config_path, _, plist_path = _paths(str(home))
     helper = _helper_path(crypto_helper)
+    vault_key_id = _metadata(_read_json(Path(plan.vault) / "vault.json"))
     interval_seconds = _interval(interval_hours)
     engine = list(engine_command or _engine_command())
     if not engine or not isinstance(engine[0], str) or not Path(engine[0]).is_absolute():
@@ -285,6 +304,7 @@ def install_schedule(
         "version": CONFIG_VERSION,
         "source_home": str(home),
         "vault": plan.vault,
+        "vault_key_id": vault_key_id,
         "crypto_helper": str(helper),
         "interval_seconds": interval_seconds,
         "installed_at": _now(),
@@ -355,6 +375,9 @@ def schedule_status(source_home: str) -> Dict[str, object]:
         return {"enabled": False, "healthy": False,
                 "error": "Automatic backup setup is incomplete. Turn it on again."}
     configuration = _configuration(config_path)
+    if configuration["version"] == 1:
+        return {"enabled": True, "healthy": False,
+                "error": "Turn off automatic backup, then turn on daily backup again to verify this Vault destination."}
     if configuration["source_home"] != str(_home(source_home)):
         raise MigrationError("The automatic backup configuration belongs to another account.")
     _safe_file(plist_path)
@@ -407,6 +430,9 @@ def schedule_status(source_home: str) -> Dict[str, object]:
             result["error"] = "Automatic backup is overdue. Check the Vault folder and run a verified backup."
     if not result["healthy"]:
         result.setdefault("error", "The automatic backup service is not loaded. Turn it on again.")
+    if not _same_vault(str(configuration["vault"]), str(configuration["vault_key_id"])):
+        result["healthy"] = False
+        result["error"] = "The scheduled Vault folder is missing or changed. Reconnect the original destination before the next backup."
     return result
 
 
@@ -420,12 +446,15 @@ def run_scheduled_backup(config_path: str) -> int:
         expected_config, status_path, _ = _paths(source_home)
         if path.resolve() != expected_config.resolve():
             raise MigrationError("The automatic backup configuration is outside its managed location.")
+        if configuration["version"] != CONFIG_VERSION:
+            raise MigrationError("The automatic backup must be set up again to verify its Vault destination.")
         _atomic_json(status_path, {
             "status": "running", "started_at": _now(),
         }, replace=True)
         result = backup(
             source_home, str(configuration["vault"]),
             crypto_helper=str(configuration["crypto_helper"]),
+            require_existing_key_id=str(configuration["vault_key_id"]),
         )
         if result.recovery_key is not None:
             raise MigrationError("Automatic backup cannot create an unacknowledged recovery key.")
