@@ -653,6 +653,29 @@ class SetupTests(unittest.TestCase):
                          & {item["transcript"] for item in second["results"]})
         self.assertEqual(self.request("/api/vault/search?q=clerk&offset=-1")[0], 400)
 
+    def test_vault_search_local_titles_does_not_require_matching_content(self):
+        codex = self.home / ".codex"
+        folder = codex / "sessions"
+        folder.mkdir(parents=True)
+        thread_id = "11111111-1111-4111-8111-111111111111"
+        (folder / ("rollout-" + thread_id + ".jsonl")).write_text(
+            json.dumps({"payload": {"message": {"content": "Clerk setup"}}}) + "\n",
+            encoding="utf-8",
+        )
+        (codex / "session_index.jsonl").write_text(
+            json.dumps({"id": thread_id, "thread_name": "Old project title"}) + "\n"
+            + json.dumps({"id": thread_id, "thread_name": "New project title"}) + "\n",
+            encoding="utf-8",
+        )
+        code, result = self.request(
+            "/api/vault/search?q=Old%20project%20title&source=local_titles")
+        self.assertEqual(code, 200)
+        self.assertEqual(len(result["results"]), 1)
+        self.assertEqual(result["results"][0]["title"], "New project title")
+        self.assertFalse(result["has_more"])
+        self.assertEqual(self.request(
+            "/api/vault/search?q=Clerk&source=local_titles")[1]["results"], [])
+
     def test_vault_rejects_traversal_and_foreign_origin(self):
         path = "/api/vault/thread?collection=active&transcript=../auth.json"
         self.assertEqual(self.request(path)[0], 400)

@@ -96,6 +96,10 @@ class VaultTests(unittest.TestCase):
             result = search(str(root), "clerk", limit=10)
             self.assertEqual(len(result), 1)
             self.assertEqual(result[0].title, "Current sign-in title")
+            old_name = search(str(root), "Old sign-in", limit=10, titles_only=True)
+            self.assertEqual(len(old_name), 1)
+            self.assertEqual(old_name[0].title, "Current sign-in title")
+            self.assertEqual(search(str(root), "clerk", limit=10, titles_only=True), [])
 
     def test_search_finds_text_appended_to_an_active_thread(self):
         with tempfile.TemporaryDirectory() as temporary:

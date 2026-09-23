@@ -111,6 +111,32 @@ Team API key for notarization, avoiding the locked notary-profile Keychain. This
 an unexercised route until a real authorized `.p8` key is available. It does
 not solve Developer ID signing or establish a prompt-free release by itself.
 
+## Read-only discovery check on the larger Mac
+
+After the initial two-Mac synthetic acceptance, the source search was changed
+to return one result per conversation, newest first, with paged results instead
+of allowing repeated message hits to fill the first page. The complete local
+suite passed 819 tests (12 skips) at `263c2a3`; both hosted Python CI jobs
+passed. The larger Mac then passed all 13 focused search tests on an isolated
+copy of the source, without changing its real Codex history.
+
+A read-only check against the larger Mac's real, still-active history found a
+conversation under one of its former indexed titles. A common content word
+found that same conversation within the first 50 distinct results. The title
+index and the app's displayed task name did not agree on the latest name; the
+opaque thread identity, rather than either name, linked them. No private title,
+thread ID, snippet, or transcript content is recorded here.
+
+That Mac has tens of gigabytes of local rollout data, including a single
+multi-gigabyte active transcript. A rare full-text query exceeded a bounded
+30-second read-only probe. This is a real performance limitation, not a search
+failure or proof of missing content. A separate **current and old titles**
+search now reads the existing local title index without scanning transcript
+content; on the same Mac it found the formerly named active conversation as
+the only title match in 0.16 seconds. The title-only behavior passed focused
+tests on both physical Macs. Full-text search remains available, but large
+histories may take longer and are not claimed to have instant indexed search.
+
 ## Claim boundary
 
 This is evidence for the tested Codex Vault engine on these two Macs, not every

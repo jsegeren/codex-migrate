@@ -175,7 +175,8 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 <form id="search">
 <label class="muted" for="search-source">Search in</label>
 <select id="search-source">
-<option value="local">This Mac</option>
+<option value="local">This Mac · Conversation text</option>
+<option value="local_titles">This Mac · Current and old titles</option>
 <option value="backup" disabled>Opened backup</option>
 <option value="history">All saved titles</option>
 </select>
@@ -187,7 +188,7 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 <input id="query" required autocomplete="off">
 <button type="submit">Search</button>
 </form>
-<p class="muted">Search this Mac or an opened backup by title and content. All saved titles searches dated encrypted snapshots; open a version to search its full text.</p>
+<p class="muted">Remember an old name? Search this Mac's titles first. Full-text search reads local conversations and may take longer for large histories. All saved titles searches dated encrypted snapshots; open a version to search its full text.</p>
 </section>
 <section class="panel" id="results-panel" hidden>
 <h2>Results</h2>
@@ -344,7 +345,8 @@ async function runSearch(append=false){
   const offset=append?searchPage.offset:0;
   $("more-results").disabled=true;
   $("status").textContent=source==="history"?"Searching saved titles…":
-    source==="backup"?"Searching the opened backup…":"Searching this Mac…";
+    source==="backup"?"Searching the opened backup…":
+    source==="local_titles"?"Searching current and old titles…":"Searching this Mac…";
   try{
     let data;
     if(source==="history"){
@@ -361,7 +363,7 @@ async function runSearch(append=false){
         text.textContent=item.matching_title;
         button.onclick=()=>openSavedResult(item);
       }else{
-        item.source=source;
+        item.source=source==="local_titles"?"local":source;
         small.textContent=`${item.collection}${item.timestamp?" · "+item.timestamp:""}`;
         if(item.title)title.textContent=item.title;
         text.textContent=item.snippet;button.onclick=()=>openThread(item);
@@ -376,7 +378,9 @@ async function runSearch(append=false){
     $("status").textContent=count?(data.has_more?
       `${count} matching conversations shown. Show more or add more words to narrow the results.`:
       `${count} matching conversation${count===1?"":"s"}. Select one to open it.`):
-      source==="history"?"No matching saved title found. Choose one dated backup to search its full text.":"No matching conversation text found.";
+      source==="history"?"No matching saved title found. Choose one dated backup to search its full text.":
+      source==="local_titles"?"No matching local title found. Try searching conversation text.":
+      "No matching conversation text found.";
   }catch(error){if(request===searchRequest)fail(error)}finally{if(request===searchRequest)$("more-results").disabled=false}
 }
 $("search").onsubmit=event=>{event.preventDefault();void runSearch()};

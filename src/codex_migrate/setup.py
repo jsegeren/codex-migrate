@@ -1194,7 +1194,7 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                             source = query.get("source", ["local"])[0]
                             if (len(phrase) > 500 or len(raw_limit) > 4
                                     or len(raw_offset) > 6
-                                    or source not in ("local", "backup")):
+                                    or source not in ("local", "local_titles", "backup")):
                                 raise ValueError("invalid history search")
                             page_size = int(raw_limit)
                             if not 1 <= page_size <= 499:
@@ -1203,7 +1203,8 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                             results = (setup.search_vault_backup(phrase, page_size + 1, offset)
                                        if source == "backup" else
                                        search_vault(setup.source_home, phrase, page_size + 1,
-                                                    offset=offset))
+                                                    offset=offset,
+                                                    titles_only=source == "local_titles"))
                             self._json(200, {"results": [item.as_dict() for item in results[:page_size]],
                                              "has_more": len(results) > page_size})
                             return

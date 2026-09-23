@@ -189,8 +189,9 @@ def search(
     limit: int = 25,
     catalog: Optional[List[Dict[str, object]]] = None,
     offset: int = 0,
+    titles_only: bool = False,
 ) -> List[VaultMatch]:
-    """Find recent matching conversations without retaining a local index."""
+    """Find recent matching conversations without retaining a local content index."""
     needle = query.strip().casefold()
     if not needle:
         raise ValueError("search query must not be empty")
@@ -233,7 +234,7 @@ def search(
                                               title_match.casefold().find(needle),
                                               len(query.strip())),
             )
-        else:
+        elif not titles_only:
             try:
                 descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
                 with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
