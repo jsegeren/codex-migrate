@@ -316,7 +316,10 @@ class SiteTests(unittest.TestCase):
             with self.subTest(page=page.name):
                 if page.name == "purchase.html":
                     self.assertIn('src="/analytics.js?v=20260911-ecommerce"', page.read_text())
-                    self.assertIn('name="referrer" content="no-referrer"', page.read_text())
+                    # The same-origin archive form needs a real Origin header;
+                    # no-referrer makes Chromium send Origin: null (403).
+                    # Cross-origin navigation still receives no referrer.
+                    self.assertIn('name="referrer" content="same-origin"', page.read_text())
                     continue
                 self.assertIn('src="/analytics.js?v=20260911-ecommerce"', page.read_text())
         self.assertIn('const GRANTED = "granted"', analytics)
