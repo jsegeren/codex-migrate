@@ -65,7 +65,7 @@ jobs:
           from desktop.build import sparkle_distribution
           sparkle_distribution(Path("build"))
           PY
-          xcrun swiftc -typecheck -parse-as-library -F build/sparkle-2.10.0 desktop/CodexMigrate.swift desktop/UpdateEntitlement.swift desktop/SavedSetup.swift
+          xcrun swiftc -typecheck -parse-as-library -F build/sparkle-2.10.0 desktop/CodexMigrate.swift desktop/UpdateEntitlement.swift desktop/InstallLocation.swift desktop/SavedSetup.swift
           xcrun swiftc -typecheck -parse-as-library desktop/CodexVaultCrypto.swift
       - uses: actions/setup-node@v7
         with:

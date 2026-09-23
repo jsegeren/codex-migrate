@@ -326,6 +326,20 @@ class DesktopTests(unittest.TestCase):
                 process.communicate(timeout=5)
 
     @unittest.skipUnless(sys.platform == "darwin", "native macOS persistence")
+    def test_native_install_location_guidance(self):
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as temporary:
+            binary = Path(temporary) / "install-location-checks"
+            subprocess.run(["xcrun", "swiftc", "-parse-as-library",
+                            str(root / "desktop/InstallLocation.swift"),
+                            str(root / "tests/InstallLocationChecks.swift"), "-o", str(binary)],
+                           check=True, capture_output=True, text=True, timeout=60)
+            result = subprocess.run([str(binary)], capture_output=True,
+                                    text=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Install location checks passed", result.stdout)
+
+    @unittest.skipUnless(sys.platform == "darwin", "native macOS persistence")
     def test_native_saved_setup_permissions_and_recovery(self):
         root = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as temporary:

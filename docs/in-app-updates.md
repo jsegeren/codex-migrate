@@ -49,7 +49,8 @@ until those checks pass.
 3. Upload the exact ZIP to private storage and independently read it back;
    verify its byte length and SHA-256. Promote only that catalog entry.
 4. Install the buyer download in Applications and open it from there. Check
-   that the purchase page and delivery email give the correct ZIP/DMG steps;
+   that the purchase page and delivery email give the correct ZIP/DMG steps,
+   and that the app warns from Downloads, mounted images, and App Translocation;
    do not count an app launched from Downloads or a mounted disk image as an
    updater acceptance test. On a test Mac with an older updater-capable app,
    link a paid test purchase; check manually and via automatic check. Confirm download, signature

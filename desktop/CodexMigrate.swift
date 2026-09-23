@@ -46,6 +46,13 @@ import Sparkle
         menu.delegate = self
         item.menu = menu
         _ = updaterController
+        if InstallLocation.needsMoveToApplications(
+            appURL: Bundle.main.bundleURL,
+            homeURL: FileManager.default.homeDirectoryForCurrentUser
+        ) {
+            showFailure("Quit this copy, move Codex Migrate.app into Applications, then open it there. In-app updates may not install from Downloads, a disk image, or a translocated app. Your Codex data has not changed.",
+                        title: "Move Codex Migrate to Applications")
+        }
         startHelper()
     }
 
