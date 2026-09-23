@@ -50,3 +50,28 @@ If a release is bad, stop promotion and restore the prior approved catalog
 entry. Do not remove old private artifacts or revoke valid purchases. Sparkle
 does not make rollback automatic; publish a corrected build with a strictly
 higher build number.
+
+## Build 16 physical update receipt — September 23, 2026
+
+- The final Developer ID signed, Apple-notarized and stapled arm64 archive is
+  `Codex-Migrate-0.1.0-build16-arm64.zip`, 9,591,579 bytes, SHA-256
+  `60eff4dcb07088d01c966587e808f21d5fa74b8afb4eba45ed326543f07241f7`.
+  The Sparkle Ed25519 signature in `commerce/releases.json` verifies against
+  the public key embedded in the signed app. The private Blob upload was read
+  back in full with the same byte count and SHA-256.
+- An isolated, older build-15 app copy on the first Mac used a local appcast
+  carrying that exact signature and archive. Sparkle discovered build 16,
+  downloaded the ZIP, offered Install and Relaunch, and replaced the app in
+  place. The resulting app reports build 16; strict code-signature verification
+  and macOS Gatekeeper both pass as Notarized Developer ID. A relaunched copy
+  started its local helper. A concurrent duplicate launch showed the expected
+  already-running warning and did not modify migration data.
+- The same final ZIP was copied to the second Mac solely for a non-invasive
+  artifact check. Its SHA-256 matched, and strict code-signature verification
+  and Gatekeeper both passed there. No app or migration was launched on that Mac.
+- CI passed on Python 3.9 and 3.12 for the updater implementation. The
+  purchase-token, appcast and private-archive failure cases have automated
+  coverage. This local physical smoke does **not** by itself prove a paid
+  purchase-link update through the Production proxy, automatic scheduled
+  installation, or a clean-user-account first launch. Keep those as explicit
+  post-deployment checks and retain the original-email download fallback.
