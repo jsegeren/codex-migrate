@@ -136,8 +136,19 @@ hook returned `continue: false`; Codex displayed `Hook stopped` and
 `Conversation interrupted`, and the checkpoint directory stayed empty. That
 task was archived and its temporary storage removed. This proves an automatic
 failure veto in the tested CLI build, not a successful encrypted automatic
-checkpoint. Hook timeout behavior, the affected desktop rewrite ordering, and
-Vault-format integration remain separate gates.
+checkpoint. The affected desktop rewrite ordering and Vault-format integration
+remain separate gates.
+
+A third disposable TUI task configured a manual `PreCompact` command that slept
+for five seconds with a one-second hook timeout. `/compact` displayed `Hook
+failed` and `hook timed out after 1s`, then reported `Context compacted` five
+seconds later. The task was archived and its temporary storage removed. This
+is a **fail-open timeout** in Codex CLI 0.155.0-alpha.16: an explicit
+`continue: false` veto works on the tested manual and automatic paths, but a
+hook timeout does not veto manual compaction. Even if the affected desktop
+rewrite invokes the hook in time, this result prevents us from advertising a
+hook as a reliable pre-rewrite protection boundary without an upstream
+fail-closed timeout/error option or an independent write-ahead mechanism.
 
 No PreCompact protection is installed or advertised in the customer build.
 The release guarantee remains the last successfully verified scheduled
