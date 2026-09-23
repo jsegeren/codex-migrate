@@ -150,6 +150,18 @@ rewrite invokes the hook in time, this result prevents us from advertising a
 hook as a reliable pre-rewrite protection boundary without an upstream
 fail-closed timeout/error option or an independent write-ahead mechanism.
 
+Four additional disposable app-server `thread/compact/start` runs on that same
+installed binary completed compaction and archived their test threads without
+invoking the configured command or publishing a checkpoint. `config/read`
+showed one `PreCompact` group; `hooks/list` showed the command as enabled but
+`trustStatus: modified`. The process was started with
+`--dangerously-bypass-hook-trust`, yet no `hook/started` or `hook/completed`
+notification was observed. Because the hook was not persistently trusted, this
+does not isolate whether the app-server path bypassed `PreCompact`, the bypass
+flag failed to apply to that path, or the trust state prevented execution.
+It does establish that merely discovering and enabling the hook is not a safe
+checkpoint guarantee. None of these tests used a live customer thread.
+
 No PreCompact protection is installed or advertised in the customer build.
 The release guarantee remains the last successfully verified scheduled
 snapshot, with at-risk detection on a later shrink. The upstream durable
