@@ -8,6 +8,7 @@ An interrupted Apple submission is resumed from its saved ID, never repeated.
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import plistlib
 import re
@@ -82,23 +83,62 @@ def source_release(directory):
 def finish(output, candidate, receipt, notary):
     if notary.get("status") != "Accepted":
         raise ValueError("disk image notarization was not Accepted")
-    run("xcrun", "stapler", "staple", candidate)
-    run("xcrun", "stapler", "validate", candidate)
-    run("codesign", "--verify", "--verbose=2", candidate)
-    run("spctl", "--assess", "--type", "open", "--context", "context:primary-signature", candidate)
     filename = receipt["artifact"].removesuffix(".zip") + ".dmg"
     artifact = output / filename
-    if artifact.exists() or (output / "build-info.json").exists():
-        raise ValueError("disk image has already been finalized")
-    image = candidate.read_bytes()
-    if len(image) < 512 or len(image) > 100 * 1024 * 1024 or image[-512:-508] != b"koly":
-        raise ValueError("signed disk image has an invalid UDIF trailer or size")
-    digest = hashlib.sha256(image).hexdigest()
+    digest_path = output / "final-image.json"
+    expected_binding = {"source_sha256": receipt["sha256"], "notary_id": notary["id"]}
+
+    def write_atomic(path, content):
+        if path.is_symlink():
+            raise ValueError("release receipt is a symlink")
+        descriptor, name = tempfile.mkstemp(prefix="." + path.name + "-", dir=output)
+        temporary = Path(name)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+                stream.write(content)
+            temporary.replace(path)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+    def verify_image(path):
+        if path.is_symlink() or not path.is_file():
+            raise ValueError("final disk image is missing or is a symlink")
+        run("xcrun", "stapler", "validate", path)
+        run("codesign", "--verify", "--verbose=2", path)
+        run("spctl", "--assess", "--type", "open", "--context", "context:primary-signature", path)
+        image = path.read_bytes()
+        if len(image) < 512 or len(image) > 100 * 1024 * 1024 or image[-512:-508] != b"koly":
+            raise ValueError("signed disk image has an invalid UDIF trailer or size")
+        return hashlib.sha256(image).hexdigest()
+
+    if artifact.exists() or artifact.is_symlink():
+        if digest_path.is_symlink() or not digest_path.is_file():
+            raise ValueError("final disk image has no checksum receipt")
+        digest = verify_image(artifact)
+        if json.loads(digest_path.read_text()) != {**expected_binding, "sha256": digest}:
+            raise ValueError("final disk image changed after stapling")
+    else:
+        if (output / "build-info.json").exists() or (output / "SHA256SUMS").exists():
+            raise ValueError("release receipt exists without its disk image")
+        # Notarization is bound to the submitted bytes. Staple a copy so the
+        # submitted candidate keeps its recorded hash across interrupted runs.
+        with tempfile.TemporaryDirectory(prefix="staple-", dir=output) as temporary:
+            working = Path(temporary) / filename
+            shutil.copy2(candidate, working)
+            run("xcrun", "stapler", "staple", working)
+            digest = verify_image(working)
+            write_atomic(digest_path, json.dumps({**expected_binding, "sha256": digest}) + "\n")
+            working.replace(artifact)
+
     final_receipt = {**receipt, "artifact": filename, "sha256": digest,
                      "diskImageNotarization": notary}
-    (output / "build-info.json").write_text(json.dumps(final_receipt, indent=2) + "\n")
-    (output / "SHA256SUMS").write_text(digest + "  " + filename + "\n")
-    candidate.rename(artifact)
+    for path, content in ((output / "build-info.json", json.dumps(final_receipt, indent=2) + "\n"),
+                          (output / "SHA256SUMS", digest + "  " + filename + "\n")):
+        if path.exists():
+            if path.read_text() != content:
+                raise ValueError("existing release receipt does not match final disk image")
+            continue
+        write_atomic(path, content)
     return artifact
 
 

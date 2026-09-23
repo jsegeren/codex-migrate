@@ -36,7 +36,10 @@ the signer must verify its output against the final DMG bytes.
    notarization credential. The command signs the disk image, records its
    separate Apple submission, staples it, verifies Gatekeeper, and produces an
    exact DMG receipt. If Apple's submission is interrupted, resume its saved
-   output directory; do not submit another copy blindly.
+   output directory; do not submit another copy blindly. The submitted image
+   remains byte-for-byte unchanged while a separate copy is stapled. A failed
+   staple can be retried; a completed image with interrupted receipt writing
+   is verified against its recorded final hash before its receipts are restored.
 4. Sign the final DMG with Sparkle's new private seed. Verify the signature,
    public key, DMG SHA-256, byte length, embedded build number and source SHA.
    Add the reviewed DMG entry to the release catalog only after these match.
