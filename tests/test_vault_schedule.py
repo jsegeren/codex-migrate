@@ -65,9 +65,18 @@ class VaultScheduleTests(unittest.TestCase):
             key_id = json.loads((vault / "vault.json").read_text())["key_id"]
             installed = False
             try:
-                install_schedule(str(home), str(vault), crypto_helper=str(helper),
-                                 engine_command=[str(engine)])
+                install = subprocess.run(
+                    [str(engine), "vault", "--source-home", str(home),
+                     "schedule", "--vault", str(vault), "--crypto-helper", str(helper),
+                     "--apply", "--json"],
+                    env=env, capture_output=True, text=True, timeout=60)
+                self.assertEqual(install.returncode, 0, "packaged schedule setup failed")
                 installed = True
+                plist_path = home / "Library/LaunchAgents" / (LABEL + ".plist")
+                self.assertEqual(
+                    plistlib.loads(plist_path.read_bytes())["EnvironmentVariables"]["HOME"],
+                    pwd.getpwuid(os.getuid()).pw_dir,
+                )
                 kickstart = subprocess.run(["/bin/launchctl", "kickstart", "-k", service],
                                            capture_output=True, text=True, timeout=15)
                 self.assertEqual(kickstart.returncode, 0, "macOS did not start the test agent")
@@ -92,7 +101,12 @@ class VaultScheduleTests(unittest.TestCase):
             finally:
                 try:
                     if installed:
-                        remove_schedule(str(home))
+                        removed = subprocess.run(
+                            [str(engine), "vault", "--source-home", str(home),
+                             "schedule-remove", "--json"],
+                            env=env, capture_output=True, text=True, timeout=15)
+                        if removed.returncode != 0:
+                            remove_schedule(str(home))
                 finally:
                     subprocess.run([str(helper), "delete-key", "--key-id", key_id],
                                    env=env, check=True, capture_output=True, timeout=15)
