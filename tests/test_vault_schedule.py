@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timedelta, timezone
 import os
 from pathlib import Path
 import plistlib
@@ -94,7 +95,7 @@ class VaultScheduleTests(unittest.TestCase):
                     engine_command=[str(engine)])
             status_path = home / "Library/Application Support/Codex Vault/last-run.json"
             status_path.write_text(json.dumps({
-                "status": "completed", "completed_at": "2026-09-18T00:00:00Z",
+                "status": "completed", "completed_at": datetime.now(timezone.utc).isoformat(),
                 "snapshot_id": "fixture-snapshot", "transcript_files": 2,
                 "transcript_bytes": 100,
             }), encoding="utf-8")
@@ -105,6 +106,117 @@ class VaultScheduleTests(unittest.TestCase):
             self.assertTrue(result["healthy"])
             self.assertEqual(result["interval_hours"], 24)
             self.assertEqual(result["last_run"]["status"], "completed")
+
+    def test_status_does_not_call_an_overdue_backup_healthy(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            home, vault, helper, verified = self.fixture(root)
+            engine = root / "engine"
+            engine.write_text("fixture", encoding="utf-8")
+            engine.chmod(0o700)
+            with patch("codex_migrate.vault_schedule.verify_snapshot",
+                       return_value=verified), \
+                    patch("codex_migrate.vault_schedule._loaded", return_value=False), \
+                    patch("codex_migrate.vault_schedule._launchctl"):
+                install_schedule(str(home), str(vault), crypto_helper=str(helper),
+                                 engine_command=[str(engine)])
+            config_path = home / "Library/Application Support/Codex Vault/schedule.json"
+            status_path = config_path.parent / "last-run.json"
+            old = (datetime.now(timezone.utc) - timedelta(days=4)).isoformat()
+            configuration = json.loads(config_path.read_text(encoding="utf-8"))
+            configuration["installed_at"] = old
+            config_path.write_text(json.dumps(configuration), encoding="utf-8")
+            status_path.write_text(json.dumps({
+                "status": "completed", "completed_at": old,
+                "snapshot_id": "old-snapshot", "transcript_files": 2,
+                "transcript_bytes": 100,
+            }), encoding="utf-8")
+            status_path.chmod(0o600)
+            with patch("codex_migrate.vault_schedule._loaded", return_value=True):
+                result = schedule_status(str(home))
+            self.assertFalse(result["healthy"])
+            self.assertIn("overdue", result["error"])
+
+    def test_schedule_reinstall_does_not_reuse_old_success_receipt(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            home, vault, helper, verified = self.fixture(root)
+            engine = root / "engine"
+            engine.write_text("fixture", encoding="utf-8")
+            engine.chmod(0o700)
+            with patch("codex_migrate.vault_schedule.verify_snapshot",
+                       return_value=verified), \
+                    patch("codex_migrate.vault_schedule._loaded", return_value=False), \
+                    patch("codex_migrate.vault_schedule._launchctl"):
+                install_schedule(str(home), str(vault), crypto_helper=str(helper),
+                                 engine_command=[str(engine)])
+            status_path = home / "Library/Application Support/Codex Vault/last-run.json"
+            old_receipts = [
+                {"status": "completed", "completed_at": "2026-09-18T00:00:00Z",
+                 "snapshot_id": "old-snapshot", "transcript_files": 2,
+                 "transcript_bytes": 100},
+                {"status": "running", "started_at": "2026-09-18T00:00:00Z"},
+                {"status": "failed", "failed_at": "2026-09-18T00:00:00Z",
+                 "error": "Automatic backup stopped safely. The previous verified snapshot and local Codex data were not changed."},
+            ]
+            for receipt in old_receipts:
+                status_path.write_text(json.dumps(receipt), encoding="utf-8")
+                status_path.chmod(0o600)
+                with patch("codex_migrate.vault_schedule._loaded", return_value=True):
+                    result = schedule_status(str(home))
+                self.assertTrue(result["enabled"])
+                self.assertNotIn("last_run", result)
+
+    def test_schedule_without_any_run_becomes_overdue(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            home, vault, helper, verified = self.fixture(root)
+            engine = root / "engine"
+            engine.write_text("fixture", encoding="utf-8")
+            engine.chmod(0o700)
+            with patch("codex_migrate.vault_schedule.verify_snapshot",
+                       return_value=verified), \
+                    patch("codex_migrate.vault_schedule._loaded", return_value=False), \
+                    patch("codex_migrate.vault_schedule._launchctl"):
+                install_schedule(str(home), str(vault), crypto_helper=str(helper),
+                                 engine_command=[str(engine)])
+            config_path = home / "Library/Application Support/Codex Vault/schedule.json"
+            configuration = json.loads(config_path.read_text(encoding="utf-8"))
+            configuration["installed_at"] = (
+                datetime.now(timezone.utc) - timedelta(days=4)).isoformat()
+            config_path.write_text(json.dumps(configuration), encoding="utf-8")
+            with patch("codex_migrate.vault_schedule._loaded", return_value=True):
+                result = schedule_status(str(home))
+            self.assertFalse(result["healthy"])
+            self.assertIn("overdue", result["error"])
+
+    def test_stalled_running_receipt_does_not_look_healthy(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            home, vault, helper, verified = self.fixture(root)
+            engine = root / "engine"
+            engine.write_text("fixture", encoding="utf-8")
+            engine.chmod(0o700)
+            with patch("codex_migrate.vault_schedule.verify_snapshot",
+                       return_value=verified), \
+                    patch("codex_migrate.vault_schedule._loaded", return_value=False), \
+                    patch("codex_migrate.vault_schedule._launchctl"):
+                install_schedule(str(home), str(vault), crypto_helper=str(helper),
+                                 engine_command=[str(engine)])
+            config_path = home / "Library/Application Support/Codex Vault/schedule.json"
+            status_path = config_path.parent / "last-run.json"
+            started = datetime.now(timezone.utc) - timedelta(days=4)
+            configuration = json.loads(config_path.read_text(encoding="utf-8"))
+            configuration["installed_at"] = (started - timedelta(days=1)).isoformat()
+            config_path.write_text(json.dumps(configuration), encoding="utf-8")
+            status_path.write_text(json.dumps({
+                "status": "running", "started_at": started.isoformat(),
+            }), encoding="utf-8")
+            status_path.chmod(0o600)
+            with patch("codex_migrate.vault_schedule._loaded", return_value=True):
+                result = schedule_status(str(home))
+            self.assertFalse(result["healthy"])
+            self.assertIn("overdue", result["error"])
 
     def test_scheduled_run_reuses_key_and_records_content_free_result(self):
         with tempfile.TemporaryDirectory() as temporary:

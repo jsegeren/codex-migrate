@@ -50,6 +50,16 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _timestamp(value: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is not None:
+            return parsed.astimezone(timezone.utc)
+    except (AttributeError, TypeError, ValueError):
+        pass
+    raise MigrationError("The automatic backup timestamp is invalid.")
+
+
 def _home(source_home: str) -> Path:
     home = Path(source_home).expanduser()
     if not home.is_absolute():
@@ -348,10 +358,25 @@ def schedule_status(source_home: str) -> Dict[str, object]:
     if configuration["source_home"] != str(_home(source_home)):
         raise MigrationError("The automatic backup configuration belongs to another account.")
     _safe_file(plist_path)
+    try:
+        installed_at = _timestamp(configuration["installed_at"])
+    except MigrationError:
+        return {"enabled": True, "healthy": False,
+                "error": "Automatic backup setup has an invalid timestamp. Turn it on again."}
     status = None
     if status_path.exists():
         try:
             status = _last_run(status_path)
+        except MigrationError:
+            status = {"status": "unknown"}
+    if status and status["status"] != "unknown":
+        timestamp_key = {
+            "running": "started_at", "completed": "completed_at",
+            "needs_attention": "completed_at", "failed": "failed_at",
+        }[status["status"]]
+        try:
+            if _timestamp(status[timestamp_key]) < installed_at:
+                status = None
         except MigrationError:
             status = {"status": "unknown"}
     result: Dict[str, object] = {
@@ -365,6 +390,21 @@ def schedule_status(source_home: str) -> Dict[str, object]:
         if status.get("status") in ("needs_attention", "failed", "unknown"):
             result["healthy"] = False
             result["error"] = "The latest automatic backup needs attention. Earlier snapshots remain available."
+    if result["healthy"]:
+        if status and status["status"] == "completed":
+            last_activity = status["completed_at"]
+        elif status and status["status"] == "running":
+            last_activity = status["started_at"]
+        else:
+            last_activity = configuration["installed_at"]
+        try:
+            age = (datetime.now(timezone.utc) - _timestamp(last_activity)).total_seconds()
+        except MigrationError:
+            age = float("inf")
+        grace = configuration["interval_seconds"] * 2 + 3600
+        if age < -3600 or age > grace:
+            result["healthy"] = False
+            result["error"] = "Automatic backup is overdue. Check the Vault folder and run a verified backup."
     if not result["healthy"]:
         result.setdefault("error", "The automatic backup service is not loaded. Turn it on again.")
     return result

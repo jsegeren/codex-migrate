@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { createHash } = require('node:crypto');
 const { PassThrough } = require('node:stream');
 const { makeHandler: appcast } = require('../api/appcast');
 const { makeHandler: archive } = require('../api/update-archive');
@@ -78,4 +79,38 @@ test('update archive streams the approved private build without exposing its blo
   assert.equal(requested, signedURL);
   assert.equal(Buffer.concat(output).toString(), bytes.toString());
   assert.equal(JSON.stringify(response.headers).includes('signed=fixture'), false);
+});
+
+test('update archive streams an app-sized release without buffering or changing bytes', async () => {
+  const chunk = Buffer.alloc(64 * 1024, 0x5a);
+  const count = 147;
+  const size = chunk.length * count;
+  const digest = createHash('sha256');
+  for (let i = 0; i < count; i++) digest.update(chunk);
+  const updateConfig = { ...config, release: { ...release, size } };
+  const signedURL = `https://fixturestore.private.blob.vercel-storage.com/${release.pathname}?signed=fixture`;
+  const handler = archive(async () => ({ config: updateConfig,
+    service: { downloadLatest: async () => ({ release: release.id, sha256: release.sha256,
+      size, filename: release.filename, url: signedURL }) } }), async () => ({
+    status: 200, headers: { get: () => String(size) },
+    body: new ReadableStream({
+      pull(controller) {
+        if (this.sent === count) { controller.close(); return; }
+        controller.enqueue(chunk);
+        this.sent = (this.sent || 0) + 1;
+      },
+    }),
+  }), {}, () => updateConfig);
+  const response = new PassThrough();
+  response.headers = {};
+  response.setHeader = (key, value) => { response.headers[key] = value; };
+  const received = createHash('sha256');
+  let receivedBytes = 0;
+  response.on('data', data => { received.update(data); receivedBytes += data.length; });
+  await handler({ method: 'GET', url: '/api/update-archive',
+    headers: { authorization: `Bearer ${token}` } }, response);
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.headers['Content-Length'], String(size));
+  assert.equal(receivedBytes, size);
+  assert.equal(received.digest('hex'), digest.digest('hex'));
 });
