@@ -2,6 +2,9 @@
   'use strict';
   const status = document.getElementById('purchase-status');
   const download = document.getElementById('purchase-download');
+  const archiveForm = document.getElementById('purchase-archive-form');
+  const archiveCredential = document.getElementById('purchase-archive-credential');
+  const archiveVersion = document.getElementById('purchase-archive-version');
   const original = document.getElementById('purchase-original');
   const retry = document.getElementById('purchase-retry');
   const checksum = document.getElementById('purchase-checksum');
@@ -30,6 +33,7 @@
   if (location.hash) history.replaceState(null, '', location.pathname);
   let token = credential.startsWith('session=') ? null : credential;
   let busy = false;
+  let selectedVersion = null;
   let linkLifetime = 0, requestWallTime = 0, requestMonotonicTime = 0;
   function trackVerifiedPurchase() {
     let alreadyTracked = false;
@@ -70,7 +74,7 @@
       }
       linkLifetime = result.expiresInMs;
       checksum.textContent = `Archive SHA-256: ${result.sha256}`; integrity.hidden = false;
-      download.setAttribute('href', url.toString()); download.removeAttribute('aria-disabled');
+      download.setAttribute('href', '/api/purchase-archive'); download.removeAttribute('aria-disabled');
       download.hidden = false; retry.hidden = true;
   }
   async function check(action = 'download_latest') {
@@ -86,6 +90,7 @@
       requestWallTime = Date.now(); requestMonotonicTime = performance.now();
       const result = await call(action, token);
       acceptLink(result);
+      selectedVersion = action === 'download' ? 'original' : 'latest';
       if (validToken(token)) {
         try {
           const saved = JSON.parse(sessionStorage.getItem(storageKey));
@@ -110,6 +115,7 @@
       };
       status.textContent = messages[error.message] || 'We couldn’t check your download right now. Try again or email Joshua. Do not purchase again.';
       download.removeAttribute('href'); download.setAttribute('aria-disabled', 'true');
+      selectedVersion = null;
       download.hidden = true; retry.hidden = false; integrity.hidden = true;
       original.hidden = true;
       retry.textContent = 'Check again';
@@ -122,10 +128,14 @@
     }
   }
   download.addEventListener('click', event => {
+    event.preventDefault();
     if (busy) { event.preventDefault(); return; }
-    if (!download.getAttribute('href')) { event.preventDefault(); check(); return; }
+    if (!download.getAttribute('href') || !selectedVersion) { check(); return; }
     const age = Math.max(Date.now() - requestWallTime, performance.now() - requestMonotonicTime);
-    if (age >= linkLifetime - 5000) { event.preventDefault(); check(); return; }
+    if (age >= linkLifetime - 5000) { check(); return; }
+    archiveCredential.value = token;
+    archiveVersion.value = selectedVersion;
+    archiveForm.submit();
     status.textContent = 'Download requested. Check your browser’s downloads. If it stops, select Get a fresh link below.';
     retry.textContent = 'Get a fresh link'; retry.hidden = false;
   });

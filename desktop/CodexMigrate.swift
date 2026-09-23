@@ -3,12 +3,14 @@ import Sparkle
 
 // The Mac app owns only the local helper's lifetime. All setup, migration,
 // progress and recovery decisions belong to the browser.
-@main final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
+@main final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, SPUUpdaterDelegate {
     private var item: NSStatusItem!
     private var process: Process?
     private var dashboardURL: URL?
     private var buffer = Data()
     private var quitting = false
+    private var automaticChecksItem: NSMenuItem!
+    private var automaticInstallItem: NSMenuItem!
     private lazy var updaterController = SPUStandardUpdaterController(
         startingUpdater: true, updaterDelegate: self, userDriverDelegate: nil)
 
@@ -32,6 +34,13 @@ import Sparkle
             entry.target = self
             menu.addItem(entry)
         }
+        automaticChecksItem = NSMenuItem(title: "Check for updates automatically", action: #selector(toggleAutomaticChecks), keyEquivalent: "")
+        automaticChecksItem.target = self
+        menu.insertItem(automaticChecksItem, at: 2)
+        automaticInstallItem = NSMenuItem(title: "Install updates automatically when idle", action: #selector(toggleAutomaticInstall), keyEquivalent: "")
+        automaticInstallItem.target = self
+        menu.insertItem(automaticInstallItem, at: 3)
+        menu.delegate = self
         item.menu = menu
         _ = updaterController
         startHelper()
@@ -54,6 +63,29 @@ import Sparkle
             linkPurchase(); return
         }
         updaterController.checkForUpdates(nil)
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        let linked = UpdateEntitlement.savedToken() != nil
+        automaticChecksItem.isEnabled = linked
+        automaticInstallItem.isEnabled = linked
+        automaticChecksItem.state = updaterController.updater.automaticallyChecksForUpdates ? .on : .off
+        automaticInstallItem.state = updaterController.updater.automaticallyDownloadsUpdates ? .on : .off
+    }
+
+    @objc private func toggleAutomaticChecks() {
+        guard UpdateEntitlement.savedToken() != nil else { return }
+        let updater = updaterController.updater
+        updater.automaticallyChecksForUpdates = !updater.automaticallyChecksForUpdates
+        if !updater.automaticallyChecksForUpdates { updater.automaticallyDownloadsUpdates = false }
+    }
+
+    @objc private func toggleAutomaticInstall() {
+        guard UpdateEntitlement.savedToken() != nil else { return }
+        let updater = updaterController.updater
+        let enabling = !updater.automaticallyDownloadsUpdates
+        if enabling { updater.automaticallyChecksForUpdates = true }
+        updater.automaticallyDownloadsUpdates = enabling
     }
 
     @objc private func linkPurchase() {

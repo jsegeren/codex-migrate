@@ -11,13 +11,16 @@ const privateToken = 'cs_test_fixture.' + 'b'.repeat(64);
 function fixture(options = {}) {
   const document = { body: {}, activeElement: null }; document.activeElement = document.body;
   const analyticsEvents = [];
+  const submissions = [];
   document.dispatchEvent = event => analyticsEvents.push(event.detail);
   const elements = new Map();
   document.getElementById = id => {
     if (!elements.has(id)) {
       const attributes = new Map();
-      const e = { hidden: id !== 'purchase-status', textContent: '', events: {},
+      const e = { hidden: id !== 'purchase-status', textContent: '', value: '', events: {},
         addEventListener(name, fn) { this.events[name] = fn; }, focus() { document.activeElement = this; },
+        submit() { submissions.push({ credential: document.getElementById('purchase-archive-credential').value,
+          version: document.getElementById('purchase-archive-version').value }); },
         setAttribute(name, value) { attributes.set(name, String(value)); },
         getAttribute(name) { return attributes.has(name) ? attributes.get(name) : null; },
         removeAttribute(name) { attributes.delete(name); } };
@@ -45,7 +48,7 @@ function fixture(options = {}) {
   const finish = async (data = good, ok = true, status = ok ? 200 : 503) => {
     pending.shift()({ ok, status, json: async () => { if (data instanceof Error) throw data; return data; } }); await tick();
   };
-  return { document, get: document.getElementById, location, calls, finish, storage, analyticsEvents,
+  return { document, get: document.getElementById, location, calls, finish, storage, analyticsEvents, submissions,
     advance(ms, monotonicMs = ms) { wall += ms; monotonic += monotonicMs; } };
 }
 test('reload rechecks a tab-scoped token and never reuses the old signed file URL', async () => {
@@ -56,7 +59,7 @@ test('reload rechecks a tab-scoped token and never reuses the old signed file UR
   assert.equal(refreshed.get('purchase-download').hidden, true);
   assert.equal(JSON.parse(refreshed.calls[0].options.body).credential, privateToken);
   await refreshed.finish({ ...good, url: good.url + 'fresh' });
-  assert.equal(refreshed.get('purchase-download').getAttribute('href'), good.url + 'fresh');
+  assert.equal(refreshed.get('purchase-download').getAttribute('href'), '/api/purchase-archive');
 });
 test('purchase page prefers a free update and offers the preserved original', async () => {
   const f = fixture();
@@ -67,7 +70,9 @@ test('purchase page prefers a free update and offers the preserved original', as
   f.get('purchase-original').events.click();
   assert.equal(JSON.parse(f.calls[1].options.body).action, 'download');
   await f.finish({ ...good, url: good.url + 'old' });
-  assert.equal(f.get('purchase-download').getAttribute('href'), good.url + 'old');
+  assert.equal(f.get('purchase-download').getAttribute('href'), '/api/purchase-archive');
+  f.get('purchase-download').events.click({ preventDefault() {} });
+  assert.deepEqual(f.submissions, [{ credential: privateToken, version: 'original' }]);
   assert.equal(f.get('purchase-original').hidden, true);
 });
 test('verified purchases emit one conversion across checks and reloads', async () => {
@@ -113,14 +118,15 @@ test('malformed tab storage is discarded without requesting a purchase', () => {
   const f = fixture({ hash: '', storage: new Map([['codex-migrate-purchase-v1', '{bad']]) });
   assert.equal(f.calls.length, 0); assert.equal(f.storage.size, 0);
 });
-test('page strips bearer fragment and gives a verified URL to the buyer click; no browser clock gate', async () => {
+test('page strips bearer fragment and posts a verified buyer download to the same origin', async () => {
   const f = fixture(); assert.equal(f.location.hash, '');
   await f.finish(); assert.equal(f.get('purchase-download').hidden, false);
   assert.equal(f.calls[0].url, '/api/purchase'); assert.equal(f.calls[0].options.method, 'POST');
   assert.equal(f.calls[0].options.credentials, 'same-origin');
-  const link = f.get('purchase-download'); assert.equal(link.getAttribute('href'), good.url);
+  const link = f.get('purchase-download'); assert.equal(link.getAttribute('href'), '/api/purchase-archive');
   link.focus(); const click = { defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
-  link.events.click(click); assert.equal(click.defaultPrevented, false); assert.equal(f.calls.length, 1);
+  link.events.click(click); assert.equal(click.defaultPrevented, true); assert.equal(f.calls.length, 1);
+  assert.deepEqual(f.submissions, [{ credential: privateToken, version: 'latest' }]);
   assert.equal(f.document.activeElement, link);
   assert.match(f.get('purchase-status').textContent, /Download requested/);
   assert.equal(f.get('purchase-retry').hidden, false);
@@ -137,7 +143,7 @@ for (const [name, wall, mono] of [['ordinary expiry', 300000, 300000],
     assert.equal(f.calls.length, 2);
     link.events.click(event); assert.equal(f.calls.length, 2, 'no duplicate refresh while busy');
     await f.finish({ ...good, url: good.url + '2' });
-    assert.equal(link.getAttribute('href'), good.url + '2');
+    assert.equal(link.getAttribute('href'), '/api/purchase-archive');
     assert.equal(f.document.activeElement, link);
     assert.match(f.get('purchase-status').textContent, /Select Download for Mac/);
   });
