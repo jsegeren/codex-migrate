@@ -29,14 +29,17 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
   >/dev/null 2>&1
 openssl pkcs12 -export -inkey "$probe_dir/synthetic.key" \
   -in "$probe_dir/synthetic.crt" -out "$probe_dir/synthetic.p12" \
+  -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -macalg sha1 \
   -passout pass:synthetic-ci-only >/dev/null 2>&1
+openssl pkcs12 -in "$probe_dir/synthetic.p12" \
+  -passin pass:synthetic-ci-only -info -noout >/dev/null 2>&1
 
 # Empty passwords are restricted to this disposable Keychain containing only
 # the synthetic CI key. Production signing must use a protected build Keychain.
 security create-keychain -p '' "$probe_keychain"
 security unlock-keychain -p '' "$probe_keychain"
 security import "$probe_dir/synthetic.p12" -k "$probe_keychain" \
-  -P synthetic-ci-only -T /usr/bin/codesign >/dev/null
+  -f pkcs12 -P synthetic-ci-only -T /usr/bin/codesign >/dev/null
 security set-key-partition-list -S 'apple-tool:,apple:' -k '' \
   "$probe_keychain" >/dev/null
 
