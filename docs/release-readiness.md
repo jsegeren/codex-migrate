@@ -5,9 +5,33 @@ remaining acceptance checks continue. This is not full release certification.
 The [paid-beta launch record](paid-beta-launch-2026-09-07.md) controls the current
 distribution decision; the dated entries below preserve their original status.
 
+## September 22 Codex Vault build 15 beta release
+
+The current paid artifact is `beta-build15-arm64`, built from clean source
+`929e65c0b2f24e1b84ca7305895c4312520c720c`. Apple accepted notarization
+submission `bfeca634-8fcc-4356-b792-0487653e8470`; the 8,538,406-byte ZIP
+has SHA-256
+`e8a578b4f6a0e58de17325671eb6015d8379f46c5bc55063fdee9fed2f99c8fc`.
+The exact archive passed private-store readback and independent signature,
+staple, Gatekeeper and packaged-engine checks on the original Mac. The same
+quarantined ZIP passed checksum, signature, staple and Gatekeeper checks on the
+larger Mac without installing or launching the app there. All four final PR
+checks passed on Python 3.9/3.12; the website suite passed 298 of 299 Node
+tests with one expected skip. [The physical-test receipt](vault-history-physical-acceptance-2026-09-22.md)
+states the remaining first-launch and `PreCompact` limits.
+
+PR #19 merged as `31e1f1e61c332836494fed1bc4b26dd8efe677e2` with the old
+release catalog entries preserved. Production deployment
+`dpl_6r2J57JDPbm5aWzadek9Rci9vWGY` was built with
+`COMMERCE_RELEASE=beta-build15-arm64`, checked at its protected unique URL,
+then promoted to `migrate.segeren.com`. Public `/api/availability` returned
+`available:true`, `priceUSD:49`, `architecture:arm64`, `channel:beta` after
+promotion. Existing purchases retain their bound artifacts; new checkouts
+select build 15. No real payment was made as part of this release verification.
+
 ## September 18 Codex Vault build 14 release
 
-The current distributed artifact is signed and notarized build 14, produced
+The then-current distributed artifact was signed and notarized build 14, produced
 from clean pushed source `cc767efd77081c9a15fe5656a4713b3ee04f001e`.
 Apple accepted submission `54785df0-5d68-483f-a15b-4d6964d0ad65`; the stapled
 app passed strict deep signature verification, staple validation and Gatekeeper
@@ -152,7 +176,7 @@ shown as `unknown`. The route probe now selects the address family before
 looking up the hardware port, with regression coverage for the observed ULA
 IPv6 path.
 
-## Current release boundary — September 18
+## Historical release boundary — September 18
 
 The current distributed artifact is **signed and notarized build 14**, $49 USD,
 Apple silicon, beta channel. Production checkout is open and the live Stripe
@@ -715,7 +739,7 @@ release certification remains open while the named native/hardware gates remain.
 | Website accessibility and performance | Fresh production Lighthouse: mobile 97 performance and 100 accessibility/best practices/SEO; desktop 98 performance and 100 in the other categories. Keyboard, narrow-width reflow, text enlargement, contrast and semantics have automated/browser evidence. Exact build 9's browser-first setup passed a spoken VoiceOver walkthrough of key controls. | Broader screen-reader/state coverage remains useful; no blanket WCAG conformance claim is made. Field Core Web Vitals require real traffic. |
 | Domain, search discovery, analytics and cross-promotion | Live canonical domain/robots/sitemap; recorded Search Console ownership, successful sitemap submission and accepted homepage request; separate GA4 property with region-aware default/full measurement, consent-mode handling for the EEA/UK/Switzerland, 14-month retention, returning-user continuity, aggregate Google Signals reporting, granular location/device reporting, ads personalization and user-provided data disabled, launch-request key event and Search Console link; live U.S. edge returned default mode with no banner and both host-only GA cookies; browser-forced consent mode showed the compact control, set no cookies before choice, produced a denied cookieless measurement, and correctly allowed or declined; You.one link on the live homepage; fresh HTTP 200 check of segeren.com confirms its “Explore Codex Migrate” link to the canonical domain | Watch native reports after real visits. A request originating from an actual EEA/UK/Swiss edge remains useful additional confirmation, but endpoint unit tests and browser-boundary simulation cover the branch. Actual demographics depend on consent, Google eligibility and reporting thresholds; indexing, ranking and traffic are not guaranteed. No repeated indexing request needed. |
 | Reproducible identifiable packaged app | Build 14 is produced from pushed source `cc767efd77081c9a15fe5656a4713b3ee04f001e`, Developer ID signed, Apple Accepted, stapled and Gatekeeper accepted. The private archive is 8,500,913 bytes with SHA-256 `256ea14e4eb132c9c10e16f20bb722d9f921e7b43fda2c165da792a3cf300c05`; its private-store readback and packaged-engine/UI checks passed. Prior receiving-Mac, VoiceOver, interruption and TCC observations remain applicable to the unchanged migration machinery; selected-thread recovery has its own bounded physical two-Mac receipt. | A pristine receiving Mac without prior test state or developer tooling remains stronger installation evidence. The complete guided permission-recovery journey remains open. |
-| Paid purchase, delivery, support and refunds | Production checkout and webhook are live for build 14. Ordinary Stripe sandbox payment, signed-app delivery, email recovery, refreshed private download, refund and post-refund denial passed. Private links remain entitlement-bound and short lived; merchant successful-payment email is enabled. | Confirm buyer delivery and merchant notification from the first real sale. This is an operational observation for the live beta, not a reason to close the revenue path. |
+| Paid purchase, delivery, support and refunds | Production checkout and webhook are live for build 15; earlier purchases retain their exact bound artifacts. Ordinary Stripe sandbox payment, signed-app delivery, email recovery, refreshed private download, refund and post-refund denial passed in the established commerce path. Private links remain entitlement-bound and short lived; merchant successful-payment email is enabled. | Confirm buyer delivery and merchant notification from the first real sale. This is an operational observation for the live beta, not a reason to close the revenue path. |
 
 ### Earlier device chronology (historical evidence)
 

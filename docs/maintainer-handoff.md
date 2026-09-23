@@ -23,7 +23,7 @@ implementation.
 
 ## Current live state
 
-As of September 18, 2026:
+As of September 22, 2026 (Pacific time):
 
 - Public site: <https://migrate.segeren.com/>
 - Source repository: <https://github.com/jsegeren/codex-migrate>
@@ -33,22 +33,23 @@ As of September 18, 2026:
 - Support: best effort at `joshua@segeren.com`
 - Public analytics: the separate Codex Migrate GA4 property; no app or workspace
   analytics
-- Current paid artifact: `beta-build14-arm64`
-- Artifact filename: `Codex-Migrate-0.1.0-build14-arm64.zip`
-- Source commit: `cc767efd77081c9a15fe5656a4713b3ee04f001e`
-- Archive size: 8,500,913 bytes
+- Current paid artifact: `beta-build15-arm64`
+- Artifact filename: `Codex-Migrate-0.1.0-build15-arm64.zip`
+- Source commit: `929e65c0b2f24e1b84ca7305895c4312520c720c`
+- Archive size: 8,538,406 bytes
 - Archive SHA-256:
-  `256ea14e4eb132c9c10e16f20bb722d9f921e7b43fda2c165da792a3cf300c05`
+  `e8a578b4f6a0e58de17325671eb6015d8379f46c5bc55063fdee9fed2f99c8fc`
 - Apple notarization submission:
-  `54785df0-5d68-483f-a15b-4d6964d0ad65` (`Accepted`)
+  `bfeca634-8fcc-4356-b792-0487653e8470` (`Accepted`)
 - Acceptance label: `founder-approved-paid-beta-2026-09-07`
 
-Build 14 includes the established Codex Vault history browser, encrypted
-versioned backup, recovery and migration machinery. It reorganizes the packaged
-app around overview, backup, conversations, recovery and Move Macs views; adds
-conservative recognition of common cloud-synced destination folders; and keeps
-daily automatic backup as the recommended default without claiming that a
-storage provider has completed synchronization.
+Build 15 retains the established guided migration and Vault backup views. It
+adds thread-identity-aware history, old-title and active-message search,
+verified version timelines, guarded selected-thread copy-back, and recovery-key
+import. Protection begins after a verified backup, not at installation; the
+automatic-protection state also requires a successful scheduled run. Local
+backup is not Mac-loss insurance, and the `PreCompact` hook is not shipped.
+See [the exact release and physical-test receipt](vault-history-physical-acceptance-2026-09-22.md).
 The selected-thread path passed bounded physical two-Mac acceptance while the
 receiving Mac remained in use; see
 [the selected-thread acceptance receipt](vault-selected-thread-acceptance-2026-09-18.md).
