@@ -120,10 +120,18 @@ its recovered byte count and SHA-256, and publishes an owner-only checkpoint
 and receipt before returning `continue: true`. Missing paths, symlinks, or
 non-private storage return `continue: false` in direct fixture tests. It uses a
 disposable test key outside Keychain and is **not** the Vault backup format or
-an installed customer hook. These direct tests prove its checkpoint mechanics,
-not that a desktop compaction calls it or waits for publication. An integrated
-disposable CLI hook run and the desktop rewrite-order, timeout, and failure
-cases remain separate gates.
+an installed customer hook. Direct tests prove its checkpoint mechanics. In a
+separate disposable TUI session on installed Codex 0.155.0-alpha.16, the
+reviewed one-off hook produced an authenticated 78,899-byte checkpoint before
+manual `/compact` reported completion. A separate verifier decrypted that
+saved ciphertext and matched its byte count and SHA-256 to the receipt. Making
+the disposable key unreadable and trying `/compact` again produced `Hook
+stopped` with the probe's stop reason; no second checkpoint was published. The
+temporary key, ciphertext, and receipt were then removed, and the test Codex
+task was archived. This proves encrypted checkpoint publication and failure
+veto for the tested manual CLI path. It does not prove automatic failure veto,
+hook timeout behavior, the affected desktop rewrite ordering, or Vault-format
+integration; those remain separate gates.
 
 No PreCompact protection is installed or advertised in the customer build.
 The release guarantee remains the last successfully verified scheduled
