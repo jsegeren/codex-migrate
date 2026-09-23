@@ -19,6 +19,13 @@ automatic updater on the website or in buyer email before that test passes.
 - Sparkle verifies the archive signature and installs the replacement. The
   app's existing termination hook must shut down its local helper cleanly
   before replacement. An update never changes or migrates Codex/Vault data.
+- After an opted-in automatic download, Sparkle normally installs on quit.
+  The app probes its token-protected loopback `/api/update-idle` endpoint and
+  initiates that quit only when the helper reports no active migration or Vault
+  worker or running LaunchAgent backup. `/api/shutdown` rechecks under the
+  action lock before the helper exits; a new helper operation wins the race and
+  cancels the quit. Physical signed-update acceptance is still required
+  before this behavior is advertised.
 - A buyer can still download the newest compatible build from their original
   purchase link, or retrieve the original build. This is the fallback if
   in-app installation cannot complete.
@@ -36,8 +43,10 @@ automatic updater on the website or in buyer email before that test passes.
 4. On a test Mac with an older updater-capable app, link a paid test purchase;
    check manually and via automatic check. Confirm download, signature
    verification, helper shutdown, in-place installation, relaunch, and new
-   version. Confirm an active migration makes shutdown refuse the update
-   safely rather than interrupting the operation.
+   version. Confirm an active migration, Vault backup, restore, or scheduled
+   backup makes shutdown refuse the update safely rather than interrupting
+   the operation. Confirm the opted-in idle path actually installs without a
+   manual quit, and that it retries after an operation becomes idle.
 5. Verify a missing/forged token, refund/dispute, wrong architecture, corrupt
    archive, wrong EdDSA signature, and unavailable network do **not** replace
    the installed app or expose a private artifact. Verify the email purchase

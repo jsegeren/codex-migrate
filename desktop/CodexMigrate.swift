@@ -9,6 +9,8 @@ import Sparkle
     private var dashboardURL: URL?
     private var buffer = Data()
     private var quitting = false
+    private var idleInstallTimer: Timer?
+    private var idleProbeInFlight = false
     private var automaticChecksItem: NSMenuItem!
     private var automaticInstallItem: NSMenuItem!
     private lazy var updaterController = SPUStandardUpdaterController(
@@ -58,6 +60,10 @@ import Sparkle
 
     @objc private func quit() { NSApplication.shared.terminate(nil) }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        idleInstallTimer?.invalidate()
+    }
+
     @objc private func checkForUpdates() {
         guard UpdateEntitlement.savedToken() != nil else {
             linkPurchase(); return
@@ -77,7 +83,11 @@ import Sparkle
         guard UpdateEntitlement.savedToken() != nil else { return }
         let updater = updaterController.updater
         updater.automaticallyChecksForUpdates = !updater.automaticallyChecksForUpdates
-        if !updater.automaticallyChecksForUpdates { updater.automaticallyDownloadsUpdates = false }
+        if !updater.automaticallyChecksForUpdates {
+            updater.automaticallyDownloadsUpdates = false
+            idleInstallTimer?.invalidate()
+            idleInstallTimer = nil
+        }
     }
 
     @objc private func toggleAutomaticInstall() {
@@ -86,6 +96,7 @@ import Sparkle
         let enabling = !updater.automaticallyDownloadsUpdates
         if enabling { updater.automaticallyChecksForUpdates = true }
         updater.automaticallyDownloadsUpdates = enabling
+        if !enabling { idleInstallTimer?.invalidate(); idleInstallTimer = nil }
     }
 
     @objc private func linkPurchase() {
@@ -120,6 +131,52 @@ import Sparkle
         guard request.url?.scheme == "https", request.url?.host == "migrate.segeren.com",
               request.url?.path == "/api/update-archive", let token = UpdateEntitlement.savedToken() else { return }
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    }
+
+    func updater(_ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem,
+                 immediateInstallationBlock _: @escaping () -> Void) -> Bool {
+        // Sparkle's default automatic download installs on quit, not when the
+        // Mac is idle. A linked buyer who opted in gets an idle-triggered quit;
+        // Sparkle still owns archive verification and the actual replacement.
+        guard updater.automaticallyDownloadsUpdates, UpdateEntitlement.savedToken() != nil else { return false }
+        idleInstallTimer?.invalidate()
+        idleInstallTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            self?.attemptAutomaticInstallWhenIdle()
+        }
+        // Let Sparkle finish scheduling the install-on-quit before a fast
+        // loopback response can initiate application termination.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
+            self?.attemptAutomaticInstallWhenIdle()
+        }
+        return false
+    }
+
+    private func attemptAutomaticInstallWhenIdle() {
+        guard !quitting, !idleProbeInFlight else { return }
+        guard updaterController.updater.automaticallyDownloadsUpdates,
+              UpdateEntitlement.savedToken() != nil else {
+            idleInstallTimer?.invalidate()
+            idleInstallTimer = nil
+            return
+        }
+        guard let child = process else {
+            NSApplication.shared.terminate(nil)
+            return
+        }
+        guard child.isRunning, let request = helperRequest("/api/update-idle", method: "GET") else { return }
+        idleProbeInFlight = true
+        URLSession.shared.dataTask(with: request) { _, response, _ in
+            DispatchQueue.main.async {
+                self.idleProbeInFlight = false
+                guard !self.quitting, self.updaterController.updater.automaticallyDownloadsUpdates else { return }
+                if (response as? HTTPURLResponse)?.statusCode == 200 {
+                    // The final POST in applicationShouldTerminate rechecks
+                    // idleness under the action lock, closing the race with a
+                    // migration or Vault operation that starts after this GET.
+                    NSApplication.shared.terminate(nil)
+                }
+            }
+        }.resume()
     }
 
     private func startHelper() {
@@ -192,20 +249,7 @@ import Sparkle
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let child = process, child.isRunning else { return .terminateNow }
         guard !quitting else { return .terminateCancel }
-        guard let url = dashboardURL,
-              let token = URLComponents(string: "http://localhost/?" + (url.fragment ?? ""))?.queryItems?.first(where: { $0.name == "token" })?.value,
-              var endpoint = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
-            return .terminateCancel
-        }
-        endpoint.path = "/api/shutdown"
-        endpoint.fragment = nil
-        guard let shutdownURL = endpoint.url else { return .terminateCancel }
-        var request = URLRequest(url: shutdownURL)
-        request.httpMethod = "POST"
-        request.httpBody = Data("{}".utf8)
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(token, forHTTPHeaderField: "X-Codex-Migrate-Token")
-        request.timeoutInterval = 5
+        guard let request = helperRequest("/api/shutdown", method: "POST") else { return .terminateCancel }
         quitting = true
         URLSession.shared.dataTask(with: request) { _, response, _ in
             DispatchQueue.main.async {
@@ -221,6 +265,25 @@ import Sparkle
             }
         }.resume()
         return .terminateLater
+    }
+
+    private func helperRequest(_ path: String, method: String) -> URLRequest? {
+        guard let url = dashboardURL,
+              let token = URLComponents(string: "http://localhost/?" + (url.fragment ?? ""))?.queryItems?.first(where: { $0.name == "token" })?.value,
+              var endpoint = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+        endpoint.path = path
+        endpoint.query = nil
+        endpoint.fragment = nil
+        guard let requestURL = endpoint.url else { return nil }
+        var request = URLRequest(url: requestURL)
+        request.httpMethod = method
+        request.setValue(token, forHTTPHeaderField: "X-Codex-Migrate-Token")
+        request.timeoutInterval = 5
+        if method == "POST" {
+            request.httpBody = Data("{}".utf8)
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        }
+        return request
     }
 
     private func showFailure(_ message: String, title: String = "Codex Migrate couldn’t open") {

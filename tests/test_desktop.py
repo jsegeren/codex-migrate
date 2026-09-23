@@ -190,6 +190,13 @@ class DesktopTests(unittest.TestCase):
                     state = json.load(response)
                 self.assertFalse(state["attached"])
                 self.assertIsNone(state["saved"])
+                with self.assertRaises(HTTPError) as denied:
+                    urlopen(base + "/api/update-idle", timeout=3)
+                self.assertEqual(denied.exception.code, 403)
+                denied.exception.close()
+                with urlopen(Request(base + "/api/update-idle", headers={
+                    "X-Codex-Migrate-Token": token}), timeout=3) as response:
+                    self.assertEqual(json.load(response), {"idle": True})
                 duplicate = subprocess.run(command + ["launch", "--port", "0", "--no-open",
                                            "--source-home", temporary, "--state-dir", temporary + "/state"],
                                            env=env, capture_output=True, text=True, timeout=15)
