@@ -17,6 +17,75 @@ from codex_migrate.cli import _port
 
 
 class DesktopTests(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == "darwin", "packaged Vault requires macOS CryptoKit")
+    def test_packaged_engine_backs_up_and_restores_without_authentication(self):
+        binary = os.environ.get("CODEX_MIGRATE_TEST_ENGINE")
+        if not binary:
+            self.skipTest("set CODEX_MIGRATE_TEST_ENGINE to a packaged engine")
+        helper = Path(binary).resolve().parents[1] / "CodexVaultCrypto"
+        self.assertTrue(helper.is_file())
+        env = {key: value for key, value in os.environ.items()
+               if not key.startswith(("PYTHON", "DYLD_"))}
+        env["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            codex = source / ".codex"
+            sessions = codex / "sessions"
+            sessions.mkdir(parents=True)
+            transcript = sessions / "fixture.jsonl"
+            transcript.write_text(json.dumps({"payload": {"message": {"content": "Disposable work"}}}) + "\n")
+            (codex / "auth.json").write_text("TEST-AUTH-MUST-NOT-BACK-UP")
+            (codex / "installation_id").write_text("TEST-IDENTITY-MUST-NOT-BACK-UP")
+            vault = root / "vault"
+            restored = root / "restored"
+            restored_latest = root / "restored-latest"
+            original = transcript.read_bytes()
+
+            def vault_command(*arguments):
+                result = subprocess.run(
+                    [binary, "vault", "--source-home", str(source), *arguments],
+                    env=env, capture_output=True, text=True, timeout=60,
+                )
+                self.assertEqual(result.returncode, 0, "packaged Vault command failed")
+                return json.loads(result.stdout)
+
+            try:
+                plan = vault_command("backup", "--destination", str(vault), "--json")
+                self.assertFalse(plan["applied"])
+                self.assertFalse(vault.exists())
+                saved = vault_command("backup", "--destination", str(vault), "--apply", "--json")
+                self.assertTrue(saved["recovery_key"].startswith("CV1-"))
+                self.assertEqual(saved["transcript_files"], 1)
+                transcript.write_bytes(original + b'{"type":"message","payload":"Later work"}\n')
+                later = vault_command("backup", "--destination", str(vault), "--apply", "--json")
+                self.assertIsNone(later["recovery_key"])
+                self.assertNotEqual(saved["snapshot_id"], later["snapshot_id"])
+                versions = vault_command("snapshots", "--vault", str(vault), "--json")
+                self.assertEqual([item["snapshot_id"] for item in versions],
+                                 [later["snapshot_id"], saved["snapshot_id"]])
+                checked = vault_command("verify", "--vault", str(vault), "--json")
+                self.assertEqual(checked["snapshot_id"], later["snapshot_id"])
+                checked_old = vault_command("verify", "--vault", str(vault),
+                                            "--snapshot", saved["snapshot_id"], "--json")
+                self.assertEqual(checked_old["snapshot_id"], saved["snapshot_id"])
+                vault_command("restore", "--vault", str(vault), "--output", str(restored),
+                              "--snapshot", saved["snapshot_id"], "--apply", "--json")
+                vault_command("restore", "--vault", str(vault), "--output", str(restored_latest),
+                              "--apply", "--json")
+                self.assertEqual((restored / "sessions/fixture.jsonl").read_bytes(), original)
+                self.assertEqual((restored_latest / "sessions/fixture.jsonl").read_bytes(),
+                                 transcript.read_bytes())
+                for destination in (restored, restored_latest):
+                    self.assertFalse((destination / "auth.json").exists())
+                    self.assertFalse((destination / "installation_id").exists())
+            finally:
+                metadata = vault / "vault.json"
+                if metadata.exists():
+                    key_id = json.loads(metadata.read_text())["key_id"]
+                    subprocess.run([str(helper), "delete-key", "--key-id", key_id],
+                                   check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
     def test_real_engine_rejects_nested_filename_collision(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
