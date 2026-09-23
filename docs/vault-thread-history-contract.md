@@ -114,6 +114,17 @@ That improves confidence in current hook coverage but does not establish the
 behavior of the older desktop build or the separate on-disk rewrite reported
 in the issue.
 
+An isolated, test-only `PreCompact` command prototype now encrypts a synthetic
+transcript with AES-256-GCM, reopens and authenticates the ciphertext, compares
+its recovered byte count and SHA-256, and publishes an owner-only checkpoint
+and receipt before returning `continue: true`. Missing paths, symlinks, or
+non-private storage return `continue: false` in direct fixture tests. It uses a
+disposable test key outside Keychain and is **not** the Vault backup format or
+an installed customer hook. These direct tests prove its checkpoint mechanics,
+not that a desktop compaction calls it or waits for publication. An integrated
+disposable CLI hook run and the desktop rewrite-order, timeout, and failure
+cases remain separate gates.
+
 No PreCompact protection is installed or advertised in the customer build.
 The release guarantee remains the last successfully verified scheduled
 snapshot, with at-risk detection on a later shrink. The upstream durable
