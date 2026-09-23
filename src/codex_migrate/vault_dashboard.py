@@ -210,6 +210,7 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 </p>
 <p class="muted" id="thread-meta">
 </p>
+<button id="read-from-start" type="button" class="secondary" hidden>Read from beginning</button>
 <div id="thread-timeline" class="subsection" hidden>
 <h3>Saved versions</h3>
 <div id="versions"></div>
@@ -249,27 +250,34 @@ $("choose-history-vault").onclick=async()=>{
   }catch(error){fail(error)}
 };
 let selected=null;
+let threadExcerpted=false;
 function params(item){return new URLSearchParams({collection:item.collection,transcript:item.transcript,source:item.source||"local"})}
 function appendEntries(entries){$("entries").append(...entries.map((entry,index)=>{
   const article=document.createElement("article");article.className="entry";
   const h=document.createElement("h3");h.textContent=entry.role||`Entry ${$("entries").children.length+index+1}`;article.append(h);
   if(entry.timestamp){const time=document.createElement("time");time.textContent=entry.timestamp;article.append(time)}
+  if(entry.excerpted){const note=document.createElement("small");note.textContent="Excerpt from a long message. Download Markdown for its full text.";article.append(note)}
   const p=document.createElement("p");p.textContent=entry.text;article.append(p);return article;
 }))}
 async function openThread(item){
   $("error").textContent="";$("status").textContent="Opening conversation…";
   try{
-    const thread=await api("/api/vault/thread?"+params(item));selected=item;
+    const fromMatch=Number.isSafeInteger(item.cursor)&&item.cursor>=0&&item.line>0;
+    const query=params(item);
+    if(fromMatch){query.set("cursor",String(item.cursor));query.set("match",item.match_query||"")}
+    const thread=await api("/api/vault/thread?"+query);selected=item;
     const fromBackup=item.source==="backup";
     $("restore-thread").hidden=!fromBackup;
     $("thread-restore-note").hidden=!fromBackup;
     $("thread-restore-status").textContent="";$("thread-restore-error").textContent="";
-    $("thread-meta").textContent=`${fromBackup?"Opened backup":"This Mac"} · ${thread.collection} · ${thread.entries.length} readable entries${thread.next_cursor!==null&&thread.next_cursor!==undefined?" so far. Download Markdown includes the full conversation.":""}`;
+    threadExcerpted=thread.entries.some(entry=>entry.excerpted);
+    $("thread-meta").textContent=`${fromBackup?"Opened backup":"This Mac"} · ${thread.collection} · ${fromMatch?"Starting at the search match · ":""}${thread.entries.length} readable entries${threadExcerpted?". A long message is excerpted here; Download Markdown for full text.":thread.next_cursor!==null&&thread.next_cursor!==undefined?" so far. Download Markdown includes the full conversation.":""}`;
+    $("read-from-start").hidden=!fromMatch||item.cursor===0;
     $("entries").replaceChildren();appendEntries(thread.entries);
     $("load-more").dataset.cursor=thread.next_cursor===null||thread.next_cursor===undefined?"":String(thread.next_cursor);
     $("load-more").hidden=!$("load-more").dataset.cursor;
-    $("print").hidden=Boolean($("load-more").dataset.cursor);
-    $("share").hidden=Boolean($("load-more").dataset.cursor);
+    $("print").hidden=threadExcerpted||Boolean($("load-more").dataset.cursor);
+    $("share").hidden=threadExcerpted||Boolean($("load-more").dataset.cursor);
     $("thread-timeline").hidden=true;$("versions").replaceChildren();
     if(fromBackup&&item.key&&chosenVault()){
       const data=await api("/api/vault/thread-history?"+new URLSearchParams({vault:chosenVault(),key:item.key}));
@@ -284,28 +292,34 @@ async function openThread(item){
       }));
       $("thread-timeline").hidden=data.versions.length<2;
     }
-    $("thread").hidden=false;$("status").textContent="";$("thread").scrollIntoView({behavior:"smooth"});
+    $("thread").hidden=false;$("status").textContent="";
+    const matched=fromMatch&&item.match_query?[...$("entries").querySelectorAll("p")].find(
+      p=>p.textContent.toLocaleLowerCase().includes(item.match_query.toLocaleLowerCase())):null;
+    (matched||$("thread")).scrollIntoView({behavior:"smooth"});
   }catch(error){
     if(item.source==="backup"||item.source==="local"){
       selected=item;$("entries").replaceChildren();$("load-more").hidden=true;
-      $("print").hidden=true;$("share").hidden=true;$("restore-thread").hidden=item.source!=="backup";
+      $("print").hidden=true;$("share").hidden=true;$("read-from-start").hidden=true;$("restore-thread").hidden=item.source!=="backup";
       $("thread-meta").textContent="This conversation cannot be previewed here. Try its Markdown export or another saved version.";
       $("thread").hidden=false;
     }
     fail(error)
   }
 }
+$("read-from-start").onclick=()=>{if(selected)openThread({...selected,cursor:0,line:0,match_query:""})};
 $("load-more").onclick=async()=>{
   if(!selected||!$("load-more").dataset.cursor)return;
   $("load-more").disabled=true;
   try{
     const query=params(selected);query.set("cursor",$("load-more").dataset.cursor);
     const page=await api("/api/vault/thread?"+query);appendEntries(page.entries);
+    threadExcerpted=threadExcerpted||page.entries.some(entry=>entry.excerpted);
     $("load-more").dataset.cursor=page.next_cursor===null?"":String(page.next_cursor);
     $("load-more").hidden=!$("load-more").dataset.cursor;
-    $("thread-meta").textContent=`${selected.source==="backup"?"Opened backup":"This Mac"} · ${page.collection} · ${$("entries").children.length} readable entries${page.next_cursor!==null?" so far. Download Markdown includes the full conversation.":""}`;
-    $("print").hidden=Boolean($("load-more").dataset.cursor);
-    $("share").hidden=Boolean($("load-more").dataset.cursor);
+    const fromMatch=Number.isSafeInteger(selected.cursor)&&selected.cursor>=0&&selected.line>0;
+    $("thread-meta").textContent=`${selected.source==="backup"?"Opened backup":"This Mac"} · ${page.collection} · ${fromMatch?"Starting at the search match · ":""}${$("entries").children.length} readable entries${threadExcerpted?". A long message is excerpted here; Download Markdown for full text.":page.next_cursor!==null?" so far. Download Markdown includes the full conversation.":""}`;
+    $("print").hidden=threadExcerpted||Boolean($("load-more").dataset.cursor);
+    $("share").hidden=threadExcerpted||Boolean($("load-more").dataset.cursor);
   }catch(error){fail(error)}finally{$("load-more").disabled=false}
 };
 async function openSavedResult(item){
@@ -364,6 +378,7 @@ async function runSearch(append=false){
         button.onclick=()=>openSavedResult(item);
       }else{
         item.source=source==="local_titles"?"local":source;
+        item.match_query=query;
         small.textContent=`${item.collection}${item.timestamp?" · "+item.timestamp:""}`;
         if(item.title)title.textContent=item.title;
         text.textContent=item.snippet;button.onclick=()=>openThread(item);

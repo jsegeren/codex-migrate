@@ -155,6 +155,19 @@ with the current title attached to each result. The loopback helper shut down
 cleanly; the disposable test copy was not installed as the user's app. This
 does not prove notarization, quarantined first launch, or a live buyer restore.
 
+On the original Mac, a subsequent read-only full-text search for a distinctive
+word found a **current, active** conversation in 0.14 seconds. This exposed a
+usability gap: opening the result initially showed the beginning of a long
+thread rather than the matching message. The candidate now records the match's
+byte offset and opens there. The real matching record exceeded the 1 MiB page
+preview budget, so the candidate shows a clearly labelled excerpt at the match
+while leaving the exact full-thread Markdown export available. A read-only
+recheck opened that match in 0.22 seconds. The complete local suite passed 822
+tests (12 skips), including active and restored-backup jump-to-match cases and
+an oversized-message excerpt case. No private conversation text or identifier
+is recorded in this receipt. This is source-level evidence; the improvement is
+not in the currently distributed signed/notarized build 14.
+
 ## Claim boundary
 
 This is evidence for the tested Codex Vault engine on these two Macs, not every

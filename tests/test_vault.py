@@ -117,6 +117,46 @@ class VaultTests(unittest.TestCase):
             self.assertEqual(result[0].collection, "active")
             self.assertEqual(result[0].line, 2)
             self.assertIn("Clerk", result[0].snippet)
+            self.assertGreater(result[0].cursor, 0)
+            page, _ = read_thread_page(
+                str(root), "active", "active.jsonl", result[0].cursor,
+                expected_query="clerk")
+            self.assertEqual([entry.text for entry in page.entries], ["Set up Clerk now"])
+            with self.assertRaisesRegex(MigrationError, "changed since the search"):
+                read_thread_page(str(root), "active", "active.jsonl", result[0].cursor,
+                                 expected_query="missing")
+
+    def test_search_can_open_an_excerpt_when_matching_message_is_too_large(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            transcript = root / ".codex/sessions/large.jsonl"
+            transcript.parent.mkdir(parents=True)
+            body = "A" * (1024 * 1024) + "Clerk marker" + "B" * (1024 * 1024)
+            transcript.write_text(
+                json.dumps({"payload": {"message": {"content": "Earlier work"}}}) + "\n"
+                + json.dumps({"payload": {"message": {"content": body}}}) + "\n",
+                encoding="utf-8",
+            )
+            match = search(str(root), "clerk", limit=1)[0]
+            page, next_cursor = read_thread_page(
+                str(root), "active", "large.jsonl", match.cursor,
+                expected_query="clerk")
+            self.assertIsNone(next_cursor)
+            self.assertEqual(len(page.entries), 1)
+            self.assertTrue(page.entries[0].excerpted)
+            self.assertIn("Clerk marker", page.entries[0].text)
+            self.assertLess(len(page.entries[0].text), 2000)
+            with self.assertRaisesRegex(MigrationError, "too large to preview"):
+                read_thread_page(str(root), "active", "large.jsonl", match.cursor)
+            transcript.write_text(json.dumps({"payload": {"message": {"content": body}}}) + "\n",
+                                  encoding="utf-8")
+            first_match = search(str(root), "clerk", limit=1)[0]
+            self.assertEqual(first_match.cursor, 0)
+            first_page, _ = read_thread_page(
+                str(root), "active", "large.jsonl", first_match.cursor,
+                expected_query="clerk")
+            self.assertTrue(first_page.entries[0].excerpted)
+            self.assertIn("Clerk marker", first_page.entries[0].text)
 
     def test_search_rejects_linked_transcript(self):
         with tempfile.TemporaryDirectory() as temporary:

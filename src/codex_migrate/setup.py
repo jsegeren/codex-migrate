@@ -737,11 +737,11 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
             worker.start()
         return self.vault_browse_status()
 
-    def _browse(self, function, *args):
+    def _browse(self, function, *args, **kwargs):
         with self._browse_data_lock:
             if self._browse_home is None:
                 raise MigrationError("Open a verified Vault backup before searching it")
-            return function(str(self._browse_home), *args)
+            return function(str(self._browse_home), *args, **kwargs)
 
     def search_vault_backup(self, phrase, limit, offset=0):
         with self._browse_data_lock:
@@ -753,8 +753,9 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
     def read_vault_backup_thread(self, collection, transcript):
         return self._browse(read_thread, collection, transcript)
 
-    def read_vault_backup_thread_page(self, collection, transcript, cursor):
-        return self._browse(read_thread_page, collection, transcript, cursor)
+    def read_vault_backup_thread_page(self, collection, transcript, cursor, expected_query=""):
+        return self._browse(read_thread_page, collection, transcript, cursor,
+                            expected_query=expected_query)
 
     def issue_vault_export_ticket(self, collection, transcript, source="backup"):
         if collection not in ("active", "archived") or not isinstance(transcript, str) \
@@ -1209,22 +1210,28 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                                              "has_more": len(results) > page_size})
                             return
                         if (parsed.path in ("/api/vault/thread", "/api/vault/export")
-                                and set(query) <= {"collection", "transcript", "source", "cursor"}):
+                                and set(query) <= {"collection", "transcript", "source", "cursor", "match"}):
                             collection = query.get("collection", [""])[0]
                             transcript = query.get("transcript", [""])[0]
                             source = query.get("source", ["local"])[0]
                             if (len(collection) > 16 or len(transcript) > 4096
-                                    or source not in ("local", "backup")
-                                    or ("cursor" in query and (parsed.path != "/api/vault/thread"
+                                or source not in ("local", "backup")
+                                or ("cursor" in query and (parsed.path != "/api/vault/thread"
                                         or len(query["cursor"]) != 1
-                                        or len(query["cursor"][0]) > 20))):
+                                        or len(query["cursor"][0]) > 20))
+                                or ("match" in query and (parsed.path != "/api/vault/thread"
+                                        or len(query["match"]) != 1
+                                        or len(query["match"][0]) > 500))):
                                 raise ValueError("invalid conversation identifier")
                             if parsed.path == "/api/vault/thread":
                                 cursor = int(query.get("cursor", ["0"])[0])
+                                expected_query = query.get("match", [""])[0]
                                 thread, next_cursor = (
-                                    setup.read_vault_backup_thread_page(collection, transcript, cursor)
+                                    setup.read_vault_backup_thread_page(
+                                        collection, transcript, cursor, expected_query)
                                     if source == "backup" else
-                                    read_thread_page(setup.source_home, collection, transcript, cursor))
+                                    read_thread_page(setup.source_home, collection, transcript,
+                                                     cursor, expected_query=expected_query))
                                 self._json(200, {**thread.as_dict(),
                                                  "next_cursor": next_cursor})
                                 return

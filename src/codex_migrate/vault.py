@@ -41,6 +41,7 @@ class VaultMatch:
     timestamp: Optional[str]
     snippet: str
     title: Optional[str] = None
+    cursor: int = 0
 
     def as_dict(self) -> Dict[str, object]:
         return asdict(self)
@@ -51,6 +52,7 @@ class ThreadEntry:
     timestamp: Optional[str]
     role: Optional[str]
     text: str
+    excerpted: bool = False
 
     def as_dict(self) -> Dict[str, object]:
         return asdict(self)
@@ -237,11 +239,17 @@ def search(
         elif not titles_only:
             try:
                 descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-                with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
+                with os.fdopen(descriptor, "rb") as handle:
                     info = os.fstat(handle.fileno())
                     if not stat.S_ISREG(info.st_mode):
                         raise MigrationError("A conversation transcript changed while it was being read.")
-                    for line_number, line in enumerate(handle, start=1):
+                    line_number = 0
+                    while True:
+                        cursor = handle.tell()
+                        line = handle.readline()
+                        if not line:
+                            break
+                        line_number += 1
                         try:
                             record = json.loads(line)
                         except (UnicodeError, json.JSONDecodeError) as error:
@@ -261,6 +269,7 @@ def search(
                                 timestamp=_timestamp(record),
                                 title=current_title,
                                 snippet=_snippet(text, position, len(query.strip())),
+                                cursor=cursor,
                             )
                             break
                         if match is not None:
@@ -335,12 +344,15 @@ def read_thread(
 def read_thread_page(
     source_home: str, collection: str, transcript: str, cursor: int = 0,
     max_entries: int = 100, max_text_bytes: int = 1024 * 1024,
+    expected_query: str = "",
 ):
     """Read one bounded page of a verified Vault browse copy by byte offset."""
     if not isinstance(cursor, int) or cursor < 0 or cursor > 1 << 63:
         raise ValueError("invalid conversation cursor")
     if not 1 <= max_entries <= 100 or not 1 <= max_text_bytes <= 1024 * 1024:
         raise ValueError("invalid conversation page budget")
+    if not isinstance(expected_query, str) or len(expected_query) > 500:
+        raise ValueError("invalid conversation search match")
     path = _find_transcript(source_home, collection, transcript)
     entries: List[ThreadEntry] = []
     total = 0
@@ -363,6 +375,10 @@ def read_thread_page(
                     record = json.loads(raw)
                 except (UnicodeError, json.JSONDecodeError) as error:
                     raise MigrationError("A conversation transcript contains unreadable JSON.") from error
+                if expected_query and start == cursor and not any(
+                        expected_query.casefold() in body.casefold()
+                        for body in _strings(record)):
+                    raise MigrationError("This conversation changed since the search. Search again.")
                 seen = set()
                 new_entries = []
                 new_bytes = 0
@@ -375,6 +391,19 @@ def read_thread_page(
                         timestamp=_timestamp(record),
                         role=_first_named_string(record, "role"), text=body,
                     ))
+                if (expected_query and start == cursor
+                        and (len(new_entries) > max_entries
+                             or total + new_bytes > max_text_bytes)):
+                    matched = next(entry.text for entry in new_entries
+                                   if expected_query.casefold() in entry.text.casefold())
+                    position = matched.casefold().find(expected_query.casefold())
+                    excerpt = _snippet(matched, position, len(expected_query), width=1000)
+                    new_entries = [ThreadEntry(
+                        timestamp=_timestamp(record),
+                        role=_first_named_string(record, "role"),
+                        text=excerpt, excerpted=True,
+                    )]
+                    new_bytes = len(excerpt.encode("utf-8"))
                 if (len(entries) + len(new_entries) > max_entries
                         or total + new_bytes > max_text_bytes):
                     if not entries:
