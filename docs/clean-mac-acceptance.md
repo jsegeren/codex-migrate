@@ -91,7 +91,11 @@ schema to make this check pass. Record the exact app versions tested.
 
 After the intended Apple membership activates, build with the existing
 `desktop/build.py --release --identity <Developer-ID-name> --notary-profile
-<keychain-profile-name>` workflow. Never put credential values in those arguments.
+<keychain-profile-name>` workflow only if that Keychain is already unlocked.
+Alternatively, use the documented App Store Connect Team API key, key ID, and
+issuer flags to avoid the locked notarization Keychain. Never put private key
+contents or passwords in command arguments. The separate Developer ID signing
+identity must still be available without an unexpected prompt.
 Verify the exact artifact's signature, notarization/staple, version, checksum,
 and quarantined download/first launch on the clean Mac. An unsigned candidate
 does not satisfy this final gate. Payment/delivery/refund acceptance is separate:
