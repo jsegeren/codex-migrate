@@ -36,7 +36,8 @@ and [in-app update acceptance](in-app-updates.md).
 
 The Founder approved a Sparkle key rotation. A new local signing seed and
 public key exist, and the source now supports a Developer ID signed DMG for
-the rotation. The private seed still needs a secure second copy. The separate
+the rotation. A byte-verified, owner-only second copy of the seed now exists on
+the Founder's other FileVault-enabled Mac. The separate
 Apple notarization Keychain is locked, so no new DMG has been notarized or
 distributed. See [the rotation runbook](sparkle-key-rotation-2026-09-23.md).
 

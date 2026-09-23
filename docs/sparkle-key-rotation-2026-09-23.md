@@ -4,8 +4,11 @@ The Founder approved rotating the inaccessible Sparkle Ed25519 signing key.
 The live build 16, original purchase links, and public appcast remain unchanged
 until an exact replacement passes the checks below. Do not delete the old key or
 artifact. The new private seed is owner-only and outside Git; only its public
-key is embedded in the candidate app. A second secure copy of the new seed is
-still required before release.
+key is embedded in the candidate app. On September 23, a second owner-only
+copy was placed on the Founder's other FileVault-enabled Mac over verified
+SSH. A byte-for-byte comparison passed without displaying the seed; the
+destination file and directory are owner-only. Keep both copies until a later
+key-custody decision is explicitly verified.
 
 Sparkle permits an EdDSA key change when the Developer ID signing identity
 stays the same. Because this app enables `SUVerifyUpdateBeforeExtraction`,
