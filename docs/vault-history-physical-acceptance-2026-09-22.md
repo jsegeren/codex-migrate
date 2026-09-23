@@ -198,6 +198,13 @@ two-Mac encrypted-backup result for this exact commit. Earlier physical
 encrypted-history acceptance remains recorded above. The isolated checkout
 was clean and removed; neither Mac's real Vault or Codex history was changed.
 
+An exact-source local-test build 15 at `d5f973a` passed strict deep ad-hoc
+signature verification and the nine-case packaged desktop suite (eight passes,
+one case-sensitive-filesystem skip). Its bundled build receipt names that
+commit and `local-test`; ZIP SHA-256 is
+`d2531f81467fa8081f05cea184d86dfd3e2ddec067d5cc5b1123d757563074c0`.
+This artifact is not Developer ID signed or notarized and is not for customers.
+
 ## Claim boundary
 
 This is evidence for the tested Codex Vault engine on these two Macs, not every
