@@ -87,10 +87,24 @@ verification path is established. An unknown Keychain password is never a
 reason to request a credential from the Founder in chat.
 The source helper now supplies a noninteractive Local Authentication context
 for its Keychain operations, so an interaction requirement should fail with an
-explicit error instead of opening a helper password dialog. This change has
-passed Swift typechecking only; it does not identify the source of the earlier
-prompt or clear the signed-release gate. Signing and notarization can invoke
-Keychain independently of this helper.
+explicit error instead of opening a helper password dialog. Its real
+create/export/delete/import recovery-key round trip passed on disposable
+macOS CI runners for both Python matrix jobs. That does not identify the
+source of the earlier local prompt or clear the signed-release gate. Signing
+and notarization can invoke Keychain independently of this helper.
+
+## Disposable signing-path probe
+
+A September 23 hosted macOS CI probe tried to sign a disposable executable
+using a separate, temporary Keychain and a synthetic one-day identity. It
+never imported the release certificate or key and did not access either
+physical Mac's Keychain. A compatible PKCS#12 bundle imported, but the
+self-signed identity was not trusted for code signing. An attempt to establish
+test-only trust stalled and hit a two-minute step timeout. The experimental
+probe was removed from the release branch rather than leaving a failing or
+misleading check. This is **not** evidence that a dedicated Keychain can sign
+the release without prompting; Developer ID signing and notarization remain
+unverified for build 15.
 
 ## Claim boundary
 

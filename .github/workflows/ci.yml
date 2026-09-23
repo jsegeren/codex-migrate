@@ -54,10 +54,6 @@ jobs:
         run: |
           xcrun swiftc -parse-as-library desktop/CodexVaultCrypto.swift -o "$RUNNER_TEMP/CodexVaultCryptoSmoke"
           python tests/keychain_ci_smoke.py "$RUNNER_TEMP/CodexVaultCryptoSmoke"
-      - name: Probe isolated noninteractive signing Keychain
-        if: matrix['python-version'] == '3.12'
-        timeout-minutes: 2
-        run: bash tests/fixtures/signing_keychain_ci_probe.sh
       - name: Test
         run: PYTHONPATH=src python -m unittest discover -s tests -v
       - name: Check CLI
