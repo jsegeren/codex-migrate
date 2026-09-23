@@ -4,10 +4,11 @@ import platform
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from codex_migrate.vault import search
 from codex_migrate.vault_backup import backup
-from codex_migrate.vault_history import search_titles, thread_timeline
+from codex_migrate.vault_history import _group_key, search_titles, thread_timeline
 from codex_migrate.vault_identity import loss_warnings, peek_identity
 from codex_migrate.vault_recovery import snapshot_catalog, verify_snapshot
 
@@ -20,6 +21,25 @@ def record(kind, payload):
 
 
 class IdentityTests(unittest.TestCase):
+    def test_conflicted_same_path_versions_are_not_one_thread(self):
+        base = {"collection": "codex", "path": "sessions/rollout.jsonl",
+                "transcript": "sessions/rollout.jsonl",
+                "thread_id": None, "identity_state": "needs_review",
+                "titles": ["Same title"], "records": 1,
+                "assistant_messages": 0, "at_risk": True, "size": 20}
+        first = {**base, "sha256": "a" * 64, "snapshot_id": "older",
+                 "created_at": "2026-09-01T00:00:00Z"}
+        second = {**base, "sha256": "b" * 64, "snapshot_id": "newer",
+                  "created_at": "2026-09-02T00:00:00Z"}
+        first["key"] = _group_key(first)
+        second["key"] = _group_key(second)
+        self.assertNotEqual(first["key"], second["key"])
+        with patch("codex_migrate.vault_history._versions", return_value=[second, first]):
+            hits = search_titles("unused", "Same title")
+            self.assertEqual(len(hits), 2)
+            self.assertEqual([item["version_count"] for item in hits], [1, 1])
+            self.assertEqual(len(thread_timeline("unused", second["key"])), 1)
+
     def test_embedded_id_survives_rename_and_conflict_needs_review(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "renamed.jsonl"

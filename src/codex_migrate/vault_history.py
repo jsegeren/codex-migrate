@@ -11,7 +11,12 @@ def _group_key(file: Dict[str, object]) -> str:
     thread_id = file.get("thread_id")
     if file.get("identity_state") == "verified" and isinstance(thread_id, str):
         return "id:" + thread_id
-    # Conflicted or missing IDs must never be merged on title alone.
+    if file.get("identity_state") == "needs_review":
+        # A conflicted path can be reused by a different thread. Equal bytes
+        # may be shown together, but distinct captures are never one history.
+        return ("review:" + str(file["collection"]) + "/" + str(file["path"])
+                + "/" + str(file["sha256"]))
+    # Missing IDs have only a source-scoped path discovery hint.
     return "path:" + str(file["collection"]) + "/" + str(file["path"])
 
 
@@ -79,7 +84,8 @@ def thread_timeline(
     vault: str, key: str, *, crypto_helper: Optional[str] = None,
 ) -> List[Dict[str, object]]:
     if not isinstance(key, str) or not key or len(key) > 4096 \
-            or not (key.startswith("id:") or key.startswith("path:")):
+            or not (key.startswith("id:") or key.startswith("path:")
+                    or key.startswith("review:")):
         raise ValueError("invalid Vault thread identity")
     versions = [version for version in _versions(vault, crypto_helper=crypto_helper)
                 if version["key"] == key]
