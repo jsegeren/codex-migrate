@@ -185,6 +185,12 @@ search-to-match, oversized matching-message excerpt, and mismatch refusal.
 The checkout was clean and deleted after the run. This test neither read nor
 changed that Mac's real Codex history, Vault schedule, or installed app.
 
+A final identity review found that two `needs_review` captures at the same
+source path but with different bytes could otherwise appear as one history.
+The candidate now keeps those captures in distinct review-only groups without
+changing verified-ID grouping or the path hint for a missing ID. The local
+suite passed 823 tests (12 skips), including a regression for this boundary.
+
 ## Claim boundary
 
 This is evidence for the tested Codex Vault engine on these two Macs, not every
