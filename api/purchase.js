@@ -13,11 +13,13 @@ function makeHandler(load = runtime, configure = configuration, env = process.en
       }
       const config = configure(env);
       // Reject bogus bearer credentials before opening a database connection.
-      if (data.action === 'download') tokenSession(data.credential, config);
+      if (['download', 'download_latest', 'entitlement'].includes(data.action)) tokenSession(data.credential, config);
       else if (data.action !== 'status' || !sessionId(data.credential, config.live)) throw new CommerceError('invalid_link', 403);
       const { service } = await load(env);
       if (data.action === 'status') return reply(res, 200, await service.status(data.credential));
       if (data.action === 'download') return reply(res, 200, await service.download(data.credential));
+      if (data.action === 'download_latest') return reply(res, 200, await service.downloadLatest(data.credential));
+      if (data.action === 'entitlement') return reply(res, 200, await service.entitlement(data.credential));
       throw new CommerceError('invalid_request', 400);
     } catch (error) { return failure(res, error); }
   };

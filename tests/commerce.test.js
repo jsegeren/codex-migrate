@@ -4,7 +4,7 @@ const { Readable } = require('node:stream');
 const Stripe = require('stripe');
 const { configuration, SITE } = require('../commerce/config');
 const { service, checkoutRecovery, validatePurchase, validateCheckoutRecovery,
-  purchasePriceCents, tokenFor, tokenSession } = require('../commerce/service');
+  purchasePriceCents, tokenFor, tokenSession, newerCompatibleRelease } = require('../commerce/service');
 const { deliveryMail, recoveryMail, PURCHASE_NOTIFY_EMAILS } = require('../commerce/runtime');
 const { makeHandler: webhook } = require('../api/stripe-webhook');
 const { makeHandler: checkout } = require('../api/checkout');
@@ -214,6 +214,32 @@ test('purchases recover their original artifact after a new current release', as
   const api = service({ config: { ...config, release: next, catalog: { ...config.catalog, [next.id]: next } },
     stripe: f.stripe, store: f.store, signDownload, sendMail: async () => 'accepted' });
   assert.equal((await api.download(tokenFor(f.s.id, config))).release, release.id);
+});
+test('a paid buyer can retrieve a newer approved compatible build without losing the original', async () => {
+  const old = { ...release, filename: 'Codex-Migrate-0.1.0-build15-arm64.zip',
+    pathname: `sandbox/${release.sha256}/Codex-Migrate-0.1.0-build15-arm64.zip` };
+  const next = { ...old, id: 'fixture-2', filename: 'Codex-Migrate-0.1.0-build16-arm64.zip',
+    pathname: `sandbox/${old.sha256}/Codex-Migrate-0.1.0-build16-arm64.zip` };
+  const f = fixture();
+  const updateConfig = { ...config, release: next, catalog: { [old.id]: old, [next.id]: next } };
+  const api = service({ config: updateConfig, stripe: f.stripe, store: f.store,
+    signDownload, sendMail: async () => 'accepted' });
+  const token = tokenFor(f.s.id, config);
+  assert.equal((await api.download(token)).release, old.id);
+  const latest = await api.downloadLatest(token);
+  assert.equal(latest.release, next.id);
+  assert.equal(latest.originalRelease, old.id);
+  assert.equal(latest.updateAvailable, true);
+  assert.equal(f.records.get(f.s.id).releaseId, old.id);
+  assert.deepEqual(await api.entitlement(token), { release: old.id, currentRelease: next.id, updateAvailable: true });
+  f.s.payment_intent.latest_charge.refunded = true;
+  await assert.rejects(api.downloadLatest(token), /requires_support/);
+});
+test('update selection refuses cross-architecture, downgrade, and unapproved releases', () => {
+  const old = { ...release, filename: 'Codex-Migrate-0.1.0-build15-arm64.zip' };
+  assert.equal(newerCompatibleRelease(old, { ...old, filename: 'Codex-Migrate-0.1.0-build16-x86_64.zip' }, false), false);
+  assert.equal(newerCompatibleRelease(old, { ...old, filename: 'Codex-Migrate-0.1.0-build14-arm64.zip' }, false), false);
+  assert.equal(newerCompatibleRelease(old, { ...old, filename: 'Codex-Migrate-0.1.0-build16-arm64.zip', url: 'https://evil.example' }, false), false);
 });
 test('unapproved historical artifacts cannot become download redirects', async () => {
   const f = fixture();

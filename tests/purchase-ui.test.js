@@ -58,6 +58,18 @@ test('reload rechecks a tab-scoped token and never reuses the old signed file UR
   await refreshed.finish({ ...good, url: good.url + 'fresh' });
   assert.equal(refreshed.get('purchase-download').getAttribute('href'), good.url + 'fresh');
 });
+test('purchase page prefers a free update and offers the preserved original', async () => {
+  const f = fixture();
+  assert.equal(JSON.parse(f.calls[0].options.body).action, 'download_latest');
+  await f.finish({ ...good, updateAvailable: true, originalRelease: 'beta-build15-arm64', release: 'beta-build16-arm64' });
+  assert.match(f.get('purchase-status').textContent, /free update/);
+  assert.equal(f.get('purchase-original').hidden, false);
+  f.get('purchase-original').events.click();
+  assert.equal(JSON.parse(f.calls[1].options.body).action, 'download');
+  await f.finish({ ...good, url: good.url + 'old' });
+  assert.equal(f.get('purchase-download').getAttribute('href'), good.url + 'old');
+  assert.equal(f.get('purchase-original').hidden, true);
+});
 test('verified purchases emit one conversion across checks and reloads', async () => {
   const first = fixture();
   await first.finish();

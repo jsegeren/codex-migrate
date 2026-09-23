@@ -19,6 +19,10 @@ function commerceSite(env = process.env) {
 }
 function validRelease(release, live) {
   return Boolean(release && /^[a-f0-9]{64}$/.test(release.sha256 || '') &&
+    (release.sparkleSignature === undefined ||
+      typeof release.sparkleSignature === 'string' &&
+      /^[A-Za-z0-9+/]{86}==$/.test(release.sparkleSignature) &&
+      Buffer.from(release.sparkleSignature, 'base64').length === 64) &&
     (release.channel === undefined || release.channel === 'beta' &&
       release.acceptance === 'founder-approved-paid-beta-2026-09-07') &&
     /^[a-f0-9]{40}$/.test(release.source || '') && /^[A-Za-z0-9._-]{1,100}$/.test(release.id || '') &&
