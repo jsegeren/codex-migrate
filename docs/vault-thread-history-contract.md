@@ -129,9 +129,15 @@ the disposable key unreadable and trying `/compact` again produced `Hook
 stopped` with the probe's stop reason; no second checkpoint was published. The
 temporary key, ciphertext, and receipt were then removed, and the test Codex
 task was archived. This proves encrypted checkpoint publication and failure
-veto for the tested manual CLI path. It does not prove automatic failure veto,
-hook timeout behavior, the affected desktop rewrite ordering, or Vault-format
-integration; those remain separate gates.
+veto for the tested manual CLI path. A second disposable TUI task configured
+with an `auto`-only matcher and an artificially low compaction threshold reached
+automatic compaction on its second turn. Its test key was unreadable, so the
+hook returned `continue: false`; Codex displayed `Hook stopped` and
+`Conversation interrupted`, and the checkpoint directory stayed empty. That
+task was archived and its temporary storage removed. This proves an automatic
+failure veto in the tested CLI build, not a successful encrypted automatic
+checkpoint. Hook timeout behavior, the affected desktop rewrite ordering, and
+Vault-format integration remain separate gates.
 
 No PreCompact protection is installed or advertised in the customer build.
 The release guarantee remains the last successfully verified scheduled

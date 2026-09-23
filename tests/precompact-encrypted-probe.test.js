@@ -65,6 +65,21 @@ test('missing transcript fails closed without publishing a checkpoint', () => fi
   assert.deepEqual(fs.readdirSync(paths.output), []);
 }));
 
+test('automatic checkpoint succeeds only with a verified ciphertext', () => fixture(paths => {
+  assert.deepEqual(invoke(paths, { trigger: 'auto' }), { continue: true });
+  const receiptName = fs.readdirSync(paths.output).find(name => name.endsWith('.json'));
+  assert.ok(receiptName);
+  const receipt = JSON.parse(fs.readFileSync(path.join(paths.output, receiptName)));
+  assert.equal(receipt.trigger, 'auto');
+  assert.equal(receipt.verified, true);
+}));
+
+test('automatic checkpoint refuses to continue when its test key is invalid', () => fixture(paths => {
+  fs.writeFileSync(paths.key, Buffer.alloc(0));
+  assert.equal(invoke(paths, { trigger: 'auto' }).continue, false);
+  assert.deepEqual(fs.readdirSync(paths.output), []);
+}));
+
 test('symlinked transcript fails closed without publishing a checkpoint', () => fixture(paths => {
   const link = path.join(paths.root, 'linked.jsonl');
   fs.symlinkSync(paths.transcript, link);
