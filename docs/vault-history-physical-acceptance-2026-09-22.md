@@ -178,6 +178,13 @@ ZIP SHA-256 is
 This is packaging evidence, not Developer ID signing, notarization, Gatekeeper
 acceptance, or buyer delivery.
 
+The larger Mac independently cloned pushed source `96c5a40` into an isolated
+temporary checkout and passed all 69 focused Vault and setup tests under its
+Python 3.9.6 runtime, including active search-to-match, restored-backup
+search-to-match, oversized matching-message excerpt, and mismatch refusal.
+The checkout was clean and deleted after the run. This test neither read nor
+changed that Mac's real Codex history, Vault schedule, or installed app.
+
 ## Claim boundary
 
 This is evidence for the tested Codex Vault engine on these two Macs, not every
