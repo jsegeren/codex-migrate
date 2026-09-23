@@ -152,7 +152,8 @@ class DesktopTests(unittest.TestCase):
                 sessions = codex / "sessions"
                 sessions.mkdir(parents=True)
                 (sessions / ("rollout-" + fixture_id + ".jsonl")).write_text(
-                    json.dumps({"payload": {"message": {"content": "Different fixture text"}}}) + "\n",
+                    json.dumps({"payload": {"message": {"content": "Different fixture text"}}}) + "\n"
+                    + json.dumps({"payload": {"message": {"content": "Clerk in active work"}}}) + "\n",
                     encoding="utf-8",
                 )
                 (codex / "session_index.jsonl").write_text(
@@ -168,6 +169,22 @@ class DesktopTests(unittest.TestCase):
                     title_results = json.load(response)
                 self.assertEqual(len(title_results["results"]), 1)
                 self.assertEqual(title_results["results"][0]["title"], "New fixture title")
+                match_request = Request(
+                    base + "/api/vault/search?q=Clerk&source=local",
+                    headers={"X-Codex-Migrate-Token": token},
+                )
+                with urlopen(match_request, timeout=3) as response:
+                    match = json.load(response)["results"][0]
+                self.assertGreater(match["cursor"], 0)
+                page_request = Request(
+                    base + "/api/vault/thread?collection=active&transcript=rollout-"
+                    + fixture_id + ".jsonl&cursor=" + str(match["cursor"]) + "&match=Clerk",
+                    headers={"X-Codex-Migrate-Token": token},
+                )
+                with urlopen(page_request, timeout=3) as response:
+                    page = json.load(response)
+                self.assertEqual([entry["text"] for entry in page["entries"]],
+                                 ["Clerk in active work"])
                 request = Request(base + "/api/setup", headers={"X-Codex-Migrate-Token": token})
                 with urlopen(request, timeout=3) as response:
                     state = json.load(response)

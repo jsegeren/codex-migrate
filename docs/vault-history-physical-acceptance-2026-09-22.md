@@ -168,6 +168,16 @@ an oversized-message excerpt case. No private conversation text or identifier
 is recorded in this receipt. This is source-level evidence; the improvement is
 not in the currently distributed signed/notarized build 14.
 
+A fresh local-test-only build 15 from clean pushed source `9ca2c4f` then passed
+strict deep ad-hoc signature verification and the exact bundled-engine desktop
+suite (8 passes, 1 case-sensitive-filesystem skip). The bundled loopback
+server found a synthetic active conversation by message text and returned its
+matching message when opened at the search result's byte offset. The local
+ZIP SHA-256 is
+`38274369a2f83d3a6ee41c6ca0a87c39b2638c1b00b9f999087ac6082e1c681a`.
+This is packaging evidence, not Developer ID signing, notarization, Gatekeeper
+acceptance, or buyer delivery.
+
 ## Claim boundary
 
 This is evidence for the tested Codex Vault engine on these two Macs, not every
