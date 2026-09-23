@@ -30,7 +30,7 @@ def sparkle_distribution(build_root):
     framework = cache / "Sparkle.framework"
     if framework.is_dir() and archive.is_file() and hashlib.sha256(archive.read_bytes()).hexdigest() == SPARKLE_ARCHIVE_SHA256:
         return cache
-    cache.mkdir(exist_ok=True)
+    cache.mkdir(parents=True, exist_ok=True)
     if not archive.is_file() or hashlib.sha256(archive.read_bytes()).hexdigest() != SPARKLE_ARCHIVE_SHA256:
         url = "https://github.com/sparkle-project/Sparkle/releases/download/" + SPARKLE_VERSION + "/" + archive.name
         with urllib.request.urlopen(url, timeout=30) as response:
