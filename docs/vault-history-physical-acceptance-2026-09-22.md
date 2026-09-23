@@ -233,10 +233,14 @@ remains separate evidence.
 The private release operator uploaded the exact ZIP to the product's private
 Blob store without overwrite and streamed it back, independently verifying
 all 8,538,406 bytes and the SHA-256 above. Upload alone did not activate the
-checkout. The release catalog retains build 14 and adds the verified build 15;
-the live version still requires a reviewed deploy and an explicit production
-`COMMERCE_RELEASE` switch. The website's 299 Node tests passed (298 passes,
-one skip) after the catalog change.
+checkout. The release catalog retains build 14 and adds the verified build 15.
+After all four final GitHub checks passed, PR #19 merged as
+`31e1f1e61c332836494fed1bc4b26dd8efe677e2`. Production was then set to
+`COMMERCE_RELEASE=beta-build15-arm64`; the unpromoted deployment
+`dpl_6r2J57JDPbm5aWzadek9Rci9vWGY` returned an available $49 Apple-silicon
+beta. It was promoted, and the public domain returned the same availability
+response. The website's 299 Node tests passed (298 passes, one skip) after the
+catalog change. No test charge or live-buyer delivery occurred in this step.
 
 ## Claim boundary
 
