@@ -60,15 +60,26 @@ class ExternalVolumeVaultTests(unittest.TestCase):
             self.assertIsNotNone(first.recovery_key)
             self.assertEqual(verify_snapshot(str(vault), crypto_helper=str(helper)).snapshot_id,
                              first.snapshot_id)
+            packaged_engine = os.environ.get("CODEX_MIGRATE_TEST_ENGINE")
             with patch("codex_migrate.vault_schedule._loaded", return_value=False), \
                     patch("codex_migrate.vault_schedule._launchctl"):
                 install_schedule(str(source), str(vault), crypto_helper=str(helper),
-                                 engine_command=[str(helper)])
+                                 engine_command=[packaged_engine or str(helper)])
             config = source / "Library/Application Support/Codex Vault/schedule.json"
+
+            def scheduled_run():
+                if packaged_engine:
+                    result = subprocess.run([
+                        packaged_engine, "vault", "--source-home", str(source),
+                        "scheduled-run", "--config", str(config),
+                    ], capture_output=True, text=True, timeout=60)
+                    self.assertNotIn("fixture", result.stdout + result.stderr)
+                    return result.returncode
+                return run_scheduled_backup(str(config))
 
             self.tool("/usr/bin/hdiutil", "detach", str(mount))
             self.assertFalse(os.path.ismount(mount))
-            self.assertEqual(run_scheduled_backup(str(config)), 1)
+            self.assertEqual(scheduled_run(), 1)
             self.assertFalse(vault.exists(), "a missing drive must not create a local replacement Vault")
 
             self.tool("/usr/bin/hdiutil", "attach", "-nobrowse", "-owners", "on",
@@ -76,7 +87,7 @@ class ExternalVolumeVaultTests(unittest.TestCase):
             self.assertTrue(os.path.ismount(mount))
             transcript.write_text(transcript.read_text() + json.dumps({
                 "type": "response_item", "payload": {"role": "assistant", "content": "fixture"}}) + "\n")
-            self.assertEqual(run_scheduled_backup(str(config)), 0)
+            self.assertEqual(scheduled_run(), 0)
             latest = verify_snapshot(str(vault), crypto_helper=str(helper))
             self.assertNotEqual(latest.snapshot_id, first.snapshot_id)
             self.assertEqual(json.loads((config.parent / "last-run.json").read_text())["status"], "completed")
