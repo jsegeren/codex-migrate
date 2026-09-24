@@ -79,3 +79,19 @@ remains valid proof of Sparkle's key-rotation mechanism. Rebuild and repeat
 the physical installation, then complete paid-entitlement and failure-path
 checks. No live catalog entry or appcast has changed; build 16 remains the
 paid beta.
+
+The same-copy relaunch fix was committed as
+`35c775d4854525a8f49f1c2b78582926821a8c6c` and rebuilt. The replacement
+app received Apple Accepted notarization receipt
+`3d92ba3e-4f16-438a-b332-8a9676983a95`; its signed and stapled DMG received
+Accepted receipt `9d526d9a-b67e-422c-b598-00f75ca27095`. Final DMG size is
+10,354,263 bytes, SHA-256
+`e61280cf3045db6deb559fa9c70e434513883ef9d731080fcd732fad9d9ae330`,
+Sparkle signature
+`OhLypSR6qkktLrru6xC+7TJMSUztKuFA4ah9t45vK9A4Qjrqxv2nEyViyuwXLOPqvgoA/r5bSEvXzbA9vPi+DQ==`.
+The mounted app passed strict code-signature and Gatekeeper checks, and the
+image's exact bytes were verified from private sandbox storage. A second
+isolated build-16-to-17 local Sparkle upgrade installed this image in place;
+the resulting app contained the exact clean-source receipt and started one
+healthy helper. This still does not certify the paid Production path, idle
+automatic installation, or the required failure-path matrix.
