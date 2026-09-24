@@ -2,6 +2,8 @@
   'use strict';
   const status = document.getElementById('purchase-status');
   const download = document.getElementById('purchase-download');
+  const directHelp = document.getElementById('purchase-direct-help');
+  const direct = document.getElementById('purchase-direct');
   const archiveForm = document.getElementById('purchase-archive-form');
   const archiveCredential = document.getElementById('purchase-archive-credential');
   const archiveVersion = document.getElementById('purchase-archive-version');
@@ -75,12 +77,14 @@
       linkLifetime = result.expiresInMs;
       checksum.textContent = `Archive SHA-256: ${result.sha256}`; integrity.hidden = false;
       download.setAttribute('href', '/api/purchase-archive'); download.removeAttribute('aria-disabled');
+      direct.setAttribute('href', result.url); directHelp.hidden = false;
       download.hidden = false; retry.hidden = true;
   }
   async function check(action = 'download_latest') {
     if (busy) return;
     const initiatingControl = document.activeElement;
-    busy = true; download.removeAttribute('href'); download.setAttribute('aria-disabled', 'true'); retry.disabled = true;
+    busy = true; download.removeAttribute('href'); download.setAttribute('aria-disabled', 'true');
+    direct.removeAttribute('href'); directHelp.hidden = true; retry.disabled = true;
     status.textContent = 'Checking your purchase…';
     try {
       if (!token) token = (await call('status', credential.slice('session='.length))).token;
@@ -127,19 +131,30 @@
       }
     }
   }
+  const selectedAction = () => selectedVersion === 'original' ? 'download' : 'download_latest';
+  const linkAge = () => Math.max(Date.now() - requestWallTime, performance.now() - requestMonotonicTime);
   download.addEventListener('click', event => {
     event.preventDefault();
     if (busy) { event.preventDefault(); return; }
-    if (!download.getAttribute('href') || !selectedVersion) { check(); return; }
-    const age = Math.max(Date.now() - requestWallTime, performance.now() - requestMonotonicTime);
-    if (age >= linkLifetime - 5000) { check(); return; }
+    if (!download.getAttribute('href') || !selectedVersion) { check(selectedAction()); return; }
+    if (linkAge() >= linkLifetime - 5000) { check(selectedAction()); return; }
     archiveCredential.value = token;
     archiveVersion.value = selectedVersion;
     archiveForm.submit();
     status.textContent = 'Download requested. Check your browser’s downloads. If it stops, select Get a fresh link below.';
     retry.textContent = 'Get a fresh link'; retry.hidden = false;
   });
-  retry.addEventListener('click', () => check());
+  direct.addEventListener('click', event => {
+    if (busy || !direct.getAttribute('href') || !selectedVersion) {
+      event.preventDefault(); return;
+    }
+    if (linkAge() >= linkLifetime - 5000) {
+      event.preventDefault(); check(selectedAction()); return;
+    }
+    status.textContent = 'Download requested. Check your browser’s downloads. If it stops, select Get a fresh link below.';
+    retry.textContent = 'Get a fresh link'; retry.hidden = false;
+  });
+  retry.addEventListener('click', () => check(selectedAction()));
   original.addEventListener('click', () => check('download'));
   // Opening another delivery link in this same tab must consume the new
   // fragment, rather than keep the previous purchase in memory.
