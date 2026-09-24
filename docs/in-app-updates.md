@@ -118,6 +118,26 @@ entry. Do not remove old private artifacts or revoke valid purchases. Sparkle
 does not make rollback automatic; publish a corrected build with a strictly
 higher build number.
 
+## Paid Production canary receipt — September 24, 2026
+
+- A short-lived Production canary was scoped to the already-paid Founder
+  purchase and the exact testing-only build-17 DMG from source `27ef9bf`.
+  The public appcast and normal buyer delivery continued to advertise build 16.
+- The authenticated first-party `/api/update-archive` request returned HTTP
+  200 and exactly 10,376,201 bytes. Its SHA-256 was
+  `bf33da502e15a012c287efc5cec6c9b3057bf544c9ebbf8d9aebb1d91d2c1dc6`,
+  matching the signed, notarized candidate and private storage readback.
+  An anonymous request with the canary header returned 403.
+- All four temporary canary environment variables were removed, Production
+  was redeployed, and the active deployment again advertised only build 16.
+  The canary variables were absent from Production and anonymous canary
+  requests still returned 403. No purchase credential or session identifier
+  was saved in this receipt.
+- This proves the paid Production archive stream, **not** Sparkle installation
+  from an unmodified buyer app. The native paid-install, busy-operation,
+  clean-account, and failure-path gates above remain open; build 17 remains
+  unaccepted and must not be promoted from this receipt alone.
+
 ## Build 16 physical update receipt — September 23, 2026
 
 - The final Developer ID signed, Apple-notarized and stapled arm64 archive is
