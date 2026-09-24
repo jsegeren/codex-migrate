@@ -136,6 +136,11 @@ also returned HTTP 200 from Production's `entitlement` action. The private
 credential was not copied into this ledger or command arguments. This confirms
 positive entitlement for the current live release, not paid access to the
 unpromoted build-17 candidate.
+Sparkle's release verification tool accepted the exact build-17 DMG and its
+rotation signature, then rejected a deliberately altered signature for the
+same DMG (exit status 1). This proves the local signature verifier's negative
+path, not that a running app leaves itself and Vault data untouched after a
+failed update attempt.
 
 Sparkle's [published appcast format](https://sparkle-project.org/documentation/publishing/)
 supports `arm64` as the Apple-silicon hardware requirement; it does not define
