@@ -125,6 +125,13 @@ Developer ID. The image was detached and the temporary copy moved to Trash.
 No app launch, Vault operation, or Codex data mutation occurred there; this is
 cross-device artifact verification, not a clean-account installation test.
 
+On September 24, all four current PR #26 CI checks passed (Python 3.9 and
+3.12 for both active runs). The live Production update archive returned HTTP
+403 with no bearer token and with a forged bearer token. The actual live
+`/api/appcast` returned HTTP 200 and still advertised build 16. These are
+read-only Production denial and feed receipts; they do not prove revoked-token
+behavior, the candidate's paid entitlement path, or native installation.
+
 Sparkle's [published appcast format](https://sparkle-project.org/documentation/publishing/)
 supports `arm64` as the Apple-silicon hardware requirement; it does not define
 `x86_64` as a negative requirement. A local test that substituted `x86_64` in
