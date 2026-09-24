@@ -252,6 +252,15 @@ test keys were deleted, and app, feed, and synthetic home were moved to Trash;
 no real Codex data or second-Mac work was changed. Migration and restore
 contention, a real paid entitlement, and clean-account acceptance remain open.
 
+On September 24, the complete Python regression suite was run with
+`CODEX_MIGRATE_TEST_ENGINE` set to the exact build-17 packaged engine from
+clean source `479780861710a857dedde8d8de0716999320721a`: 853 tests passed,
+14 opt-in tests skipped. The same app bundle reports build 17, passes strict
+code-signature verification, and is Gatekeeper accepted as Notarized Developer
+ID. All four PR #26 CI checks on head `ce6282f` passed (Python 3.9 and 3.12).
+This is broad packaged-engine regression evidence, not a paid Production
+update, a clean-account run, or execution of the skipped physical fixtures.
+
 Sparkle's [published appcast format](https://sparkle-project.org/documentation/publishing/)
 supports `arm64` as the Apple-silicon hardware requirement; it does not define
 `x86_64` as a negative requirement. A local test that substituted `x86_64` in
