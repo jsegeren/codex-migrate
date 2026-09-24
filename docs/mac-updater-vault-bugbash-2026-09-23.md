@@ -459,6 +459,24 @@ the DMG; normal AppKit quit left build 16 and the synthetic transcript unchanged
 when the rejection is reported before quit. The notarized `b510f216` app and
 DMG predate this source change and must be rebuilt and reaccepted.
 
+Clean source `27ef9bf1d4c89ae9fb1853ed0e37a57458db39cf` produced that
+rebuild. The Developer ID signed app was Apple Accepted under submission
+`0ee9063e-e017-4283-b646-434c81337cd7`; the separately signed rotation
+DMG was Accepted under `f3179da8-56d6-4cb5-b43c-a3e19d2aa7af`. The final
+10,376,201-byte DMG has SHA-256
+`bf33da502e15a012c287efc5cec6c9b3057bf544c9ebbf8d9aebb1d91d2c1dc6`.
+Sparkle verified its new-key signature. A read-only mount passed strict app
+signing, app and disk-image staple validation, Gatekeeper assessment, build-17
+and rotated-key checks; the embedded source receipt names `27ef9bf` and is
+clean. The exact bytes were uploaded to private **sandbox** Blob and streamed
+back with the same length and digest. The catalog entry remains
+`testingOnly: true`, `accepted: false`; the public appcast still advertises
+build 16. The full source suite passed 856 tests with 15 opt-in skips, Swift
+typecheck passed, and the commerce suite passed 324 tests with one skip. This
+is a new signed candidate, **not** release acceptance: the full paid install,
+clean-account and remaining failure-path matrix still need proof against this
+exact image.
+
 ## Release blockers for this candidate
 
 The Founder approved a Sparkle key rotation. A new local signing seed and

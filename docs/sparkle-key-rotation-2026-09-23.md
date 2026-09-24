@@ -209,3 +209,21 @@ Sparkle signature verification passed. Private sandbox storage returned
 identical bytes. The catalog entry is testing-only and unaccepted; neither
 appcast nor paid buyer delivery has been changed. Physical installation and
 clean-account acceptance are still required before promotion.
+
+An invalid-signature physical probe of that image exposed a stale native
+ready-to-install flag after Sparkle had already aborted. Source now clears
+uncommitted update readiness on Sparkle abort, failed download and user
+cancelation; an isolated repeat of the bad-signature case left the old app and
+synthetic transcript unchanged and created no Vault update guard on a normal
+quit. Clean source `27ef9bf1d4c89ae9fb1853ed0e37a57458db39cf` was rebuilt
+and notarized: Apple Accepted the app (`0ee9063e-e017-4283-b646-434c81337cd7`)
+and separately signed DMG (`f3179da8-56d6-4cb5-b43c-a3e19d2aa7af`). The
+10,376,201-byte image's SHA-256 is
+`bf33da502e15a012c287efc5cec6c9b3057bf544c9ebbf8d9aebb1d91d2c1dc6`;
+its Sparkle signature
+`NPh2GD88tMlk9/aeyA/zkTTZkKX2DxccR16JJaSfh4UHm+mdpom9x26v5Nrn2ifAk6YbYHXRNbXJuCdZLO5UCQ==`
+verified against the exact bytes. The mounted app and DMG passed staple,
+strict signing and Gatekeeper checks. Private sandbox storage readback matched
+the image; its catalog entry is testing-only and unaccepted. Build 16 remains
+live. Re-run buyer-path and clean-account acceptance with this exact image
+before any promotion.
