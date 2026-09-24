@@ -370,6 +370,10 @@ filesystem-denial probes confirmed the packaged engine did not treat protected
 Codex or workspace directories as fully readable or change their sentinels.
 These are disposable-fixture checks, not a clean buyer account or paid updater
 installation. Both mounted images and all temporary jobs were removed.
+The full regression suite with this exact packaged engine selected also
+completed: 854 tests ran, 14 opt-in cases skipped, no failures. That suite uses
+synthetic homes and mocked Apple receipts for many cases; it does not replace
+the pending native paid-update and pristine-account checks.
 
 All four PR #26 CI checks passed on Python 3.9 and 3.12 at head `0065d1a`.
 Build 16 remains the public appcast release; the new
