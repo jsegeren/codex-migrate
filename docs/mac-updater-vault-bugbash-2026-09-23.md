@@ -332,10 +332,14 @@ key. From the mounted read-only DMG, this exact app showed the unsafe-location
 warning, started no helper, and exited after dismissal. A separate installed
 copy in Applications started its helper, with its AppKit main thread idle in
 the event loop rather than blocked in Keychain; the test copy was stopped and
-moved to Trash. A manually quarantined ZIP extraction was Gatekeeper-accepted,
-but its synthetic first-open test stalled before app code after macOS displayed
-an approval dialog; the test process was stopped and the copy moved to Trash.
-Do **not** count that path as a successful translocated first launch. The new
+moved to Trash. An initial manually quarantined ZIP extraction stalled before
+app code after macOS displayed an approval dialog; its test process was stopped.
+A second disposable copy with a current quarantine timestamp was accepted by
+Gatekeeper and launched from an actual `/AppTranslocation/` path. It showed
+only the move-to-Applications warning, started no helper, and exited after
+the warning was dismissed. That copy was moved to Trash. This proves the
+translocated code path under a synthetic quarantine flag, **not** a complete
+browser-download first launch or pristine buyer-account installation. The new
 image was uploaded to the private sandbox store and all 10,372,434 bytes were
 read back with the matching SHA-256. Its catalog entry is `testingOnly: true`
 and `accepted: false`; the public appcast remains build 16. A pristine-account

@@ -180,7 +180,10 @@ its Sparkle signature is
 `W1Db4e3BORBja+NcrvwH5jxRXDy7g2CJiHzPK/UeH2HkOA4HFGqyRRgko3soaYlg+ewRRFqPtB2hZ0LQ62DpCQ==`
 and verifies against the exact DMG bytes with the public key embedded in that
 app. The mounted-image unsafe-location warning and exit passed physically;
-the manually quarantined first-open test did not finish past macOS's approval
-dialog and remains open. The exact image was uploaded to private sandbox
+an initial manually quarantined first-open test stalled at macOS's approval
+dialog; a second, correctly dated disposable quarantine copy launched from
+App Translocation, showed the expected warning, started no helper, and exited
+after dismissal. A true browser-download first open and clean-account run
+remain open. The exact image was uploaded to private sandbox
 storage, read back byte-for-byte, and catalogued as testing-only and
 unaccepted. It has not been promoted. Build 16 remains public.
