@@ -17,6 +17,21 @@ from codex_migrate.cli import _port
 
 
 class DesktopTests(unittest.TestCase):
+    def test_unsafe_launch_exits_before_sparkle_or_helper_and_keychain_reads_are_silent(self):
+        root = Path(__file__).resolve().parents[1]
+        source = (root / "desktop/CodexMigrate.swift").read_text()
+        launch = source.split("func applicationDidFinishLaunching", 1)[1].split(
+            "func applicationShouldHandleReopen", 1)[0]
+        self.assertIn("showFailure(\"Quit this copy", launch)
+        self.assertIn("NSApplication.shared.terminate(nil)\n            return\n        }\n        _ = updaterController\n        startHelper()", launch)
+        helper = source.split("private func startHelper()", 1)[1].split("private func consume", 1)[0]
+        self.assertIn("guard !InstallLocation.needsMoveToApplications(", helper)
+        self.assertLess(helper.index("guard !InstallLocation.needsMoveToApplications("), helper.index("let child = Process()"))
+        entitlement = (root / "desktop/UpdateEntitlement.swift").read_text()
+        self.assertIn("context.interactionNotAllowed = true", entitlement)
+        self.assertIn("kSecUseAuthenticationContext as String: context", entitlement)
+        self.assertIn("DispatchQueue.global(qos: .userInitiated).async", source)
+
     def test_native_quit_handoff_does_not_wait_for_main_queue_reply(self):
         source = (Path(__file__).resolve().parents[1] / "desktop/CodexMigrate.swift").read_text()
         self.assertIn("return .terminateCancel", source)

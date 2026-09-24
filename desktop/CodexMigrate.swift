@@ -50,14 +50,16 @@ import Sparkle
         menu.insertItem(automaticInstallItem, at: 3)
         menu.delegate = self
         item.menu = menu
-        _ = updaterController
         if InstallLocation.needsMoveToApplications(
             appURL: Bundle.main.bundleURL,
             homeURL: FileManager.default.homeDirectoryForCurrentUser
         ) {
             showFailure("Quit this copy, move Codex Migrate.app into Applications, then open it there. In-app updates may not install from Downloads, a disk image, or a translocated app. Your Codex data has not changed.",
                         title: "Move Codex Migrate to Applications")
+            NSApplication.shared.terminate(nil)
+            return
         }
+        _ = updaterController
         startHelper()
     }
 
@@ -137,12 +139,17 @@ import Sparkle
                 self.showFailure("We could not verify this purchase right now. Check the link or email joshua@segeren.com; do not purchase again.", title: "Purchase not verified")
                 return
             }
-            guard UpdateEntitlement.save(token) else {
-                self.showFailure("macOS could not save update access in Keychain. Your purchase is unchanged.", title: "Could not link purchase")
-                return
+            DispatchQueue.global(qos: .userInitiated).async {
+                let saved = UpdateEntitlement.save(token)
+                DispatchQueue.main.async {
+                    guard saved else {
+                        self.showFailure("macOS could not save update access in Keychain. Your purchase is unchanged.", title: "Could not link purchase")
+                        return
+                    }
+                    self.updaterController.updater.automaticallyChecksForUpdates = true
+                    self.updaterController.checkForUpdates(nil)
+                }
             }
-            self.updaterController.updater.automaticallyChecksForUpdates = true
-            self.updaterController.checkForUpdates(nil)
         }
     }
 
@@ -250,6 +257,12 @@ import Sparkle
 
     private func startHelper() {
         guard process == nil else { return }
+        // Reopen/menu events can arrive while the first-launch alert is up.
+        // No helper may run from a path Sparkle cannot replace safely.
+        guard !InstallLocation.needsMoveToApplications(
+            appURL: Bundle.main.bundleURL,
+            homeURL: FileManager.default.homeDirectoryForCurrentUser
+        ) else { return }
         guard let resources = Bundle.main.resourceURL else {
             showFailure("The app is missing its resources. Reinstall Codex Migrate.")
             return
@@ -257,10 +270,7 @@ import Sparkle
         let child = Process()
         child.executableURL = resources.appendingPathComponent("engine/codex-migrate-engine")
         var arguments = ["launch", "--port", "0", "--no-open"]
-        if !InstallLocation.needsMoveToApplications(
-            appURL: Bundle.main.bundleURL,
-            homeURL: FileManager.default.homeDirectoryForCurrentUser
-        ), let installedBuild = Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "") {
+        if let installedBuild = Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "") {
             arguments += ["--resume-after-update-build", String(installedBuild)]
         }
         child.arguments = arguments

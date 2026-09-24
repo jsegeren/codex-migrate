@@ -278,6 +278,10 @@ supports `arm64` as the Apple-silicon hardware requirement; it does not define
 the feed still installed, so it is **not** evidence of a wrong-architecture
 guard. The actual public feed retains `arm64`. Intel-Mac rejection requires a
 supported test environment before being called physically verified.
+The exact build-17 candidate's app executable, packaged engine, and Vault
+CryptoKit helper each report `arm64` through `lipo -archs`. This verifies the
+three primary native executables, not every bundled framework or an Intel-Mac
+install rejection.
 
 On September 24, the narrowly scoped paid-stream canary from PR #28 passed
 all four CI jobs and merged to `main` as `8d74587`. A Production-environment
@@ -299,6 +303,23 @@ copy was moved to Trash after its digest was checked. The canary proves the
 hosted paid server stream for the exact candidate, **not** Sparkle installing
 that release through an unmodified buyer app, scheduled installation on a
 buyer Mac, or approval to publish build 17.
+
+A quarantined disposable copy of that exact notarized build-17 candidate was
+accepted by Gatekeeper but opened under App Translocation. First open showed
+a Keychain authorization prompt for a pre-existing updater entitlement item
+and left AppKit unresponsive while the prompt was pending. This account is
+not a pristine buyer account, so the prompt is not evidence that every buyer
+would see it. Source now performs automatic Keychain reads with a noninteractive
+authentication context, saves a newly linked purchase off the AppKit thread,
+and refuses to start Sparkle or the local helper from unsafe launch locations.
+An initial local ad-hoc build from Downloads exposed a second helper-start
+path through reopening; that path was closed. A rebuilt ad-hoc test app then
+showed only the move-to-Applications warning, started no helper, and exited
+when the warning was dismissed. Both disposable test copies were moved to
+Trash. This is local-source evidence, **not** a notarized replacement artifact
+or pristine-account proof; the existing build-17 candidate does not include
+these fixes and remains unpublished. The full Python regression suite passed
+854 tests with 15 opt-in skips, and Swift typecheck passed without warnings.
 
 ## Release blockers for this candidate
 
