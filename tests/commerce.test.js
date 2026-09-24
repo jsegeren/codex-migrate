@@ -235,6 +235,42 @@ test('a paid buyer can retrieve a newer approved compatible build without losing
   f.s.payment_intent.latest_charge.refunded = true;
   await assert.rejects(api.downloadLatest(token), /requires_support/);
 });
+test('live paid canary rechecks charge state and leaves the original release available', async () => {
+  const approved = require('../commerce/releases.json')['beta-build16-arm64'];
+  const candidate = require('../commerce/releases.json')['codex-migrate-0.1.0-build17-quit-guard-arm64'];
+  const f = fixture();
+  f.s.id = 'cs_live_fixture';
+  f.s.livemode = true;
+  f.s.metadata.release = approved.id;
+  f.s.amount_subtotal = 4900;
+  f.s.amount_total = 4900;
+  f.s.line_items.data[0].amount_subtotal = 4900;
+  f.s.line_items.data[0].price.livemode = true;
+  f.s.line_items.data[0].price.unit_amount = 4900;
+  f.s.payment_intent.livemode = true;
+  f.s.payment_intent.amount_received = 4900;
+  f.s.payment_intent.latest_charge.livemode = true;
+  f.s.payment_intent.latest_charge.amount = 4900;
+  const live = { ...config, live: true, mode: 'live', release: approved,
+    catalog: { [approved.id]: approved, [candidate.id]: candidate } };
+  let canarySigns = 0;
+  const api = service({ config: live, stripe: f.stripe, store: f.store,
+    signDownload, signCanaryDownload: async selected => { canarySigns++;
+      assert.equal(selected.id, candidate.id);
+      return signDownload(selected);
+    }, sendMail: async () => 'accepted' });
+  const credential = tokenFor(f.s.id, live);
+  assert.equal((await api.downloadCanary(credential, candidate.id)).sha256, candidate.sha256);
+  assert.equal((await api.download(credential)).sha256, approved.sha256);
+  assert.equal(canarySigns, 1);
+  f.s.payment_intent.latest_charge.refunded = true;
+  await assert.rejects(api.downloadCanary(credential, candidate.id), /requires_support/);
+  f.s.payment_intent.latest_charge.refunded = false;
+  f.s.payment_intent.latest_charge.disputed = true;
+  await assert.rejects(api.downloadCanary(credential, candidate.id), /requires_support/);
+  assert.equal(canarySigns, 1);
+  await assert.rejects(api.downloadCanary(credential, approved.id), /release_unavailable/);
+});
 test('update selection refuses cross-architecture, downgrade, and unapproved releases', () => {
   const old = { ...release, filename: 'Codex-Migrate-0.1.0-build15-arm64.zip' };
   assert.equal(newerCompatibleRelease(old, { ...old, filename: 'Codex-Migrate-0.1.0-build16-x86_64.zip' }, false), false);
