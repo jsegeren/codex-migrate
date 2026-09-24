@@ -822,3 +822,7 @@ ID assessment all passed after extraction to a disposable directory. No buyer
 token or private download URL is recorded here. The browser-button observation
 remains unresolved for that controlled session and must not be described as a
 verified ordinary-click purchase flow from this run.
+The same Production handler's `original` choice returned HTTP 200 and the
+same verified build-16 byte count and digest, as expected while build 16 is
+both the paid original and the latest live release. This does not exercise
+the purchase page's original-build button after a newer release is promoted.
