@@ -106,6 +106,18 @@ catalog marks this image `testingOnly: true` and `accepted: false`; build 16
 remains live. This is an artifact and storage receipt, not yet a paid 16→17
 installation or clean-account acceptance.
 
+An isolated copy of the exact live build-16 ZIP, installed separately in
+`/Applications` with only its feed changed to loopback and re-signed by the
+same Developer ID, fetched this exact 10,371,481-byte DMG. A test-only
+`SIGTERM` then caused Sparkle to replace that copy in place with build 17;
+the installed source receipt matched `fc127ec`, and strict signature and
+Gatekeeper checks passed. **This is not a successful normal updater flow:**
+the signal bypassed AppKit's guarded quit, the app did not relaunch, and its
+old helper briefly remained orphaned. That helper was stopped; the isolated
+test app and local feed were moved to Trash/stopped. Repeat the normal
+Install-and-Relaunch UI path and busy-operation checks before release. This
+test used a loopback feed, not a real paid Production entitlement.
+
 Sparkle's [published appcast format](https://sparkle-project.org/documentation/publishing/)
 supports `arm64` as the Apple-silicon hardware requirement; it does not define
 `x86_64` as a negative requirement. A local test that substituted `x86_64` in
