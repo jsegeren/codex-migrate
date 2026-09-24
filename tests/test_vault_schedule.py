@@ -1,9 +1,11 @@
 import json
 from datetime import datetime, timedelta, timezone
+from http.client import HTTPConnection
 import os
 from pathlib import Path
 import plistlib
 import pwd
+import select
 import shutil
 import subprocess
 import sys
@@ -12,6 +14,7 @@ import time
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlsplit
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_backup import BackupResult
@@ -64,6 +67,8 @@ class VaultScheduleTests(unittest.TestCase):
             first_snapshot = json.loads(initial.stdout)["snapshot_id"]
             key_id = json.loads((vault / "vault.json").read_text())["key_id"]
             installed = False
+            dashboard = None
+            kickstart = None
             try:
                 install = subprocess.run(
                     [str(engine), "vault", "--source-home", str(home),
@@ -77,29 +82,106 @@ class VaultScheduleTests(unittest.TestCase):
                     plistlib.loads(plist_path.read_bytes())["EnvironmentVariables"]["HOME"],
                     pwd.getpwuid(os.getuid()).pw_dir,
                 )
-                kickstart = subprocess.run(["/bin/launchctl", "kickstart", "-k", service],
-                                           capture_output=True, text=True, timeout=15)
-                self.assertEqual(kickstart.returncode, 0, "macOS did not start the test agent")
                 status_path = home / "Library/Application Support/Codex Vault/last-run.json"
-                deadline = time.monotonic() + 60
-                receipt = None
+                # Run the packaged helper alongside a real, intentionally
+                # longer scheduled capture. Sparkle's idle/shutdown protocol
+                # must refuse replacement while the LaunchAgent is using the
+                # bundled engine, then permit it once the capture finishes.
+                dashboard = subprocess.Popen(
+                    [str(engine), "launch", "--source-home", str(home),
+                     "--state-dir", str(home / ".local/state/codex-migrate-test"),
+                     "--port", "0", "--no-open"],
+                    env=env, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                    text=True, bufsize=1)
+                self.assertIsNotNone(dashboard.stdout)
+                prefix = "Codex Migrate dashboard: "
+                address = ""
+                deadline = time.monotonic() + 15
                 while time.monotonic() < deadline:
-                    if status_path.exists():
-                        receipt = json.loads(status_path.read_text())
-                        if receipt.get("status") in ("completed", "needs_attention", "failed"):
-                            break
-                    time.sleep(0.25)
-                self.assertIsNotNone(receipt, "the LaunchAgent produced no run receipt")
-                self.assertEqual(receipt["status"], "completed", "scheduled backup failed")
+                    ready, _, _ = select.select(
+                        [dashboard.stdout], [], [], max(0, deadline - time.monotonic()))
+                    if not ready:
+                        break
+                    address = dashboard.stdout.readline().strip()
+                    if address.startswith(prefix) or dashboard.poll() is not None:
+                        break
+                self.assertTrue(address.startswith(prefix),
+                                "packaged helper returned no dashboard (exit %s)" % dashboard.poll())
+                parsed = urlsplit(address[len(prefix):])
+                self.assertEqual(parsed.hostname, "127.0.0.1")
+                token = parse_qs(parsed.fragment).get("token", [None])[0]
+                self.assertTrue(token)
+
+                def request(path, method="GET"):
+                    connection = HTTPConnection("127.0.0.1", parsed.port, timeout=5)
+                    try:
+                        connection.request(method, path, headers={
+                            "X-Codex-Migrate-Token": token,
+                        })
+                        response = connection.getresponse()
+                        response.read()
+                        return response.status
+                    finally:
+                        connection.close()
+
+                self.assertEqual(request("/api/update-idle"), 200)
+                fixture_line = json.dumps({
+                    "payload": {"message": {"content": "scheduled backup fixture " + "x" * 65536}}
+                }) + "\n"
+                with transcript.open("a", encoding="utf-8") as handle:
+                    for _ in range(2048):
+                        handle.write(fixture_line)
+                # launchctl kickstart can wait for a long-running backup to
+                # exit, so keep it async while observing the live receipt.
+                kickstart = subprocess.Popen(
+                    ["/bin/launchctl", "kickstart", "-k", service],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                deadline = time.monotonic() + 20
+                while time.monotonic() < deadline:
+                    if status_path.exists() and json.loads(status_path.read_text()).get("status") == "running":
+                        break
+                    time.sleep(0.02)
+                else:
+                    self.fail("the real scheduled capture was not observed running "
+                              "(kickstart=%s, receipt=%s)" % (
+                                  kickstart.poll(),
+                                  json.loads(status_path.read_text()).get("status")
+                                  if status_path.exists() else "missing"))
+                self.assertEqual(request("/api/update-idle"), 409)
+                self.assertEqual(request("/api/shutdown", "POST"), 409)
+                deadline = time.monotonic() + 90
+                while time.monotonic() < deadline:
+                    receipt = json.loads(status_path.read_text())
+                    if receipt.get("status") in ("completed", "needs_attention", "failed"):
+                        break
+                    time.sleep(0.1)
+                self.assertEqual(receipt["status"], "completed", "scheduled capture failed")
+                kickstart.wait(timeout=15)
+                self.assertEqual(kickstart.returncode, 0)
+                kickstart = None
                 self.assertNotEqual(receipt["snapshot_id"], first_snapshot)
                 self.assertEqual(
                     verify_snapshot(str(vault), crypto_helper=str(helper)).snapshot_id,
                     receipt["snapshot_id"],
                 )
                 self.assertTrue(schedule_status(str(home))["healthy"])
-                self.assertIn("LaunchAgent fixture", transcript.read_text())
+                with transcript.open(encoding="utf-8") as handle:
+                    self.assertIn("LaunchAgent fixture", handle.read(100))
+                self.assertEqual(request("/api/update-idle"), 200)
+                self.assertEqual(request("/api/shutdown", "POST"), 200)
+                dashboard.wait(timeout=15)
+                self.assertEqual(dashboard.returncode, 0)
+                dashboard.stdout.close()
+                dashboard = None
             finally:
                 try:
+                    if dashboard is not None:
+                        dashboard.terminate()
+                        dashboard.wait(timeout=15)
+                        dashboard.stdout.close()
+                    if kickstart is not None:
+                        kickstart.terminate()
+                        kickstart.wait(timeout=15)
                     if installed:
                         removed = subprocess.run(
                             [str(engine), "vault", "--source-home", str(home),

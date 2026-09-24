@@ -58,6 +58,15 @@ asserts the job is absent; the packaged test passes and the account has no
 loaded test backup job afterward. This validates scheduled capture and cleanup,
 not deferral of an actual in-app update while a backup is running.
 
+The opt-in physical test now also starts the final `ee40e56` packaged helper
+and a real LaunchAgent capture of disposable transcript data. While the capture
+was running, both the token-protected updater idle probe and final shutdown
+request returned 409. After the new encrypted snapshot completed and verified,
+the same helper returned 200 for the idle probe and shutdown; the helper exited
+cleanly. The temporary LaunchAgent and test key were removed. This proves the
+packaged helper's deferral protocol against a live scheduled backup on this Mac,
+not a full Sparkle replacement during that backup or the race after helper exit.
+
 Sparkle's [published appcast format](https://sparkle-project.org/documentation/publishing/)
 supports `arm64` as the Apple-silicon hardware requirement; it does not define
 `x86_64` as a negative requirement. A local test that substituted `x86_64` in
