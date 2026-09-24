@@ -2,11 +2,6 @@
   'use strict';
   const status = document.getElementById('purchase-status');
   const download = document.getElementById('purchase-download');
-  const directHelp = document.getElementById('purchase-direct-help');
-  const direct = document.getElementById('purchase-direct');
-  const archiveForm = document.getElementById('purchase-archive-form');
-  const archiveCredential = document.getElementById('purchase-archive-credential');
-  const archiveVersion = document.getElementById('purchase-archive-version');
   const original = document.getElementById('purchase-original');
   const retry = document.getElementById('purchase-retry');
   const checksum = document.getElementById('purchase-checksum');
@@ -76,15 +71,14 @@
       }
       linkLifetime = result.expiresInMs;
       checksum.textContent = `Archive SHA-256: ${result.sha256}`; integrity.hidden = false;
-      download.setAttribute('href', '/api/purchase-archive'); download.removeAttribute('aria-disabled');
-      direct.setAttribute('href', result.url); directHelp.hidden = false;
+      download.setAttribute('href', result.url); download.removeAttribute('aria-disabled');
       download.hidden = false; retry.hidden = true;
   }
   async function check(action = 'download_latest') {
     if (busy) return;
     const initiatingControl = document.activeElement;
     busy = true; download.removeAttribute('href'); download.setAttribute('aria-disabled', 'true');
-    direct.removeAttribute('href'); directHelp.hidden = true; retry.disabled = true;
+    retry.disabled = true;
     status.textContent = 'Checking your purchase…';
     try {
       if (!token) token = (await call('status', credential.slice('session='.length))).token;
@@ -134,19 +128,9 @@
   const selectedAction = () => selectedVersion === 'original' ? 'download' : 'download_latest';
   const linkAge = () => Math.max(Date.now() - requestWallTime, performance.now() - requestMonotonicTime);
   download.addEventListener('click', event => {
-    event.preventDefault();
     if (busy) { event.preventDefault(); return; }
-    if (!download.getAttribute('href') || !selectedVersion) { check(selectedAction()); return; }
-    if (linkAge() >= linkLifetime - 5000) { check(selectedAction()); return; }
-    archiveCredential.value = token;
-    archiveVersion.value = selectedVersion;
-    archiveForm.submit();
-    status.textContent = 'Download requested. Check your browser’s downloads. If it stops, select Get a fresh link below.';
-    retry.textContent = 'Get a fresh link'; retry.hidden = false;
-  });
-  direct.addEventListener('click', event => {
-    if (busy || !direct.getAttribute('href') || !selectedVersion) {
-      event.preventDefault(); return;
+    if (!download.getAttribute('href') || !selectedVersion) {
+      event.preventDefault(); check(selectedAction()); return;
     }
     if (linkAge() >= linkLifetime - 5000) {
       event.preventDefault(); check(selectedAction()); return;
