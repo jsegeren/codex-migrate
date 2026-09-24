@@ -772,3 +772,15 @@ migration are physically proved; keep using the recovery key for portability.
 Apple references: [Mac keychain implementations](https://developer.apple.com/documentation/technotes/tn3137-on-mac-keychains),
 [Data Protection Keychain](https://developer.apple.com/documentation/security/ksecusedataprotectionkeychain),
 and [access-group entitlement checks](https://developer.apple.com/documentation/security/errsecmissingentitlement).
+
+On September 24, the synthetic recovery-key portability test passed on two
+independent GitHub-hosted macOS runners in
+[CI run 36058234998](https://github.com/jsegeren/codex-migrate/actions/runs/36058234998).
+The producer created and verified an encrypted one-transcript snapshot, then
+deleted its disposable Keychain key. The consumer had no producer Keychain key,
+imported the recovery key, verified the snapshot, and restored the synthetic
+transcript byte-for-byte. The one-day CI artifact contains only synthetic test
+material and a disposable recovery key, never Founder or customer content.
+This proves the format and recovery-key round trip across distinct macOS runner
+Keychains; it is **not** a clean account or GUI recovery test on the Founder's
+two physical Macs, and it does not prove `ThisDeviceOnly` key accessibility.
