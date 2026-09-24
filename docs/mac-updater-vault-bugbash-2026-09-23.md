@@ -541,6 +541,19 @@ recorded. The browser session closed after the check. This proves browser
 transport of the testing-only archive, **not** purchase-page choice, a paid
 entitlement, or an installed buyer update.
 
+On September 24, the original paid purchase email was opened in Chrome
+without recording its private link. The purchase page reverified the payment,
+showed “Download for Mac,” and routed that action to the first-party
+`/api/purchase-archive` form. In this Chrome profile, the attempted form
+navigation displayed `ERR_BLOCKED_BY_CLIENT`; no new Codex Migrate archive
+appeared in Downloads. Returning to the page showed its “Download requested”
+recovery state. This is a **failed buyer-browser download observation**, not
+evidence that the server rejected the entitlement or that a different browser
+would fail. Do not count the sandbox-only successful download as closing it.
+The original-versus-latest choice cannot be observed on the live page yet,
+because the public latest release is still build 16. The PR checks for Python
+3.9 and 3.12 passed on the September 24 branch state.
+
 ## Release blockers for this candidate
 
 The Founder approved a Sparkle key rotation. A new local signing seed and
@@ -553,9 +566,12 @@ private file is owner-only outside Git. The final DMG is notarized and
 stored privately for testing, but has not been distributed or promoted.
 See [the rotation runbook](sparkle-key-rotation-2026-09-23.md).
 
-1. Inspect the remaining operator-alert inbox and recheck the original-build
-   browser choice. The latest-build file save now has a clean Chrome and SHA-256
-   receipt; both authenticated Production server streams matched build 16.
+1. Inspect the remaining operator-alert inbox; determine why this Chrome
+   profile blocked the paid first-party form and recheck the original-build
+   browser choice after a new accepted release exists. The sandbox latest-build
+   file save has a clean Chrome and SHA-256 receipt, and both authenticated
+   Production server streams matched build 16, but the September 24 paid
+   browser click did not save an archive.
 2. The rebuilt clean-source app, rotation DMG, Sparkle signature, private
    sandbox Blob readback, isolated build-16-to-17 quit-path install, and
    candidate-code idle install/relaunch with an app-owned synthetic token pass.
