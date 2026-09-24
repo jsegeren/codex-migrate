@@ -624,6 +624,16 @@ See [the rotation runbook](sparkle-key-rotation-2026-09-23.md).
 
 The current local Vault guarantees the last verified capture, not zero loss
 between snapshots, completed off-device cloud sync, or every Codex UI resume.
+On September 24, the complete source suite ran from a disposable checkout on
+the Founder's second Mac (macOS 26.5, Apple silicon, system Python 3.9.6).
+It ran 856 tests in 254.6 seconds: 834 passed, 15 skipped, and seven Vault
+backup/history tests errored at `create-key`. A separate read-only Keychain
+check in that SSH login returned `User interaction is not allowed`; the Vault
+helper deliberately refused to publish a snapshot. This is a headless SSH
+Keychain-context limitation, not a second-Mac GUI acceptance receipt or proof
+of a product failure. All Python 3.9/3.12 CI jobs for the same branch passed.
+The clean 23 MB remote checkout was removed after the test; no live Codex
+content was used or changed.
 The separate desktop pre-compaction proof remains open; a tested Codex hook
 timed out fail-open. See [thread history contract](vault-thread-history-contract.md).
 On this Mac, `vault schedule-status` reports that automatic Vault backups are
