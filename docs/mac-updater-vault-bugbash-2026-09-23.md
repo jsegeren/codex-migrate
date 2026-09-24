@@ -706,6 +706,11 @@ Python 3.12 in 53.3 and 52.7 seconds respectively. This exercises file-count
 and incremental-backup behavior, not multi-gigabyte histories, live Codex
 data, search latency, or a scheduled run. The opt-in test is in
 `tests/test_vault_backup.py`; ordinary CI skips it.
+The same test file now deterministically rewrites a synthetic transcript
+immediately after the encrypted chunk helper reads it. On Python 3.9 and
+3.12, backup rejected the changed source, published no new snapshot
+reference, and the previous snapshot still verified. This checks the
+mid-read failure boundary without racing or changing a real Codex thread.
 On September 24, the complete source suite ran from a disposable checkout on
 the Founder's second Mac (macOS 26.5, Apple silicon, system Python 3.9.6).
 It ran 856 tests in 254.6 seconds: 834 passed, 15 skipped, and seven Vault
