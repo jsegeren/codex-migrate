@@ -90,7 +90,9 @@ Accepted receipt `9d526d9a-b67e-422c-b598-00f75ca27095`. Final DMG size is
 Sparkle signature
 `OhLypSR6qkktLrru6xC+7TJMSUztKuFA4ah9t45vK9A4Qjrqxv2nEyViyuwXLOPqvgoA/r5bSEvXzbA9vPi+DQ==`.
 The mounted app passed strict code-signature and Gatekeeper checks, and the
-image's exact bytes were verified from private sandbox storage. A second
+image's exact bytes were verified from private sandbox storage. The exact
+candidate is catalogued for sandbox-only testing with `testingOnly: true` and
+`accepted: false`; the live release selector cannot use it. A second
 isolated build-16-to-17 local Sparkle upgrade installed this image in place;
 the resulting app contained the exact clean-source receipt and started one
 healthy helper. This still does not certify the paid Production path, idle
