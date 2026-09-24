@@ -55,5 +55,17 @@ the signer must verify its output against the final DMG bytes.
    through the original purchase link. Be explicit with buyers; never claim a
    seamless automatic update that has not been observed.
 
-The separate notarization Keychain is currently locked. No candidate DMG has
-been notarized, uploaded, or promoted. Build 16 remains the live paid beta.
+The separate notarization Keychain remains locked. A Founder-approved App
+Store Connect Team API key was generated for notarization; its owner-only
+private file remains outside Git and `notarytool history` accepted it. From
+clean source `004d3e28f8d40c656784b17af523bf8237a42d19`, the app and
+rotation DMG received Apple Accepted notarization receipts
+`ea31c59b-da11-415e-8357-dbfbba7cc198` and
+`03552619-b676-492b-bd80-80f9a3b79972`. The final DMG is 10,356,114
+bytes with SHA-256
+`861b7f1341d79da87a64e0399a7450904e89241d507ff877dfa1a3ce428efe70`.
+Its Sparkle signature verifies independently against the public key embedded
+in the app. A read-only mount passed strict code-signature and Gatekeeper
+checks, and private **sandbox** Blob storage returned matching bytes. The
+paid build-16-to-17 installation and failure-path checks remain open. No
+live catalog entry or appcast has changed; build 16 remains the paid beta.

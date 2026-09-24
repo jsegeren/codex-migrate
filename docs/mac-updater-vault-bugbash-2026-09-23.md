@@ -38,24 +38,26 @@ and [in-app update acceptance](in-app-updates.md).
 | Rotated-key local package | Current PR head `ae2fce7` compiled into an arm64 local-test app. Strict code-signature verification passed and its Info.plist contains the rotated Sparkle public key. The bundled engine passed 9 of 10 desktop tests, with only the case-sensitive-filesystem fixture skipped. A new disposable-home packaged-engine test made two encrypted, verified snapshots, restored both versions to separate folders, and confirmed that authentication and installation identity files were not restored; its test Keychain key was removed. | This is ad-hoc signed and not notarized. It does not prove the key-rotation DMG, buyer installation, clean-account first launch, or scheduled backups on either real Mac. |
 | Latest local package | Source `e4a82a3` produced a local-only arm64 build. Strict code-signature verification passed, and its bundled engine passed 10 desktop tests with one case-sensitive-filesystem skip. The opt-in packaged LaunchAgent test above used this build and completed a verified scheduled snapshot. | This build is ad-hoc signed and not notarized or offered to buyers. It does not prove the paid key-rotation update, buyer installation, or first run on a clean account. |
 | Rotation packager path check | A direct call against the live signed build 16 exposed that the certificate inspector failed for a relative app path because it changed into a temporary working directory. The packager now resolves the app path before invoking `codesign`; a regression test and the same real-certificate check pass. | This removes a local packaging failure, but does not prove a final notarized DMG or a paid in-app upgrade. |
+| Final rotation artifact | Clean source `004d3e28f8d40c656784b17af523bf8237a42d19` produced a Developer ID signed, Apple-notarized and stapled build-17 app (Apple Accepted receipt `ea31c59b-da11-415e-8357-dbfbba7cc198`). A separately signed, notarized and stapled 10,356,114-byte DMG has SHA-256 `861b7f1341d79da87a64e0399a7450904e89241d507ff877dfa1a3ce428efe70` and Apple Accepted receipt `03552619-b676-492b-bd80-80f9a3b79972`. The new Sparkle signature verified against the public key embedded in the app and the exact DMG bytes. A read-only mounted-image inspection passed strict code signing, Gatekeeper, build-number and key checks. The exact image was uploaded to private **sandbox** Blob storage and streamed back with matching size and digest. | Sandbox storage and signature checks do not prove build 16 installs the rotation through Sparkle or that the paid Production proxy serves build 17. The image is not in the live release catalog or appcast. Build 16 remains live. |
 
 ## Release blockers for this candidate
 
 The Founder approved a Sparkle key rotation. A new local signing seed and
-public key exist, and the source now supports a Developer ID signed DMG for
-the rotation. A byte-verified, owner-only second copy of the seed now exists on
-the Founder's other FileVault-enabled Mac. The separate
-Apple notarization Keychain is locked, so no new DMG has been notarized or
-distributed. See [the rotation runbook](sparkle-key-rotation-2026-09-23.md).
+public key exist, and the source supports the required Developer ID signed
+DMG. A byte-verified, owner-only second copy of the seed exists on the
+Founder's other FileVault-enabled Mac. The separate Apple notarization
+Keychain remains locked, but a Founder-approved App Store Connect Team API
+key with Developer access was created and accepted by `notarytool`; its
+private file is owner-only outside Git. The final DMG is notarized and
+stored privately for testing, but has not been distributed or promoted.
+See [the rotation runbook](sparkle-key-rotation-2026-09-23.md).
 
 1. Inspect the remaining operator-alert inbox and recheck the original-build
    browser choice. The latest-build file save now has a clean Chrome and SHA-256
    receipt; both authenticated Production server streams matched build 16.
-2. The Founder approved rotating the inaccessible Sparkle key. Rebuild and
-   notarize the clean final build-17 source, then create the separately signed
-   and notarized rotation DMG while retaining the live build-16 Apple signing
-   certificate. Sign that final DMG with the new Sparkle key, upload/read back
-   exact bytes, and test build 16 → 17 with a real paid entitlement.
+2. The final clean-source app, rotation DMG, Sparkle signature, and private
+   sandbox Blob readback now pass. Test build 16 → 17 with a real paid
+   entitlement before adding or promoting a live release-catalog entry.
    Relaunch the app and prove periodic checks still run. If the customer opts
    into automatic installation, prove it waits for an idle helper and does not
    interrupt migration, Vault backup, or restore.
