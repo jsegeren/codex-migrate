@@ -620,12 +620,20 @@ private file is owner-only outside Git. The final DMG is notarized and
 stored privately for testing, but has not been distributed or promoted.
 See [the rotation runbook](sparkle-key-rotation-2026-09-23.md).
 
-1. Inspect the remaining operator-alert inbox; recheck the primary
-   first-party archive button and the original-build choice after a new
-   accepted release exists. The deployed fallback now has a paid Chrome save
-   and exact catalog SHA-256 receipt; both authenticated Production server
-   streams previously matched build 16. This does not prove every browser or
-   the first-party form route.
+1. Inspect the remaining operator-alert inbox; repair the buyer-facing
+   primary download and recheck the original-build choice after a new
+   accepted release exists. In a live paid Chrome test on September 24, the
+   first-party form download reached Chrome's Save dialog but was marked
+   “Suspicious download blocked.” The existing direct private-Blob fallback
+   worked through Save Link As, producing all 9,591,579 build-16 bytes with
+   the catalog SHA-256. Making that direct URL the sole primary button passed
+   unit/CI tests but an ordinary click in this Chrome profile navigated to
+   `ERR_BLOCKED_BY_CLIENT`; the exact client blocker is unknown. That candidate
+   was briefly promoted, then the prior production deployment was restored.
+   PR #31 returned `main` to the prior source tree after PR #30's failed live
+   experiment. Do not tell a buyer to bypass a Chrome warning or call either
+   button reliable until an ordinary-click delivery passes in a buyer browser.
+   Both authenticated Production server streams previously matched build 16.
 2. The rebuilt clean-source app, rotation DMG, Sparkle signature, private
    sandbox Blob readback, isolated build-16-to-17 quit-path install, and
    candidate-code idle install/relaunch with an app-owned synthetic token pass.
