@@ -131,6 +131,11 @@ On September 24, all four current PR #26 CI checks passed (Python 3.9 and
 `/api/appcast` returned HTTP 200 and still advertised build 16. These are
 read-only Production denial and feed receipts; they do not prove revoked-token
 behavior, the candidate's paid entitlement path, or native installation.
+The Founder's existing paid purchase credential from the buyer-delivery email
+also returned HTTP 200 from Production's `entitlement` action. The private
+credential was not copied into this ledger or command arguments. This confirms
+positive entitlement for the current live release, not paid access to the
+unpromoted build-17 candidate.
 
 Sparkle's [published appcast format](https://sparkle-project.org/documentation/publishing/)
 supports `arm64` as the Apple-silicon hardware requirement; it does not define
