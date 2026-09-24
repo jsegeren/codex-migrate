@@ -218,7 +218,21 @@ import Sparkle
                 } else if child.terminationStatus == 0 || child.terminationStatus == 130 {
                     NSApplication.shared.terminate(nil)
                 } else if child.terminationStatus == 75 {
-                    self.showFailure("Continue in the existing browser tab. To switch copies, finish or stop the current operation safely, then choose Quit Codex Migrate from its menu-bar icon and reopen this copy. This copy hasn’t changed your migration data.", title: "Codex Migrate is already running")
+                    let peers = NSRunningApplication.runningApplications(
+                        withBundleIdentifier: Bundle.main.bundleIdentifier ?? ""
+                    ).map { (pid: $0.processIdentifier, bundleURL: $0.bundleURL) }
+                    if DuplicateLaunch.sameCopyIsRunning(
+                        ownURL: Bundle.main.bundleURL,
+                        ownPID: ProcessInfo.processInfo.processIdentifier,
+                        candidates: peers
+                    ) {
+                        // Sparkle can reopen the installed bundle twice. The copy
+                        // that lost the helper lock should exit without alarming
+                        // the buyer; the healthy copy remains open.
+                        NSApplication.shared.terminate(nil)
+                    } else {
+                        self.showFailure("Continue in the existing browser tab. To switch copies, finish or stop the current operation safely, then choose Quit Codex Migrate from its menu-bar icon and reopen this copy. This copy hasn’t changed your migration data.", title: "Codex Migrate is already running")
+                    }
                 } else {
                     self.showFailure("The local helper stopped. Reopen Codex Migrate to resume. If this keeps happening, email joshua@segeren.com. Your saved migration remains on your Macs.")
                 }

@@ -73,6 +73,9 @@ The installed build 17 passes strict code-signature and Gatekeeper checks and
 starts its helper. The old test app was locally re-signed after changing only
 its feed and automatic-check settings; this is not a paid-entitlement test.
 Relaunch also produced a second process with an already-running warning,
-which remains a user-facing bug to investigate. Paid installation and
-failure-path checks remain open. No live catalog entry or appcast has changed;
-build 16 remains the paid beta.
+which prompted a same-installed-copy quiet-exit fix. That source change
+supersedes this image as the final release candidate, although the image
+remains valid proof of Sparkle's key-rotation mechanism. Rebuild and repeat
+the physical installation, then complete paid-entitlement and failure-path
+checks. No live catalog entry or appcast has changed; build 16 remains the
+paid beta.

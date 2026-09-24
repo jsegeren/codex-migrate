@@ -40,6 +40,7 @@ and [in-app update acceptance](in-app-updates.md).
 | Rotation packager path check | A direct call against the live signed build 16 exposed that the certificate inspector failed for a relative app path because it changed into a temporary working directory. The packager now resolves the app path before invoking `codesign`; a regression test and the same real-certificate check pass. | This removes a local packaging failure, but does not prove a final notarized DMG or a paid in-app upgrade. |
 | Final rotation artifact | Clean source `004d3e28f8d40c656784b17af523bf8237a42d19` produced a Developer ID signed, Apple-notarized and stapled build-17 app (Apple Accepted receipt `ea31c59b-da11-415e-8357-dbfbba7cc198`). A separately signed, notarized and stapled 10,356,114-byte DMG has SHA-256 `861b7f1341d79da87a64e0399a7450904e89241d507ff877dfa1a3ce428efe70` and Apple Accepted receipt `03552619-b676-492b-bd80-80f9a3b79972`. The new Sparkle signature verified against the public key embedded in the app and the exact DMG bytes. A read-only mounted-image inspection passed strict code signing, Gatekeeper, build-number and key checks. The exact image was uploaded to private **sandbox** Blob storage and streamed back with matching size and digest. | Sandbox storage and signature checks do not prove build 16 installs the rotation through Sparkle or that the paid Production proxy serves build 17. The image is not in the live release catalog or appcast. Build 16 remains live. |
 | Physical Sparkle rotation smoke | An isolated Developer ID re-signed build-16 app in `/Applications` used a loopback test appcast pointing at the exact final build-17 DMG. Sparkle discovered build 17, fetched the DMG, extracted it, offered Install and Relaunch, and replaced the app in place. The installed bundle reports build 17 and the rotated public key; strict code-signature verification and Gatekeeper both pass as Notarized Developer ID. The relaunched app started its helper. The loopback server was stopped and the test installation moved to Trash afterward. | The old test copy's feed and automatic-check settings were changed locally, so this proves the Sparkle DMG/key-rotation mechanism, not the Production paid-entitlement path or a pristine buyer install. Relaunch produced a second app process that displayed an already-running warning while the first updated process and helper were healthy; eliminate or explicitly accept that duplicate-launch UX before release. |
+| Same-copy relaunch UX fix | After the smoke test, source now distinguishes a second process of the same installed bundle from a genuinely different app copy. The duplicate process exits quietly only when another process from that exact bundle path is running; a different copy still gets the existing safety warning. Native Swift check, full Swift typecheck, 847 Python tests (15 skipped), and 318 Node tests (1 skipped) passed. | This changes source after the notarized artifact above. Rebuild, sign, notarize, and retest the final image before release; the existing DMG is now a mechanism proof, not the final candidate. |
 
 ## Release blockers for this candidate
 
@@ -56,11 +57,11 @@ See [the rotation runbook](sparkle-key-rotation-2026-09-23.md).
 1. Inspect the remaining operator-alert inbox and recheck the original-build
    browser choice. The latest-build file save now has a clean Chrome and SHA-256
    receipt; both authenticated Production server streams matched build 16.
-2. The final clean-source app, rotation DMG, Sparkle signature, private
+2. The earlier clean-source app, rotation DMG, Sparkle signature, private
    sandbox Blob readback, and an isolated local build-16-to-17 Sparkle install
-   now pass. Test the same upgrade with a real paid entitlement before adding
-   or promoting a live release-catalog entry. Resolve the duplicate-launch
-   warning observed after the local relaunch.
+   passed. The same-copy relaunch fix supersedes that candidate: rebuild,
+   notarize, sign, read back, and repeat the upgrade with a real paid
+   entitlement before promoting a live release-catalog entry.
    Relaunch the app and prove periodic checks still run. If the customer opts
    into automatic installation, prove it waits for an idle helper and does not
    interrupt migration, Vault backup, or restore.

@@ -402,6 +402,7 @@ def main():
             "-Xlinker", "@executable_path/../Frameworks",
             ROOT / "desktop/CodexMigrate.swift", ROOT / "desktop/UpdateEntitlement.swift",
             ROOT / "desktop/InstallLocation.swift",
+            ROOT / "desktop/DuplicateLaunch.swift",
             ROOT / "desktop/SavedSetup.swift", "-o", executable)
         run("xcrun", "swiftc", "-parse-as-library", "-O", "-target", arch + "-apple-macos13.0",
             ROOT / "desktop/CodexVaultCrypto.swift", "-o", vault_crypto)

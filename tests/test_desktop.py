@@ -340,6 +340,20 @@ class DesktopTests(unittest.TestCase):
             self.assertIn("Install location checks passed", result.stdout)
 
     @unittest.skipUnless(sys.platform == "darwin", "native macOS persistence")
+    def test_native_duplicate_launch_guidance(self):
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as temporary:
+            binary = Path(temporary) / "duplicate-launch-checks"
+            subprocess.run(["xcrun", "swiftc", "-parse-as-library",
+                            str(root / "desktop/DuplicateLaunch.swift"),
+                            str(root / "tests/DuplicateLaunchChecks.swift"), "-o", str(binary)],
+                           check=True, capture_output=True, text=True, timeout=60)
+            result = subprocess.run([str(binary)], capture_output=True,
+                                    text=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Duplicate launch checks passed", result.stdout)
+
+    @unittest.skipUnless(sys.platform == "darwin", "native macOS persistence")
     def test_native_saved_setup_permissions_and_recovery(self):
         root = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as temporary:
