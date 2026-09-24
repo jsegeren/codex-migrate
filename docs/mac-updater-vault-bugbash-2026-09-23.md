@@ -565,6 +565,16 @@ The original-versus-latest choice cannot be observed on the live page yet,
 because the public latest release is still build 16. The PR checks for Python
 3.9 and 3.12 passed on the September 24 branch state.
 
+The buyer-page fallback and original-build refresh fix were isolated from
+the held build-17 release in PR #29 and merged to `main` as `5f7f341`.
+All four remote CI jobs passed. Production deployment
+`dpl_G8okmz5mMeQNqbpNgdLG5KiAuuyJ` is Ready; independent HTTPS reads
+confirmed the new purchase HTML and JavaScript, while the public appcast still
+advertises build 16. A repeat paid-browser download could not be observed
+because this Chrome control session stopped responding. Keep the real
+browser-download acceptance open; neither successful deployment nor the
+earlier sandbox-only save substitutes for it.
+
 ## Release blockers for this candidate
 
 The Founder approved a Sparkle key rotation. A new local signing seed and
@@ -577,8 +587,8 @@ private file is owner-only outside Git. The final DMG is notarized and
 stored privately for testing, but has not been distributed or promoted.
 See [the rotation runbook](sparkle-key-rotation-2026-09-23.md).
 
-1. Inspect the remaining operator-alert inbox; exercise the new direct-link
-   fallback in a live browser after deployment, and recheck the original-build
+1. Inspect the remaining operator-alert inbox; exercise the deployed direct-link
+   fallback in a live browser, and recheck the original-build
    choice after a new accepted release exists. The sandbox latest-build file
    save has a clean Chrome and SHA-256 receipt, and both authenticated
    Production server streams matched build 16, but the September 24 paid
