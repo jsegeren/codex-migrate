@@ -136,6 +136,8 @@ also returned HTTP 200 from Production's `entitlement` action. The private
 credential was not copied into this ledger or command arguments. This confirms
 positive entitlement for the current live release, not paid access to the
 unpromoted build-17 candidate.
+Production's `entitlement` action separately returned HTTP 403 for a forged
+credential. A refunded purchase was not exercised against a real buyer.
 Sparkle's release verification tool accepted the exact build-17 DMG and its
 rotation signature, then rejected a deliberately altered signature for the
 same DMG (exit status 1). This proves the local signature verifier's negative
@@ -175,6 +177,14 @@ so it remains recoverable. The isolated build-16 test app's loopback feed
 now points at this exact new DMG, but native Install and Relaunch, paid
 build-16-to-17 entitlement, and the broader failure-path matrix still require
 direct acceptance before release.
+The exact packaged build-17 engine also passed the opt-in detachable-APFS Vault
+test: when its synthetic Vault volume was absent, scheduled backup failed
+without creating a local replacement; after remount, the next capture verified.
+The real macOS LaunchAgent fixture then passed with that packaged engine and
+cleaned up its temporary job. A read-only check afterward found no loaded
+Vault backup agent or account LaunchAgent plist on this Mac. These synthetic
+fixtures do not establish buyer-account backup protection or a full update
+while a physical external disk disconnects.
 
 Sparkle's [published appcast format](https://sparkle-project.org/documentation/publishing/)
 supports `arm64` as the Apple-silicon hardware requirement; it does not define
