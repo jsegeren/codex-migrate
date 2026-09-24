@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { Readable } = require('node:stream');
 const Stripe = require('stripe');
-const { configuration, SITE } = require('../commerce/config');
+const { configuration, validRelease, SITE } = require('../commerce/config');
 const { service, checkoutRecovery, validatePurchase, validateCheckoutRecovery,
   purchasePriceCents, tokenFor, tokenSession, newerCompatibleRelease } = require('../commerce/service');
 const { deliveryMail, recoveryMail, PURCHASE_NOTIFY_EMAILS } = require('../commerce/runtime');
@@ -16,6 +16,14 @@ const env = { COMMERCE_MODE: 'sandbox', COMMERCE_STRIPE_KEY: 'rk_test_fixture', 
   COMMERCE_STRIPE_ACCOUNT: 'acct_fixture', COMMERCE_PRODUCT: 'prod_fixture', COMMERCE_PRICE: 'price_fixture',
   COMMERCE_WEBHOOK_SECRET: 'whsec_fixture', COMMERCE_RELEASE: release.id, COMMERCE_BLOB_STORE_ID: 'fixturestore' };
 const config = configuration(env, { [release.id]: release });
+test('build 17 rotation candidate stays sandbox-only until release acceptance', () => {
+  const candidate = require('../commerce/releases.json')['beta-build17-arm64'];
+  assert.equal(candidate.testingOnly, true);
+  assert.equal(candidate.accepted, false);
+  assert.equal(validRelease(candidate, false), true);
+  assert.equal(validRelease(candidate, true), false);
+  assert.equal(configuration({ ...env, COMMERCE_RELEASE: candidate.id }).release.id, candidate.id);
+});
 const signDownload = async r => ({ url: `https://fixturestore.private.blob.vercel-storage.com/${r.pathname}?fixture=1`, expiresAt: Date.now() + 300000, expiresInMs: 300000 });
 function fixture() {
   const s = { id: 'cs_test_fixture', livemode: false, mode: 'payment', status: 'complete', payment_status: 'paid',
