@@ -14,6 +14,7 @@ import Sparkle
     private var idleInstallHandler: (() -> Void)?
     private var idleInstallShutdownPending = false
     private var idleInstallShutdownConfirmed = false
+    private var updateScheduledForQuit = false
     private var automaticChecksItem: NSMenuItem!
     private var automaticInstallItem: NSMenuItem!
     private lazy var updaterController = SPUStandardUpdaterController(
@@ -151,6 +152,7 @@ import Sparkle
 
     func updater(_ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem,
                  immediateInstallationBlock install: @escaping () -> Void) -> Bool {
+        updateScheduledForQuit = true
         // Take control of the staged update so Sparkle can install and relaunch
         // after the helper confirms that no migration or Vault job is active.
         guard updater.automaticallyDownloadsUpdates, UpdateEntitlement.savedToken() != nil else { return false }
@@ -193,7 +195,7 @@ import Sparkle
 
     private func shutdownHelperForIdleInstall() {
         guard !idleInstallShutdownPending, process?.isRunning == true,
-              let request = helperRequest("/api/shutdown", method: "POST") else { return }
+              let request = helperRequest("/api/update-shutdown", method: "POST") else { return }
         // This POST rechecks idleness under the helper's action lock. A job
         // started after the GET wins and leaves the app and helper running.
         idleInstallShutdownPending = true
@@ -230,7 +232,14 @@ import Sparkle
         }
         let child = Process()
         child.executableURL = resources.appendingPathComponent("engine/codex-migrate-engine")
-        child.arguments = ["launch", "--port", "0", "--no-open"]
+        var arguments = ["launch", "--port", "0", "--no-open"]
+        if !InstallLocation.needsMoveToApplications(
+            appURL: Bundle.main.bundleURL,
+            homeURL: FileManager.default.homeDirectoryForCurrentUser
+        ) {
+            arguments.append("--resume-after-update")
+        }
+        child.arguments = arguments
         child.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
         child.environment = ProcessInfo.processInfo.environment.filter {
             !$0.key.hasPrefix("PYTHON") && !$0.key.hasPrefix("DYLD_")
@@ -311,7 +320,9 @@ import Sparkle
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let child = process, child.isRunning else { return .terminateNow }
         guard !quitting else { return .terminateCancel }
-        guard let request = helperRequest("/api/shutdown", method: "POST") else { return .terminateCancel }
+        let updatePending = updateScheduledForQuit || updaterController.updater.sessionInProgress
+        let endpoint = updatePending ? "/api/update-shutdown" : "/api/shutdown"
+        guard let request = helperRequest(endpoint, method: "POST") else { return .terminateCancel }
         quitting = true
         URLSession.shared.dataTask(with: request) { _, response, _ in
             DispatchQueue.main.async {

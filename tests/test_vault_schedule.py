@@ -23,7 +23,9 @@ from codex_migrate.vault_schedule import (
     LABEL,
     install_schedule,
     plan_schedule,
+    prepare_update,
     remove_schedule,
+    resume_after_update,
     run_scheduled_backup,
     schedule_status,
 )
@@ -148,7 +150,7 @@ class VaultScheduleTests(unittest.TestCase):
                                   json.loads(status_path.read_text()).get("status")
                                   if status_path.exists() else "missing"))
                 self.assertEqual(request("/api/update-idle"), 409)
-                self.assertEqual(request("/api/shutdown", "POST"), 409)
+                self.assertEqual(request("/api/update-shutdown", "POST"), 409)
                 deadline = time.monotonic() + 90
                 while time.monotonic() < deadline:
                     receipt = json.loads(status_path.read_text())
@@ -168,11 +170,24 @@ class VaultScheduleTests(unittest.TestCase):
                 with transcript.open(encoding="utf-8") as handle:
                     self.assertIn("LaunchAgent fixture", handle.read(100))
                 self.assertEqual(request("/api/update-idle"), 200)
-                self.assertEqual(request("/api/shutdown", "POST"), 200)
+                self.assertEqual(request("/api/update-shutdown", "POST"), 200)
                 dashboard.wait(timeout=15)
                 self.assertEqual(dashboard.returncode, 0)
                 dashboard.stdout.close()
                 dashboard = None
+                marker_path = status_path.parent / "update.json"
+                self.assertTrue(marker_path.exists())
+                deferred = subprocess.run(
+                    [str(engine), "vault", "--source-home", str(home),
+                     "scheduled-run", "--config", str(status_path.parent / "schedule.json")],
+                    env=env, capture_output=True, text=True, timeout=15)
+                self.assertEqual(deferred.returncode, 0, "packaged guard did not defer backup")
+                self.assertTrue(json.loads(marker_path.read_text())["deferred"])
+                self.assertEqual(json.loads(status_path.read_text())["status"], "failed")
+                self.assertEqual(
+                    verify_snapshot(str(vault), crypto_helper=str(helper)).snapshot_id,
+                    receipt["snapshot_id"],
+                )
             finally:
                 try:
                     if dashboard is not None:
@@ -456,6 +471,86 @@ class VaultScheduleTests(unittest.TestCase):
             self.assertEqual(last_run["snapshot_id"], "safe-snapshot")
             self.assertNotIn("key_id", last_run)
             self.assertNotIn("recovery_key", last_run)
+
+    def test_update_guard_defers_a_scheduled_run_and_catches_up_after_relaunch(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            home, vault, helper, verified = self.fixture(root)
+            engine = root / "engine"
+            engine.write_text("fixture", encoding="utf-8")
+            engine.chmod(0o700)
+            with patch("codex_migrate.vault_schedule.verify_snapshot",
+                       return_value=verified), \
+                    patch("codex_migrate.vault_schedule._loaded", return_value=False), \
+                    patch("codex_migrate.vault_schedule._launchctl"):
+                install_schedule(str(home), str(vault), crypto_helper=str(helper),
+                                 engine_command=[str(engine)])
+            config_path = home / "Library/Application Support/Codex Vault/schedule.json"
+            marker_path = config_path.parent / "update.json"
+            self.assertFalse(prepare_update(str(home), lambda: False))
+            self.assertFalse(marker_path.exists())
+            self.assertTrue(prepare_update(str(home), lambda: True))
+            self.assertEqual(marker_path.stat().st_mode & 0o777, 0o600)
+            with patch("codex_migrate.vault_schedule.backup") as backup:
+                self.assertEqual(run_scheduled_backup(str(config_path)), 0)
+            backup.assert_not_called()
+            self.assertTrue(json.loads(marker_path.read_text())["deferred"])
+            self.assertEqual(json.loads((config_path.parent / "last-run.json").read_text())["status"],
+                             "failed")
+            with patch("codex_migrate.vault_schedule._loaded", return_value=True), \
+                    patch("codex_migrate.vault_schedule.subprocess.Popen") as start:
+                resume_after_update(str(home))
+            self.assertFalse(marker_path.exists())
+            self.assertEqual(start.call_args.args[0], [
+                "/bin/launchctl", "kickstart", "-k", "gui/%d/%s" % (os.getuid(), LABEL)])
+            completed = BackupResult(
+                destination=str(vault), snapshot_id="caught-up-snapshot",
+                transcript_files=1, transcript_bytes=99, chunks=1,
+                key_id="private-key-id", recovery_key=None,
+            )
+            with patch("codex_migrate.vault_schedule.backup", return_value=completed) as backup:
+                self.assertEqual(run_scheduled_backup(str(config_path)), 0)
+            backup.assert_called_once()
+            self.assertEqual(json.loads((config_path.parent / "last-run.json").read_text())["status"],
+                             "completed")
+
+    def test_update_guard_is_not_granted_while_backup_holds_lock(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary) / "home"
+            home.mkdir(mode=0o700)
+            from codex_migrate.vault_schedule import _update_lock
+            with _update_lock(str(home)):
+                self.assertFalse(prepare_update(str(home), lambda: True))
+            self.assertTrue(prepare_update(str(home), lambda: True))
+
+    def test_expired_update_guard_cannot_disable_future_scheduled_backups(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            home, vault, helper, verified = self.fixture(root)
+            engine = root / "engine"
+            engine.write_text("fixture", encoding="utf-8")
+            engine.chmod(0o700)
+            with patch("codex_migrate.vault_schedule.verify_snapshot",
+                       return_value=verified), \
+                    patch("codex_migrate.vault_schedule._loaded", return_value=False), \
+                    patch("codex_migrate.vault_schedule._launchctl"):
+                install_schedule(str(home), str(vault), crypto_helper=str(helper),
+                                 engine_command=[str(engine)])
+            config_path = home / "Library/Application Support/Codex Vault/schedule.json"
+            self.assertTrue(prepare_update(str(home), lambda: True))
+            marker_path = config_path.parent / "update.json"
+            marker = json.loads(marker_path.read_text())
+            marker["expires_at"] = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
+            marker_path.write_text(json.dumps(marker), encoding="utf-8")
+            completed = BackupResult(
+                destination=str(vault), snapshot_id="after-expiry",
+                transcript_files=1, transcript_bytes=99, chunks=1,
+                key_id="private-key-id", recovery_key=None,
+            )
+            with patch("codex_migrate.vault_schedule.backup", return_value=completed) as backup:
+                self.assertEqual(run_scheduled_backup(str(config_path)), 0)
+            backup.assert_called_once()
+            self.assertFalse(marker_path.exists())
 
     def test_missing_external_vault_fails_without_creating_a_replacement(self):
         with tempfile.TemporaryDirectory() as temporary:

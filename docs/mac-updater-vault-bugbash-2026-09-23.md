@@ -67,6 +67,22 @@ cleanly. The temporary LaunchAgent and test key were removed. This proves the
 packaged helper's deferral protocol against a live scheduled backup on this Mac,
 not a full Sparkle replacement during that backup or the race after helper exit.
 
+The next source change closes that after-exit scheduler window: update-specific
+shutdown now takes an owner-only cross-process lock and leaves a bounded update
+marker. A scheduled run holds the lock through its capture; if the marker is
+present it leaves the last verified snapshot intact and records a deferred
+failure instead of starting from the bundle being replaced. The installed app's
+next safe-location launch clears the marker and requests an immediate catch-up
+run if one was deferred. The marker expires after two hours if the app never
+relaunches, so later daily backups are not permanently disabled. Unit tests
+cover lock contention, deferral, relaunch catch-up, and expiry. An ad-hoc local
+build from the then-dirty working tree passed the real LaunchAgent test: the
+packaged helper refused update shutdown during a running capture, accepted it
+after completion, and a packaged scheduled run was deferred while the marker
+remained. This is **not** yet a notarized release artifact or a full Sparkle
+installation-under-contention observation; the native app was edited again
+after that local build to restrict marker clearing to safe install locations.
+
 Sparkle's [published appcast format](https://sparkle-project.org/documentation/publishing/)
 supports `arm64` as the Apple-silicon hardware requirement; it does not define
 `x86_64` as a negative requirement. A local test that substituted `x86_64` in

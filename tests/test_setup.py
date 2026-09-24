@@ -831,6 +831,7 @@ class SetupTests(unittest.TestCase):
 
     def test_browser_shutdown_requires_local_token_and_stops_idle_server(self):
         self.assertEqual(self.request("/api/shutdown", {}, authorized=False)[0], 403)
+        self.assertEqual(self.request("/api/update-shutdown", {}, authorized=False)[0], 403)
         self.assertEqual(self.request("/api/shutdown", {}, extra_headers={"Origin": "https://example.com"})[0], 403)
         self.assertFalse(self.helper._closing)
         self.assertEqual(self.request("/api/shutdown", {})[0], 200)
@@ -856,6 +857,7 @@ class SetupTests(unittest.TestCase):
             "enabled": True, "last_run": {"status": "running"}}):
             self.assertEqual(self.request("/api/update-idle"), (409, {"idle": False}))
             self.assertEqual(self.request("/api/shutdown", {})[0], 409)
+            self.assertEqual(self.request("/api/update-shutdown", {})[0], 409)
         with patch("codex_migrate.setup.vault_schedule_status", side_effect=MigrationError("unsafe")):
             self.assertEqual(self.request("/api/update-idle"), (409, {"idle": False}))
             self.assertEqual(self.request("/api/shutdown", {})[0], 409)
@@ -869,10 +871,12 @@ class SetupTests(unittest.TestCase):
         with patch("codex_migrate.setup.vault_schedule_status", side_effect=lambda _: schedule):
             self.assertEqual(self.request("/api/update-idle"), (200, {"idle": True}))
             schedule["last_run"] = {"status": "running"}
-            self.assertEqual(self.request("/api/shutdown", {})[0], 409)
+            self.assertEqual(self.request("/api/update-shutdown", {})[0], 409)
             self.assertFalse(self.helper._closing)
             schedule["last_run"] = {"status": "completed"}
-            self.assertEqual(self.request("/api/shutdown", {})[0], 200)
+            self.assertEqual(self.request("/api/update-shutdown", {})[0], 200)
+        guard = self.home / "Library/Application Support/Codex Vault/update.json"
+        self.assertTrue(guard.exists())
         self.thread.join(timeout=2)
         self.assertFalse(self.thread.is_alive())
 

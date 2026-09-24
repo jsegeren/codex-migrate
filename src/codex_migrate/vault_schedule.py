@@ -6,8 +6,10 @@ content remains inside the encrypted Vault written by ``vault_backup``.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -37,6 +39,8 @@ LABEL = "com.segeren.codex-vault.backup"
 CONFIG_FORMAT = "codex-vault-schedule"
 CONFIG_VERSION = 2
 ALLOWED_INTERVAL_HOURS = (6, 12, 24, 168)
+UPDATE_GUARD_VERSION = 1
+UPDATE_GUARD_DURATION = timedelta(hours=2)
 
 
 @dataclass(frozen=True)
@@ -82,6 +86,90 @@ def _paths(source_home: str) -> Tuple[Path, Path, Path]:
     state = home / "Library/Application Support/Codex Vault"
     plist = home / "Library/LaunchAgents" / (LABEL + ".plist")
     return state / "schedule.json", state / "last-run.json", plist
+
+
+def _update_paths(source_home: str) -> Tuple[Path, Path]:
+    config_path, _, _ = _paths(source_home)
+    return config_path.parent / "update.lock", config_path.parent / "update.json"
+
+
+@contextmanager
+def _update_lock(source_home: str, *, nonblocking: bool = False):
+    home = _home(source_home)
+    lock_path, marker_path = _update_paths(str(home))
+    _ensure_owned_directory(home, lock_path.parent)
+    try:
+        descriptor = os.open(lock_path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+        info = os.fstat(descriptor)
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                or info.st_mode & 0o077):
+            raise MigrationError("The Vault update guard has unsafe permissions.")
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | (fcntl.LOCK_NB if nonblocking else 0))
+        except BlockingIOError as error:
+            raise MigrationError("A scheduled Vault backup is using the app.") from error
+        yield marker_path
+    finally:
+        if "descriptor" in locals():
+            os.close(descriptor)
+
+
+def _pending_update(marker_path: Path) -> Optional[Dict[str, object]]:
+    if not marker_path.exists():
+        return None
+    marker = _safe_json(marker_path)
+    if (set(marker) != {"version", "expires_at", "deferred"}
+            or marker["version"] != UPDATE_GUARD_VERSION
+            or type(marker["deferred"]) is not bool):
+        raise MigrationError("The Vault update guard is invalid.")
+    expires_at = _timestamp(marker["expires_at"])
+    if expires_at <= datetime.now(timezone.utc):
+        marker_path.unlink()
+        _fsync_directory(marker_path.parent)
+        return None
+    return marker
+
+
+def prepare_update(source_home: str, idle_check) -> bool:
+    """Reserve the bundle for Sparkle without racing the LaunchAgent."""
+    try:
+        with _update_lock(source_home, nonblocking=True) as marker_path:
+            if not idle_check():
+                return False
+            previous = _pending_update(marker_path)
+            _atomic_json(marker_path, {
+                "version": UPDATE_GUARD_VERSION,
+                "expires_at": (datetime.now(timezone.utc) + UPDATE_GUARD_DURATION).isoformat(),
+                "deferred": bool(previous and previous["deferred"]),
+            }, replace=True)
+            return True
+    except (MigrationError, OSError):
+        return False
+
+
+def resume_after_update(source_home: str) -> None:
+    """Clear a completed/aborted update and catch up a deferred backup."""
+    _, marker_path = _update_paths(source_home)
+    if not marker_path.exists():
+        return
+    with _update_lock(source_home) as marker_path:
+        marker = _pending_update(marker_path)
+        if marker is None:
+            return
+        deferred = marker["deferred"]
+        marker_path.unlink()
+        _fsync_directory(marker_path.parent)
+    if deferred and _loaded():
+        try:
+            subprocess.Popen(
+                ["/bin/launchctl", "kickstart", "-k", "gui/%d/%s" % (os.getuid(), LABEL)],
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL, start_new_session=True,
+            )
+        except OSError:
+            # Keep the app available; the failed receipt remains visible and
+            # the LaunchAgent will try again at its next scheduled interval.
+            pass
 
 
 def _ensure_owned_directory(home: Path, destination: Path) -> None:
@@ -457,25 +545,35 @@ def run_scheduled_backup(config_path: str) -> int:
             raise MigrationError("The automatic backup configuration is outside its managed location.")
         if configuration["version"] != CONFIG_VERSION:
             raise MigrationError("The automatic backup must be set up again to verify its Vault destination.")
-        _atomic_json(status_path, {
-            "status": "running", "started_at": _now(),
-        }, replace=True)
-        result = backup(
-            source_home, str(configuration["vault"]),
-            crypto_helper=str(configuration["crypto_helper"]),
-            require_existing_key_id=str(configuration["vault_key_id"]),
-        )
-        if result.recovery_key is not None:
-            raise MigrationError("Automatic backup cannot create an unacknowledged recovery key.")
-        _atomic_json(status_path, {
-            "status": "needs_attention" if result.needs_attention else "completed",
-            "completed_at": _now(),
-            "snapshot_id": result.snapshot_id,
-            "transcript_files": result.transcript_files,
-            "transcript_bytes": result.transcript_bytes,
-            **({"at_risk_threads": result.at_risk_threads} if result.needs_attention else {}),
-        }, replace=True)
-        return 0
+        with _update_lock(source_home) as marker_path:
+            marker = _pending_update(marker_path)
+            if marker is not None:
+                _atomic_json(marker_path, {**marker, "deferred": True}, replace=True)
+                _atomic_json(status_path, {
+                    "status": "failed",
+                    "failed_at": _now(),
+                    "error": "Automatic backup stopped safely. The previous verified snapshot and local Codex data were not changed.",
+                }, replace=True)
+                return 0
+            _atomic_json(status_path, {
+                "status": "running", "started_at": _now(),
+            }, replace=True)
+            result = backup(
+                source_home, str(configuration["vault"]),
+                crypto_helper=str(configuration["crypto_helper"]),
+                require_existing_key_id=str(configuration["vault_key_id"]),
+            )
+            if result.recovery_key is not None:
+                raise MigrationError("Automatic backup cannot create an unacknowledged recovery key.")
+            _atomic_json(status_path, {
+                "status": "needs_attention" if result.needs_attention else "completed",
+                "completed_at": _now(),
+                "snapshot_id": result.snapshot_id,
+                "transcript_files": result.transcript_files,
+                "transcript_bytes": result.transcript_bytes,
+                **({"at_risk_threads": result.at_risk_threads} if result.needs_attention else {}),
+            }, replace=True)
+            return 0
     except Exception:
         try:
             source_home = str(locals().get("configuration", {}).get("source_home", ""))

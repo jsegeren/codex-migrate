@@ -42,6 +42,7 @@ from codex_migrate.vault_install import install_status as persistent_install_sta
 from codex_migrate.vault_install import recover_interrupted_install
 from codex_migrate.vault_schedule import (
     install_schedule as install_vault_schedule,
+    prepare_update as prepare_vault_update,
     remove_schedule as remove_vault_schedule,
     schedule_status as vault_schedule_status,
 )
@@ -1322,10 +1323,12 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                 if not self._local() or not self._authorized():
                     self._json(403, {"error": "Local origin and control token required"})
                     return
-                if self.path == "/api/shutdown":
+                if self.path in ("/api/shutdown", "/api/update-shutdown"):
                     # _request_lock excludes concurrent configuration, pickers,
                     # and new operations while shutdown closes the action gate.
-                    if not setup._idle_for_shutdown():
+                    ready = (prepare_vault_update(setup.source_home, setup._idle_for_shutdown)
+                             if self.path == "/api/update-shutdown" else setup._idle_for_shutdown())
+                    if not ready:
                         self._json(409, {"error": "Finish running work and save any displayed Vault recovery key before quitting."})
                         return
                     setup._closing = True
