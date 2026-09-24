@@ -178,6 +178,7 @@ class VaultScheduleTests(unittest.TestCase):
                 dashboard = None
                 marker_path = status_path.parent / "update.json"
                 self.assertTrue(marker_path.exists())
+                self.assertEqual(json.loads(marker_path.read_text())["target_build"], 17)
                 deferred = subprocess.run(
                     [str(engine), "vault", "--source-home", str(home),
                      "scheduled-run", "--config", str(status_path.parent / "schedule.json")],

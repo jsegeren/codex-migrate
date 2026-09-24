@@ -508,6 +508,19 @@ without a build-17 or sandbox path, and an anonymous `/api/update-archive`
 request returned 403 without a private Blob redirect. This proves the
 unreleased image remains private, not a paid installation of it.
 
+The **exact `27ef9bf` packaged engine** then passed the opt-in real macOS
+LaunchAgent test on disposable transcript data. A scheduled encrypted capture
+ran through the bundled engine; while it was active, the helper returned 409
+for both updater idle and update-shutdown requests. Once the capture completed
+and verified, it returned 200 to a target-build-17 shutdown request, left an
+owner-only update guard whose recorded target was 17, and deferred a subsequent
+scheduled run without changing the last good snapshot.
+The packaged backup/restore smoke also passed without copying authentication
+files. The test unloaded its LaunchAgent and removed its plist and test key;
+a post-run check found no loaded backup job or plist on this account. This is
+physical **packaged-helper contention and cleanup** evidence, not a Sparkle
+replacement while busy or a buyer-home catch-up observation.
+
 ## Release blockers for this candidate
 
 The Founder approved a Sparkle key rotation. A new local signing seed and
