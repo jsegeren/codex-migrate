@@ -37,10 +37,13 @@ an exact catalogued `testingOnly` candidate, the matching SHA-256 digest, an
 already-paid Founder Checkout session, and that session's bearer token plus a
 matching `X-Codex-Migrate-Canary` request header. Operators configure the
 catalog ID, digest, and exact session via `COMMERCE_UPDATER_CANARY_RELEASE`,
-`COMMERCE_UPDATER_CANARY_SHA256`, and `COMMERCE_UPDATER_CANARY_SESSION`. Do not
-put the session ID or token in Git or logs. Normal buyers and the public feed
-remain on build 16. Remove all three canary settings after the test and verify
-that the special request is denied. This tests the paid server stream only; a
+`COMMERCE_UPDATER_CANARY_SHA256`, and `COMMERCE_UPDATER_CANARY_SESSION`, plus a
+UTC `COMMERCE_UPDATER_CANARY_EXPIRES_AT` no more than 48 hours ahead. The route
+refuses expired requests even if an old deployment still holds the settings.
+Do not put the session ID or token in Git or logs. Normal buyers and the public feed
+remain on build 16. Remove all four canary settings after the test, redeploy
+Production to remove them from the active deployment, and verify that the
+special request is denied. This tests the paid server stream only; a
 test-only client that supplies the header does not prove the unmodified buyer
 app. It never constitutes public release approval.
 

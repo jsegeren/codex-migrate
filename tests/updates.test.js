@@ -58,10 +58,13 @@ test('canary requires the exact paid session and explicit release pin before loa
   const selectedConfig = { ...config, catalog: { [candidate.id]: candidate } };
   const allowed = { COMMERCE_UPDATER_CANARY_RELEASE: candidate.id,
     COMMERCE_UPDATER_CANARY_SESSION: 'cs_live_fixture',
-    COMMERCE_UPDATER_CANARY_SHA256: candidate.sha256 };
+    COMMERCE_UPDATER_CANARY_SHA256: candidate.sha256,
+    COMMERCE_UPDATER_CANARY_EXPIRES_AT: new Date(Date.now() + 3600000).toISOString().replace(/\.\d{3}Z$/, 'Z') };
   for (const [header, environment] of [
     [candidate.id, {}],
     [candidate.id, { ...allowed, COMMERCE_UPDATER_CANARY_SESSION: 'cs_live_other' }],
+    [candidate.id, { ...allowed, COMMERCE_UPDATER_CANARY_EXPIRES_AT: '2020-01-01T00:00:00Z' }],
+    [candidate.id, { ...allowed, COMMERCE_UPDATER_CANARY_EXPIRES_AT: new Date(Date.now() + 72 * 3600000).toISOString().replace(/\.\d{3}Z$/, 'Z') }],
     ['another-release', allowed],
     [[candidate.id, candidate.id], allowed],
   ]) {
@@ -88,7 +91,8 @@ test('canary streams only the exact sandbox candidate while the public feed rema
   const selectedConfig = { ...config, catalog: { [candidate.id]: candidate } };
   const environment = { COMMERCE_UPDATER_CANARY_RELEASE: candidate.id,
     COMMERCE_UPDATER_CANARY_SESSION: 'cs_live_fixture',
-    COMMERCE_UPDATER_CANARY_SHA256: candidate.sha256 };
+    COMMERCE_UPDATER_CANARY_SHA256: candidate.sha256,
+    COMMERCE_UPDATER_CANARY_EXPIRES_AT: new Date(Date.now() + 3600000).toISOString().replace(/\.\d{3}Z$/, 'Z') };
   const feed = plainResponse();
   appcast(() => selectedConfig)({ method: 'GET' }, feed);
   assert.match(feed.data, /<sparkle:version>15<\/sparkle:version>/);
@@ -127,7 +131,8 @@ test('canary refuses mismatched digest or accepted manifest before signing', asy
   for (const [manifest, digest] of [[candidate, '0'.repeat(64)], [{ ...candidate, accepted: true }, candidate.sha256]]) {
     const selectedConfig = { ...config, catalog: { [candidate.id]: manifest } };
     const environment = { COMMERCE_UPDATER_CANARY_RELEASE: candidate.id,
-      COMMERCE_UPDATER_CANARY_SESSION: 'cs_live_fixture', COMMERCE_UPDATER_CANARY_SHA256: digest };
+      COMMERCE_UPDATER_CANARY_SESSION: 'cs_live_fixture', COMMERCE_UPDATER_CANARY_SHA256: digest,
+      COMMERCE_UPDATER_CANARY_EXPIRES_AT: new Date(Date.now() + 3600000).toISOString().replace(/\.\d{3}Z$/, 'Z') };
     let downloads = 0;
     const handler = archive(async () => ({ config: selectedConfig, service: {
       downloadCanary: async () => { downloads++; throw Error('unexpected'); },
