@@ -124,6 +124,46 @@ class VaultBackupTests(unittest.TestCase):
             finally:
                 self.delete_key(destination)
 
+    @unittest.skipUnless(
+        os.environ.get("CODEX_MIGRATE_LARGE_HISTORY_PROBE") == "1",
+        "opt-in physical large-history probe",
+    )
+    def test_large_history_incremental_backup_keeps_unchanged_chunks(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            destination = root / "vault"
+            sessions = source / ".codex/sessions/2026/09/24"
+            sessions.mkdir(parents=True)
+            for index in range(2048):
+                (sessions / f"thread-{index:04d}.jsonl").write_text(
+                    json.dumps({"thread": index, "text": f"synthetic-{index:04d}"}) + "\n",
+                    encoding="utf-8",
+                )
+            try:
+                first = backup(str(source), str(destination), crypto_helper=str(self.helper))
+                self.assertEqual(first.transcript_files, 2048)
+                self.assertEqual(
+                    verify_snapshot(str(destination), crypto_helper=str(self.helper)).transcript_files,
+                    2048,
+                )
+                first_objects = set((destination / "objects").rglob("*.cvchunk"))
+                changed = sessions / "thread-1024.jsonl"
+                changed.write_text(changed.read_text(encoding="utf-8") +
+                                   json.dumps({"text": "later synthetic work"}) + "\n",
+                                   encoding="utf-8")
+                second = backup(str(source), str(destination), crypto_helper=str(self.helper))
+                self.assertEqual(second.transcript_files, 2048)
+                self.assertNotEqual(second.snapshot_id, first.snapshot_id)
+                second_objects = set((destination / "objects").rglob("*.cvchunk"))
+                self.assertEqual(len(second_objects - first_objects), 1)
+                self.assertEqual(
+                    verify_snapshot(str(destination), crypto_helper=str(self.helper)).snapshot_id,
+                    second.snapshot_id,
+                )
+            finally:
+                self.delete_key(destination)
+
     def test_tampered_chunk_fails_closed_without_new_reference(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

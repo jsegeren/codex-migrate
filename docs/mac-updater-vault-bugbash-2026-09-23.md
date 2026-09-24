@@ -698,6 +698,14 @@ See [the rotation runbook](sparkle-key-rotation-2026-09-23.md).
 
 The current local Vault guarantees the last verified capture, not zero loss
 between snapshots, completed off-device cloud sync, or every Codex UI resume.
+An opt-in synthetic large-history probe now creates 2,048 distinct Codex
+transcripts, publishes and verifies a first encrypted snapshot, appends to one
+thread, then publishes and verifies a second. Only one new encrypted chunk is
+added on the second run. It passed on this Mac under system Python 3.9 and
+Python 3.12 in 53.3 and 52.7 seconds respectively. This exercises file-count
+and incremental-backup behavior, not multi-gigabyte histories, live Codex
+data, search latency, or a scheduled run. The opt-in test is in
+`tests/test_vault_backup.py`; ordinary CI skips it.
 On September 24, the complete source suite ran from a disposable checkout on
 the Founder's second Mac (macOS 26.5, Apple silicon, system Python 3.9.6).
 It ran 856 tests in 254.6 seconds: 834 passed, 15 skipped, and seven Vault
