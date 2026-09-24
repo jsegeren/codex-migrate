@@ -354,6 +354,27 @@ reported build 17, and its app, packaged engine, and Vault helper each reported
 The app was not opened on that Mac, so this is cross-device artifact acceptance,
 not a second-Mac first-run, Vault, migration, or updater result.
 
+The exact build-17 DMG's **bundled engine** was then exercised from a read-only
+mount on this Mac. All 16 focused desktop tests completed (15 passed, one
+case-sensitive-filesystem skip), including two encrypted synthetic snapshots,
+versioned restore without authentication or installation identity, and a real
+dashboard/helper startup and shutdown. The opt-in real macOS LaunchAgent test
+created and verified a scheduled capture with the packaged engine, then
+removed its disposable schedule; read-only checks found no loaded test job or
+account LaunchAgent plist afterward. The opt-in external-volume test detached
+its synthetic APFS Vault, confirmed a scheduled run failed without creating a
+replacement local Vault, remounted it, and verified the next capture. A
+separate case-sensitive APFS volume let the packaged engine reject a nested
+`README`/`readme` collision without changing either file. Two real
+filesystem-denial probes confirmed the packaged engine did not treat protected
+Codex or workspace directories as fully readable or change their sentinels.
+These are disposable-fixture checks, not a clean buyer account or paid updater
+installation. Both mounted images and all temporary jobs were removed.
+
+All four PR #26 CI checks passed on Python 3.9 and 3.12 at head `0065d1a`.
+Build 16 remains the public appcast release; the new
+build-17 candidate remains private, testing-only, and unaccepted.
+
 ## Release blockers for this candidate
 
 The Founder approved a Sparkle key rotation. A new local signing seed and
