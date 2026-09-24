@@ -48,6 +48,15 @@ and [in-app update acceptance](in-app-updates.md).
 | Final relaunch-source candidate | Clean source `ee40e565d3c5890e818dd2c6cbc2f1e30de97d40` produced a Developer ID signed, stapled build-17 app (Apple Accepted receipt `c36e16c2-637f-498d-9e68-ee3ff44a090b`) and a separately signed, stapled 10,355,906-byte DMG, SHA-256 `bc0da26470268ff37f9d37cd512d0a957dc502b7074256554e5ef051c040d383` (Accepted DMG receipt `22e674ea-e5e0-4b67-bb61-520c2f020221`). The Sparkle signature independently verified against the app's embedded public key. The exact DMG was uploaded to private **sandbox** Blob and streamed back with matching bytes. An isolated re-signed test app in `/Applications`, reporting build 16 and running the same updater code plus synthetic-token diagnostics, fetched this final DMG over a loopback feed, installed automatically while idle, and relaunched one healthy app and helper. The installed source receipt matched `ee40e56`; strict signing and Gatekeeper passed. Test app, synthetic Keychain item and temporary preference changes were removed/restored. | This is a loopback/synthetic-token test, not a pristine live-build-16 or Production paid update. The final candidate remains sandbox-only and unaccepted; busy-operation, paid/revoked entitlement, low-space, clean-account and second-Mac physical checks remain open. |
 | Second-Mac artifact acceptance | The final `ee40e56` DMG was copied over verified SSH to the Founder's other Apple-silicon Mac (macOS 26.5). Its 10,355,906-byte length and SHA-256 matched the final receipt. The image was mounted read-only; the embedded build-17 app passed strict code-signature verification and Gatekeeper as Notarized Developer ID. The image was detached and the temporary copy moved to Trash. | The app was not opened and no migration or Vault operation ran on that Mac. This is cross-device artifact validation, not a clean-account first launch or a purchase-link test. |
 
+The real LaunchAgent check was rerun against the final `ee40e56` packaged
+engine. It created and verified a second encrypted snapshot, but inspection
+found that the test harness had only *planned* schedule removal: its CLI call
+omitted `--apply`, leaving a loaded job pointing at a deleted temporary home.
+That orphan was explicitly unloaded. The harness now applies removal and
+asserts the job is absent; the packaged test passes and the account has no
+loaded test backup job afterward. This validates scheduled capture and cleanup,
+not deferral of an actual in-app update while a backup is running.
+
 Sparkle's [published appcast format](https://sparkle-project.org/documentation/publishing/)
 supports `arm64` as the Apple-silicon hardware requirement; it does not define
 `x86_64` as a negative requirement. A local test that substituted `x86_64` in

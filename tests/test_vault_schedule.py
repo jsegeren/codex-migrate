@@ -103,10 +103,21 @@ class VaultScheduleTests(unittest.TestCase):
                     if installed:
                         removed = subprocess.run(
                             [str(engine), "vault", "--source-home", str(home),
-                             "schedule-remove", "--json"],
+                             "schedule-remove", "--apply", "--json"],
                             env=env, capture_output=True, text=True, timeout=15)
-                        if removed.returncode != 0:
+                        try:
+                            applied = removed.returncode == 0 and json.loads(removed.stdout).get("applied") is True
+                        except (ValueError, AttributeError):
+                            applied = False
+                        if not applied:
                             remove_schedule(str(home))
+                        self.assertTrue(applied, "packaged schedule removal did not apply")
+                        self.assertNotEqual(
+                            subprocess.run(["/bin/launchctl", "print", service],
+                                           stdout=subprocess.DEVNULL,
+                                           stderr=subprocess.DEVNULL).returncode,
+                            0, "the disposable LaunchAgent was not unloaded",
+                        )
                 finally:
                     subprocess.run([str(helper), "delete-key", "--key-id", key_id],
                                    env=env, check=True, capture_output=True, timeout=15)
