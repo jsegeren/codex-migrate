@@ -186,6 +186,30 @@ Vault backup agent or account LaunchAgent plist on this Mac. These synthetic
 fixtures do not establish buyer-account backup protection or a full update
 while a physical external disk disconnects.
 
+The latest PR #26 head `394a7f9` completed all four CI checks on September 24
+(Python 3.9 and 3.12 across both active runs). An isolated copy of the exact
+live build-16 app downloaded the current 10,368,949-byte candidate through a
+loopback appcast. Sending SIGINT to **that copy's helper only** caused its
+normal AppKit termination path to run; Sparkle replaced the app in place with
+build 17. Its installed executable matched the clean-source candidate byte
+for byte, the embedded receipt named `4797808`, and strict code-signature and
+Gatekeeper checks passed. It did **not** relaunch: this was build 16's
+install-on-quit behavior, not a manual Install and Relaunch or build 17's new
+idle-install callback. No paid Production entitlement was involved.
+
+A second isolated copy used the candidate's current updater code, changed only
+its reported version and feed for a local 16-to-17 test, and was re-signed by
+the same Developer ID. It fetched the exact image with automatic checks
+enabled. A synthetic Keychain item created by the `security` CLI then blocked
+its main thread in `SecItemCopyMatching` during Sparkle's automatic-install
+handoff; this is **not** an idle-install acceptance result and must not be
+called a product Keychain failure without an app-owned purchase-link test.
+The synthetic item was deleted, the isolated processes were stopped, both
+test apps and the loopback feed were moved to Trash, and the test-only 60-second
+Sparkle check interval was removed. No buyer purchase or Codex/Vault data was
+changed. Repeat the idle-install test with a token saved by the app itself,
+then directly observe installation and relaunch.
+
 Sparkle's [published appcast format](https://sparkle-project.org/documentation/publishing/)
 supports `arm64` as the Apple-silicon hardware requirement; it does not define
 `x86_64` as a negative requirement. A local test that substituted `x86_64` in
