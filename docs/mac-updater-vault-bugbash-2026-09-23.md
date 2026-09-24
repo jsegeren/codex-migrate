@@ -650,8 +650,14 @@ See [the rotation runbook](sparkle-key-rotation-2026-09-23.md).
    unaccepted. Directly observe
    that the duplicate-launch warning is absent and prove periodic checks still
    run after relaunch. A synthetic scheduled backup now proves the full
-   replacement waits and resumes safely; migration and restore contention,
-   plus catch-up from an unmodified buyer home, remain unverified.
+   replacement waits and resumes safely. An opt-in physical test using the
+   exact notarized build-17 packaged engine also proves that the updater's
+   idle and shutdown requests refuse a real synthetic Vault restore, create
+   no update guard while it runs, and permit shutdown only after the restored
+   transcript matches the source. It passed under macOS system Python 3.9 and
+   Python 3.12. This is helper-level contention, not a full Sparkle bundle
+   replacement during restore. Migration contention, full replacement under
+   restore contention, and catch-up from an unmodified buyer home remain open.
 3. The invalid-signature and missing-archive probes above left the app and
    synthetic transcript unchanged. Source now clears aborted-update state, and
    the isolated repeat of the bad-signature case creates no update guard on
