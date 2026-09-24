@@ -22,6 +22,18 @@ CANARY_ID = "codex-migrate-0.1.0-build17-abort-guard-arm64"
 ARCHIVE = ROOT / "build/desktop-wm6vw05x/Codex-Migrate-0.1.0-build16-arm64.zip"
 CANDIDATE_DMG = ROOT / "build/desktop-rotation-fsfhlg3d/Codex-Migrate-0.1.0-build17-arm64.dmg"
 HEADER_HOOK = 'request.setValue("Bearer \\(token)", forHTTPHeaderField: "Authorization")'
+TOKEN_LOOKUP = '    static func savedToken() -> String? {\n'
+HELPER_START = '        _ = updaterController\n        startHelper()\n'
+CANARY_TOKEN_LOOKUP = '''    // Disposable test client only: consume a private token from a closed stdin pipe.
+    // Nothing is written to Keychain, argv, the environment, the helper, or disk.
+    private static let pipedCanaryToken: String? = {
+        guard let value = String(data: FileHandle.standardInput.readDataToEndOfFile(), encoding: .utf8) else { return nil }
+        return token(from: value)
+    }()
+
+    static func savedToken() -> String? {
+        if let token = pipedCanaryToken { return token }
+'''
 
 
 def run(*args, timeout=180):
@@ -60,10 +72,23 @@ def appcast_xml(selected):
 def add_canary_header(source):
     if source.count(HEADER_HOOK) != 1 or "X-Codex-Migrate-Canary" in source:
         raise ValueError("archived updater request hook changed")
-    return source.replace(
+    source = source.replace(
         HEADER_HOOK,
         HEADER_HOOK + '\n        request.setValue("' + CANARY_ID
         + '", forHTTPHeaderField: "X-Codex-Migrate-Canary")')
+    if source.count(HELPER_START) != 1:
+        raise ValueError("archived startup hook changed")
+    return source.replace(HELPER_START, HELPER_START + '''        // Disposable test client only: exercise the background paid update path once.
+        DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(3)) {
+            self.updaterController.updater.checkForUpdatesInBackground()
+        }
+''')
+
+
+def add_piped_test_token(source):
+    if source.count(TOKEN_LOOKUP) != 1 or "pipedCanaryToken" in source:
+        raise ValueError("archived entitlement lookup changed")
+    return source.replace(TOKEN_LOOKUP, CANARY_TOKEN_LOOKUP)
 
 
 def prepare(output, port, identity):
@@ -103,6 +128,8 @@ def prepare(output, port, identity):
                 ["git", "show", f"{OLD_SOURCE}:desktop/{filename}"], cwd=ROOT, text=True)
             if filename == "CodexMigrate.swift":
                 source = add_canary_header(source)
+            elif filename == "UpdateEntitlement.swift":
+                source = add_piped_test_token(source)
             path = Path(scratch) / filename
             path.write_text(source)
             sources.append(path)

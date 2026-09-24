@@ -138,6 +138,39 @@ higher build number.
   clean-account, and failure-path gates above remain open; build 17 remains
   unaccepted and must not be promoted from this receipt alone.
 
+## Native paid-update canary receipt — September 24, 2026
+
+- The disposable, locally re-signed build-16 test client used the old shipped
+  Sparkle public key, a loopback appcast, and a test-only canary request header.
+  To avoid touching the Founder's Keychain, this disposable copy read the
+  already-paid purchase token once from a closed stdin pipe. A test-only
+  startup hook requested one background update check. Neither hook exists in
+  the shipped build 16 or candidate build 17; no token was put in argv, an
+  environment variable, the helper, a file, or Git.
+- Production's four canary variables were limited to that paid session, exact
+  build-17 candidate and a short expiry. During the test the public appcast
+  still advertised build 16, and an anonymous canary archive request returned
+  HTTP 403.
+- Sparkle downloaded a 10,376,201-byte DMG with SHA-256
+  `bf33da502e15a012c287efc5cec6c9b3057bf544c9ebbf8d9aebb1d91d2c1dc6`.
+  With automatic updates enabled, a normal quit of the idle build-16 app let
+  Sparkle replace it in `/Applications` with build 17. The installed app
+  passed strict code-signature and notarized Developer ID Gatekeeper checks.
+  It did not visibly relaunch itself after that intentional quit. Opening the
+  installed copy manually started build 17 and its helper with the
+  `--resume-after-update-build 17` argument.
+- Afterward all four temporary Production canary variables were removed and
+  Production was redeployed. The live appcast again showed build 16, an
+  anonymous canary request still returned 403, and the local feed and
+  disposable `/Applications` installation were removed. The original
+  developer app was reopened. The purchase-link Keychain item remained absent;
+  automatic-check and automatic-update preferences remained enabled.
+- This passes **paid native download and install-on-quit for a modified test
+  client**. It does not pass unmodified buyer-client linkage, unattended
+  install/relaunch while the app stays open, busy-operation retry, failure
+  injection, or a clean-account purchase/download/install test. Build 17
+  remains unaccepted and the public release remains build 16.
+
 ## Build 16 physical update receipt — September 23, 2026
 
 - The final Developer ID signed, Apple-notarized and stapled arm64 archive is
