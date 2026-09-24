@@ -118,6 +118,13 @@ test app and local feed were moved to Trash/stopped. Repeat the normal
 Install-and-Relaunch UI path and busy-operation checks before release. This
 test used a loopback feed, not a real paid Production entitlement.
 
+The same final image was copied over the existing authenticated SSH link to
+the Founder's other Apple-silicon Mac. Its SHA-256 matched exactly; a read-only
+mount passed strict app-signature verification and Gatekeeper as Notarized
+Developer ID. The image was detached and the temporary copy moved to Trash.
+No app launch, Vault operation, or Codex data mutation occurred there; this is
+cross-device artifact verification, not a clean-account installation test.
+
 Sparkle's [published appcast format](https://sparkle-project.org/documentation/publishing/)
 supports `arm64` as the Apple-silicon hardware requirement; it does not define
 `x86_64` as a negative requirement. A local test that substituted `x86_64` in
