@@ -574,6 +574,13 @@ advertises build 16. A repeat paid-browser download could not be observed
 because this Chrome control session stopped responding. Keep the real
 browser-download acceptance open; neither successful deployment nor the
 earlier sandbox-only save substitutes for it.
+On a fresh Production check, the public appcast still advertised build 16.
+The live `/api/update-archive` returned 403 for both a missing bearer and a
+structurally valid but forged bearer; `/api/purchase` returned 403 for that
+same forged token's entitlement check. No private file URL or buyer material
+was requested or logged. A further Gmail-link browser attempt reached the
+same unresponsive Chrome purchase tab, so a successful paid browser save
+remains unverified.
 
 ## Release blockers for this candidate
 
