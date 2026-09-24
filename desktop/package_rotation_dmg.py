@@ -37,6 +37,8 @@ def signed_team(app):
 
 
 def same_developer_certificate(app):
+    # codesign runs from a temporary directory so its input must be absolute.
+    app = Path(app).resolve()
     with tempfile.TemporaryDirectory(prefix="codex-migrate-cert-") as temporary:
         result = subprocess.run(["codesign", "--display", "--extract-certificates", str(app)],
                                 cwd=temporary, capture_output=True, text=True)

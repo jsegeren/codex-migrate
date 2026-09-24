@@ -7,12 +7,29 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "desktop"))
 import package_rotation_dmg as rotation
 
 
 class RotationDiskImageTests(unittest.TestCase):
+    def test_certificate_inspection_resolves_relative_app_before_changing_directory(self):
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as temporary:
+            app = Path(temporary) / "Codex Migrate.app"
+            app.mkdir()
+            certificate = b"fixture Developer ID certificate"
+
+            def extract(args, **kwargs):
+                self.assertEqual(Path(args[-1]), app)
+                (Path(kwargs["cwd"]) / "codesign0").write_bytes(certificate)
+                return SimpleNamespace(returncode=0)
+
+            with patch.object(rotation.subprocess, "run", side_effect=extract), \
+                    patch.object(rotation, "LIVE_DEVELOPER_ID_CERT_SHA256",
+                                 hashlib.sha256(certificate).hexdigest()):
+                rotation.same_developer_certificate(app.relative_to(Path.cwd()))
+
     def fixture(self, root):
         output = root / "build/desktop-source"
         app = output / "Codex Migrate.app"
