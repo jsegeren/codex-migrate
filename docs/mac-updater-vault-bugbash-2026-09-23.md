@@ -413,6 +413,24 @@ launched, installed, or used against Codex or Vault data on that Mac. This
 proves cross-device artifact integrity, not a paid update or clean-account
 first launch.
 
+An isolated `/Applications` copy of the `b510f216` app was made to report
+build 16 with the old Sparkle public key and a loopback feed for the exact
+10,375,160-byte notarized build-17 DMG. Test-only code supplied a synthetic
+Codex home, a separate synthetic entitlement Keychain service, and an immediate
+background update check; the release app and DMG were not modified. Sparkle
+fetched the appcast and exact DMG, then automatically replaced the isolated
+app. The synthetic home's owner-only update marker recorded target build 17,
+which is evidence that the helper's guarded update-shutdown path ran. The
+installed executable matched the `b510f216` release app byte-for-byte, its
+bundle reported build 17, and strict signing and Gatekeeper both passed as
+Notarized Developer ID. The synthetic transcript's SHA-256 remained unchanged.
+The isolated app and HTTP server were stopped, its test-only Keychain item
+removed, and the changed Sparkle check time restored. Because another copy of
+Codex Migrate was already running on this account, the installed test copy did
+not retain a healthy helper after relaunch. This is a successful guarded
+replacement with synthetic data, **not** proof of a clean-account relaunch,
+real paid entitlement, Production feed, or buyer-data protection.
+
 ## Release blockers for this candidate
 
 The Founder approved a Sparkle key rotation. A new local signing seed and
