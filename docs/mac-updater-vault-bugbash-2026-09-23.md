@@ -822,7 +822,25 @@ ID assessment all passed after extraction to a disposable directory. No buyer
 token or private download URL is recorded here. The browser-button observation
 remains unresolved for that controlled session and must not be described as a
 verified ordinary-click purchase flow from this run.
+Production request logs independently show that the controlled Chrome click
+did reach `/api/purchase-archive` and received HTTP 200 at 23:07:43 UTC. They
+do not identify which local client component blocked the attachment after the
+response. Do not disable browser security or attribute the block to a specific
+extension without evidence.
 The same Production handler's `original` choice returned HTTP 200 and the
 same verified build-16 byte count and digest, as expected while build 16 is
 both the paid original and the latest live release. This does not exercise
 the purchase page's original-build button after a newer release is promoted.
+
+PR #26's latest source and receipt commit `a760fbb` passed both Python 3.9
+and 3.12 macOS CI checks in the push and pull-request runs; the opt-in
+portability workflow did not run on this ordinary commit. The exact
+10,376,201-byte signed, notarized build-17 candidate DMG was mounted read-only
+on this Mac and its packaged engine passed the opt-in physical restore/update
+contention fixture again: the token-protected idle and shutdown requests
+refused a running restore, the recovered synthetic transcript matched the
+source, then idle and shutdown succeeded and the helper exited. The test
+removed its disposable Keychain key and temporary data; the image was
+detached. This repeats the helper-level guard against the current candidate;
+it still does not prove a full Sparkle replacement during a restore or a
+pristine buyer-account installation.
