@@ -181,5 +181,6 @@ its Sparkle signature is
 and verifies against the exact DMG bytes with the public key embedded in that
 app. The mounted-image unsafe-location warning and exit passed physically;
 the manually quarantined first-open test did not finish past macOS's approval
-dialog and remains open. This candidate has not been uploaded or promoted.
-Build 16 remains public.
+dialog and remains open. The exact image was uploaded to private sandbox
+storage, read back byte-for-byte, and catalogued as testing-only and
+unaccepted. It has not been promoted. Build 16 remains public.

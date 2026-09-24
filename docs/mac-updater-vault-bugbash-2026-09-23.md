@@ -336,8 +336,10 @@ moved to Trash. A manually quarantined ZIP extraction was Gatekeeper-accepted,
 but its synthetic first-open test stalled before app code after macOS displayed
 an approval dialog; the test process was stopped and the copy moved to Trash.
 Do **not** count that path as a successful translocated first launch. The new
-image is not yet in the private test catalog, and the public appcast remains
-build 16. A pristine-account paid update is still required.
+image was uploaded to the private sandbox store and all 10,372,434 bytes were
+read back with the matching SHA-256. Its catalog entry is `testingOnly: true`
+and `accepted: false`; the public appcast remains build 16. A pristine-account
+paid update is still required.
 
 ## Release blockers for this candidate
 
