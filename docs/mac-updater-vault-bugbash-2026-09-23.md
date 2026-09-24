@@ -261,6 +261,17 @@ ID. All four PR #26 CI checks on head `ce6282f` passed (Python 3.9 and 3.12).
 This is broad packaged-engine regression evidence, not a paid Production
 update, a clean-account run, or execution of the skipped physical fixtures.
 
+On September 24, two additional opt-in physical fixtures ran against that
+exact packaged engine. A disposable APFS Vault volume was detached before a
+scheduled backup: the run failed safely without creating a replacement Vault
+at the now-missing mount path. After remount, the next run created and verified
+an encrypted snapshot, and the fixture removed its test Keychain key. A
+separate disposable **case-sensitive APFS** image let the packaged inventory
+engine see both `README` and `readme` in one workspace; it rejected the
+collision without changing either file. Both tests passed, and the mounted
+images were detached. These are synthetic filesystem checks, not evidence for
+an actual buyer's external disk, cloud-sync completion, or a paid app update.
+
 Sparkle's [published appcast format](https://sparkle-project.org/documentation/publishing/)
 supports `arm64` as the Apple-silicon hardware requirement; it does not define
 `x86_64` as a negative requirement. A local test that substituted `x86_64` in
