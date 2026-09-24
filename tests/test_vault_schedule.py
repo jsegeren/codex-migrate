@@ -492,6 +492,8 @@ class VaultScheduleTests(unittest.TestCase):
             self.assertFalse(marker_path.exists())
             self.assertTrue(prepare_update(str(home), lambda: True, 17))
             self.assertEqual(marker_path.stat().st_mode & 0o777, 0o600)
+            self.assertFalse(prepare_update(str(home), lambda: True, 16))
+            self.assertEqual(json.loads(marker_path.read_text())["target_build"], 17)
             with patch("codex_migrate.vault_schedule.backup") as backup:
                 self.assertEqual(run_scheduled_backup(str(config_path)), 0)
             backup.assert_not_called()

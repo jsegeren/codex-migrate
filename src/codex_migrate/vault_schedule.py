@@ -141,6 +141,8 @@ def prepare_update(source_home: str, idle_check, target_build: int) -> bool:
             if not idle_check():
                 return False
             previous = _pending_update(marker_path)
+            if previous is not None and target_build < previous["target_build"]:
+                return False
             _atomic_json(marker_path, {
                 "version": UPDATE_GUARD_VERSION,
                 "expires_at": (datetime.now(timezone.utc) + UPDATE_GUARD_DURATION).isoformat(),
