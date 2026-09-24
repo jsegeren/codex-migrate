@@ -93,6 +93,19 @@ an ad-hoc app built from this source passed the real LaunchAgent/packaged-helper
 contention and deferral test. This remains source and ad-hoc evidence, **not**
 a signed/notarized buyer update or proof of Sparkle's full replacement path.
 
+Clean source `fc127ec746eecaea4494d4567d91ec28e32b2683` subsequently
+produced an Apple Accepted, stapled build-17 app (submission
+`a8ffdccc-1967-42a0-90de-22d7f25d9d57`) and a separately signed, Apple
+Accepted, stapled rotation DMG (submission
+`3f8c2492-9165-4f46-ad8f-60ca0bc15b69`). The final image is 10,371,481
+bytes with SHA-256
+`f1fba3b4a7b60909d912005187e0c0d97de34a7c1b15df878a5adf1708ac9944`;
+Sparkle's rotated key independently verified its signature. Exact bytes were
+uploaded to private **sandbox** Blob and read back successfully. The release
+catalog marks this image `testingOnly: true` and `accepted: false`; build 16
+remains live. This is an artifact and storage receipt, not yet a paid 16→17
+installation or clean-account acceptance.
+
 Sparkle's [published appcast format](https://sparkle-project.org/documentation/publishing/)
 supports `arm64` as the Apple-silicon hardware requirement; it does not define
 `x86_64` as a negative requirement. A local test that substituted `x86_64` in
