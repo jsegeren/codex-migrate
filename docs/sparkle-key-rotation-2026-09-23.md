@@ -169,3 +169,17 @@ Private sandbox storage returned identical bytes. Its catalog entry remains
 testing-only and unaccepted; the paid live release is still build 16. The
 normal native installation and failure-path acceptance listed above have not
 been completed for this exact image.
+
+An updater first-open hardening change superseded that candidate. Clean source
+`90f1cb29e377675f730aeee1207d6cb5fe7f090b` produced an Apple Accepted,
+stapled build-17 app (`5f19c6ed-d861-4e0c-9d1e-d3f0e71bcfee`) and a
+separately signed, Apple Accepted, stapled DMG
+(`77cc1e96-8b28-446b-836d-cafbf8941b03`). The final image SHA-256 is
+`f9d4f5b580a7637f3a5dcc73e58598760824f7d8475934a71bb05379b0a76f51`;
+its Sparkle signature is
+`W1Db4e3BORBja+NcrvwH5jxRXDy7g2CJiHzPK/UeH2HkOA4HFGqyRRgko3soaYlg+ewRRFqPtB2hZ0LQ62DpCQ==`
+and verifies against the exact DMG bytes with the public key embedded in that
+app. The mounted-image unsafe-location warning and exit passed physically;
+the manually quarantined first-open test did not finish past macOS's approval
+dialog and remains open. This candidate has not been uploaded or promoted.
+Build 16 remains public.

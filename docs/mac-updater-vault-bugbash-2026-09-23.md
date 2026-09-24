@@ -321,6 +321,24 @@ or pristine-account proof; the existing build-17 candidate does not include
 these fixes and remains unpublished. The full Python regression suite passed
 854 tests with 15 opt-in skips, and Swift typecheck passed without warnings.
 
+Clean source `90f1cb29e377675f730aeee1207d6cb5fe7f090b` then produced a
+Developer ID signed, Apple Accepted and stapled build-17 app (submission
+`5f19c6ed-d861-4e0c-9d1e-d3f0e71bcfee`) and a separately signed, Apple
+Accepted and stapled rotation DMG (submission
+`77cc1e96-8b28-446b-836d-cafbf8941b03`). The image SHA-256 is
+`f9d4f5b580a7637f3a5dcc73e58598760824f7d8475934a71bb05379b0a76f51`;
+its Sparkle signature independently verified with the app's embedded public
+key. From the mounted read-only DMG, this exact app showed the unsafe-location
+warning, started no helper, and exited after dismissal. A separate installed
+copy in Applications started its helper, with its AppKit main thread idle in
+the event loop rather than blocked in Keychain; the test copy was stopped and
+moved to Trash. A manually quarantined ZIP extraction was Gatekeeper-accepted,
+but its synthetic first-open test stalled before app code after macOS displayed
+an approval dialog; the test process was stopped and the copy moved to Trash.
+Do **not** count that path as a successful translocated first launch. The new
+image is not yet in the private test catalog, and the public appcast remains
+build 16. A pristine-account paid update is still required.
+
 ## Release blockers for this candidate
 
 The Founder approved a Sparkle key rotation. A new local signing seed and
