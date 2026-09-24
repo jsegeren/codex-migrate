@@ -293,7 +293,9 @@ then removed. A clean Production deployment was staged; the same exact paid
 canary request returned 403 there. That clean deployment was promoted to
 `migrate.segeren.com`, where the public appcast still advertises build 16,
 unauthenticated archive access returns 403, and the Founder's paid token
-downloads the current 9,591,579-byte build-16 archive. The canary proves the
+downloads the current 9,591,579-byte build-16 archive. The temporary canary
+deployment was then removed without affecting the live domain; the test DMG
+copy was moved to Trash after its digest was checked. The canary proves the
 hosted paid server stream for the exact candidate, **not** Sparkle installing
 that release through an unmodified buyer app, scheduled installation on a
 buyer Mac, or approval to publish build 17.
