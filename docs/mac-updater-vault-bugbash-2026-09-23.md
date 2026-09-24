@@ -490,6 +490,17 @@ installed test copy did not retain a separate healthy helper. This proves
 the exact signed archive's guarded replacement, **not** clean-account
 relaunch or paid Production delivery.
 
+The same exact DMG was copied read-only to the Founder's second Mac
+(`Joshuas-MacBook-Pro-128.local`, macOS 26.5, Apple silicon). Its remote
+SHA-256 and 10,376,201-byte length matched the candidate. From a read-only
+mount, the app passed strict deep code-signature verification, stapled-ticket
+validation, and Gatekeeper assessment as Notarized Developer ID. It reported
+build 17, the rotated public key, and the clean `27ef9bf` source receipt.
+The image was detached and the disposable copy moved to Trash there; no app
+was launched and no Codex or Vault data was touched. This is cross-Mac
+artifact compatibility evidence, **not** a second-Mac install or clean-account
+acceptance test.
+
 ## Release blockers for this candidate
 
 The Founder approved a Sparkle key rotation. A new local signing seed and

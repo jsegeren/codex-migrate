@@ -237,3 +237,11 @@ was written before replacement. The test artifacts were removed afterward.
 The other already-running app on this account prevented a separate healthy
 helper after the test copy relaunched, so clean-account relaunch and the real
 paid Production path remain release gates.
+
+The exact same `27ef9bf` DMG was independently checked on the Founder's
+second Mac (macOS 26.5, Apple silicon): remote length and SHA-256 matched,
+and a read-only mount passed strict deep signing, stapled-ticket validation,
+and Gatekeeper as Notarized Developer ID. The mounted app reported build 17,
+the rotated public key, and the `27ef9bf` source receipt. The mount was
+detached and the disposable image moved to Trash without launching the app.
+This is artifact compatibility evidence, not a second-Mac install test.
