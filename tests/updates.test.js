@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
+const { createServer } = require('node:http');
 const { PassThrough } = require('node:stream');
 const { makeHandler: appcast } = require('../api/appcast');
 const { makeHandler: archive } = require('../api/update-archive');
@@ -207,6 +208,49 @@ test('paid updater sends no archive when entitlement or upstream delivery fails'
   for (const request of failures) {
     const response = await responseFor(authorized, request);
     assert.equal(response.statusCode, 503);
+  }
+});
+
+test('interrupted private archive stream cannot finish as a complete update', async () => {
+  const prefix = Buffer.from('partial update');
+  const size = prefix.length + 64;
+  const selected = { ...release, size };
+  const selectedConfig = { ...config, release: selected };
+  const signedURL = `https://fixturestore.private.blob.vercel-storage.com/${release.pathname}?signed=fixture`;
+  let upstreamRequested = false;
+  const handler = archive(async () => ({ config: selectedConfig, service: {
+    downloadLatest: async () => ({ release: selected.id, sha256: selected.sha256,
+      size, filename: selected.filename, url: signedURL }),
+  } }), async () => {
+    upstreamRequested = true;
+    return { status: 200, headers: { get: () => String(size) },
+      body: new ReadableStream({
+        pull(controller) {
+          if (this.sent) { controller.error(new Error('upstream interrupted')); return; }
+          this.sent = true;
+          controller.enqueue(prefix);
+        },
+      }),
+    };
+  }, {}, () => selectedConfig);
+  const server = createServer((req, res) => { handler(req, res).catch(() => res.destroy()); });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  try {
+    let response;
+    try {
+      response = await fetch(`http://127.0.0.1:${server.address().port}/api/update-archive`, {
+        headers: { authorization: `Bearer ${token}` },
+      });
+    } catch (error) {
+      assert.equal(upstreamRequested, true);
+      assert.match(String(error), /fetch failed/);
+      return;
+    }
+    assert.equal(upstreamRequested, true);
+    if (response.status === 200) await assert.rejects(response.arrayBuffer());
+    else assert.equal(response.status, 503);
+  } finally {
+    await new Promise(resolve => server.close(resolve));
   }
 });
 

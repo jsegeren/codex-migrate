@@ -526,6 +526,13 @@ a post-run check found no loaded backup job or plist on this account. This is
 physical **packaged-helper contention and cleanup** evidence, not a Sparkle
 replacement while busy or a buyer-home catch-up observation.
 
+A real loopback HTTP test of the paid archive handler now interrupts its
+private upstream stream after a partial body. The client cannot receive a
+completed update response; the server closes the failed stream instead of
+delivering a seemingly complete archive. The web/commerce suite passes 325
+tests with one skip. This covers proxy behavior under one network-break shape,
+not Sparkle's physical offline/resume experience or a Production Blob outage.
+
 ## Release blockers for this candidate
 
 The Founder approved a Sparkle key rotation. A new local signing seed and
