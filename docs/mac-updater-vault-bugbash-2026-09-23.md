@@ -431,6 +431,22 @@ not retain a healthy helper after relaunch. This is a successful guarded
 replacement with synthetic data, **not** proof of a clean-account relaunch,
 real paid entitlement, Production feed, or buyer-data protection.
 
+Two further physical failure-path probes used the same disposable build-16
+test app and separate synthetic homes. First, a loopback appcast offered the
+exact candidate DMG with an intentionally invalid Sparkle signature. Sparkle
+fetched the DMG twice but did not replace the app: it remained signed build 16,
+its helper stayed alive until a normal AppKit quit, and the transcript hash
+was unchanged. On that quit, the helper **did** reserve an owner-only Vault
+update marker for target build 17 although signature validation ultimately
+prevented replacement. This is fail-closed for snapshot safety, but scheduled
+backups on that synthetic home would defer until the marker's two-hour expiry
+unless a later successful update clears it. Treat this backup-delay behavior as
+an explicit release concern, not a clean negative-path pass. Second, an
+appcast with the correct signature but a missing archive returned HTTP 404.
+The app remained build 16, the transcript hash was unchanged, and normal
+AppKit quit left **no** update marker. Neither probe used a buyer credential
+or the Production feed.
+
 ## Release blockers for this candidate
 
 The Founder approved a Sparkle key rotation. A new local signing seed and
@@ -457,10 +473,14 @@ See [the rotation runbook](sparkle-key-rotation-2026-09-23.md).
    run after relaunch. A synthetic scheduled backup now proves the full
    replacement waits and resumes safely; migration and restore contention,
    plus catch-up from an unmodified buyer home, remain unverified.
-3. Exercise missing/forged/refunded credentials, wrong architecture, corrupt
-   archive, invalid Sparkle signature, unavailable network, and insufficient
-   disk space against the actual update path. No failure may replace the app
-   or mutate Codex/Vault data.
+3. The invalid Sparkle signature and missing-archive probes above left the app
+   and synthetic transcript unchanged; the latter created no update guard.
+   The former left a bounded guard after quit, which may defer an automatic
+   backup until its two-hour expiry and the next scheduled run. Decide and
+   verify the acceptable catch-up behavior before promotion. Still exercise
+   missing/forged/refunded credentials, wrong architecture, corrupt archive,
+   unavailable network, and insufficient disk space against the actual update
+   path. No failure may replace the app or mutate Codex/Vault snapshots.
 4. On a disposable clean macOS user account, complete quarantined download,
    Gatekeeper open, purchase linking, first Vault backup, recovery-key save,
    scheduled run, search/export, and selected-thread recovery. Do not treat
