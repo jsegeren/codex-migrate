@@ -74,6 +74,7 @@ test('canary update requires an exact Founder session and explicit release pin b
     [{ 'x-codex-migrate-canary': candidate.id }, {}],
     [{ 'x-codex-migrate-canary': candidate.id }, { ...canaryEnv, COMMERCE_UPDATER_CANARY_SESSION: 'cs_live_other' }],
     [{ 'x-codex-migrate-canary': candidate.id }, { ...canaryEnv, COMMERCE_UPDATER_CANARY_EXPIRES_AT: '2020-01-01T00:00:00Z' }],
+    [{ 'x-codex-migrate-canary': candidate.id }, { ...canaryEnv, COMMERCE_UPDATER_CANARY_EXPIRES_AT: new Date(Date.now() + 72 * 3600000).toISOString().replace(/\.\d{3}Z$/, 'Z') }],
     [{ 'x-codex-migrate-canary': 'other-release' }, canaryEnv],
     [{ 'x-codex-migrate-canary': [candidate.id, candidate.id] }, canaryEnv],
   ]) {
@@ -91,6 +92,12 @@ test('canary update requires an exact Founder session and explicit release pin b
 test('canary update streams only the exact private candidate; public appcast stays on approved build', async () => {
   const candidate = require('../commerce/releases.json')['codex-migrate-0.1.0-build17-quit-guard-arm64'];
   const canaryConfig = { ...config, catalog: { [release.id]: release, [candidate.id]: candidate } };
+  const current = require('../commerce/releases.json')['beta-build16-arm64'];
+  const productionFeed = plainResponse();
+  appcast(() => ({ ...config, release: current, catalog: { [current.id]: current,
+    [candidate.id]: candidate } }))({ method: 'GET' }, productionFeed);
+  assert.match(productionFeed.data, /<sparkle:version>16<\/sparkle:version>/);
+  assert.doesNotMatch(productionFeed.data, /build17|sandbox\//);
   const canaryEnv = { COMMERCE_UPDATER_CANARY_RELEASE: candidate.id,
     COMMERCE_UPDATER_CANARY_SESSION: 'cs_live_fixture',
     COMMERCE_UPDATER_CANARY_SHA256: candidate.sha256,
