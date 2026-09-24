@@ -74,3 +74,41 @@ jobs:
         run: |
           npm ci --ignore-scripts
           npm test
+
+  vault-portability-export:
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[vault-portability]')
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Create synthetic encrypted snapshot on producer Mac
+        run: |
+          xcrun swiftc -parse-as-library desktop/CodexVaultCrypto.swift -o "$RUNNER_TEMP/CodexVaultCrypto"
+          PYTHONPATH=src python tests/portable_vault_roundtrip.py produce "$RUNNER_TEMP/vault-portability" "$RUNNER_TEMP/CodexVaultCrypto"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vault-portability-synthetic
+          path: |
+            ${{ runner.temp }}/vault-portability/vault/
+            ${{ runner.temp }}/vault-portability/recovery-key.txt
+          retention-days: 1
+          if-no-files-found: error
+
+  vault-portability-import:
+    needs: vault-portability-export
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          name: vault-portability-synthetic
+          path: ${{ runner.temp }}/vault-portability
+      - name: Import and restore on independent Mac
+        run: |
+          xcrun swiftc -parse-as-library desktop/CodexVaultCrypto.swift -o "$RUNNER_TEMP/CodexVaultCrypto"
+          PYTHONPATH=src python tests/portable_vault_roundtrip.py consume "$RUNNER_TEMP/vault-portability" "$RUNNER_TEMP/CodexVaultCrypto"
