@@ -827,6 +827,13 @@ did reach `/api/purchase-archive` and received HTTP 200 at 23:07:43 UTC. They
 do not identify which local client component blocked the attachment after the
 response. Do not disable browser security or attribute the block to a specific
 extension without evidence.
+Opening that same already-paid link in the isolated Codex in-app browser then
+verified the purchase and produced a real download event from the **primary**
+button. Its saved, quarantined ZIP in Downloads was 9,591,579 bytes and
+matched build 16's exact published SHA-256. Thus the live first-party buyer
+flow works in a second browser surface, while this Chrome profile's block is
+still unexplained. This is not a Safari/Firefox or pristine-Chrome acceptance
+result, and the browser-quarantined app has not been installed from that ZIP.
 The same Production handler's `original` choice returned HTTP 200 and the
 same verified build-16 byte count and digest, as expected while build 16 is
 both the paid original and the latest live release. This does not exercise
