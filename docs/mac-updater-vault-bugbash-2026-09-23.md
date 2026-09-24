@@ -634,6 +634,13 @@ See [the rotation runbook](sparkle-key-rotation-2026-09-23.md).
    experiment. Do not tell a buyer to bypass a Chrome warning or call either
    button reliable until an ordinary-click delivery passes in a buyer browser.
    Both authenticated Production server streams previously matched build 16.
+   The verified `https://migrate.segeren.com/` property showed **No issues
+   detected** in Google Search Console's Security issues report on September
+   24. That rules out a reported site-level issue there, not an unfamiliar-file
+   warning or a client-extension block. Google's
+   [Chrome download guidance](https://support.google.com/chrome/answer/6261569)
+   explicitly lists uncommon files and ZIP archives as possible reasons for a
+   “Suspicious” classification.
 2. The rebuilt clean-source app, rotation DMG, Sparkle signature, private
    sandbox Blob readback, isolated build-16-to-17 quit-path install, and
    candidate-code idle install/relaunch with an app-owned synthetic token pass.
@@ -661,7 +668,13 @@ See [the rotation runbook](sparkle-key-rotation-2026-09-23.md).
    case-sensitive APFS; permission denial; local, external, and cloud-sync
    folders; low free space; sleep/restart during backup and staging; large
    histories; and direct-cable interruption. Mark an untested combination as
-   such rather than assuming support.
+   such rather than assuming support. A September 24 opt-in test with the exact
+   packaged build-17 engine now passes backup, snapshot verification, safe
+   absent-volume failure, remount, and scheduled catch-up on both ordinary and
+   **case-sensitive APFS external Vault volumes**, under Python 3.9 and 3.12.
+   It verifies each mounted
+   filesystem's actual case behavior. This does not cover a case-sensitive
+   source home or Mac-to-Mac migration.
 
 The current local Vault guarantees the last verified capture, not zero loss
 between snapshots, completed off-device cloud sync, or every Codex UI resume.

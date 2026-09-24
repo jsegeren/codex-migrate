@@ -1,4 +1,4 @@
-"""Opt-in synthetic Vault test across a real APFS volume detach/remount.
+"""Opt-in synthetic Vault tests across ordinary and case-sensitive APFS volumes.
 
 Run on macOS with CODEX_MIGRATE_EXTERNAL_VAULT_TEST=yes. This does not load
 the account-wide LaunchAgent or read the user's Codex home.
@@ -28,6 +28,12 @@ class ExternalVolumeVaultTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_missing_external_volume_never_becomes_a_new_local_vault(self):
+        self.exercise_external_volume("APFS")
+
+    def test_missing_case_sensitive_external_volume_never_becomes_a_new_local_vault(self):
+        self.exercise_external_volume("Case-sensitive APFS")
+
+    def exercise_external_volume(self, filesystem):
         root = Path(tempfile.mkdtemp(prefix="codex-vault-volume-test-")).resolve()
         mount = root / "mounted"
         mount.mkdir()
@@ -40,13 +46,17 @@ class ExternalVolumeVaultTests(unittest.TestCase):
             self.tool("xcrun", "swiftc", "-parse-as-library", "-O",
                       "-target", platform.machine() + "-apple-macos13.0",
                       "desktop/CodexVaultCrypto.swift", "-o", str(helper))
-            self.tool("/usr/bin/hdiutil", "create", "-size", "512m", "-fs", "APFS",
+            self.tool("/usr/bin/hdiutil", "create", "-size", "512m", "-fs", filesystem,
                       "-type", "SPARSE", "-volname", "CodexVaultVolumeFixture",
                       "-nospotlight", str(image))
             self.tool("/usr/bin/hdiutil", "attach", "-nobrowse", "-owners", "on",
                       "-mountpoint", str(mount), str(image))
             self.assertTrue(os.path.ismount(mount))
             self.assertNotEqual(mount.stat().st_dev, root.stat().st_dev)
+            probe = mount / "CaseProbe"
+            probe.write_text("test", encoding="utf-8")
+            self.assertEqual((mount / "caseprobe").exists(), filesystem == "APFS")
+            probe.unlink()
 
             source = root / "source"
             sessions = source / ".codex/sessions"
