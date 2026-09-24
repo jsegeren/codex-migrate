@@ -186,4 +186,6 @@ App Translocation, showed the expected warning, started no helper, and exited
 after dismissal. A true browser-download first open and clean-account run
 remain open. The exact image was uploaded to private sandbox
 storage, read back byte-for-byte, and catalogued as testing-only and
-unaccepted. It has not been promoted. Build 16 remains public.
+unaccepted. The exact bytes also passed signature, staple, Gatekeeper, and
+read-only mounted-app checks on the Founder's other arm64 Mac; no app was
+launched there. It has not been promoted. Build 16 remains public.

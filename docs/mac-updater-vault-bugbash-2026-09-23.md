@@ -345,6 +345,15 @@ read back with the matching SHA-256. Its catalog entry is `testingOnly: true`
 and `accepted: false`; the public appcast remains build 16. A pristine-account
 paid update is still required.
 
+The exact 10,372,434-byte DMG was copied by verified SSH to the Founder's
+second Apple-silicon Mac (macOS 26.5). Its SHA-256 matched the local release
+receipt. The DMG passed code-signature, staple, and Gatekeeper checks there;
+its read-only mounted app passed strict code-signature and Gatekeeper checks,
+reported build 17, and its app, packaged engine, and Vault helper each reported
+`arm64`. The image was detached and the disposable remote copy moved to Trash.
+The app was not opened on that Mac, so this is cross-device artifact acceptance,
+not a second-Mac first-run, Vault, migration, or updater result.
+
 ## Release blockers for this candidate
 
 The Founder approved a Sparkle key rotation. A new local signing seed and
