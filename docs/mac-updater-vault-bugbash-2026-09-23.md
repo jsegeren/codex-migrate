@@ -226,6 +226,32 @@ mechanism with an app-owned token, **not** a paid Production entitlement,
 busy-operation deferral during the full Sparkle replacement, or a pristine
 buyer install.
 
+A full replacement-under-contention smoke used a new disposable home and Vault
+with the exact packaged engine. An actual scheduled-run process had written
+its `running` receipt and held `update.lock` when it was deliberately paused
+with SIGSTOP (simulating a stalled backup). A Developer ID re-signed test copy
+of the candidate client pointed its helper at that disposable home, used an
+app-owned synthetic token, and reported build 16. Sparkle fetched the exact
+10,368,949-byte DMG but left the app and helper on build 16 while the job held
+the lock for over a minute. After SIGCONT, the job completed a 156,714,428-byte
+encrypted snapshot, and the packaged engine verified that snapshot. Only then
+did Sparkle replace the test app, install build 17, and relaunch one app and
+helper. Installed executable and engine bytes matched the clean-source
+candidate; strict signing and Gatekeeper passed.
+
+The test-only client had supplied a synthetic `--source-home`; the real
+installed app correctly dropped that test modification and therefore could
+not clear the synthetic home's guard on its own. While that guard remained, a
+packaged scheduled run recorded a safe deferred failure and left the verified
+snapshot unchanged. Launching the exact packaged engine with the synthetic
+home and `--resume-after-update-build 17` cleared the guard and triggered the
+loaded LaunchAgent, which made a second verified snapshot. This proves the
+packaged catch-up mechanism but **not** its automatic execution on a buyer's
+real home. The disposable LaunchAgent was unloaded, Vault and entitlement
+test keys were deleted, and app, feed, and synthetic home were moved to Trash;
+no real Codex data or second-Mac work was changed. Migration and restore
+contention, a real paid entitlement, and clean-account acceptance remain open.
+
 Sparkle's [published appcast format](https://sparkle-project.org/documentation/publishing/)
 supports `arm64` as the Apple-silicon hardware requirement; it does not define
 `x86_64` as a negative requirement. A local test that substituted `x86_64` in
@@ -253,9 +279,10 @@ See [the rotation runbook](sparkle-key-rotation-2026-09-23.md).
    candidate-code idle install/relaunch with an app-owned synthetic token pass.
    Test a real paid entitlement before promoting a live release-catalog entry;
    the sandbox-only catalog entry is not release approval. Directly observe
-   that the duplicate-launch warning is absent, prove periodic checks still
-   run after relaunch, and prove the full Sparkle replacement waits for idle
-   migration, Vault backup, and restore operations.
+   that the duplicate-launch warning is absent and prove periodic checks still
+   run after relaunch. A synthetic scheduled backup now proves the full
+   replacement waits and resumes safely; migration and restore contention,
+   plus catch-up from an unmodified buyer home, remain unverified.
 3. Exercise missing/forged/refunded credentials, wrong architecture, corrupt
    archive, invalid Sparkle signature, unavailable network, and insufficient
    disk space against the actual update path. No failure may replace the app
