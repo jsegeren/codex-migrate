@@ -34,6 +34,14 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("process == nil, let install = idleInstallHandler", source)
         self.assertIn("install() // Sparkle owns signature verification", source)
 
+    def test_check_or_incomplete_download_does_not_reserve_vault_update_guard(self):
+        source = (Path(__file__).resolve().parents[1] / "desktop/CodexMigrate.swift").read_text()
+        self.assertIn("private var updateArchiveReady = false", source)
+        self.assertIn("func updater(_ updater: SPUUpdater, didDownloadUpdate item: SUAppcastItem)", source)
+        self.assertIn("func updater(_ updater: SPUUpdater, willInstallUpdate item: SUAppcastItem)", source)
+        self.assertIn("updateArchiveReady && updaterController.updater.sessionInProgress", source)
+        self.assertNotIn("updateScheduledForQuit || updaterController.updater.sessionInProgress", source)
+
     @unittest.skipUnless(sys.platform == "darwin", "packaged Vault requires macOS CryptoKit")
     def test_packaged_engine_backs_up_and_restores_without_authentication(self):
         binary = os.environ.get("CODEX_MIGRATE_TEST_ENGINE")

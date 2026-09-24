@@ -141,6 +141,16 @@ rotation signature, then rejected a deliberately altered signature for the
 same DMG (exit status 1). This proves the local signature verifier's negative
 path, not that a running app leaves itself and Vault data untouched after a
 failed update attempt.
+Review of Sparkle's bundled delegate contract found that `sessionInProgress`
+includes appcast checks and incomplete downloads. The candidate's quit path
+previously treated either as an impending install and could reserve the Vault
+update guard for two hours if the user quit mid-download. Source now reserves
+the guard only after a successful download or an actual install handoff;
+download failure and cancellation clear readiness. Swift typecheck passed,
+15 focused desktop tests passed with 2 opt-in skips, and the full Python suite
+passed 853 tests with 15 opt-in skips. The already-notarized build-17 DMG
+predates this correction; it must be rebuilt, signed, notarized, and retested
+before release.
 
 Sparkle's [published appcast format](https://sparkle-project.org/documentation/publishing/)
 supports `arm64` as the Apple-silicon hardware requirement; it does not define

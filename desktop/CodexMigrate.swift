@@ -15,6 +15,7 @@ import Sparkle
     private var idleInstallShutdownPending = false
     private var idleInstallShutdownConfirmed = false
     private var updateScheduledForQuit = false
+    private var updateArchiveReady = false
     private var updateTargetBuild: Int?
     private var automaticChecksItem: NSMenuItem!
     private var automaticInstallItem: NSMenuItem!
@@ -147,15 +148,35 @@ import Sparkle
 
     func updater(_ updater: SPUUpdater, willDownloadUpdate item: SUAppcastItem, with request: NSMutableURLRequest) {
         updateTargetBuild = Int(item.versionString)
+        updateArchiveReady = false
         guard request.url?.scheme == "https", request.url?.host == "migrate.segeren.com",
               request.url?.path == "/api/update-archive", let token = UpdateEntitlement.savedToken() else { return }
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    }
+
+    func updater(_ updater: SPUUpdater, didDownloadUpdate item: SUAppcastItem) {
+        updateTargetBuild = Int(item.versionString)
+        updateArchiveReady = true
+    }
+
+    func updater(_ updater: SPUUpdater, failedToDownloadUpdate item: SUAppcastItem, error: Error) {
+        updateArchiveReady = false
+    }
+
+    func userDidCancelDownload(_ updater: SPUUpdater) {
+        updateArchiveReady = false
+    }
+
+    func updater(_ updater: SPUUpdater, willInstallUpdate item: SUAppcastItem) {
+        updateTargetBuild = Int(item.versionString)
+        updateArchiveReady = true
     }
 
     func updater(_ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem,
                  immediateInstallationBlock install: @escaping () -> Void) -> Bool {
         updateScheduledForQuit = true
         updateTargetBuild = Int(item.versionString)
+        updateArchiveReady = true
         // Take control of the staged update so Sparkle can install and relaunch
         // after the helper confirms that no migration or Vault job is active.
         guard updater.automaticallyDownloadsUpdates, UpdateEntitlement.savedToken() != nil else { return false }
@@ -323,7 +344,10 @@ import Sparkle
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let child = process, child.isRunning else { return .terminateNow }
         guard !quitting else { return .terminateCancel }
-        let updatePending = updateScheduledForQuit || updaterController.updater.sessionInProgress
+        // Sparkle considers a check or incomplete download a session. Neither
+        // can replace the bundle, so do not defer scheduled Vault backups for it.
+        let updatePending = updateScheduledForQuit ||
+            (updateArchiveReady && updaterController.updater.sessionInProgress)
         let endpoint = updatePending ? "/api/update-shutdown" : "/api/shutdown"
         guard let request = helperRequest(endpoint, method: "POST", targetBuild: updateTargetBuild) else { return .terminateCancel }
         quitting = true
