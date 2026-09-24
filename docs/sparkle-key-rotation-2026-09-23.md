@@ -227,3 +227,13 @@ strict signing and Gatekeeper checks. Private sandbox storage readback matched
 the image; its catalog entry is testing-only and unaccepted. Build 16 remains
 live. Re-run buyer-path and clean-account acceptance with this exact image
 before any promotion.
+
+The exact `27ef9bf` DMG subsequently passed an isolated automatic 16-to-17
+Sparkle installation with the old public key and a loopback appcast. The
+installed executable matched the notarized candidate byte-for-byte; its
+source receipt, build number, strict signature, Gatekeeper result, and
+unchanged synthetic transcript were checked. A target-build-17 Vault guard
+was written before replacement. The test artifacts were removed afterward.
+The other already-running app on this account prevented a separate healthy
+helper after the test copy relaunched, so clean-account relaunch and the real
+paid Production path remain release gates.

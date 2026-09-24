@@ -477,6 +477,19 @@ is a new signed candidate, **not** release acceptance: the full paid install,
 clean-account and remaining failure-path matrix still need proof against this
 exact image.
 
+An isolated `/Applications` copy of the `27ef9bf` client code, configured as
+build 16 with the old Sparkle key and a loopback feed, automatically fetched
+and installed that **exact** 10,376,201-byte DMG. The helper's owner-only
+update marker recorded target build 17. The relaunched installed copy reported
+build 17 and clean source `27ef9bf`; its executable matched the notarized app
+byte-for-byte, and strict signing plus Gatekeeper accepted it. The synthetic
+transcript hash was unchanged. The loopback server, test app, synthetic
+Keychain item and temporary Sparkle check time were cleaned up. Because the
+Founder's real app was already running under the same macOS account, the
+installed test copy did not retain a separate healthy helper. This proves
+the exact signed archive's guarded replacement, **not** clean-account
+relaunch or paid Production delivery.
+
 ## Release blockers for this candidate
 
 The Founder approved a Sparkle key rotation. A new local signing seed and
