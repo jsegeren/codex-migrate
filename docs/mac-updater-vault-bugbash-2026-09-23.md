@@ -279,6 +279,25 @@ the feed still installed, so it is **not** evidence of a wrong-architecture
 guard. The actual public feed retains `arm64`. Intel-Mac rejection requires a
 supported test environment before being called physically verified.
 
+On September 24, the narrowly scoped paid-stream canary from PR #28 passed
+all four CI jobs and merged to `main` as `8d74587`. A Production-environment
+deployment was staged without assigning the public domain. Its appcast still
+advertised build 16, and an unauthenticated archive request returned 403. For
+the Founder's real, already-paid purchase session, an exact-release,
+short-lived canary request returned the private build-17 DMG: 10,368,949 bytes,
+SHA-256 `8aace2577a612bc9dcc064cad3f63dad57a0ecb02b042ac2b06d1748ad0b8486`,
+matching the notarized sandbox catalog entry. The same paid token with a wrong
+candidate header returned 403. No bearer token or private download URL was
+recorded in Git or this receipt. All four canary environment settings were
+then removed. A clean Production deployment was staged; the same exact paid
+canary request returned 403 there. That clean deployment was promoted to
+`migrate.segeren.com`, where the public appcast still advertises build 16,
+unauthenticated archive access returns 403, and the Founder's paid token
+downloads the current 9,591,579-byte build-16 archive. The canary proves the
+hosted paid server stream for the exact candidate, **not** Sparkle installing
+that release through an unmodified buyer app, scheduled installation on a
+buyer Mac, or approval to publish build 17.
+
 ## Release blockers for this candidate
 
 The Founder approved a Sparkle key rotation. A new local signing seed and
@@ -297,8 +316,10 @@ See [the rotation runbook](sparkle-key-rotation-2026-09-23.md).
 2. The rebuilt clean-source app, rotation DMG, Sparkle signature, private
    sandbox Blob readback, isolated build-16-to-17 quit-path install, and
    candidate-code idle install/relaunch with an app-owned synthetic token pass.
-   Test a real paid entitlement before promoting a live release-catalog entry;
-   the sandbox-only catalog entry is not release approval. Directly observe
+   The real paid entitlement streamed this candidate from the staged hosted
+   server and the temporary canary was disabled afterward. This is not a
+   buyer-app update or release approval; the sandbox-only catalog entry stays
+   unaccepted. Directly observe
    that the duplicate-launch warning is absent and prove periodic checks still
    run after relaunch. A synthetic scheduled backup now proves the full
    replacement waits and resumes safely; migration and restore contention,
