@@ -66,6 +66,26 @@ while the public appcast and ordinary buyer downloads still return build 16.
 Never use the canary route as a shortcut for catalog promotion or a public
 claim that automatic updates are accepted.
 
+For the exact September 24 build-17 candidate, `python3
+ops/paid-update-canary-client.py prepare` verifies the archived live build-16
+ZIP and local candidate DMG against their catalog digests, then creates a
+**disposable, locally re-signed, unnotarized** build-16 app in `build/`. Only
+that test app adds the canary request header; it retains the shipped old
+Sparkle key and points to a loopback appcast. `python3
+ops/paid-update-canary-client.py serve` binds that feed to `127.0.0.1:8898`
+and advertises the exact sandbox candidate through the first-party paid archive
+URL. The script contains no bearer token or Checkout session. A real paid test
+still needs the temporary four-variable Production canary, the Founder's
+purchase linked privately in the app, and physical install/relaunch evidence.
+Do not put this locally re-signed copy into buyer delivery or count its
+unnotarized Gatekeeper status as first-launch acceptance. Run the feed only
+for the active test and stop it afterward. The disposable app retains the
+production bundle ID and Keychain service so Sparkle can validate the real
+replacement; before opening it, quit other copies, record the current update
+preferences, and use an isolated test account or restore those preferences
+and remove only the test-linked entitlement afterward. Never erase an
+existing buyer entitlement to make the test work.
+
 1. Bump the app's build number; commit the exact source before release build.
    Build with the Developer ID identity, obtain Apple's Accepted notarization
    receipt, staple, and verify Gatekeeper. Keep the prior release available.
