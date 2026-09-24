@@ -661,7 +661,13 @@ See [the rotation runbook](sparkle-key-rotation-2026-09-23.md).
 3. The invalid-signature and missing-archive probes above left the app and
    synthetic transcript unchanged. Source now clears aborted-update state, and
    the isolated repeat of the bad-signature case creates no update guard on
-   quit. Rebuild and repeat against the final notarized artifact. Still exercise
+   quit. Rebuild and repeat against the final notarized artifact. A fresh
+   September 24 Production probe of `/api/update-archive` returned 403 with
+   zero response bytes and no redirect for missing bearer, a syntactically
+   valid forged bearer, and the forged bearer plus the disabled build-17
+   canary header. The public appcast still advertised build 16 with no
+   build-17 or sandbox reference. These are live server-denial checks, not a
+   paid native-client failure-path receipt. Still exercise
    missing/forged/refunded credentials, wrong architecture, corrupt archive,
    unavailable network, and insufficient disk space against the actual update
    path. No failure may replace the app or mutate Codex/Vault snapshots.
