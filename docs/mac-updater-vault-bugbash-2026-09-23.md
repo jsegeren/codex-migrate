@@ -671,6 +671,14 @@ coverage from source inspection: use a disposable key and synthetic Vault
 to verify a real locked-screen LaunchAgent run, then review the key-custody
 tradeoff and existing-key migration if a change is needed. The daily cadence
 can otherwise fail repeatedly when the Mac is locked at the same hour.
+On this Mac, a disposable generic-password item using the helper's current
+legacy-Keychain attributes was added and queried successfully, but its
+returned attributes contained no `kSecAttrAccessible` value. It was deleted
+successfully. A second disposable item requesting the Data Protection
+Keychain returned Security status `-34018` on add; no item was created. These
+nonsecret metadata probes do not establish actual locked-screen behavior or
+authorize a Keychain migration. They do show that merely swapping the
+accessibility constant in source is not an evidence-backed fix.
 Apple references:
 [`WhenUnlockedThisDeviceOnly`](https://developer.apple.com/documentation/security/ksecattraccessiblewhenunlockedthisdeviceonly),
 [`AfterFirstUnlockThisDeviceOnly`](https://developer.apple.com/documentation/security/ksecattraccessibleafterfirstunlockthisdeviceonly),
