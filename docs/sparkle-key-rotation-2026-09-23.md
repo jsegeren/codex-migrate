@@ -198,3 +198,14 @@ update if the helper is missing and no guard was confirmed. The preceding
 image predates this fix, so its Apple receipts and Sparkle signature remain
 valid only for that superseded image; build a new exact-source candidate and
 repeat physical update acceptance before promotion.
+
+The rebuilt race-fixed candidate uses clean source
+`b510f2166f30fe2856b0ec04599237c07d4a570d`. Apple accepted the signed
+and stapled app (`c0f3b663-ebc1-4b00-a38f-217edcdfbfb2`) and the
+10,375,160-byte rotation DMG (`a904a709-5c83-4459-bb50-887f3e7b6486`).
+The image SHA-256 is
+`9890bffb25ca30c9d080dfe9ae6ed2f61902fec6f26c103965fba8f902ba7b79`;
+Sparkle signature verification passed. Private sandbox storage returned
+identical bytes. The catalog entry is testing-only and unaccepted; neither
+appcast nor paid buyer delivery has been changed. Physical installation and
+clean-account acceptance are still required before promotion.

@@ -391,6 +391,18 @@ no failures. The previously notarized `90f1cb29` image does **not** contain
 this race fix. It must be rebuilt, re-signed, re-notarized, and retested before
 release; build 16 remains live.
 
+Clean source `b510f2166f30fe2856b0ec04599237c07d4a570d` now produced a
+Developer ID signed, Apple-notarized and stapled build-17 app (Accepted receipt
+`c0f3b663-ebc1-4b00-a38f-217edcdfbfb2`) and a separately signed,
+Apple-notarized and stapled 10,375,160-byte rotation DMG (Accepted receipt
+`a904a709-5c83-4459-bb50-887f3e7b6486`). Its SHA-256 is
+`9890bffb25ca30c9d080dfe9ae6ed2f61902fec6f26c103965fba8f902ba7b79`;
+the Sparkle signature independently verified against its embedded rotated
+public key. The exact image was uploaded to private sandbox Blob and streamed
+back with the same size and digest. It is catalogued as testing-only and
+unaccepted. This is the current candidate; physical quit-race, paid-updater,
+and clean-account acceptance remain open. Build 16 remains live.
+
 ## Release blockers for this candidate
 
 The Founder approved a Sparkle key rotation. A new local signing seed and
