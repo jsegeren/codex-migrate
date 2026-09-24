@@ -685,7 +685,7 @@ See [the rotation runbook](sparkle-key-rotation-2026-09-23.md).
    absent-volume failure, remount, and scheduled catch-up on both ordinary and
    **case-sensitive APFS external Vault volumes**, under Python 3.9 and 3.12.
    It verifies each mounted
-   filesystem's actual case behavior. This does not cover a case-sensitive
+   filesystem's actual case behavior. That test does not cover a case-sensitive
    source home or Mac-to-Mac migration.
    A separate real-APFS sparse-volume test filled an external Vault destination
    to under 32 MiB free, then ran the exact packaged build-17 backup engine
@@ -694,7 +694,18 @@ See [the rotation runbook](sparkle-key-rotation-2026-09-23.md).
    verified, the source stayed byte-identical, and a retry published a new
    verified snapshot after the disposable pressure file was removed. It passed
    on Python 3.9 and 3.12. This proves Vault destination disk-pressure
-recovery, not insufficient-space handling inside Sparkle's app update.
+   recovery, not insufficient-space handling inside Sparkle's app update.
+
+An opt-in packaged-engine test now puts a synthetic Codex source home on a
+**case-sensitive APFS** volume with two distinct transcripts whose filenames
+differ only by case. The exact build-17 engine backed up and verified both,
+then restored both byte-for-byte on a case-sensitive volume. Restoring that
+snapshot to ordinary case-insensitive APFS refused the name collision: it
+published no restore receipt, left only an incomplete disposable staging
+folder, and did not change the source or encrypted Vault. This is fail-closed
+behavior, not full cross-filesystem recovery support; such a snapshot needs a
+case-sensitive restore destination or separate thread export. The opt-in test
+is in `tests/test_vault_external_volume.py`.
 
 The exact build-17 packaged engine also passed an opt-in **process-kill during
 Vault backup** test on this Mac. After an initial verified snapshot, the test
