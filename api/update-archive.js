@@ -18,10 +18,14 @@ function makeHandler(load = runtime, request = fetch, env = process.env, configu
       const configured = configure(env);
       const sessionId = tokenSession(match[1], configured);
       const canary = req.headers['x-codex-migrate-canary'];
+      const canaryExpiry = env.COMMERCE_UPDATER_CANARY_EXPIRES_AT;
+      const canaryLifetime = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(canaryExpiry || '')
+        ? Date.parse(canaryExpiry) - Date.now() : NaN;
       if (canary !== undefined && (!configured.live || typeof canary !== 'string' ||
           canary !== env.COMMERCE_UPDATER_CANARY_RELEASE ||
           sessionId !== env.COMMERCE_UPDATER_CANARY_SESSION ||
-          !/^[a-f0-9]{64}$/.test(env.COMMERCE_UPDATER_CANARY_SHA256 || ''))) {
+          !/^[a-f0-9]{64}$/.test(env.COMMERCE_UPDATER_CANARY_SHA256 || '') ||
+          !Number.isFinite(canaryLifetime) || canaryLifetime <= 0 || canaryLifetime > 48 * 60 * 60 * 1000)) {
         throw new CommerceError('invalid_link', 403);
       }
       const { config, service } = await load(env);

@@ -46,7 +46,10 @@ The update archive handler has an opt-in operator test route for the exact
 build-17 sandbox artifact. It remains off unless Production has all three
 `COMMERCE_UPDATER_CANARY_RELEASE`, `COMMERCE_UPDATER_CANARY_SHA256`, and
 `COMMERCE_UPDATER_CANARY_SESSION` set to the reviewed catalog ID, exact DMG
-digest, and one already-paid Founder Checkout session. A request also needs
+digest, and one already-paid Founder Checkout session. A fourth setting,
+`COMMERCE_UPDATER_CANARY_EXPIRES_AT`, must be a UTC time no more than 48 hours
+ahead; the route refuses expired requests even from an older deployment.
+A request also needs
 that session's valid private purchase bearer token and an exact
 `X-Codex-Migrate-Canary` header naming the catalog ID. Payment, refund, dispute,
 artifact metadata, and exact private Blob URL are rechecked. The public
@@ -57,7 +60,8 @@ Use the canary only in a disposable test installation; a test-only client/feed
 may add the header while exercising the Production proxy. That proves the
 paid server stream, not an unmodified buyer app. Keep the physical Sparkle
 install and unmodified-client checks separate. After the test, remove all
-three Production canary variables and verify the special request is denied
+four Production canary variables, redeploy Production so the active deployment
+drops them, and verify the special request is denied
 while the public appcast and ordinary buyer downloads still return build 16.
 Never use the canary route as a shortcut for catalog promotion or a public
 claim that automatic updates are accepted.

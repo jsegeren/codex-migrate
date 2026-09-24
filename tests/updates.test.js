@@ -68,10 +68,12 @@ test('canary update requires an exact Founder session and explicit release pin b
   const canaryConfig = { ...config, catalog: { [release.id]: release, [candidate.id]: candidate } };
   const canaryEnv = { COMMERCE_UPDATER_CANARY_RELEASE: candidate.id,
     COMMERCE_UPDATER_CANARY_SESSION: 'cs_live_fixture',
-    COMMERCE_UPDATER_CANARY_SHA256: candidate.sha256 };
+    COMMERCE_UPDATER_CANARY_SHA256: candidate.sha256,
+    COMMERCE_UPDATER_CANARY_EXPIRES_AT: new Date(Date.now() + 3600000).toISOString().replace(/\.\d{3}Z$/, 'Z') };
   for (const [headers, environment] of [
     [{ 'x-codex-migrate-canary': candidate.id }, {}],
     [{ 'x-codex-migrate-canary': candidate.id }, { ...canaryEnv, COMMERCE_UPDATER_CANARY_SESSION: 'cs_live_other' }],
+    [{ 'x-codex-migrate-canary': candidate.id }, { ...canaryEnv, COMMERCE_UPDATER_CANARY_EXPIRES_AT: '2020-01-01T00:00:00Z' }],
     [{ 'x-codex-migrate-canary': 'other-release' }, canaryEnv],
     [{ 'x-codex-migrate-canary': [candidate.id, candidate.id] }, canaryEnv],
   ]) {
@@ -91,7 +93,8 @@ test('canary update streams only the exact private candidate; public appcast sta
   const canaryConfig = { ...config, catalog: { [release.id]: release, [candidate.id]: candidate } };
   const canaryEnv = { COMMERCE_UPDATER_CANARY_RELEASE: candidate.id,
     COMMERCE_UPDATER_CANARY_SESSION: 'cs_live_fixture',
-    COMMERCE_UPDATER_CANARY_SHA256: candidate.sha256 };
+    COMMERCE_UPDATER_CANARY_SHA256: candidate.sha256,
+    COMMERCE_UPDATER_CANARY_EXPIRES_AT: new Date(Date.now() + 3600000).toISOString().replace(/\.\d{3}Z$/, 'Z') };
   const feed = plainResponse();
   appcast(() => canaryConfig)({ method: 'GET' }, feed);
   assert.match(feed.data, /<sparkle:version>15<\/sparkle:version>/);
@@ -133,7 +136,8 @@ test('canary update rejects a changed catalog candidate before signing or stream
   const canaryConfig = { ...config, catalog: { [candidate.id]: { ...candidate, accepted: true } } };
   const canaryEnv = { COMMERCE_UPDATER_CANARY_RELEASE: candidate.id,
     COMMERCE_UPDATER_CANARY_SESSION: 'cs_live_fixture',
-    COMMERCE_UPDATER_CANARY_SHA256: candidate.sha256 };
+    COMMERCE_UPDATER_CANARY_SHA256: candidate.sha256,
+    COMMERCE_UPDATER_CANARY_EXPIRES_AT: new Date(Date.now() + 3600000).toISOString().replace(/\.\d{3}Z$/, 'Z') };
   let downloads = 0;
   const handler = archive(async () => ({ config: canaryConfig, service: {
     downloadCanary: async () => { downloads++; throw Error('unexpected'); },
@@ -152,7 +156,8 @@ test('canary update refuses a digest-pinned mismatch before signing or streaming
   const canaryConfig = { ...config, catalog: { [candidate.id]: candidate } };
   const canaryEnv = { COMMERCE_UPDATER_CANARY_RELEASE: candidate.id,
     COMMERCE_UPDATER_CANARY_SESSION: 'cs_live_fixture',
-    COMMERCE_UPDATER_CANARY_SHA256: '0'.repeat(64) };
+    COMMERCE_UPDATER_CANARY_SHA256: '0'.repeat(64),
+    COMMERCE_UPDATER_CANARY_EXPIRES_AT: new Date(Date.now() + 3600000).toISOString().replace(/\.\d{3}Z$/, 'Z') };
   let downloads = 0;
   const handler = archive(async () => ({ config: canaryConfig, service: {
     downloadCanary: async () => { downloads++; throw Error('unexpected'); },
