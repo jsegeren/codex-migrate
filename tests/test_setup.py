@@ -853,11 +853,12 @@ class SetupTests(unittest.TestCase):
         self.assertFalse(self.helper._closing)
 
     def test_scheduled_vault_backup_blocks_update_and_quit(self):
+        update_headers = {"X-Codex-Migrate-Target-Build": "17"}
         with patch("codex_migrate.setup.vault_schedule_status", return_value={
             "enabled": True, "last_run": {"status": "running"}}):
             self.assertEqual(self.request("/api/update-idle"), (409, {"idle": False}))
             self.assertEqual(self.request("/api/shutdown", {})[0], 409)
-            self.assertEqual(self.request("/api/update-shutdown", {})[0], 409)
+            self.assertEqual(self.request("/api/update-shutdown", {}, extra_headers=update_headers)[0], 409)
         with patch("codex_migrate.setup.vault_schedule_status", side_effect=MigrationError("unsafe")):
             self.assertEqual(self.request("/api/update-idle"), (409, {"idle": False}))
             self.assertEqual(self.request("/api/shutdown", {})[0], 409)
@@ -868,13 +869,15 @@ class SetupTests(unittest.TestCase):
         # The updater probes first, then requests shutdown. The second check
         # must catch a LaunchAgent backup that started between those requests.
         schedule = {"enabled": True, "last_run": {"status": "completed"}}
+        update_headers = {"X-Codex-Migrate-Target-Build": "17"}
         with patch("codex_migrate.setup.vault_schedule_status", side_effect=lambda _: schedule):
             self.assertEqual(self.request("/api/update-idle"), (200, {"idle": True}))
             schedule["last_run"] = {"status": "running"}
-            self.assertEqual(self.request("/api/update-shutdown", {})[0], 409)
+            self.assertEqual(self.request("/api/update-shutdown", {}, extra_headers=update_headers)[0], 409)
             self.assertFalse(self.helper._closing)
             schedule["last_run"] = {"status": "completed"}
-            self.assertEqual(self.request("/api/update-shutdown", {})[0], 200)
+            self.assertEqual(self.request("/api/update-shutdown", {})[0], 409)
+            self.assertEqual(self.request("/api/update-shutdown", {}, extra_headers=update_headers)[0], 200)
         guard = self.home / "Library/Application Support/Codex Vault/update.json"
         self.assertTrue(guard.exists())
         self.thread.join(timeout=2)

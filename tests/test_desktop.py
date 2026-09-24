@@ -28,8 +28,9 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("idleInstallHandler = install", source)
         self.assertIn("return true", source)
         self.assertIn("self.shutdownHelperForIdleInstall()", source)
-        self.assertIn('helperRequest("/api/update-shutdown", method: "POST")', source)
-        self.assertIn('"--resume-after-update"', source)
+        self.assertIn('helperRequest("/api/update-shutdown", method: "POST", targetBuild: updateTargetBuild)', source)
+        self.assertIn('"--resume-after-update-build"', source)
+        self.assertIn('"X-Codex-Migrate-Target-Build"', source)
         self.assertIn("process == nil, let install = idleInstallHandler", source)
         self.assertIn("install() // Sparkle owns signature verification", source)
 

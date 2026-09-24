@@ -117,9 +117,10 @@ class VaultScheduleTests(unittest.TestCase):
                 def request(path, method="GET"):
                     connection = HTTPConnection("127.0.0.1", parsed.port, timeout=5)
                     try:
-                        connection.request(method, path, headers={
-                            "X-Codex-Migrate-Token": token,
-                        })
+                        headers = {"X-Codex-Migrate-Token": token}
+                        if path == "/api/update-shutdown":
+                            headers["X-Codex-Migrate-Target-Build"] = "17"
+                        connection.request(method, path, headers=headers)
                         response = connection.getresponse()
                         response.read()
                         return response.status
@@ -487,9 +488,9 @@ class VaultScheduleTests(unittest.TestCase):
                                  engine_command=[str(engine)])
             config_path = home / "Library/Application Support/Codex Vault/schedule.json"
             marker_path = config_path.parent / "update.json"
-            self.assertFalse(prepare_update(str(home), lambda: False))
+            self.assertFalse(prepare_update(str(home), lambda: False, 17))
             self.assertFalse(marker_path.exists())
-            self.assertTrue(prepare_update(str(home), lambda: True))
+            self.assertTrue(prepare_update(str(home), lambda: True, 17))
             self.assertEqual(marker_path.stat().st_mode & 0o777, 0o600)
             with patch("codex_migrate.vault_schedule.backup") as backup:
                 self.assertEqual(run_scheduled_backup(str(config_path)), 0)
@@ -499,7 +500,11 @@ class VaultScheduleTests(unittest.TestCase):
                              "failed")
             with patch("codex_migrate.vault_schedule._loaded", return_value=True), \
                     patch("codex_migrate.vault_schedule.subprocess.Popen") as start:
-                resume_after_update(str(home))
+                resume_after_update(str(home), 16)
+            self.assertTrue(marker_path.exists(), "the old app must not clear the update guard")
+            with patch("codex_migrate.vault_schedule._loaded", return_value=True), \
+                    patch("codex_migrate.vault_schedule.subprocess.Popen") as start:
+                resume_after_update(str(home), 17)
             self.assertFalse(marker_path.exists())
             self.assertEqual(start.call_args.args[0], [
                 "/bin/launchctl", "kickstart", "-k", "gui/%d/%s" % (os.getuid(), LABEL)])
@@ -520,8 +525,8 @@ class VaultScheduleTests(unittest.TestCase):
             home.mkdir(mode=0o700)
             from codex_migrate.vault_schedule import _update_lock
             with _update_lock(str(home)):
-                self.assertFalse(prepare_update(str(home), lambda: True))
-            self.assertTrue(prepare_update(str(home), lambda: True))
+                self.assertFalse(prepare_update(str(home), lambda: True, 17))
+            self.assertTrue(prepare_update(str(home), lambda: True, 17))
 
     def test_expired_update_guard_cannot_disable_future_scheduled_backups(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -537,7 +542,7 @@ class VaultScheduleTests(unittest.TestCase):
                 install_schedule(str(home), str(vault), crypto_helper=str(helper),
                                  engine_command=[str(engine)])
             config_path = home / "Library/Application Support/Codex Vault/schedule.json"
-            self.assertTrue(prepare_update(str(home), lambda: True))
+            self.assertTrue(prepare_update(str(home), lambda: True, 17))
             marker_path = config_path.parent / "update.json"
             marker = json.loads(marker_path.read_text())
             marker["expires_at"] = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()

@@ -15,6 +15,7 @@ import Sparkle
     private var idleInstallShutdownPending = false
     private var idleInstallShutdownConfirmed = false
     private var updateScheduledForQuit = false
+    private var updateTargetBuild: Int?
     private var automaticChecksItem: NSMenuItem!
     private var automaticInstallItem: NSMenuItem!
     private lazy var updaterController = SPUStandardUpdaterController(
@@ -145,6 +146,7 @@ import Sparkle
     }
 
     func updater(_ updater: SPUUpdater, willDownloadUpdate item: SUAppcastItem, with request: NSMutableURLRequest) {
+        updateTargetBuild = Int(item.versionString)
         guard request.url?.scheme == "https", request.url?.host == "migrate.segeren.com",
               request.url?.path == "/api/update-archive", let token = UpdateEntitlement.savedToken() else { return }
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -153,6 +155,7 @@ import Sparkle
     func updater(_ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem,
                  immediateInstallationBlock install: @escaping () -> Void) -> Bool {
         updateScheduledForQuit = true
+        updateTargetBuild = Int(item.versionString)
         // Take control of the staged update so Sparkle can install and relaunch
         // after the helper confirms that no migration or Vault job is active.
         guard updater.automaticallyDownloadsUpdates, UpdateEntitlement.savedToken() != nil else { return false }
@@ -195,7 +198,7 @@ import Sparkle
 
     private func shutdownHelperForIdleInstall() {
         guard !idleInstallShutdownPending, process?.isRunning == true,
-              let request = helperRequest("/api/update-shutdown", method: "POST") else { return }
+              let request = helperRequest("/api/update-shutdown", method: "POST", targetBuild: updateTargetBuild) else { return }
         // This POST rechecks idleness under the helper's action lock. A job
         // started after the GET wins and leaves the app and helper running.
         idleInstallShutdownPending = true
@@ -236,8 +239,8 @@ import Sparkle
         if !InstallLocation.needsMoveToApplications(
             appURL: Bundle.main.bundleURL,
             homeURL: FileManager.default.homeDirectoryForCurrentUser
-        ) {
-            arguments.append("--resume-after-update")
+        ), let installedBuild = Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "") {
+            arguments += ["--resume-after-update-build", String(installedBuild)]
         }
         child.arguments = arguments
         child.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
@@ -322,7 +325,7 @@ import Sparkle
         guard !quitting else { return .terminateCancel }
         let updatePending = updateScheduledForQuit || updaterController.updater.sessionInProgress
         let endpoint = updatePending ? "/api/update-shutdown" : "/api/shutdown"
-        guard let request = helperRequest(endpoint, method: "POST") else { return .terminateCancel }
+        guard let request = helperRequest(endpoint, method: "POST", targetBuild: updateTargetBuild) else { return .terminateCancel }
         quitting = true
         URLSession.shared.dataTask(with: request) { _, response, _ in
             DispatchQueue.main.async {
@@ -339,7 +342,7 @@ import Sparkle
         return .terminateCancel
     }
 
-    private func helperRequest(_ path: String, method: String) -> URLRequest? {
+    private func helperRequest(_ path: String, method: String, targetBuild: Int? = nil) -> URLRequest? {
         guard let url = dashboardURL,
               let token = URLComponents(string: "http://localhost/?" + (url.fragment ?? ""))?.queryItems?.first(where: { $0.name == "token" })?.value,
               var endpoint = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
@@ -354,6 +357,10 @@ import Sparkle
         if method == "POST" {
             request.httpBody = Data("{}".utf8)
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        }
+        if path == "/api/update-shutdown" {
+            guard let targetBuild, targetBuild > 0 else { return nil }
+            request.setValue(String(targetBuild), forHTTPHeaderField: "X-Codex-Migrate-Target-Build")
         }
         return request
     }

@@ -1326,8 +1326,13 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                 if self.path in ("/api/shutdown", "/api/update-shutdown"):
                     # _request_lock excludes concurrent configuration, pickers,
                     # and new operations while shutdown closes the action gate.
-                    ready = (prepare_vault_update(setup.source_home, setup._idle_for_shutdown)
-                             if self.path == "/api/update-shutdown" else setup._idle_for_shutdown())
+                    if self.path == "/api/update-shutdown":
+                        build = self.headers.get("X-Codex-Migrate-Target-Build", "")
+                        ready = (build.isascii() and build.isdigit() and len(build) <= 9
+                                 and prepare_vault_update(
+                                     setup.source_home, setup._idle_for_shutdown, int(build)))
+                    else:
+                        ready = setup._idle_for_shutdown()
                     if not ready:
                         self._json(409, {"error": "Finish running work and save any displayed Vault recovery key before quitting."})
                         return

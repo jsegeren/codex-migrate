@@ -83,6 +83,16 @@ remained. This is **not** yet a notarized release artifact or a full Sparkle
 installation-under-contention observation; the native app was edited again
 after that local build to restrict marker clearing to safe install locations.
 
+A further source hardening binds the update guard to Sparkle's target
+`CFBundleVersion`: the helper accepts an update shutdown only with that build
+number, and an installed app clears the marker only when its own build is at
+least the target. Reopening the old installed copy therefore cannot resume a
+deferred scheduled backup while Sparkle is still replacing it. The full local
+Python suite passed (852 tests, 15 opt-in skips), Swift typecheck passed, and
+an ad-hoc app built from this source passed the real LaunchAgent/packaged-helper
+contention and deferral test. This remains source and ad-hoc evidence, **not**
+a signed/notarized buyer update or proof of Sparkle's full replacement path.
+
 Sparkle's [published appcast format](https://sparkle-project.org/documentation/publishing/)
 supports `arm64` as the Apple-silicon hardware requirement; it does not define
 `x86_64` as a negative requirement. A local test that substituted `x86_64` in

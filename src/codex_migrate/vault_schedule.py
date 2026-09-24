@@ -39,7 +39,7 @@ LABEL = "com.segeren.codex-vault.backup"
 CONFIG_FORMAT = "codex-vault-schedule"
 CONFIG_VERSION = 2
 ALLOWED_INTERVAL_HOURS = (6, 12, 24, 168)
-UPDATE_GUARD_VERSION = 1
+UPDATE_GUARD_VERSION = 2
 UPDATE_GUARD_DURATION = timedelta(hours=2)
 
 
@@ -118,9 +118,11 @@ def _pending_update(marker_path: Path) -> Optional[Dict[str, object]]:
     if not marker_path.exists():
         return None
     marker = _safe_json(marker_path)
-    if (set(marker) != {"version", "expires_at", "deferred"}
+    if (set(marker) != {"version", "expires_at", "deferred", "target_build"}
             or marker["version"] != UPDATE_GUARD_VERSION
-            or type(marker["deferred"]) is not bool):
+            or type(marker["deferred"]) is not bool
+            or type(marker["target_build"]) is not int
+            or not 0 < marker["target_build"] <= 1_000_000_000):
         raise MigrationError("The Vault update guard is invalid.")
     expires_at = _timestamp(marker["expires_at"])
     if expires_at <= datetime.now(timezone.utc):
@@ -130,8 +132,10 @@ def _pending_update(marker_path: Path) -> Optional[Dict[str, object]]:
     return marker
 
 
-def prepare_update(source_home: str, idle_check) -> bool:
+def prepare_update(source_home: str, idle_check, target_build: int) -> bool:
     """Reserve the bundle for Sparkle without racing the LaunchAgent."""
+    if type(target_build) is not int or not 0 < target_build <= 1_000_000_000:
+        return False
     try:
         with _update_lock(source_home, nonblocking=True) as marker_path:
             if not idle_check():
@@ -141,20 +145,23 @@ def prepare_update(source_home: str, idle_check) -> bool:
                 "version": UPDATE_GUARD_VERSION,
                 "expires_at": (datetime.now(timezone.utc) + UPDATE_GUARD_DURATION).isoformat(),
                 "deferred": bool(previous and previous["deferred"]),
+                "target_build": target_build,
             }, replace=True)
             return True
     except (MigrationError, OSError):
         return False
 
 
-def resume_after_update(source_home: str) -> None:
-    """Clear a completed/aborted update and catch up a deferred backup."""
+def resume_after_update(source_home: str, installed_build: int) -> None:
+    """Clear the guard only when the installed bundle reached the target build."""
     _, marker_path = _update_paths(source_home)
     if not marker_path.exists():
         return
     with _update_lock(source_home) as marker_path:
         marker = _pending_update(marker_path)
         if marker is None:
+            return
+        if type(installed_build) is not int or installed_build < marker["target_build"]:
             return
         deferred = marker["deferred"]
         marker_path.unlink()
