@@ -694,7 +694,19 @@ See [the rotation runbook](sparkle-key-rotation-2026-09-23.md).
    verified, the source stayed byte-identical, and a retry published a new
    verified snapshot after the disposable pressure file was removed. It passed
    on Python 3.9 and 3.12. This proves Vault destination disk-pressure
-   recovery, not insufficient-space handling inside Sparkle's app update.
+recovery, not insufficient-space handling inside Sparkle's app update.
+
+The exact build-17 packaged engine also passed an opt-in **process-kill during
+Vault backup** test on this Mac. After an initial verified snapshot, the test
+added a large synthetic transcript, observed a new encrypted chunk, and sent
+SIGKILL to only the disposable backup process group. The previously published
+`latest.json` remained byte-identical and its snapshot still verified; the
+synthetic source was unchanged. A fresh packaged-engine retry then published
+and verified a new snapshot. The test passed twice consecutively in its final
+form and removed its disposable Keychain key. This proves recovery from one
+mid-write process interruption, not a power loss, sleep/restart, or interruption
+of a buyer's real history. The opt-in test is
+`tests/test_packaged_vault_interruption.py`.
 
 The current local Vault guarantees the last verified capture, not zero loss
 between snapshots, completed off-device cloud sync, or every Codex UI resume.
