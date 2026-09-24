@@ -1,5 +1,5 @@
 const blob = require('@vercel/blob');
-const { CommerceError, validRelease } = require('./config');
+const { CommerceError, validRelease, releaseContentType } = require('./config');
 
 // Every link is GET-only, bound to one content-addressed object, and expires
 // within five minutes. No signing key or whole-store delegation reaches clients.
@@ -14,7 +14,7 @@ function privateDownloads(config, env = process.env, sdk = blob, clock = Date.no
     const expected = `${origin}/${release.pathname}`;
     const metadata = await sdk.head(expected, { ...auth, abortSignal: AbortSignal.timeout(8000) });
     if (metadata.url !== expected || metadata.pathname !== release.pathname ||
-        metadata.size !== release.size || metadata.contentType !== 'application/zip') {
+        metadata.size !== release.size || metadata.contentType !== releaseContentType(release)) {
       throw new CommerceError('release_unavailable');
     }
     const expiresAt = clock() + 5 * 60 * 1000;

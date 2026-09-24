@@ -64,6 +64,13 @@ test('live releases require signed and accepted evidence fields, separate from s
   assert.equal(validRelease(live, true), false);
   assert.equal(validRelease({ ...live, accepted: true }, true), true);
 });
+test('build-17 DMG remains sandbox-only and requires its accepted disk-image notarization receipt', () => {
+  const candidate = require('../commerce/releases.json')['codex-migrate-0.1.0-build17-quit-guard-arm64'];
+  assert.equal(validRelease(candidate, false), true);
+  assert.equal(validRelease(candidate, true), false);
+  assert.equal(validRelease({ ...candidate, diskImageNotarization: undefined }, false), false);
+  assert.equal(validRelease({ ...candidate, diskImageNotarization: { status: 'Invalid', id: candidate.diskImageNotarization.id } }, false), false);
+});
 for (const id of ['sandbox-build4-arm64', 'sandbox-build5-arm64']) {
 test(`${id} cannot be promoted by flipping live acceptance`, () => {
   const candidate = require('../commerce/releases.json')[id];

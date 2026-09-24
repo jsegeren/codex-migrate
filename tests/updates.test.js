@@ -53,6 +53,94 @@ test('update archive rejects a forged bearer before opening the runtime', async 
   assert.equal(loads, 0);
 });
 
+test('canary requires the exact paid session and explicit release pin before loading runtime', async () => {
+  const candidate = require('../commerce/releases.json')['codex-migrate-0.1.0-build17-quit-guard-arm64'];
+  const selectedConfig = { ...config, catalog: { [candidate.id]: candidate } };
+  const allowed = { COMMERCE_UPDATER_CANARY_RELEASE: candidate.id,
+    COMMERCE_UPDATER_CANARY_SESSION: 'cs_live_fixture',
+    COMMERCE_UPDATER_CANARY_SHA256: candidate.sha256 };
+  for (const [header, environment] of [
+    [candidate.id, {}],
+    [candidate.id, { ...allowed, COMMERCE_UPDATER_CANARY_SESSION: 'cs_live_other' }],
+    ['another-release', allowed],
+    [[candidate.id, candidate.id], allowed],
+  ]) {
+    let loads = 0;
+    const handler = archive(async () => { loads++; throw Error('runtime reached'); }, fetch,
+      environment, () => selectedConfig);
+    const response = plainResponse();
+    await handler({ method: 'GET', url: '/api/update-archive', headers: {
+      authorization: `Bearer ${token}`, 'x-codex-migrate-canary': header,
+    } }, response);
+    assert.equal(response.statusCode, 403);
+    assert.equal(loads, 0);
+  }
+});
+
+test('canary streams only the exact sandbox candidate while the public feed remains approved', async () => {
+  const candidate = require('../commerce/releases.json')['codex-migrate-0.1.0-build17-quit-guard-arm64'];
+  const current = require('../commerce/releases.json')['beta-build16-arm64'];
+  const productionFeed = plainResponse();
+  appcast(() => ({ ...config, release: current, catalog: { [current.id]: current,
+    [candidate.id]: candidate } }))({ method: 'GET' }, productionFeed);
+  assert.match(productionFeed.data, /<sparkle:version>16<\/sparkle:version>/);
+  assert.doesNotMatch(productionFeed.data, /build17|sandbox\//);
+  const selectedConfig = { ...config, catalog: { [candidate.id]: candidate } };
+  const environment = { COMMERCE_UPDATER_CANARY_RELEASE: candidate.id,
+    COMMERCE_UPDATER_CANARY_SESSION: 'cs_live_fixture',
+    COMMERCE_UPDATER_CANARY_SHA256: candidate.sha256 };
+  const feed = plainResponse();
+  appcast(() => selectedConfig)({ method: 'GET' }, feed);
+  assert.match(feed.data, /<sparkle:version>15<\/sparkle:version>/);
+  assert.doesNotMatch(feed.data, /build17|sandbox\//);
+  const bytes = Buffer.from('private canary fixture');
+  const signedURL = `https://fixturestore.private.blob.vercel-storage.com/${candidate.pathname}?signed=fixture`;
+  const handler = archive(async () => ({ config: selectedConfig, service: {
+    downloadCanary: async (credential, releaseId) => {
+      assert.equal(credential, token);
+      assert.equal(releaseId, candidate.id);
+      return { release: candidate.id, sha256: candidate.sha256,
+        size: candidate.size, filename: candidate.filename, url: signedURL };
+    },
+  } }), async (url, options) => {
+    assert.equal(url.toString(), signedURL);
+    assert.equal(options.redirect, 'error');
+    return { status: 200, headers: { get: () => String(candidate.size) },
+      body: new ReadableStream({ start(controller) { controller.enqueue(bytes); controller.close(); } }) };
+  }, environment, () => selectedConfig);
+  const response = new PassThrough();
+  response.headers = {};
+  response.setHeader = (key, value) => { response.headers[key] = value; };
+  const output = [];
+  response.on('data', chunk => output.push(chunk));
+  await handler({ method: 'GET', url: '/api/update-archive', headers: {
+    authorization: `Bearer ${token}`, 'x-codex-migrate-canary': candidate.id,
+  } }, response);
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.headers['Content-Type'], 'application/x-apple-diskimage');
+  assert.equal(Buffer.concat(output).toString(), bytes.toString());
+  assert.equal(JSON.stringify(response.headers).includes('signed=fixture'), false);
+});
+
+test('canary refuses mismatched digest or accepted manifest before signing', async () => {
+  const candidate = require('../commerce/releases.json')['codex-migrate-0.1.0-build17-quit-guard-arm64'];
+  for (const [manifest, digest] of [[candidate, '0'.repeat(64)], [{ ...candidate, accepted: true }, candidate.sha256]]) {
+    const selectedConfig = { ...config, catalog: { [candidate.id]: manifest } };
+    const environment = { COMMERCE_UPDATER_CANARY_RELEASE: candidate.id,
+      COMMERCE_UPDATER_CANARY_SESSION: 'cs_live_fixture', COMMERCE_UPDATER_CANARY_SHA256: digest };
+    let downloads = 0;
+    const handler = archive(async () => ({ config: selectedConfig, service: {
+      downloadCanary: async () => { downloads++; throw Error('unexpected'); },
+    } }), async () => { throw Error('unexpected Blob request'); }, environment, () => selectedConfig);
+    const response = plainResponse();
+    await handler({ method: 'GET', url: '/api/update-archive', headers: {
+      authorization: `Bearer ${token}`, 'x-codex-migrate-canary': candidate.id,
+    } }, response);
+    assert.equal(response.statusCode, 503);
+    assert.equal(downloads, 0);
+  }
+});
+
 test('update archive streams the approved private build without exposing its blob URL', async () => {
   const bytes = Buffer.from('signed archive fixture');
   const updateConfig = { ...config, release: { ...release, size: bytes.length } };
