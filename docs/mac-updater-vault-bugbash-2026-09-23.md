@@ -601,6 +601,12 @@ first-party form or a build-17 update. Chrome had defaulted the save dialog
 to an unrelated OneDrive folder; the exact newly saved ZIP was moved into
 Downloads immediately and verified there. No other file in that folder was
 changed. Whether OneDrive briefly synchronized the ZIP is unknown.
+That exact browser-downloaded ZIP carried macOS quarantine metadata. Extracted
+into an isolated temporary folder, its build-16 app passed strict deep
+code-signature verification and Gatekeeper assessment as **Notarized Developer
+ID**, and the extracted bundle retained quarantine metadata. The temporary
+extraction was moved to Trash. This is not a first launch in a clean buyer
+account; the Founder's running developer copy was not interrupted.
 
 ## Release blockers for this candidate
 
