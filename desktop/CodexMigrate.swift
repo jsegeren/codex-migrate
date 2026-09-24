@@ -214,7 +214,14 @@ import Sparkle
                 self.process = nil
                 self.dashboardURL = nil
                 if self.quitting {
-                    NSApplication.shared.reply(toApplicationShouldTerminate: true)
+                    // A terminateLater reply can deadlock here when the first
+                    // terminate call came from Sparkle's idle-check callback:
+                    // AppKit waits inside that call while this main-queue
+                    // completion is waiting to run. The first attempt returns
+                    // terminateCancel; now that the helper has exited, a fresh
+                    // attempt can terminate immediately.
+                    self.automaticInstallQuitPending = false
+                    NSApplication.shared.terminate(nil)
                 } else if child.terminationStatus == 0 || child.terminationStatus == 130 {
                     NSApplication.shared.terminate(nil)
                 } else if child.terminationStatus == 75 {
@@ -282,15 +289,14 @@ import Sparkle
                 guard (response as? HTTPURLResponse)?.statusCode == 200 else {
                     self.quitting = false
                     self.automaticInstallQuitPending = false
-                    NSApplication.shared.reply(toApplicationShouldTerminate: false)
                     self.openMigration()
                     return
                 }
-                // The termination handler completes quitting after the helper
-                // closes its server and releases migration locks.
+                // The termination handler requests a fresh quit after the
+                // helper closes its server and releases migration locks.
             }
         }.resume()
-        return .terminateLater
+        return .terminateCancel
     }
 
     private func helperRequest(_ path: String, method: String) -> URLRequest? {

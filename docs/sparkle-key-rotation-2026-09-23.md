@@ -97,3 +97,14 @@ isolated build-16-to-17 local Sparkle upgrade installed this image in place;
 the resulting app contained the exact clean-source receipt and started one
 healthy helper. This still does not certify the paid Production path, idle
 automatic installation, or the required failure-path matrix.
+
+An isolated automatic-install smoke then found an AppKit termination deadlock:
+the idle probe requested a quit, but `terminateLater` waited for a main-queue
+reply that could not run. The source now cancels that first quit, waits for the
+helper to exit, and requests a fresh quit. A Developer ID re-signed test copy
+with that fix, a synthetic purchase token and a loopback appcast downloaded the
+exact notarized DMG and installed build 17 without a manual quit; the installed
+app passed strict code signing and Gatekeeper. It did not relaunch afterward.
+The test copy and token were removed. This is a local mechanism test, **not**
+a live build-16 or Production paid-update test. The notarized DMG above
+predates the fix and must be rebuilt before release.
