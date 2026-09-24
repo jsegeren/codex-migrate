@@ -516,7 +516,12 @@ and verified, it returned 200 to a target-build-17 shutdown request, left an
 owner-only update guard whose recorded target was 17, and deferred a subsequent
 scheduled run without changing the last good snapshot.
 The packaged backup/restore smoke also passed without copying authentication
-files. The test unloaded its LaunchAgent and removed its plist and test key;
+files. The exact bundled engine's loopback-dashboard test passed too: it
+started without a destination, returned active and old-title search results
+from a disposable transcript, denied an unauthenticated updater idle probe,
+rejected protected workspace selections, and shut down cleanly. These are
+functional checks of the packaged helper, not a visual review. The scheduled
+test unloaded its LaunchAgent and removed its plist and test key;
 a post-run check found no loaded backup job or plist on this account. This is
 physical **packaged-helper contention and cleanup** evidence, not a Sparkle
 replacement while busy or a buyer-home catch-up observation.
