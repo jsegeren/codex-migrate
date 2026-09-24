@@ -580,7 +580,15 @@ structurally valid but forged bearer; `/api/purchase` returned 403 for that
 same forged token's entitlement check. No private file URL or buyer material
 was requested or logged. A further Gmail-link browser attempt reached the
 same unresponsive Chrome purchase tab, so a successful paid browser save
-remains unverified.
+remained unverified. A subsequent keyboard-open created a fresh verified
+purchase tab, but Chrome returned `ERR_BLOCKED_BY_CLIENT` for the short-lived
+private Blob download as well. As a control, that same automated Chrome
+profile also blocked a public GitHub source ZIP download while loading an
+ordinary site SVG. No archive appeared in Downloads. This points to a
+download/navigation restriction in the client profile or automation path; it
+does not establish that our paid endpoint is broken or that a normal buyer
+browser succeeds. The temporary test tabs were closed. Keep a non-blocked
+browser download receipt as an acceptance gate.
 
 ## Release blockers for this candidate
 
