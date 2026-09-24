@@ -75,6 +75,43 @@ test('purchase page prefers a free update and offers the preserved original', as
   assert.deepEqual(f.submissions, [{ credential: privateToken, version: 'original' }]);
   assert.equal(f.get('purchase-original').hidden, true);
 });
+test('a browser-blocked buyer can use a short-lived direct link without a second payment', async () => {
+  const f = fixture(); await f.finish();
+  assert.equal(f.get('purchase-direct-help').hidden, false);
+  assert.equal(f.get('purchase-direct').getAttribute('href'), good.url);
+  assert.equal(f.storage.get('codex-migrate-purchase-v1').includes(good.url), false);
+  let prevented = false;
+  f.get('purchase-direct').events.click({ preventDefault() { prevented = true; } });
+  assert.equal(prevented, false);
+  assert.deepEqual(f.submissions, []);
+  assert.match(f.get('purchase-status').textContent, /Download requested/);
+  assert.equal(f.get('purchase-retry').hidden, false);
+  f.get('purchase-retry').events.click();
+  assert.equal(f.get('purchase-direct-help').hidden, true);
+  assert.equal(f.get('purchase-direct').getAttribute('href'), null);
+  await f.finish({ ...good, url: good.url + 'fresh' });
+  assert.equal(f.get('purchase-direct').getAttribute('href'), good.url + 'fresh');
+});
+test('expired original-build links refresh the original, not the latest build', async () => {
+  const f = fixture(); await f.finish({ ...good, updateAvailable: true });
+  f.get('purchase-original').events.click();
+  await f.finish({ ...good, url: good.url + 'original' });
+  f.advance(300000);
+  let prevented = false;
+  f.get('purchase-direct').events.click({ preventDefault() { prevented = true; } });
+  assert.equal(prevented, true);
+  assert.equal(JSON.parse(f.calls[2].options.body).action, 'download');
+  assert.equal(f.get('purchase-direct').getAttribute('href'), null);
+  await f.finish({ ...good, url: good.url + 'refreshed-original' });
+  f.advance(300000);
+  f.get('purchase-download').events.click({ preventDefault() {} });
+  assert.equal(JSON.parse(f.calls[3].options.body).action, 'download');
+  await f.finish({ ...good, url: good.url + 'second-original' });
+  f.get('purchase-download').events.click({ preventDefault() {} });
+  assert.deepEqual(f.submissions, [{ credential: privateToken, version: 'original' }]);
+  f.get('purchase-retry').events.click();
+  assert.equal(JSON.parse(f.calls[4].options.body).action, 'download');
+});
 test('verified purchases emit one conversion across checks and reloads', async () => {
   const first = fixture();
   await first.finish();

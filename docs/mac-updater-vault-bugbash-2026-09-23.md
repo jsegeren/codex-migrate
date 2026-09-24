@@ -547,9 +547,20 @@ showed “Download for Mac,” and routed that action to the first-party
 `/api/purchase-archive` form. In this Chrome profile, the attempted form
 navigation displayed `ERR_BLOCKED_BY_CLIENT`; no new Codex Migrate archive
 appeared in Downloads. Returning to the page showed its “Download requested”
-recovery state. This is a **failed buyer-browser download observation**, not
-evidence that the server rejected the entitlement or that a different browser
-would fail. Do not count the sandbox-only successful download as closing it.
+recovery state. A separate top-level GET navigation to the public appcast was
+also blocked by this client, while a direct HTTPS request returned 200. This
+is a **failed browser-path observation**, not evidence that the server rejected
+the entitlement or that a different browser would fail. Do not count the
+sandbox-only successful download as closing it. This branch's purchase page offers
+an explicitly short-lived direct file link as a fallback after verification;
+that fallback still needs a live browser download receipt after deployment.
+The page also keeps the buyer's original-build selection when an expired link
+is refreshed instead of silently switching to the latest build. A local
+browser fixture rendered the fallback at desktop and 390px mobile widths;
+status and fallback copy computed to 17px at the mobile breakpoint. Focused
+purchase-page/archive tests passed, as did the full web/commerce suite (327
+passed, one skipped). This is UI and handler verification, not a paid live
+fallback download receipt.
 The original-versus-latest choice cannot be observed on the live page yet,
 because the public latest release is still build 16. The PR checks for Python
 3.9 and 3.12 passed on the September 24 branch state.
@@ -566,12 +577,12 @@ private file is owner-only outside Git. The final DMG is notarized and
 stored privately for testing, but has not been distributed or promoted.
 See [the rotation runbook](sparkle-key-rotation-2026-09-23.md).
 
-1. Inspect the remaining operator-alert inbox; determine why this Chrome
-   profile blocked the paid first-party form and recheck the original-build
-   browser choice after a new accepted release exists. The sandbox latest-build
-   file save has a clean Chrome and SHA-256 receipt, and both authenticated
+1. Inspect the remaining operator-alert inbox; exercise the new direct-link
+   fallback in a live browser after deployment, and recheck the original-build
+   choice after a new accepted release exists. The sandbox latest-build file
+   save has a clean Chrome and SHA-256 receipt, and both authenticated
    Production server streams matched build 16, but the September 24 paid
-   browser click did not save an archive.
+   browser click did not save an archive in this client.
 2. The rebuilt clean-source app, rotation DMG, Sparkle signature, private
    sandbox Blob readback, isolated build-16-to-17 quit-path install, and
    candidate-code idle install/relaunch with an app-owned synthetic token pass.
