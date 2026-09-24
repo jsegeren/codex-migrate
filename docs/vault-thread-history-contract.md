@@ -37,11 +37,14 @@ first verified snapshot or to turns written since the latest verified capture.
   writing, and refuse an existing or divergent ID anywhere in the active or
   archived trees. It never replaces or merges a live thread. The existing
   whole-history installer remains an advanced, separate operation.
-- The random master key is stored in this Mac's `ThisDeviceOnly` Keychain,
-  not in a plist or in the encrypted Vault. The user keeps the `CV1-` recovery
-  key outside Vault. Losing both the Keychain item and recovery key makes the
-  snapshots unreadable. Reinstalling the app on the same account normally
-  leaves Keychain intact; a new account or Mac requires recovery-key import.
+- The random master key is stored in this Mac's login Keychain, not in a plist
+  or in the encrypted Vault. The helper requests `ThisDeviceOnly`, but the
+  current legacy-Keychain item has not been shown to enforce that accessibility
+  class on macOS; do not advertise it as a proved guarantee. The user keeps
+  the `CV1-` recovery key outside Vault. Losing both the Keychain item and
+  recovery key makes snapshots unreadable. Reinstalling the app normally
+  leaves Keychain intact; use recovery-key import on a new account or Mac
+  instead of relying on Keychain migration.
 - A recovery-key round-trip is not rereading the same Keychain item. Acceptance
   requires importing the key in a different Mac account or on another Mac and
   decrypting an existing verified snapshot. Do not escrow keys silently.

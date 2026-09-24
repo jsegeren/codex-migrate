@@ -30,7 +30,16 @@ it as a generic-password item in the login Keychain:
 
 - service: `com.segeren.codex-vault`
 - account: the random Vault key UUID
-- accessibility: `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`
+- requested accessibility: `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`
+
+The current packaged helper uses the legacy macOS login Keychain, not the
+Data Protection Keychain. Apple documents that `kSecAttrAccessible` applies
+to macOS items only with the Data Protection Keychain or synchronization;
+the current helper has no access-group entitlements. Therefore the requested
+`ThisDeviceOnly` class is **not yet a verified property** of existing Vault
+keys. Treat the login Keychain item and separately saved recovery key as the
+actual v1 custody boundary until a provisioned helper and key migration are
+proved. Do not silently change where existing keys are queried or stored.
 
 The master key is not written into the Vault folder. Its one-time recovery
 encoding is `CV1-` followed by unpadded base64url of the 32 key bytes. Users

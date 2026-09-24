@@ -683,3 +683,20 @@ Apple references:
 [`WhenUnlockedThisDeviceOnly`](https://developer.apple.com/documentation/security/ksecattraccessiblewhenunlockedthisdeviceonly),
 [`AfterFirstUnlockThisDeviceOnly`](https://developer.apple.com/documentation/security/ksecattraccessibleafterfirstunlockthisdeviceonly),
 and [`kSecAttrAccessible` on macOS](https://developer.apple.com/documentation/security/ksecattraccessible).
+
+The exact notarized build-17 DMG in this ledger was mounted read-only again.
+Its embedded `CodexVaultCrypto` executable and enclosing app have no
+code-signing entitlements. Apple says the Data Protection Keychain derives
+access groups from those entitlements; the current helper therefore cannot
+simply opt into it by adding a query flag. A disposable Swift probe signed
+with the available Developer ID identity and a claimed access group, but no
+provisioning profile, exited with status 137 before it could report a Keychain
+result. An ad-hoc-signed copy with the same claimed entitlements did likewise.
+The image was detached and the probe moved to Trash. These attempts are **not**
+evidence that the needed entitlement is provisioned or that the existing
+legacy-Keychain key has the documented `ThisDeviceOnly` semantics. Hold that
+specific security claim until a provisioned signed helper and existing-key
+migration are physically proved; keep using the recovery key for portability.
+Apple references: [Mac keychain implementations](https://developer.apple.com/documentation/technotes/tn3137-on-mac-keychains),
+[Data Protection Keychain](https://developer.apple.com/documentation/security/ksecusedataprotectionkeychain),
+and [access-group entitlement checks](https://developer.apple.com/documentation/security/errsecmissingentitlement).
