@@ -4,6 +4,8 @@ Run on macOS with CODEX_MIGRATE_EXTERNAL_VAULT_TEST=yes. This does not load
 the account-wide LaunchAgent or read the user's Codex home.
 """
 
+import base64
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -32,6 +34,90 @@ class ExternalVolumeVaultTests(unittest.TestCase):
 
     def test_missing_case_sensitive_external_volume_never_becomes_a_new_local_vault(self):
         self.exercise_external_volume("Case-sensitive APFS")
+
+    def test_full_external_volume_keeps_last_verified_snapshot_and_recovers(self):
+        packaged_engine = os.environ.get("CODEX_MIGRATE_TEST_ENGINE")
+        if not packaged_engine:
+            self.skipTest("set CODEX_MIGRATE_TEST_ENGINE to a packaged engine")
+        root = Path(tempfile.mkdtemp(prefix="codex-vault-full-volume-test-")).resolve()
+        mount = root / "mounted"
+        mount.mkdir()
+        image = root / "fixture.sparseimage"
+        helper = Path(packaged_engine).resolve().parents[1] / "CodexVaultCrypto"
+        self.assertTrue(helper.is_file())
+        key_id = None
+        try:
+            if shutil.disk_usage(root).free < 2 * 1024**3:
+                self.skipTest("External-volume acceptance requires 2 GiB free")
+            self.tool("/usr/bin/hdiutil", "create", "-size", "512m", "-fs", "APFS",
+                      "-type", "SPARSE", "-volname", "CodexVaultFullFixture",
+                      "-nospotlight", str(image))
+            self.tool("/usr/bin/hdiutil", "attach", "-nobrowse", "-owners", "on",
+                      "-mountpoint", str(mount), str(image))
+            self.assertTrue(os.path.ismount(mount))
+            self.assertNotEqual(mount.stat().st_dev, root.stat().st_dev)
+            source = root / "source"
+            sessions = source / ".codex/sessions"
+            sessions.mkdir(parents=True)
+            transcript = sessions / "fixture.jsonl"
+            transcript.write_text(json.dumps({"type": "session_meta", "payload": {
+                "id": "44444444-4444-4444-8444-444444444444"}}) + "\n")
+            vault = mount / "vault"
+
+            def packaged_backup():
+                return subprocess.run([
+                    packaged_engine, "vault", "--source-home", str(source),
+                    "backup", "--destination", str(vault), "--apply", "--json",
+                ], capture_output=True, text=True, timeout=120)
+
+            initial = packaged_backup()
+            self.assertEqual(initial.returncode, 0, "initial packaged backup failed")
+            key_id = json.loads((vault / "vault.json").read_text())["key_id"]
+            first = verify_snapshot(str(vault), crypto_helper=str(helper))
+            first_reference = (vault / "latest.json").read_bytes()
+            # A new snapshot genuinely needs more than the space left below.
+            # Its source content is synthetic and kept off the mounted volume.
+            with transcript.open("a", encoding="utf-8") as stream:
+                for _ in range(48):
+                    stream.write(json.dumps({"type": "response_item", "payload": {
+                        "content": base64.b64encode(os.urandom(1024 * 1024)).decode("ascii"),
+                    }}) + "\n")
+            source_digest = hashlib.sha256(transcript.read_bytes()).hexdigest()
+            pressure = mount / "disposable-space-pressure"
+            free_mib = shutil.disk_usage(mount).free // (1024 * 1024)
+            self.assertGreater(free_mib, 100)
+            self.tool("/bin/dd", "if=/dev/zero", "of=" + str(pressure),
+                      "bs=1048576", "count=" + str(free_mib - 24))
+            self.assertLess(shutil.disk_usage(mount).free, 32 * 1024 * 1024)
+            failed = packaged_backup()
+            self.assertNotEqual(failed.returncode, 0, "full Vault volume unexpectedly published a snapshot")
+            self.assertEqual((vault / "latest.json").read_bytes(), first_reference)
+            self.assertEqual(verify_snapshot(str(vault), crypto_helper=str(helper)).snapshot_id,
+                             first.snapshot_id)
+            self.assertEqual(hashlib.sha256(transcript.read_bytes()).hexdigest(), source_digest)
+            pressure.unlink()
+            retried = packaged_backup()
+            self.assertEqual(retried.returncode, 0, "backup did not recover after space was freed")
+            self.assertNotEqual(verify_snapshot(str(vault), crypto_helper=str(helper)).snapshot_id,
+                                first.snapshot_id)
+            self.assertEqual(hashlib.sha256(transcript.read_bytes()).hexdigest(), source_digest)
+        finally:
+            cleanup_error = None
+            if key_id is not None:
+                try:
+                    self.tool(str(helper), "delete-key", "--key-id", key_id)
+                except Exception as error:
+                    cleanup_error = error
+            if os.path.ismount(mount):
+                try:
+                    self.tool("/usr/bin/hdiutil", "detach", str(mount))
+                except Exception as error:
+                    cleanup_error = cleanup_error or error
+            if mount.exists() and mount.stat().st_dev != root.stat().st_dev:
+                raise RuntimeError("Mounted full-volume fixture retained at " + str(root))
+            shutil.rmtree(root)
+            if cleanup_error is not None:
+                raise cleanup_error
 
     def exercise_external_volume(self, filesystem):
         root = Path(tempfile.mkdtemp(prefix="codex-vault-volume-test-")).resolve()

@@ -681,6 +681,14 @@ See [the rotation runbook](sparkle-key-rotation-2026-09-23.md).
    It verifies each mounted
    filesystem's actual case behavior. This does not cover a case-sensitive
    source home or Mac-to-Mac migration.
+   A separate real-APFS sparse-volume test filled an external Vault destination
+   to under 32 MiB free, then ran the exact packaged build-17 backup engine
+   against a larger synthetic transcript. The write failed without changing
+   the previous `latest.json` reference; that prior encrypted snapshot still
+   verified, the source stayed byte-identical, and a retry published a new
+   verified snapshot after the disposable pressure file was removed. It passed
+   on Python 3.9 and 3.12. This proves Vault destination disk-pressure
+   recovery, not insufficient-space handling inside Sparkle's app update.
 
 The current local Vault guarantees the last verified capture, not zero loss
 between snapshots, completed off-device cloud sync, or every Codex UI resume.
