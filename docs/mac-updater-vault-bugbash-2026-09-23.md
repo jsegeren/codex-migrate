@@ -533,6 +533,14 @@ delivering a seemingly complete archive. The web/commerce suite passes 325
 tests with one skip. This covers proxy behavior under one network-break shape,
 not Sparkle's physical offline/resume experience or a Production Blob outage.
 
+The exact `27ef9bf` candidate also passed the sandbox-only Chrome download
+check: a trusted browser click downloaded the private DMG as an attachment,
+with its expected filename, 10,376,201-byte length and SHA-256 verified. The
+short-lived signed Blob URL remained in process/browser memory and was not
+recorded. The browser session closed after the check. This proves browser
+transport of the testing-only archive, **not** purchase-page choice, a paid
+entitlement, or an installed buyer update.
+
 ## Release blockers for this candidate
 
 The Founder approved a Sparkle key rotation. A new local signing seed and
