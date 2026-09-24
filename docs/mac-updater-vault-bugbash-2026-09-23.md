@@ -590,6 +590,18 @@ does not establish that our paid endpoint is broken or that a normal buyer
 browser succeeds. The temporary test tabs were closed. Keep a non-blocked
 browser download receipt as an acceptance gate.
 
+A later live paid Chrome retry opened the verified purchase page from the
+buyer's delivery email without copying its private credential. Chrome's
+native **Save Link As** action on the deployed direct-download fallback saved
+the build-16 archive. The file was 9,591,579 bytes and its SHA-256 was
+`60eff4dcb07088d01c966587e808f21d5fa74b8afb4eba45ed326543f07241f7`,
+exactly matching the live release catalog. This closes the fallback's
+real-browser transport check for one paid purchase, not the primary
+first-party form or a build-17 update. Chrome had defaulted the save dialog
+to an unrelated OneDrive folder; the exact newly saved ZIP was moved into
+Downloads immediately and verified there. No other file in that folder was
+changed. Whether OneDrive briefly synchronized the ZIP is unknown.
+
 ## Release blockers for this candidate
 
 The Founder approved a Sparkle key rotation. A new local signing seed and
@@ -602,12 +614,12 @@ private file is owner-only outside Git. The final DMG is notarized and
 stored privately for testing, but has not been distributed or promoted.
 See [the rotation runbook](sparkle-key-rotation-2026-09-23.md).
 
-1. Inspect the remaining operator-alert inbox; exercise the deployed direct-link
-   fallback in a live browser, and recheck the original-build
-   choice after a new accepted release exists. The sandbox latest-build file
-   save has a clean Chrome and SHA-256 receipt, and both authenticated
-   Production server streams matched build 16, but the September 24 paid
-   browser click did not save an archive in this client.
+1. Inspect the remaining operator-alert inbox; recheck the primary
+   first-party archive button and the original-build choice after a new
+   accepted release exists. The deployed fallback now has a paid Chrome save
+   and exact catalog SHA-256 receipt; both authenticated Production server
+   streams previously matched build 16. This does not prove every browser or
+   the first-party form route.
 2. The rebuilt clean-source app, rotation DMG, Sparkle signature, private
    sandbox Blob readback, isolated build-16-to-17 quit-path install, and
    candidate-code idle install/relaunch with an app-owned synthetic token pass.
