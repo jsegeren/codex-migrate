@@ -170,11 +170,31 @@ import Sparkle
     }
 
     func updater(_ updater: SPUUpdater, failedToDownloadUpdate item: SUAppcastItem, error: Error) {
-        updateArchiveReady = false
+        discardUncommittedUpdate()
     }
 
     func userDidCancelDownload(_ updater: SPUUpdater) {
+        discardUncommittedUpdate()
+    }
+
+    func updater(_ updater: SPUUpdater, didAbortWithError error: Error) {
+        // Sparkle can finish downloading an archive and then reject its
+        // signature. A later ordinary Quit must not reserve the Vault update
+        // guard for an update Sparkle has already abandoned.
+        discardUncommittedUpdate()
+    }
+
+    private func discardUncommittedUpdate() {
+        // Once shutdown is underway, keep the guard until the installer or
+        // its bounded expiry resolves it. Clearing it then could race a real
+        // bundle replacement.
+        guard !quitting, !idleInstallShutdownPending, !updateShutdownAuthorized else { return }
+        updateScheduledForQuit = false
         updateArchiveReady = false
+        updateTargetBuild = nil
+        idleInstallHandler = nil
+        idleInstallTimer?.invalidate()
+        idleInstallTimer = nil
     }
 
     func updater(_ updater: SPUUpdater, willInstallUpdate item: SUAppcastItem) {

@@ -447,6 +447,18 @@ The app remained build 16, the transcript hash was unchanged, and normal
 AppKit quit left **no** update marker. Neither probe used a buyer credential
 or the Production feed.
 
+Instrumenting Sparkle's delegate during the invalid-signature probe confirmed
+that `didAbortWithError` and the failed update-cycle callback fire **before**
+the user quits. The native source now discards uncommitted update readiness on
+abort, failed download, or canceled download, while preserving the guard if
+shutdown has already begun. Swift typecheck and a focused regression passed.
+A second isolated physical probe compiled that change into a test-only signed
+app with the same invalid-signature feed. Sparkle again fetched and rejected
+the DMG; normal AppKit quit left build 16 and the synthetic transcript unchanged
+**and created no update marker**. This fixes the observed backup-delay case
+when the rejection is reported before quit. The notarized `b510f216` app and
+DMG predate this source change and must be rebuilt and reaccepted.
+
 ## Release blockers for this candidate
 
 The Founder approved a Sparkle key rotation. A new local signing seed and
@@ -473,11 +485,10 @@ See [the rotation runbook](sparkle-key-rotation-2026-09-23.md).
    run after relaunch. A synthetic scheduled backup now proves the full
    replacement waits and resumes safely; migration and restore contention,
    plus catch-up from an unmodified buyer home, remain unverified.
-3. The invalid Sparkle signature and missing-archive probes above left the app
-   and synthetic transcript unchanged; the latter created no update guard.
-   The former left a bounded guard after quit, which may defer an automatic
-   backup until its two-hour expiry and the next scheduled run. Decide and
-   verify the acceptable catch-up behavior before promotion. Still exercise
+3. The invalid-signature and missing-archive probes above left the app and
+   synthetic transcript unchanged. Source now clears aborted-update state, and
+   the isolated repeat of the bad-signature case creates no update guard on
+   quit. Rebuild and repeat against the final notarized artifact. Still exercise
    missing/forged/refunded credentials, wrong architecture, corrupt archive,
    unavailable network, and insufficient disk space against the actual update
    path. No failure may replace the app or mutate Codex/Vault snapshots.

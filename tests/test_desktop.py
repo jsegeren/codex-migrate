@@ -69,6 +69,16 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("let updatePending = updateScheduledForQuit || updateArchiveReady", source)
         self.assertNotIn("updateScheduledForQuit || updaterController.updater.sessionInProgress", source)
 
+    def test_aborted_update_discards_readiness_before_an_ordinary_quit(self):
+        source = (Path(__file__).resolve().parents[1] / "desktop/CodexMigrate.swift").read_text()
+        self.assertIn("func updater(_ updater: SPUUpdater, didAbortWithError error: Error)", source)
+        cleanup = source.split("private func discardUncommittedUpdate()", 1)[1].split(
+            "func updater(_ updater: SPUUpdater, willInstallUpdate", 1)[0]
+        self.assertIn("guard !quitting, !idleInstallShutdownPending, !updateShutdownAuthorized", cleanup)
+        self.assertIn("updateScheduledForQuit = false", cleanup)
+        self.assertIn("updateArchiveReady = false", cleanup)
+        self.assertIn("idleInstallHandler = nil", cleanup)
+
     @unittest.skipUnless(sys.platform == "darwin", "packaged Vault requires macOS CryptoKit")
     def test_packaged_engine_backs_up_and_restores_without_authentication(self):
         binary = os.environ.get("CODEX_MIGRATE_TEST_ENGINE")
