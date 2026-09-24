@@ -158,11 +158,20 @@ DMG is separately signed, stapled and Accepted under submission
 Sparkle independently verified its new-key signature. The exact bytes were
 uploaded to private sandbox Blob and read back byte-for-byte. The catalog entry
 is `testingOnly: true`, `accepted: false`; build 16 remains live. JavaScript
-tests passed 318 with 1 skip. A read-only mount of this exact DMG passed
+tests passed 318 with 1 skip. The operator-only Chrome download check clicked
+the private sandbox link without printing it; Chrome saved the expected DMG
+filename and all 10,368,949 bytes matched the catalog SHA-256. This is browser
+transport, not a buyer entitlement or installation test. A read-only mount of
+this exact DMG passed
 strict app-signature verification and Gatekeeper as Notarized Developer ID;
 the mounted bundle reports build 17. The newly packaged engine passed 14 of
 15 focused desktop tests, with only the opt-in case-sensitive fixture skipped.
-The image was detached after verification. The isolated build-16 test app's loopback feed
+The image was detached after verification. The same exact DMG reached the
+Founder's other Apple-silicon Mac over the authenticated SSH link: its SHA-256
+matched, and a read-only mount passed strict signing and Gatekeeper as
+Notarized Developer ID with build 17. No app was launched or Codex data
+changed there. That mount was detached and its temporary DMG moved to Trash,
+so it remains recoverable. The isolated build-16 test app's loopback feed
 now points at this exact new DMG, but native Install and Relaunch, paid
 build-16-to-17 entitlement, and the broader failure-path matrix still require
 direct acceptance before release.
