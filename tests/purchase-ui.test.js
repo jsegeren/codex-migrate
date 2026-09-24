@@ -3,7 +3,6 @@ const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const { readFileSync } = require('node:fs');
 const source = readFileSync(require.resolve('../site/purchase.js'), 'utf8');
-const page = readFileSync(require.resolve('../site/purchase.html'), 'utf8');
 const sha256 = 'a'.repeat(64);
 const good = { url: `https://fixturestore.private.blob.vercel-storage.com/sandbox/${sha256}/fixture.zip?signed=fixture`,
   sha256, filename: 'fixture.zip', expiresAt: 1788580000000, expiresInMs: 300000 };
@@ -12,6 +11,7 @@ const privateToken = 'cs_test_fixture.' + 'b'.repeat(64);
 function fixture(options = {}) {
   const document = { body: {}, activeElement: null }; document.activeElement = document.body;
   const analyticsEvents = [];
+  const submissions = [];
   document.dispatchEvent = event => analyticsEvents.push(event.detail);
   const elements = new Map();
   document.getElementById = id => {
@@ -19,6 +19,8 @@ function fixture(options = {}) {
       const attributes = new Map();
       const e = { hidden: id !== 'purchase-status', textContent: '', value: '', events: {},
         addEventListener(name, fn) { this.events[name] = fn; }, focus() { document.activeElement = this; },
+        submit() { submissions.push({ credential: document.getElementById('purchase-archive-credential').value,
+          version: document.getElementById('purchase-archive-version').value }); },
         setAttribute(name, value) { attributes.set(name, String(value)); },
         getAttribute(name) { return attributes.has(name) ? attributes.get(name) : null; },
         removeAttribute(name) { attributes.delete(name); } };
@@ -46,7 +48,7 @@ function fixture(options = {}) {
   const finish = async (data = good, ok = true, status = ok ? 200 : 503) => {
     pending.shift()({ ok, status, json: async () => { if (data instanceof Error) throw data; return data; } }); await tick();
   };
-  return { document, get: document.getElementById, location, calls, finish, storage, analyticsEvents,
+  return { document, get: document.getElementById, location, calls, finish, storage, analyticsEvents, submissions,
     advance(ms, monotonicMs = ms) { wall += ms; monotonic += monotonicMs; } };
 }
 test('reload rechecks a tab-scoped token and never reuses the old signed file URL', async () => {
@@ -57,7 +59,7 @@ test('reload rechecks a tab-scoped token and never reuses the old signed file UR
   assert.equal(refreshed.get('purchase-download').hidden, true);
   assert.equal(JSON.parse(refreshed.calls[0].options.body).credential, privateToken);
   await refreshed.finish({ ...good, url: good.url + 'fresh' });
-  assert.equal(refreshed.get('purchase-download').getAttribute('href'), good.url + 'fresh');
+  assert.equal(refreshed.get('purchase-download').getAttribute('href'), '/api/purchase-archive');
 });
 test('purchase page prefers a free update and offers the preserved original', async () => {
   const f = fixture();
@@ -68,26 +70,27 @@ test('purchase page prefers a free update and offers the preserved original', as
   f.get('purchase-original').events.click();
   assert.equal(JSON.parse(f.calls[1].options.body).action, 'download');
   await f.finish({ ...good, url: good.url + 'old' });
-  assert.equal(f.get('purchase-download').getAttribute('href'), good.url + 'old');
-  let prevented = false;
-  f.get('purchase-download').events.click({ preventDefault() { prevented = true; } });
-  assert.equal(prevented, false);
+  assert.equal(f.get('purchase-download').getAttribute('href'), '/api/purchase-archive');
+  f.get('purchase-download').events.click({ preventDefault() {} });
+  assert.deepEqual(f.submissions, [{ credential: privateToken, version: 'original' }]);
   assert.equal(f.get('purchase-original').hidden, true);
 });
-test('verified buyer receives a short-lived direct link without a second payment', async () => {
+test('a browser-blocked buyer can use a short-lived direct link without a second payment', async () => {
   const f = fixture(); await f.finish();
-  assert.match(page, /id="purchase-download"[^>]*rel="noreferrer"/);
-  assert.equal(f.get('purchase-download').getAttribute('href'), good.url);
+  assert.equal(f.get('purchase-direct-help').hidden, false);
+  assert.equal(f.get('purchase-direct').getAttribute('href'), good.url);
   assert.equal(f.storage.get('codex-migrate-purchase-v1').includes(good.url), false);
   let prevented = false;
-  f.get('purchase-download').events.click({ preventDefault() { prevented = true; } });
+  f.get('purchase-direct').events.click({ preventDefault() { prevented = true; } });
   assert.equal(prevented, false);
+  assert.deepEqual(f.submissions, []);
   assert.match(f.get('purchase-status').textContent, /Download requested/);
   assert.equal(f.get('purchase-retry').hidden, false);
   f.get('purchase-retry').events.click();
-  assert.equal(f.get('purchase-download').getAttribute('href'), null);
+  assert.equal(f.get('purchase-direct-help').hidden, true);
+  assert.equal(f.get('purchase-direct').getAttribute('href'), null);
   await f.finish({ ...good, url: good.url + 'fresh' });
-  assert.equal(f.get('purchase-download').getAttribute('href'), good.url + 'fresh');
+  assert.equal(f.get('purchase-direct').getAttribute('href'), good.url + 'fresh');
 });
 test('expired original-build links refresh the original, not the latest build', async () => {
   const f = fixture(); await f.finish({ ...good, updateAvailable: true });
@@ -95,18 +98,17 @@ test('expired original-build links refresh the original, not the latest build', 
   await f.finish({ ...good, url: good.url + 'original' });
   f.advance(300000);
   let prevented = false;
-  f.get('purchase-download').events.click({ preventDefault() { prevented = true; } });
+  f.get('purchase-direct').events.click({ preventDefault() { prevented = true; } });
   assert.equal(prevented, true);
   assert.equal(JSON.parse(f.calls[2].options.body).action, 'download');
-  assert.equal(f.get('purchase-download').getAttribute('href'), null);
+  assert.equal(f.get('purchase-direct').getAttribute('href'), null);
   await f.finish({ ...good, url: good.url + 'refreshed-original' });
   f.advance(300000);
   f.get('purchase-download').events.click({ preventDefault() {} });
   assert.equal(JSON.parse(f.calls[3].options.body).action, 'download');
   await f.finish({ ...good, url: good.url + 'second-original' });
-  prevented = false;
-  f.get('purchase-download').events.click({ preventDefault() { prevented = true; } });
-  assert.equal(prevented, false);
+  f.get('purchase-download').events.click({ preventDefault() {} });
+  assert.deepEqual(f.submissions, [{ credential: privateToken, version: 'original' }]);
   f.get('purchase-retry').events.click();
   assert.equal(JSON.parse(f.calls[4].options.body).action, 'download');
 });
@@ -153,14 +155,15 @@ test('malformed tab storage is discarded without requesting a purchase', () => {
   const f = fixture({ hash: '', storage: new Map([['codex-migrate-purchase-v1', '{bad']]) });
   assert.equal(f.calls.length, 0); assert.equal(f.storage.size, 0);
 });
-test('page strips bearer fragment and opens only a verified private download URL', async () => {
+test('page strips bearer fragment and posts a verified buyer download to the same origin', async () => {
   const f = fixture(); assert.equal(f.location.hash, '');
   await f.finish(); assert.equal(f.get('purchase-download').hidden, false);
   assert.equal(f.calls[0].url, '/api/purchase'); assert.equal(f.calls[0].options.method, 'POST');
   assert.equal(f.calls[0].options.credentials, 'same-origin');
-  const link = f.get('purchase-download'); assert.equal(link.getAttribute('href'), good.url);
+  const link = f.get('purchase-download'); assert.equal(link.getAttribute('href'), '/api/purchase-archive');
   link.focus(); const click = { defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
-  link.events.click(click); assert.equal(click.defaultPrevented, false); assert.equal(f.calls.length, 1);
+  link.events.click(click); assert.equal(click.defaultPrevented, true); assert.equal(f.calls.length, 1);
+  assert.deepEqual(f.submissions, [{ credential: privateToken, version: 'latest' }]);
   assert.equal(f.document.activeElement, link);
   assert.match(f.get('purchase-status').textContent, /Download requested/);
   assert.equal(f.get('purchase-retry').hidden, false);
@@ -177,7 +180,7 @@ for (const [name, wall, mono] of [['ordinary expiry', 300000, 300000],
     assert.equal(f.calls.length, 2);
     link.events.click(event); assert.equal(f.calls.length, 2, 'no duplicate refresh while busy');
     await f.finish({ ...good, url: good.url + '2' });
-    assert.equal(link.getAttribute('href'), good.url + '2');
+    assert.equal(link.getAttribute('href'), '/api/purchase-archive');
     assert.equal(f.document.activeElement, link);
     assert.match(f.get('purchase-status').textContent, /Select Download for Mac/);
   });
