@@ -656,3 +656,22 @@ disabled. A read-only check on the other Mac found no Vault backup LaunchAgent
 plist or loaded job there either. Neither account should be described as
 protected by scheduled Vault backups; setup requires a chosen destination,
 verified first snapshot, and recovery-key custody.
+
+Keychain access during a locked-screen scheduled run remains an acceptance
+question. The Vault helper requests `WhenUnlockedThisDeviceOnly` and refuses
+interactive Keychain prompts; a failed run leaves the previous verified
+snapshot intact and makes schedule status unhealthy. Apple describes that
+accessibility class as available only while unlocked, whereas
+`AfterFirstUnlockThisDeviceOnly` is designed for background access after the
+first unlock following restart. However, Apple's macOS documentation also
+says `kSecAttrAccessible` requires the Data Protection Keychain or a
+synchronizable item, so the constant alone does not prove current behavior
+on this Mac. Do not change key accessibility or advertise locked-screen
+coverage from source inspection: use a disposable key and synthetic Vault
+to verify a real locked-screen LaunchAgent run, then review the key-custody
+tradeoff and existing-key migration if a change is needed. The daily cadence
+can otherwise fail repeatedly when the Mac is locked at the same hour.
+Apple references:
+[`WhenUnlockedThisDeviceOnly`](https://developer.apple.com/documentation/security/ksecattraccessiblewhenunlockedthisdeviceonly),
+[`AfterFirstUnlockThisDeviceOnly`](https://developer.apple.com/documentation/security/ksecattraccessibleafterfirstunlockthisdeviceonly),
+and [`kSecAttrAccessible` on macOS](https://developer.apple.com/documentation/security/ksecattraccessible).
