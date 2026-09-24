@@ -67,5 +67,12 @@ bytes with SHA-256
 Its Sparkle signature verifies independently against the public key embedded
 in the app. A read-only mount passed strict code-signature and Gatekeeper
 checks, and private **sandbox** Blob storage returned matching bytes. The
-paid build-16-to-17 installation and failure-path checks remain open. No
-live catalog entry or appcast has changed; build 16 remains the paid beta.
+isolated local build-16 app subsequently discovered build 17 through a
+loopback appcast, downloaded this exact DMG, and Sparkle replaced it in place.
+The installed build 17 passes strict code-signature and Gatekeeper checks and
+starts its helper. The old test app was locally re-signed after changing only
+its feed and automatic-check settings; this is not a paid-entitlement test.
+Relaunch also produced a second process with an already-running warning,
+which remains a user-facing bug to investigate. Paid installation and
+failure-path checks remain open. No live catalog entry or appcast has changed;
+build 16 remains the paid beta.
