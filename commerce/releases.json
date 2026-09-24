@@ -4,16 +4,16 @@
     "kind": "signed-notarized",
     "testingOnly": true,
     "accepted": false,
-    "source": "35c775d4854525a8f49f1c2b78582926821a8c6c",
-    "sha256": "e61280cf3045db6deb559fa9c70e434513883ef9d731080fcd732fad9d9ae330",
+    "source": "ee40e565d3c5890e818dd2c6cbc2f1e30de97d40",
+    "sha256": "bc0da26470268ff37f9d37cd512d0a957dc502b7074256554e5ef051c040d383",
     "filename": "Codex-Migrate-0.1.0-build17-arm64.dmg",
-    "size": 10354263,
-    "pathname": "sandbox/e61280cf3045db6deb559fa9c70e434513883ef9d731080fcd732fad9d9ae330/Codex-Migrate-0.1.0-build17-arm64.dmg",
+    "size": 10355906,
+    "pathname": "sandbox/bc0da26470268ff37f9d37cd512d0a957dc502b7074256554e5ef051c040d383/Codex-Migrate-0.1.0-build17-arm64.dmg",
     "diskImageNotarization": {
       "status": "Accepted",
-      "id": "9d526d9a-b67e-422c-b598-00f75ca27095"
+      "id": "22e674ea-e5e0-4b67-bb61-520c2f020221"
     },
-    "sparkleSignature": "OhLypSR6qkktLrru6xC+7TJMSUztKuFA4ah9t45vK9A4Qjrqxv2nEyViyuwXLOPqvgoA/r5bSEvXzbA9vPi+DQ=="
+    "sparkleSignature": "NIaFQk/T554fh1WCXjUudBl9xVBWEJ15r9PFd1r4jeQ7a6xJ9ZTSRO05+GNmuSXpd1Td4TgQTSZIKYvGtRGuCg=="
   },
   "beta-build16-arm64": {
     "id": "beta-build16-arm64",

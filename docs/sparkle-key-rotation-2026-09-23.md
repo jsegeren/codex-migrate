@@ -125,3 +125,22 @@ callback only after a final idle check and helper exit. An isolated signed
 test copy with that client change installed the same DMG and **relaunched**;
 strict signing and Gatekeeper passed. The new client source is not yet in a
 notarized DMG, and neither test exercised a real paid Production entitlement.
+
+The relaunch change was committed as
+`ee40e565d3c5890e818dd2c6cbc2f1e30de97d40` and rebuilt from clean
+source. Apple Accepted the app (`c36e16c2-637f-498d-9e68-ee3ff44a090b`)
+and separately signed DMG (`22e674ea-e5e0-4b67-bb61-520c2f020221`). The
+final image is 10,355,906 bytes, SHA-256
+`bc0da26470268ff37f9d37cd512d0a957dc502b7074256554e5ef051c040d383`,
+with Sparkle signature
+`NIaFQk/T554fh1WCXjUudBl9xVBWEJ15r9PFd1r4jeQ7a6xJ9ZTSRO05+GNmuSXpd1Td4TgQTSZIKYvGtRGuCg==`.
+Independent Ed25519 verification and private sandbox Blob readback passed.
+The isolated local build-16 test copy automatically fetched and installed this
+exact DMG through Sparkle, then relaunched one app and helper. Its installed
+source receipt, code signature and Gatekeeper check passed. This copy used
+a local appcast and synthetic Keychain token, so real paid authorization,
+pristine live-build-16 installation, busy operations, clean-account first
+launch, and second-Mac application checks remain required before Production
+promotion. The exact DMG's size and SHA-256 also matched on the Founder's
+second Mac (macOS 26.5); a read-only mount passed strict signing and Gatekeeper
+checks there without launching the app or touching Codex data.
