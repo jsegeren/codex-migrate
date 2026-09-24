@@ -403,6 +403,16 @@ back with the same size and digest. It is catalogued as testing-only and
 unaccepted. This is the current candidate; physical quit-race, paid-updater,
 and clean-account acceptance remain open. Build 16 remains live.
 
+The exact `b510f216` DMG was copied over the existing authenticated SSH link
+to the Founder's second arm64 Mac (macOS 26.5) solely for read-only artifact
+verification. Its SHA-256 matched the catalog receipt. A read-only mount
+passed strict deep code-signature verification, staple validation, and
+Gatekeeper assessment as Notarized Developer ID; the mounted app reports build
+17. The image was detached and its temporary copy removed. No app was
+launched, installed, or used against Codex or Vault data on that Mac. This
+proves cross-device artifact integrity, not a paid update or clean-account
+first launch.
+
 ## Release blockers for this candidate
 
 The Founder approved a Sparkle key rotation. A new local signing seed and
