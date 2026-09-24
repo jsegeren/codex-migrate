@@ -125,7 +125,9 @@ async function runtime(env = process.env) {
   const store = purchaseStore(db);
   return { config, stripe,
     service: service({ config, stripe, store,
-      signDownload: privateDownloads(config, env), sendMail: value => deliveryMail(value, env) }),
+      signDownload: privateDownloads(config, env),
+      signCanaryDownload: privateDownloads({ ...config, live: false }, env),
+      sendMail: value => deliveryMail(value, env) }),
     recovery: checkoutRecovery({ config, stripe, store: checkoutRecoveryStore(db),
       sendMail: value => recoveryMail(value, env) }) };
 }

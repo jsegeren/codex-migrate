@@ -126,7 +126,7 @@ function validateCheckoutRecovery(session, config) {
   return { sessionId: session.id, mode: config.mode, email, link: url.toString(), release };
 }
 
-function service({ config, stripe, store, sendMail, signDownload }) {
+function service({ config, stripe, store, sendMail, signDownload, signCanaryDownload }) {
   async function verified(id) {
     if (!sessionId(id, config.live)) throw new CommerceError('invalid_link', 403);
     const account = await stripe.accounts.retrieve();
@@ -180,6 +180,23 @@ function service({ config, stripe, store, sendMail, signDownload }) {
       filename: selected.filename, size: selected.size,
       originalRelease: purchase.release.id, updateAvailable };
   }
+  async function downloadCanary(token, releaseId) {
+    if (!config.live || typeof releaseId !== 'string') throw new CommerceError('release_unavailable');
+    const candidate = config.catalog?.[releaseId];
+    if (!validRelease(candidate, false) || candidate.id !== releaseId ||
+        candidate.kind !== 'signed-notarized' || candidate.testingOnly !== true ||
+        candidate.accepted !== false || !candidate.sparkleSignature ||
+        typeof signCanaryDownload !== 'function') throw new CommerceError('release_unavailable');
+    const id = tokenSession(token, config);
+    const purchase = await verified(id); // Recheck charge, refund and dispute state.
+    if (!newerCompatibleRelease(purchase.release, candidate, false)) {
+      throw new CommerceError('release_unavailable');
+    }
+    await store.ensure(purchase);
+    const signed = await signCanaryDownload(candidate);
+    return { ...signed, sha256: candidate.sha256, release: candidate.id,
+      filename: candidate.filename, size: candidate.size };
+  }
   async function status(id) {
     const purchase = await verified(id);
     await store.ensure(purchase);
@@ -192,7 +209,7 @@ function service({ config, stripe, store, sendMail, signDownload }) {
     return { release: purchase.release.id, currentRelease: config.release.id,
       updateAvailable: newerCompatibleRelease(purchase.release, config.release, config.live) };
   }
-  return { fulfill, download, downloadLatest, entitlement, status };
+  return { fulfill, download, downloadLatest, downloadCanary, entitlement, status };
 }
 function checkoutRecovery({ config, stripe, store, sendMail }) {
   async function recover(id) {
