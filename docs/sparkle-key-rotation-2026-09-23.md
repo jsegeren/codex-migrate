@@ -144,3 +144,16 @@ launch, and second-Mac application checks remain required before Production
 promotion. The exact DMG's size and SHA-256 also matched on the Founder's
 second Mac (macOS 26.5); a read-only mount passed strict signing and Gatekeeper
 checks there without launching the app or touching Codex data.
+
+An additional rotation proof used the archived **live build-16 ZIP** itself,
+whose digest matched the live release catalog. Its embedded old Ed25519 public
+key and build number 16 were retained; only a disposable test copy's feed URL
+was changed to loopback, requiring re-signing with the unchanged Developer ID
+identity. That old app accepted the final build-17 DMG, reached Sparkle's
+**Ready to Install**, installed, and relaunched a single build-17 app and
+helper. The installed bundle contains source `ee40e56` and the new public key,
+and passed strict code-signature and Gatekeeper checks. The isolated copy,
+synthetic Keychain item, temporary update settings and HTTP server were cleaned
+up. This closes the old-key-to-new-key mechanism gap, but a real paid
+Production-entitlement update and the remaining busy/failure-path tests still
+gate live promotion.
