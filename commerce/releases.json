@@ -1,4 +1,20 @@
 {
+  "codex-migrate-0.1.0-build17-abort-guard-arm64": {
+    "id": "codex-migrate-0.1.0-build17-abort-guard-arm64",
+    "kind": "signed-notarized",
+    "testingOnly": true,
+    "accepted": false,
+    "source": "27ef9bf1d4c89ae9fb1853ed0e37a57458db39cf",
+    "sha256": "bf33da502e15a012c287efc5cec6c9b3057bf544c9ebbf8d9aebb1d91d2c1dc6",
+    "filename": "Codex-Migrate-0.1.0-build17-arm64.dmg",
+    "size": 10376201,
+    "pathname": "sandbox/bf33da502e15a012c287efc5cec6c9b3057bf544c9ebbf8d9aebb1d91d2c1dc6/Codex-Migrate-0.1.0-build17-arm64.dmg",
+    "diskImageNotarization": {
+      "status": "Accepted",
+      "id": "f3179da8-56d6-4cb5-b43c-a3e19d2aa7af"
+    },
+    "sparkleSignature": "NPh2GD88tMlk9/aeyA/zkTTZkKX2DxccR16JJaSfh4UHm+mdpom9x26v5Nrn2ifAk6YbYHXRNbXJuCdZLO5UCQ=="
+  },
   "codex-migrate-0.1.0-build17-quit-guard-arm64": {
     "id": "codex-migrate-0.1.0-build17-quit-guard-arm64",
     "kind": "signed-notarized",
