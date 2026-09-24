@@ -39,6 +39,31 @@ class PaidUpdateCanaryClientTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             CANARY.add_canary_header(source + source)
 
+    def test_only_exact_old_startup_hook_can_add_one_background_check(self):
+        source = "before\n" + CANARY.HELPER_START + "after\n"
+        modified = CANARY.add_background_check(source)
+        self.assertEqual(modified.count("checkForUpdatesInBackground()"), 1)
+        self.assertEqual(modified.count(CANARY.HELPER_START), 1)
+        with self.assertRaises(ValueError):
+            CANARY.add_background_check("no matching startup hook")
+        with self.assertRaises(ValueError):
+            CANARY.add_background_check(source + source)
+        with self.assertRaises(ValueError):
+            CANARY.add_background_check(modified)
+
+    def test_only_exact_old_entitlement_lookup_can_read_piped_test_token(self):
+        source = "before\n" + CANARY.TOKEN_LOOKUP + "        return nil\n    }\n"
+        modified = CANARY.add_piped_test_token(source)
+        self.assertEqual(modified.count("pipedCanaryToken"), 2)
+        self.assertIn("FileHandle.standardInput.readDataToEndOfFile()", modified)
+        self.assertIn("return nil", modified)  # Original Keychain fallback remains.
+        with self.assertRaises(ValueError):
+            CANARY.add_piped_test_token("no matching entitlement lookup")
+        with self.assertRaises(ValueError):
+            CANARY.add_piped_test_token(source + source)
+        with self.assertRaises(ValueError):
+            CANARY.add_piped_test_token(modified)
+
 
 if __name__ == "__main__":
     unittest.main()

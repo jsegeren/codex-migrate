@@ -72,11 +72,14 @@ def appcast_xml(selected):
 def add_canary_header(source):
     if source.count(HEADER_HOOK) != 1 or "X-Codex-Migrate-Canary" in source:
         raise ValueError("archived updater request hook changed")
-    source = source.replace(
+    return source.replace(
         HEADER_HOOK,
         HEADER_HOOK + '\n        request.setValue("' + CANARY_ID
         + '", forHTTPHeaderField: "X-Codex-Migrate-Canary")')
-    if source.count(HELPER_START) != 1:
+
+
+def add_background_check(source):
+    if source.count(HELPER_START) != 1 or "checkForUpdatesInBackground" in source:
         raise ValueError("archived startup hook changed")
     return source.replace(HELPER_START, HELPER_START + '''        // Disposable test client only: exercise the background paid update path once.
         DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(3)) {
@@ -127,7 +130,7 @@ def prepare(output, port, identity):
             source = subprocess.check_output(
                 ["git", "show", f"{OLD_SOURCE}:desktop/{filename}"], cwd=ROOT, text=True)
             if filename == "CodexMigrate.swift":
-                source = add_canary_header(source)
+                source = add_background_check(add_canary_header(source))
             elif filename == "UpdateEntitlement.swift":
                 source = add_piped_test_token(source)
             path = Path(scratch) / filename
