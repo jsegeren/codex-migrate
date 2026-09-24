@@ -19,13 +19,13 @@ automatic updater on the website or in buyer email before that test passes.
 - Sparkle verifies the archive signature and installs the replacement. The
   app's existing termination hook must shut down its local helper cleanly
   before replacement. An update never changes or migrates Codex/Vault data.
-- After an opted-in automatic download, Sparkle normally installs on quit.
-  The app probes its token-protected loopback `/api/update-idle` endpoint and
-  initiates that quit only when the helper reports no active migration or Vault
-  worker or running LaunchAgent backup. `/api/shutdown` rechecks under the
-  action lock before the helper exits; a new helper operation wins the race and
-  cancels the quit. Physical signed-update acceptance is still required
-  before this behavior is advertised.
+- After an opted-in automatic download, the app holds Sparkle's immediate
+  installation callback until its token-protected loopback `/api/update-idle`
+  endpoint reports no active migration or Vault worker or running LaunchAgent
+  backup. `/api/shutdown` rechecks under the action lock before the helper
+  exits; a new helper operation wins the race and cancels the installation.
+  Only after confirmed helper exit does Sparkle install and relaunch. Physical
+  paid-update acceptance is still required before this behavior is advertised.
 - A buyer can still download the newest compatible build from their original
   purchase link, or retrieve the original build. This is the fallback if
   in-app installation cannot complete.

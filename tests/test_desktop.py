@@ -20,9 +20,17 @@ class DesktopTests(unittest.TestCase):
     def test_native_quit_handoff_does_not_wait_for_main_queue_reply(self):
         source = (Path(__file__).resolve().parents[1] / "desktop/CodexMigrate.swift").read_text()
         self.assertIn("return .terminateCancel", source)
-        self.assertIn("self.automaticInstallQuitPending = false\n                    NSApplication.shared.terminate(nil)", source)
         self.assertNotIn("reply(toApplicationShouldTerminate:", source)
         self.assertNotIn("return .terminateLater", source)
+
+    def test_idle_update_uses_sparkle_relaunch_after_helper_shutdown(self):
+        source = (Path(__file__).resolve().parents[1] / "desktop/CodexMigrate.swift").read_text()
+        self.assertIn("idleInstallHandler = install", source)
+        self.assertIn("return true", source)
+        self.assertIn("self.shutdownHelperForIdleInstall()", source)
+        self.assertIn('helperRequest("/api/shutdown", method: "POST")', source)
+        self.assertIn("process == nil, let install = idleInstallHandler", source)
+        self.assertIn("install() // Sparkle owns signature verification", source)
 
     @unittest.skipUnless(sys.platform == "darwin", "packaged Vault requires macOS CryptoKit")
     def test_packaged_engine_backs_up_and_restores_without_authentication(self):

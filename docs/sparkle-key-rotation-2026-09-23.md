@@ -108,3 +108,20 @@ app passed strict code signing and Gatekeeper. It did not relaunch afterward.
 The test copy and token were removed. This is a local mechanism test, **not**
 a live build-16 or Production paid-update test. The notarized DMG above
 predates the fix and must be rebuilt before release.
+
+Clean source `1d90604cec80b2bf34e8d7d8137c5414cb2dc18e` then produced a
+Developer ID signed, stapled app (Apple Accepted receipt
+`19928083-f977-486c-aefb-cbd998e24270`) and a separately signed, stapled
+10,356,805-byte rotation DMG (Accepted receipt
+`ca8e6c31-5080-4c50-aa81-c207219c6a80`, SHA-256
+`c0a2c4df6c6bb035cc3f4e9fe331b9bf4b5b28fb8bdda1a3035c3321607fa824`).
+Its Sparkle signature
+`gKPgDt/x88kga/D1H6Xdx2oOSXS5mFLlUx5utgxNtjDNtbG6Dy1/G3mD5kFvdpDJDlBQbUeMFbUuvKdP6pGrCQ==`
+verified independently against the embedded public key. Private sandbox Blob
+readback matched the full image. A local signed test copy installed this exact
+DMG automatically but did not relaunch, as Sparkle's default install-on-quit
+does not. Source has since changed to invoke Sparkle's immediate-install
+callback only after a final idle check and helper exit. An isolated signed
+test copy with that client change installed the same DMG and **relaunched**;
+strict signing and Gatekeeper passed. The new client source is not yet in a
+notarized DMG, and neither test exercised a real paid Production entitlement.

@@ -11,7 +11,9 @@ import Sparkle
     private var quitting = false
     private var idleInstallTimer: Timer?
     private var idleProbeInFlight = false
-    private var automaticInstallQuitPending = false
+    private var idleInstallHandler: (() -> Void)?
+    private var idleInstallShutdownPending = false
+    private var idleInstallShutdownConfirmed = false
     private var automaticChecksItem: NSMenuItem!
     private var automaticInstallItem: NSMenuItem!
     private lazy var updaterController = SPUStandardUpdaterController(
@@ -81,30 +83,36 @@ import Sparkle
 
     func menuWillOpen(_ menu: NSMenu) {
         let linked = UpdateEntitlement.savedToken() != nil
-        automaticChecksItem.isEnabled = linked
-        automaticInstallItem.isEnabled = linked
+        automaticChecksItem.isEnabled = linked && !idleInstallShutdownPending
+        automaticInstallItem.isEnabled = linked && !idleInstallShutdownPending
         automaticChecksItem.state = updaterController.updater.automaticallyChecksForUpdates ? .on : .off
         automaticInstallItem.state = updaterController.updater.automaticallyDownloadsUpdates ? .on : .off
     }
 
     @objc private func toggleAutomaticChecks() {
-        guard UpdateEntitlement.savedToken() != nil else { return }
+        guard !idleInstallShutdownPending, UpdateEntitlement.savedToken() != nil else { return }
         let updater = updaterController.updater
         updater.automaticallyChecksForUpdates = !updater.automaticallyChecksForUpdates
         if !updater.automaticallyChecksForUpdates {
             updater.automaticallyDownloadsUpdates = false
             idleInstallTimer?.invalidate()
             idleInstallTimer = nil
+            idleInstallHandler = nil
         }
     }
 
     @objc private func toggleAutomaticInstall() {
-        guard UpdateEntitlement.savedToken() != nil else { return }
+        guard !idleInstallShutdownPending, UpdateEntitlement.savedToken() != nil else { return }
         let updater = updaterController.updater
         let enabling = !updater.automaticallyDownloadsUpdates
         if enabling { updater.automaticallyChecksForUpdates = true }
         updater.automaticallyDownloadsUpdates = enabling
-        if !enabling { idleInstallTimer?.invalidate(); idleInstallTimer = nil }
+        if !enabling {
+            idleInstallTimer?.invalidate()
+            idleInstallTimer = nil
+            idleInstallHandler = nil
+            updater.resetUpdateCycle()
+        }
     }
 
     @objc private func linkPurchase() {
@@ -142,11 +150,11 @@ import Sparkle
     }
 
     func updater(_ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem,
-                 immediateInstallationBlock _: @escaping () -> Void) -> Bool {
-        // Sparkle's default automatic download installs on quit, not when the
-        // Mac is idle. A linked buyer who opted in gets an idle-triggered quit;
-        // Sparkle still owns archive verification and the actual replacement.
+                 immediateInstallationBlock install: @escaping () -> Void) -> Bool {
+        // Take control of the staged update so Sparkle can install and relaunch
+        // after the helper confirms that no migration or Vault job is active.
         guard updater.automaticallyDownloadsUpdates, UpdateEntitlement.savedToken() != nil else { return false }
+        idleInstallHandler = install
         idleInstallTimer?.invalidate()
         idleInstallTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             self?.attemptAutomaticInstallWhenIdle()
@@ -156,11 +164,12 @@ import Sparkle
         DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
             self?.attemptAutomaticInstallWhenIdle()
         }
-        return false
+        return true
     }
 
     private func attemptAutomaticInstallWhenIdle() {
-        guard !quitting, !idleProbeInFlight else { return }
+        guard !quitting, !idleProbeInFlight, !idleInstallShutdownPending,
+              idleInstallHandler != nil else { return }
         guard updaterController.updater.automaticallyDownloadsUpdates,
               UpdateEntitlement.savedToken() != nil else {
             idleInstallTimer?.invalidate()
@@ -173,16 +182,44 @@ import Sparkle
         URLSession.shared.dataTask(with: request) { _, response, _ in
             DispatchQueue.main.async {
                 self.idleProbeInFlight = false
-                guard !self.quitting, self.updaterController.updater.automaticallyDownloadsUpdates else { return }
+                guard !self.quitting, self.updaterController.updater.automaticallyDownloadsUpdates,
+                      self.idleInstallHandler != nil else { return }
                 if (response as? HTTPURLResponse)?.statusCode == 200 {
-                    // The final POST in applicationShouldTerminate rechecks
-                    // idleness under the action lock, closing the race with a
-                    // migration or Vault operation that starts after this GET.
-                    self.automaticInstallQuitPending = true
-                    NSApplication.shared.terminate(nil)
+                    self.shutdownHelperForIdleInstall()
                 }
             }
         }.resume()
+    }
+
+    private func shutdownHelperForIdleInstall() {
+        guard !idleInstallShutdownPending, process?.isRunning == true,
+              let request = helperRequest("/api/shutdown", method: "POST") else { return }
+        // This POST rechecks idleness under the helper's action lock. A job
+        // started after the GET wins and leaves the app and helper running.
+        idleInstallShutdownPending = true
+        URLSession.shared.dataTask(with: request) { _, response, _ in
+            DispatchQueue.main.async {
+                guard self.idleInstallShutdownPending else { return }
+                guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+                    self.idleInstallShutdownPending = false
+                    if self.process == nil { self.startHelper() }
+                    return
+                }
+                self.idleInstallShutdownConfirmed = true
+                self.installAfterHelperExit()
+            }
+        }.resume()
+    }
+
+    private func installAfterHelperExit() {
+        guard idleInstallShutdownPending, idleInstallShutdownConfirmed,
+              process == nil, let install = idleInstallHandler else { return }
+        idleInstallShutdownPending = false
+        idleInstallShutdownConfirmed = false
+        idleInstallHandler = nil
+        idleInstallTimer?.invalidate()
+        idleInstallTimer = nil
+        install() // Sparkle owns signature verification, replacement and relaunch.
     }
 
     private func startHelper() {
@@ -213,14 +250,12 @@ import Sparkle
             DispatchQueue.main.async {
                 self.process = nil
                 self.dashboardURL = nil
-                if self.quitting {
-                    // A terminateLater reply can deadlock here when the first
-                    // terminate call came from Sparkle's idle-check callback:
-                    // AppKit waits inside that call while this main-queue
-                    // completion is waiting to run. The first attempt returns
-                    // terminateCancel; now that the helper has exited, a fresh
-                    // attempt can terminate immediately.
-                    self.automaticInstallQuitPending = false
+                if self.idleInstallShutdownPending {
+                    self.installAfterHelperExit()
+                } else if self.quitting {
+                    // Do not wait for a main-queue terminateLater reply from
+                    // inside AppKit's quit request. The first request was
+                    // canceled; this fresh request can now terminate.
                     NSApplication.shared.terminate(nil)
                 } else if child.terminationStatus == 0 || child.terminationStatus == 130 {
                     NSApplication.shared.terminate(nil)
@@ -274,11 +309,6 @@ import Sparkle
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        if automaticInstallQuitPending && (process == nil || process?.isRunning != true) {
-            automaticInstallQuitPending = false
-            if process == nil { startHelper() }
-            return .terminateCancel
-        }
         guard let child = process, child.isRunning else { return .terminateNow }
         guard !quitting else { return .terminateCancel }
         guard let request = helperRequest("/api/shutdown", method: "POST") else { return .terminateCancel }
@@ -288,7 +318,6 @@ import Sparkle
                 guard self.quitting, self.process != nil else { return }
                 guard (response as? HTTPURLResponse)?.statusCode == 200 else {
                     self.quitting = false
-                    self.automaticInstallQuitPending = false
                     self.openMigration()
                     return
                 }
