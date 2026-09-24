@@ -207,8 +207,24 @@ called a product Keychain failure without an app-owned purchase-link test.
 The synthetic item was deleted, the isolated processes were stopped, both
 test apps and the loopback feed were moved to Trash, and the test-only 60-second
 Sparkle check interval was removed. No buyer purchase or Codex/Vault data was
-changed. Repeat the idle-install test with a token saved by the app itself,
-then directly observe installation and relaunch.
+changed.
+
+The idle test was then repeated with an **app-owned** synthetic token. A
+disposable Developer ID re-signed copy of the candidate's current client
+source reported build 16 and used only a loopback feed; its test-only bootstrap
+called the same `UpdateEntitlement.save` routine the app uses after purchase
+verification. This avoided the CLI-created item's Keychain prompt. With
+automatic checks and downloads enabled, Sparkle fetched the exact current
+10,368,949-byte DMG, installed build 17 without a manual quit, and relaunched
+one app and one helper. The installed executable and bundled engine matched
+the clean-source candidate byte for byte, its source receipt named `4797808`,
+strict signing and Gatekeeper passed as Notarized Developer ID, and the Vault
+update guard was absent after relaunch. The test app and loopback feed were
+moved to Trash, the synthetic Keychain item was deleted, and no test process
+or port remained. This proves the candidate's idle-install-and-relaunch
+mechanism with an app-owned token, **not** a paid Production entitlement,
+busy-operation deferral during the full Sparkle replacement, or a pristine
+buyer install.
 
 Sparkle's [published appcast format](https://sparkle-project.org/documentation/publishing/)
 supports `arm64` as the Apple-silicon hardware requirement; it does not define
@@ -233,14 +249,13 @@ See [the rotation runbook](sparkle-key-rotation-2026-09-23.md).
    browser choice. The latest-build file save now has a clean Chrome and SHA-256
    receipt; both authenticated Production server streams matched build 16.
 2. The rebuilt clean-source app, rotation DMG, Sparkle signature, private
-   sandbox Blob readback, and isolated local build-16-to-17 Sparkle install
-   pass. Test the same upgrade with a real paid entitlement before promoting
-   a live release-catalog entry. The sandbox-only catalog entry is not a live
-   release approval. Verify the automatic idle-install path and
-   confirm the duplicate-launch warning is absent by direct UI observation.
-   Relaunch the app and prove periodic checks still run. If the customer opts
-   into automatic installation, prove it waits for an idle helper and does not
-   interrupt migration, Vault backup, or restore.
+   sandbox Blob readback, isolated build-16-to-17 quit-path install, and
+   candidate-code idle install/relaunch with an app-owned synthetic token pass.
+   Test a real paid entitlement before promoting a live release-catalog entry;
+   the sandbox-only catalog entry is not release approval. Directly observe
+   that the duplicate-launch warning is absent, prove periodic checks still
+   run after relaunch, and prove the full Sparkle replacement waits for idle
+   migration, Vault backup, and restore operations.
 3. Exercise missing/forged/refunded credentials, wrong architecture, corrupt
    archive, invalid Sparkle signature, unavailable network, and insufficient
    disk space against the actual update path. No failure may replace the app
