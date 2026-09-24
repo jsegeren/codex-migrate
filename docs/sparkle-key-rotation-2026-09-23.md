@@ -157,3 +157,15 @@ synthetic Keychain item, temporary update settings and HTTP server were cleaned
 up. This closes the old-key-to-new-key mechanism gap, but a real paid
 Production-entitlement update and the remaining busy/failure-path tests still
 gate live promotion.
+
+The current guarded candidate supersedes those earlier images. Clean source
+`479780861710a857dedde8d8de0716999320721a` produced an Apple Accepted
+app (`2ed37213-04bc-46bf-860e-12ca8d6e457e`) and one-time rotation DMG
+(`111275c0-d44e-4ff1-b903-b046db98321f`). The 10,368,949-byte DMG has
+SHA-256 `8aace2577a612bc9dcc064cad3f63dad57a0ecb02b042ac2b06d1748ad0b8486`
+and verified Sparkle signature
+`fn7ZhI/7P5WiYn5580/Q/PBsXt0XGCw1EClZ1ddvjbJUpkWrVc0wEfu/xvyT7cuWxR9Jkd7QTNf4B1o3ZgiwCQ==`.
+Private sandbox storage returned identical bytes. Its catalog entry remains
+testing-only and unaccepted; the paid live release is still build 16. The
+normal native installation and failure-path acceptance listed above have not
+been completed for this exact image.

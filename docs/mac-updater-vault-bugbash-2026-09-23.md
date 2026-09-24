@@ -148,9 +148,24 @@ update guard for two hours if the user quit mid-download. Source now reserves
 the guard only after a successful download or an actual install handoff;
 download failure and cancellation clear readiness. Swift typecheck passed,
 15 focused desktop tests passed with 2 opt-in skips, and the full Python suite
-passed 853 tests with 15 opt-in skips. The already-notarized build-17 DMG
-predates this correction; it must be rebuilt, signed, notarized, and retested
-before release.
+passed 853 tests with 15 opt-in skips. Clean source
+`479780861710a857dedde8d8de0716999320721a` was then rebuilt: the app is
+Developer ID signed, stapled and Gatekeeper accepted under Apple Accepted
+submission `2ed37213-04bc-46bf-860e-12ca8d6e457e`. Its one-time rotation
+DMG is separately signed, stapled and Accepted under submission
+`111275c0-d44e-4ff1-b903-b046db98321f`: 10,368,949 bytes, SHA-256
+`8aace2577a612bc9dcc064cad3f63dad57a0ecb02b042ac2b06d1748ad0b8486`.
+Sparkle independently verified its new-key signature. The exact bytes were
+uploaded to private sandbox Blob and read back byte-for-byte. The catalog entry
+is `testingOnly: true`, `accepted: false`; build 16 remains live. JavaScript
+tests passed 318 with 1 skip. A read-only mount of this exact DMG passed
+strict app-signature verification and Gatekeeper as Notarized Developer ID;
+the mounted bundle reports build 17. The newly packaged engine passed 14 of
+15 focused desktop tests, with only the opt-in case-sensitive fixture skipped.
+The image was detached after verification. The isolated build-16 test app's loopback feed
+now points at this exact new DMG, but native Install and Relaunch, paid
+build-16-to-17 entitlement, and the broader failure-path matrix still require
+direct acceptance before release.
 
 Sparkle's [published appcast format](https://sparkle-project.org/documentation/publishing/)
 supports `arm64` as the Apple-silicon hardware requirement; it does not define
