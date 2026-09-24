@@ -17,6 +17,9 @@ import Sparkle
     private var updateScheduledForQuit = false
     private var updateArchiveReady = false
     private var updateTargetBuild: Int?
+    private var quitRequiresUpdateGuard = false
+    private var quitShutdownConfirmed = false
+    private var updateShutdownAuthorized = false
     private var automaticChecksItem: NSMenuItem!
     private var automaticInstallItem: NSMenuItem!
     private lazy var updaterController = SPUStandardUpdaterController(
@@ -252,6 +255,7 @@ import Sparkle
         idleInstallHandler = nil
         idleInstallTimer?.invalidate()
         idleInstallTimer = nil
+        updateShutdownAuthorized = true
         install() // Sparkle owns signature verification, replacement and relaunch.
     }
 
@@ -296,12 +300,21 @@ import Sparkle
                 if self.idleInstallShutdownPending {
                     self.installAfterHelperExit()
                 } else if self.quitting {
-                    // Do not wait for a main-queue terminateLater reply from
-                    // inside AppKit's quit request. The first request was
-                    // canceled; this fresh request can now terminate.
-                    NSApplication.shared.terminate(nil)
+                    // An early helper exit is not proof that the update guard
+                    // was committed. Wait for the shutdown HTTP 200 before
+                    // allowing Sparkle to replace the bundle.
+                    if !self.quitRequiresUpdateGuard || self.quitShutdownConfirmed {
+                        NSApplication.shared.terminate(nil)
+                    }
                 } else if child.terminationStatus == 0 || child.terminationStatus == 130 {
-                    NSApplication.shared.terminate(nil)
+                    if (self.updateScheduledForQuit || self.updateArchiveReady) &&
+                        !self.updateShutdownAuthorized && !self.quitShutdownConfirmed {
+                        // The helper can exit before the network reply. Do
+                        // not let its exit status stand in for a Vault guard.
+                        self.startHelper()
+                    } else {
+                        NSApplication.shared.terminate(nil)
+                    }
                 } else if child.terminationStatus == 75 {
                     let peers = NSRunningApplication.runningApplications(
                         withBundleIdentifier: Bundle.main.bundleIdentifier ?? ""
@@ -352,25 +365,44 @@ import Sparkle
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard let child = process, child.isRunning else { return .terminateNow }
+        // A check or incomplete download cannot replace the bundle. A staged
+        // archive can, even if Sparkle's session flag changes during quit.
+        let updatePending = updateScheduledForQuit || updateArchiveReady
+        guard let child = process, child.isRunning else {
+            if (updatePending || updateArchiveReady ||
+                (quitting && quitRequiresUpdateGuard)) &&
+                !updateShutdownAuthorized &&
+                !(quitting && quitRequiresUpdateGuard && quitShutdownConfirmed) {
+                // A crashed/missing helper cannot prove the cross-process
+                // Vault guard. Reopen it and refuse this install attempt.
+                if process == nil { startHelper() }
+                return .terminateCancel
+            }
+            return .terminateNow
+        }
         guard !quitting else { return .terminateCancel }
-        // Sparkle considers a check or incomplete download a session. Neither
-        // can replace the bundle, so do not defer scheduled Vault backups for it.
-        let updatePending = updateScheduledForQuit ||
-            (updateArchiveReady && updaterController.updater.sessionInProgress)
         let endpoint = updatePending ? "/api/update-shutdown" : "/api/shutdown"
         guard let request = helperRequest(endpoint, method: "POST", targetBuild: updateTargetBuild) else { return .terminateCancel }
         quitting = true
+        quitRequiresUpdateGuard = updatePending
+        quitShutdownConfirmed = false
         URLSession.shared.dataTask(with: request) { _, response, _ in
             DispatchQueue.main.async {
-                guard self.quitting, self.process != nil else { return }
+                guard self.quitting else { return }
                 guard (response as? HTTPURLResponse)?.statusCode == 200 else {
                     self.quitting = false
+                    self.quitRequiresUpdateGuard = false
+                    self.quitShutdownConfirmed = false
                     self.openMigration()
                     return
                 }
-                // The termination handler requests a fresh quit after the
-                // helper closes its server and releases migration locks.
+                self.quitShutdownConfirmed = true
+                // The helper may have exited before its response reached us.
+                // In that case the termination handler could not request the
+                // fresh quit, so do it here after the guard is confirmed.
+                if self.process?.isRunning != true {
+                    NSApplication.shared.terminate(nil)
+                }
             }
         }.resume()
         return .terminateCancel

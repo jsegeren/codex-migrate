@@ -189,3 +189,12 @@ storage, read back byte-for-byte, and catalogued as testing-only and
 unaccepted. The exact bytes also passed signature, staple, Gatekeeper, and
 read-only mounted-app checks on the Founder's other arm64 Mac; no app was
 launched there. It has not been promoted. Build 16 remains public.
+
+A subsequent native quit-handoff review found that helper exit could race
+ahead of the successful update-shutdown response. The app must not treat exit
+alone as proof that the Vault update guard was committed. Source now requires
+that response before Sparkle may replace the bundle and refuses a staged
+update if the helper is missing and no guard was confirmed. The preceding
+image predates this fix, so its Apple receipts and Sparkle signature remain
+valid only for that superseded image; build a new exact-source candidate and
+repeat physical update acceptance before promotion.

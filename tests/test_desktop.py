@@ -38,6 +38,18 @@ class DesktopTests(unittest.TestCase):
         self.assertNotIn("reply(toApplicationShouldTerminate:", source)
         self.assertNotIn("return .terminateLater", source)
 
+    def test_update_quit_waits_for_confirmed_guard_when_helper_exits_first(self):
+        source = (Path(__file__).resolve().parents[1] / "desktop/CodexMigrate.swift").read_text()
+        self.assertIn("private var quitRequiresUpdateGuard = false", source)
+        self.assertIn("private var quitShutdownConfirmed = false", source)
+        self.assertIn("private var updateShutdownAuthorized = false", source)
+        self.assertIn("if !self.quitRequiresUpdateGuard || self.quitShutdownConfirmed", source)
+        self.assertIn("if self.process?.isRunning != true", source)
+        self.assertIn("if (updatePending || updateArchiveReady ||", source)
+        self.assertIn("!updateShutdownAuthorized &&", source)
+        self.assertIn("self.quitShutdownConfirmed = true", source)
+        self.assertIn("self.startHelper()", source)
+
     def test_idle_update_uses_sparkle_relaunch_after_helper_shutdown(self):
         source = (Path(__file__).resolve().parents[1] / "desktop/CodexMigrate.swift").read_text()
         self.assertIn("idleInstallHandler = install", source)
@@ -54,7 +66,7 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("private var updateArchiveReady = false", source)
         self.assertIn("func updater(_ updater: SPUUpdater, didDownloadUpdate item: SUAppcastItem)", source)
         self.assertIn("func updater(_ updater: SPUUpdater, willInstallUpdate item: SUAppcastItem)", source)
-        self.assertIn("updateArchiveReady && updaterController.updater.sessionInProgress", source)
+        self.assertIn("let updatePending = updateScheduledForQuit || updateArchiveReady", source)
         self.assertNotIn("updateScheduledForQuit || updaterController.updater.sessionInProgress", source)
 
     @unittest.skipUnless(sys.platform == "darwin", "packaged Vault requires macOS CryptoKit")

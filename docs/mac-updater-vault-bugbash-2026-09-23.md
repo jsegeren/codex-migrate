@@ -379,6 +379,18 @@ All four PR #26 CI checks passed on Python 3.9 and 3.12 at head `0065d1a`.
 Build 16 remains the public appcast release; the new
 build-17 candidate remains private, testing-only, and unaccepted.
 
+Review then found a quit race in the native updater: a helper that exited
+before its `/api/update-shutdown` HTTP response arrived could previously let
+AppKit terminate without proof that the cross-process Vault guard was set.
+The native source now waits for the successful response before allowing
+Sparkle's replacement, retries through a restarted helper if that response
+fails, and treats a completely downloaded archive as potentially installable
+even if Sparkle's session flag changes during quit. Swift typecheck and focused
+regressions pass; the full source suite ran 855 tests with 15 opt-in skips and
+no failures. The previously notarized `90f1cb29` image does **not** contain
+this race fix. It must be rebuilt, re-signed, re-notarized, and retested before
+release; build 16 remains live.
+
 ## Release blockers for this candidate
 
 The Founder approved a Sparkle key rotation. A new local signing seed and
