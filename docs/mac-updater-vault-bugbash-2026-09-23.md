@@ -807,3 +807,18 @@ material and a disposable recovery key, never Founder or customer content.
 This proves the format and recovery-key round trip across distinct macOS runner
 Keychains; it is **not** a clean account or GUI recovery test on the Founder's
 two physical Macs, and it does not prove `ThisDeviceOnly` key accessibility.
+
+On September 24, the existing paid buyer-delivery link verified on the live
+purchase page. Its primary button targeted the first-party
+`/api/purchase-archive` handler. In the controlled Chrome session, clicking it
+navigated to `ERR_BLOCKED_BY_CLIENT` and saved no file; this is not evidence of
+an HTTP failure or of normal customer Chrome behavior. An independent POST to
+that same Production handler, with the existing purchase entitlement and the
+expected same-origin form headers, returned HTTP 200 and exactly 9,591,579
+bytes. The ZIP digest matched build 16's published SHA-256
+`60eff4dcb07088d01c966587e808f21d5fa74b8afb4eba45ed326543f07241f7`;
+ZIP integrity, strict app code signature, and Gatekeeper's Notarized Developer
+ID assessment all passed after extraction to a disposable directory. No buyer
+token or private download URL is recorded here. The browser-button observation
+remains unresolved for that controlled session and must not be described as a
+verified ordinary-click purchase flow from this run.
