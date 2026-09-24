@@ -501,6 +501,13 @@ was launched and no Codex or Vault data was touched. This is cross-Mac
 artifact compatibility evidence, **not** a second-Mac install or clean-account
 acceptance test.
 
+The focused paid-archive canary tests now pin this exact abort-safe catalog
+entry rather than the superseded quit-guard image; all 12 update tests pass.
+A fresh read-only Production check still returned build 16 from `/api/appcast`
+without a build-17 or sandbox path, and an anonymous `/api/update-archive`
+request returned 403 without a private Blob redirect. This proves the
+unreleased image remains private, not a paid installation of it.
+
 ## Release blockers for this candidate
 
 The Founder approved a Sparkle key rotation. A new local signing seed and

@@ -64,7 +64,7 @@ test('update archive rejects a forged bearer before opening the runtime', async 
 });
 
 test('canary update requires an exact Founder session and explicit release pin before opening runtime', async () => {
-  const candidate = require('../commerce/releases.json')['codex-migrate-0.1.0-build17-quit-guard-arm64'];
+  const candidate = require('../commerce/releases.json')['codex-migrate-0.1.0-build17-abort-guard-arm64'];
   const canaryConfig = { ...config, catalog: { [release.id]: release, [candidate.id]: candidate } };
   const canaryEnv = { COMMERCE_UPDATER_CANARY_RELEASE: candidate.id,
     COMMERCE_UPDATER_CANARY_SESSION: 'cs_live_fixture',
@@ -90,7 +90,7 @@ test('canary update requires an exact Founder session and explicit release pin b
 });
 
 test('canary update streams only the exact private candidate; public appcast stays on approved build', async () => {
-  const candidate = require('../commerce/releases.json')['codex-migrate-0.1.0-build17-quit-guard-arm64'];
+  const candidate = require('../commerce/releases.json')['codex-migrate-0.1.0-build17-abort-guard-arm64'];
   const canaryConfig = { ...config, catalog: { [release.id]: release, [candidate.id]: candidate } };
   const current = require('../commerce/releases.json')['beta-build16-arm64'];
   const productionFeed = plainResponse();
@@ -139,7 +139,7 @@ test('canary update streams only the exact private candidate; public appcast sta
 });
 
 test('canary update rejects a changed catalog candidate before signing or streaming', async () => {
-  const candidate = require('../commerce/releases.json')['codex-migrate-0.1.0-build17-quit-guard-arm64'];
+  const candidate = require('../commerce/releases.json')['codex-migrate-0.1.0-build17-abort-guard-arm64'];
   const canaryConfig = { ...config, catalog: { [candidate.id]: { ...candidate, accepted: true } } };
   const canaryEnv = { COMMERCE_UPDATER_CANARY_RELEASE: candidate.id,
     COMMERCE_UPDATER_CANARY_SESSION: 'cs_live_fixture',
@@ -159,7 +159,7 @@ test('canary update rejects a changed catalog candidate before signing or stream
 });
 
 test('canary update refuses a digest-pinned mismatch before signing or streaming', async () => {
-  const candidate = require('../commerce/releases.json')['codex-migrate-0.1.0-build17-quit-guard-arm64'];
+  const candidate = require('../commerce/releases.json')['codex-migrate-0.1.0-build17-abort-guard-arm64'];
   const canaryConfig = { ...config, catalog: { [candidate.id]: candidate } };
   const canaryEnv = { COMMERCE_UPDATER_CANARY_RELEASE: candidate.id,
     COMMERCE_UPDATER_CANARY_SESSION: 'cs_live_fixture',
