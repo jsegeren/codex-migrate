@@ -940,3 +940,20 @@ the previous snapshot verified and the source untouched, and a retry produced
 a new verified snapshot. The synthetic test key and data were removed. This
 local app is **not notarized** and is not a release candidate; the test does
 not prove buyer installation, automatic update, or a clean account.
+
+The same signed local package then passed two actual filesystem-permission
+denial probes for synthetic Codex and workspace folders on this Mac. Its
+packaged dashboard refused updater idle/shutdown while a 128-MiB synthetic
+Vault restore ran, then allowed shutdown only after the restored transcript
+matched its source. The temporary Vault key and data were removed. This is
+helper-level contention evidence, not a Sparkle replacement under load.
+
+On the Founder's other Apple-silicon Mac (macOS 26.5), an exact copy of that
+local package passed strict Developer ID code-signature verification and both
+packaged permission-denial probes under the normal account. The first test
+invocation used a path expanded on the sending Mac and could not locate the
+remote engine; it made no product assertion. Re-running with the correct
+explicit remote path passed both cases. The isolated temporary package and
+fixtures were removed from the second Mac. No app was opened, Vault key
+created, account Codex files read, or background schedule loaded there. This
+does not establish notarization, clean-account first launch, or a paid update.
