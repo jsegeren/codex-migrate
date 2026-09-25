@@ -50,6 +50,19 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("self.quitShutdownConfirmed = true", source)
         self.assertIn("self.startHelper()", source)
 
+    def test_lost_shutdown_reply_recovers_dashboard_after_helper_exit(self):
+        source = (Path(__file__).resolve().parents[1] / "desktop/CodexMigrate.swift").read_text()
+        termination = source.split("func applicationShouldTerminate", 1)[1].split(
+            "private func helperRequest", 1)[0]
+        failure = termination.split("guard (response as? HTTPURLResponse)?.statusCode == 200 else {", 1)[1].split(
+            "self.quitShutdownConfirmed = true", 1)[0]
+        self.assertIn("self.quitting = false", failure)
+        missing, running = failure.split("} else if self.process?.isRunning == true {", 1)
+        self.assertIn("if self.process == nil {", missing)
+        self.assertIn("self.startHelper()", missing)
+        self.assertIn("self.openMigration()", running.split("}", 1)[0])
+        self.assertNotIn("self.process = nil", failure)
+
     def test_idle_update_uses_sparkle_relaunch_after_helper_shutdown(self):
         source = (Path(__file__).resolve().parents[1] / "desktop/CodexMigrate.swift").read_text()
         self.assertIn("idleInstallHandler = install", source)

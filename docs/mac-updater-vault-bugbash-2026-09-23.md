@@ -957,3 +957,14 @@ explicit remote path passed both cases. The isolated temporary package and
 fixtures were removed from the second Mac. No app was opened, Vault key
 created, account Codex files read, or background schedule loaded there. This
 does not establish notarization, clean-account first launch, or a paid update.
+
+An updater state-machine review found a lost-response recovery gap: the helper
+could exit after accepting update shutdown while the HTTP response failed to
+reach the app, leaving the menu-bar app alive without a dashboard. Source now
+restarts the helper when its termination callback has already cleared the
+process, opens the existing dashboard when the helper is still live, and lets
+an in-flight termination callback handle the third case without a second
+helper race. The focused desktop suite passed (17 tests, 2 fixture skips) and
+native Swift typechecking passed. This is a source-level failure-path fix, not
+a physical dropped-response or notarized updater receipt; the prior DMG must
+not be promoted.

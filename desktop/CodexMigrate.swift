@@ -413,7 +413,18 @@ import Sparkle
                     self.quitting = false
                     self.quitRequiresUpdateGuard = false
                     self.quitShutdownConfirmed = false
-                    self.openMigration()
+                    if self.process == nil {
+                        // The helper may have exited after committing its
+                        // guard while the HTTP response was lost. Keep the
+                        // app alive and restore its local dashboard so the
+                        // buyer can safely retry or inspect the result.
+                        self.startHelper()
+                    } else if self.process?.isRunning == true {
+                        self.openMigration()
+                    }
+                    // If the child has stopped but its termination callback
+                    // has not run, that callback restarts it when an update
+                    // is pending. Do not race it with another helper here.
                     return
                 }
                 self.quitShutdownConfirmed = true
