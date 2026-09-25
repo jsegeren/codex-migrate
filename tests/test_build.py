@@ -528,6 +528,10 @@ class ReleaseBuildTests(unittest.TestCase):
                     self.assertLess(order.index(["notarize"]), order.index(["xcrun", "stapler", "staple"]))
                     self.assertLess(order.index(["xcrun", "stapler", "validate"]),
                                     next(i for i, c in enumerate(calls) if c[0] == "spctl"))
+                    self.assertTrue(any(c[:2] == ["xcrun", "swiftc"] and
+                                        "CODEX_VAULT_TEST_LEGACY_KEYCHAIN" in c and
+                                        str(c[-1]).endswith("Resources/CodexVaultCrypto")
+                                        for c in calls))
 
 
 if __name__ == "__main__":

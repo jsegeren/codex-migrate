@@ -85,6 +85,11 @@ private struct KeyResult: Codable {
     let deleted: Bool?
 }
 
+private struct LegacyInspection: Codable {
+    let key_id: String
+    let recovery_key: String?
+}
+
 private struct SealResult: Codable {
     let bytes: Int
     let sealed: Bool
@@ -193,33 +198,29 @@ private func loadKey(_ keyID: String) throws -> SymmetricKey {
         throw VaultError.message(keychainInteractionError)
     }
 #if !CODEX_VAULT_TEST_LEGACY_KEYCHAIN
-    if status == errSecSuccess, let data = data, data.count == 32 {
-        // An interrupted migration can leave both items. Never call the key
-        // device-only while a readable legacy copy still exists.
-        let (oldStatus, oldData) = read(legacyKeyQuery(keyID))
-        if oldStatus == errSecSuccess {
-            guard oldData == data else {
-                throw VaultError.message("Vault found conflicting Keychain copies; no backup was published")
+    // A new bundle identifier cannot silently read the old helper's legacy
+    // Keychain ACL, even when both binaries are signed by the same team. Ask
+    // the separately signed, same-designated-requirement legacy helper over a
+    // private pipe; never put key material in argv, a file, or diagnostics.
+    if status == errSecSuccess || status == errSecItemNotFound {
+        let legacy = try inspectLegacyKey(keyID)
+        if status == errSecSuccess, let data = data, data.count == 32 {
+            if let legacy = legacy {
+                guard legacy == data else {
+                    throw VaultError.message("Vault found conflicting Keychain copies; no backup was published")
+                }
+                try removeLegacyKey(keyID)
             }
-            try deleteLegacyKey(keyID)
-        } else if oldStatus != errSecItemNotFound {
-            throw VaultError.message("Vault could not verify removal of its old Keychain copy")
+            return SymmetricKey(data: data)
         }
-        return SymmetricKey(data: data)
-    }
-    if status == errSecItemNotFound {
-        let (oldStatus, oldData) = read(legacyKeyQuery(keyID))
-        if oldStatus == errSecSuccess, let oldData = oldData, oldData.count == 32 {
-            try storeKey(oldData, keyID: keyID)
+        if status == errSecItemNotFound, let legacy = legacy {
+            try storeKey(legacy, keyID: keyID)
             let (newStatus, newData) = read(keyQuery(keyID))
-            guard newStatus == errSecSuccess, newData == oldData else {
+            guard newStatus == errSecSuccess, newData == legacy else {
                 throw VaultError.message("Vault could not verify the protected Keychain copy")
             }
-            try deleteLegacyKey(keyID)
-            return SymmetricKey(data: oldData)
-        }
-        if oldStatus == errSecInteractionNotAllowed {
-            throw VaultError.message(keychainInteractionError)
+            try removeLegacyKey(keyID)
+            return SymmetricKey(data: legacy)
         }
     }
 #endif
@@ -229,17 +230,84 @@ private func loadKey(_ keyID: String) throws -> SymmetricKey {
     return SymmetricKey(data: data)
 }
 
-private func deleteLegacyKey(_ keyID: String) throws {
-    let status = SecItemDelete(legacyKeyQuery(keyID) as CFDictionary)
-    if status == errSecInteractionNotAllowed {
-        throw VaultError.message(keychainInteractionError)
+#if !CODEX_VAULT_TEST_LEGACY_KEYCHAIN
+private func legacyHelper() throws -> URL {
+    let outerContents = Bundle.main.bundleURL.deletingLastPathComponent()
+        .deletingLastPathComponent()
+    let helper = outerContents.appendingPathComponent("Resources/CodexVaultCrypto")
+    guard FileManager.default.isExecutableFile(atPath: helper.path) else {
+        throw VaultError.message("Vault's signed legacy-key helper is missing")
     }
-    guard status == errSecSuccess || status == errSecItemNotFound else {
-        throw VaultError.message("the old Keychain copy could not be removed")
+    var code: SecStaticCode?
+    var requirement: SecRequirement?
+    let expected = "identifier CodexVaultCrypto and anchor apple generic and certificate leaf[subject.OU] = P9J3JK79KQ"
+    guard SecStaticCodeCreateWithPath(helper as CFURL, SecCSFlags(rawValue: 0), &code) == errSecSuccess,
+          SecRequirementCreateWithString(expected as CFString, SecCSFlags(rawValue: 0),
+                                         &requirement) == errSecSuccess,
+          let code = code, let requirement = requirement,
+          SecStaticCodeCheckValidity(code, SecCSFlags(rawValue: kSecCSStrictValidate),
+                                     requirement) == errSecSuccess else {
+        throw VaultError.message("Vault's legacy-key helper signature is invalid")
     }
+    return helper
 }
 
+private func runLegacy(_ arguments: [String]) throws -> Data {
+    let process = Process()
+    process.executableURL = try legacyHelper()
+    process.arguments = arguments
+    let output = Pipe()
+    process.standardOutput = output
+    process.standardError = FileHandle.nullDevice
+    do { try process.run() } catch {
+        throw VaultError.message("Vault could not start its signed legacy-key helper")
+    }
+    let deadline = Date().addingTimeInterval(15)
+    while process.isRunning && Date() < deadline {
+        Thread.sleep(forTimeInterval: 0.05)
+    }
+    if process.isRunning {
+        process.terminate()
+        process.waitUntilExit()
+        throw VaultError.message("Vault's legacy-key check timed out without changing the backup")
+    }
+    guard process.terminationStatus == 0 else {
+        throw VaultError.message("Vault could not safely inspect its old Keychain entry")
+    }
+    return output.fileHandleForReading.readDataToEndOfFile()
+}
+
+private func inspectLegacyKey(_ keyID: String) throws -> Data? {
+    let output = try runLegacy(["inspect-key", "--key-id", keyID])
+    guard let result = try? JSONDecoder().decode(LegacyInspection.self, from: output),
+          result.key_id == keyID else {
+        throw VaultError.message("Vault's legacy-key result was invalid")
+    }
+    guard let recovery = result.recovery_key else { return nil }
+    guard recovery.hasPrefix("CV1-") else {
+        throw VaultError.message("Vault's old Keychain entry had an invalid format")
+    }
+    let material = try decodeBase64URL(String(recovery.dropFirst(4)))
+    guard material.count == 32 else {
+        throw VaultError.message("Vault's old Keychain entry had an invalid size")
+    }
+    return material
+}
+
+private func removeLegacyKey(_ keyID: String) throws {
+    _ = try runLegacy(["delete-key", "--key-id", keyID])
+    guard try inspectLegacyKey(keyID) == nil else {
+        throw VaultError.message("Vault could not verify removal of its old Keychain copy")
+    }
+}
+#endif
+
 private func deleteKey(_ keyID: String) throws {
+#if !CODEX_VAULT_TEST_LEGACY_KEYCHAIN
+    if try inspectLegacyKey(keyID) != nil {
+        try removeLegacyKey(keyID)
+    }
+#endif
     let status = SecItemDelete(keyQuery(keyID) as CFDictionary)
     if status == errSecInteractionNotAllowed {
         throw VaultError.message(keychainInteractionError)
@@ -247,9 +315,6 @@ private func deleteKey(_ keyID: String) throws {
     guard status == errSecSuccess || status == errSecItemNotFound else {
         throw VaultError.message("the encryption key could not be removed from Keychain")
     }
-#if !CODEX_VAULT_TEST_LEGACY_KEYCHAIN
-    try deleteLegacyKey(keyID)
-#endif
 }
 
 private func rawKey(_ key: SymmetricKey) -> Data {
@@ -423,6 +488,26 @@ private func exportKeyCommand(_ arguments: [String]) throws {
                             recovery_key: "CV1-" + base64URL(rawKey(key)),
                             imported: nil, deleted: nil))
 }
+
+#if CODEX_VAULT_TEST_LEGACY_KEYCHAIN
+private func inspectKeyCommand(_ arguments: [String]) throws {
+    let keyID = try canonicalKeyID(argument("--key-id", in: arguments))
+    var query = legacyKeyQuery(keyID)
+    query[kSecReturnData] = true
+    query[kSecMatchLimit] = kSecMatchLimitOne
+    var item: CFTypeRef?
+    let status = SecItemCopyMatching(query as CFDictionary, &item)
+    if status == errSecItemNotFound {
+        try printJSON(LegacyInspection(key_id: keyID, recovery_key: nil))
+        return
+    }
+    guard status == errSecSuccess, let data = item as? Data, data.count == 32 else {
+        throw VaultError.message("the legacy Keychain entry is not available without approval")
+    }
+    try printJSON(LegacyInspection(key_id: keyID,
+                                   recovery_key: "CV1-" + base64URL(data)))
+}
+#endif
 
 private func deleteKeyCommand(_ arguments: [String]) throws {
     let keyID = try canonicalKeyID(argument("--key-id", in: arguments))
@@ -677,6 +762,12 @@ private func restoreCommand(_ arguments: [String]) throws {
 }
 
 private func run() throws {
+    // Legacy file-based Keychain ACL prompts are not reliably suppressed by
+    // LAContext.interactionNotAllowed alone. Vault runs unattended, so never
+    // allow SecurityAgent to block a backup waiting for a password dialog.
+    guard SecKeychainSetUserInteractionAllowed(false) == errSecSuccess else {
+        throw VaultError.message(keychainInteractionError)
+    }
     let arguments = Array(CommandLine.arguments.dropFirst())
     guard let command = arguments.first else {
         throw VaultError.message("a command is required")
@@ -685,6 +776,9 @@ private func run() throws {
     case "create-key": try createKeyCommand()
     case "import-key": try importKeyCommand(arguments)
     case "export-key": try exportKeyCommand(arguments)
+#if CODEX_VAULT_TEST_LEGACY_KEYCHAIN
+    case "inspect-key": try inspectKeyCommand(arguments)
+#endif
     case "delete-key": try deleteKeyCommand(arguments)
     case "store-chunks": try storeChunksCommand(arguments)
     case "seal-manifest": try sealManifestCommand(arguments)

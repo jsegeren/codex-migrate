@@ -475,6 +475,14 @@ def main():
         if not args.vault_profile:
             vault_compiler += ["-D", "CODEX_VAULT_TEST_LEGACY_KEYCHAIN"]
         run(*vault_compiler, ROOT / "desktop/CodexVaultCrypto.swift", "-o", vault_crypto)
+        legacy_crypto = resources / "CodexVaultCrypto"
+        if args.vault_profile:
+            # Preserve the old helper's designated requirement so an existing
+            # Vault key can move to the provisioned helper without a Keychain
+            # password dialog. The two helpers exchange it only over pipes.
+            run("xcrun", "swiftc", "-parse-as-library", "-O", "-D",
+                "CODEX_VAULT_TEST_LEGACY_KEYCHAIN", "-target", arch + "-apple-macos13.0",
+                ROOT / "desktop/CodexVaultCrypto.swift", "-o", legacy_crypto)
         signing = ["codesign", "--force", "--sign", args.identity or "-"]
         if args.identity:
             signing += ["--options", "runtime", "--timestamp"]
@@ -487,6 +495,8 @@ def main():
         run("codesign", "--verify", "--deep", "--strict", vault_app)
         if args.vault_profile:
             verify_vault_entitlements(vault_app)
+            run(*signing, legacy_crypto)
+            run("codesign", "--verify", "--strict", legacy_crypto)
         run(*signing, app)
         run("codesign", "--verify", "--deep", "--strict", app)
         engine_version = subprocess.check_output(
