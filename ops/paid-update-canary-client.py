@@ -18,9 +18,9 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 OLD_SOURCE = "c6d2bdf81e7093a044886dd35e1b97ed8ce40ea3"
 OLD_SHA256 = "60eff4dcb07088d01c966587e808f21d5fa74b8afb4eba45ed326543f07241f7"
-CANARY_ID = "codex-migrate-0.1.0-build17-abort-guard-arm64"
-ARCHIVE = ROOT / "build/desktop-wm6vw05x/Codex-Migrate-0.1.0-build16-arm64.zip"
-CANDIDATE_DMG = ROOT / "build/desktop-rotation-fsfhlg3d/Codex-Migrate-0.1.0-build17-arm64.dmg"
+CANARY_ID = "codex-migrate-build17-bed7cba-arm64"
+ARCHIVE = ROOT / "build/live-build16/Codex-Migrate-0.1.0-build16-arm64.zip"
+CANDIDATE_DMG = ROOT / "build/desktop-rotation-tj8skyok/Codex-Migrate-0.1.0-build17-arm64.dmg"
 HEADER_HOOK = 'request.setValue("Bearer \\(token)", forHTTPHeaderField: "Authorization")'
 TOKEN_LOOKUP = '    static func savedToken() -> String? {\n'
 HELPER_START = '        _ = updaterController\n        startHelper()\n'
@@ -45,11 +45,11 @@ def canary():
     selected = releases[CANARY_ID]
     if selected.get("accepted") is not False or selected.get("testingOnly") is not True:
         raise ValueError("canary is no longer a sandbox-only, unaccepted candidate")
-    if selected.get("source") != "27ef9bf1d4c89ae9fb1853ed0e37a57458db39cf":
+    if selected.get("source") != "bed7cba5c85f2f4316ca9f2c10a67af6b807c92c":
         raise ValueError("candidate source changed")
-    if selected.get("sha256") != "bf33da502e15a012c287efc5cec6c9b3057bf544c9ebbf8d9aebb1d91d2c1dc6":
+    if selected.get("sha256") != "09159745ee1e5ba08a3dc9e9baf37d23419310a4a49daca16032de890e15dd6e":
         raise ValueError("candidate artifact changed")
-    if selected.get("size") != 10376201 or not selected.get("sparkleSignature"):
+    if selected.get("size") != 10397434 or not selected.get("sparkleSignature"):
         raise ValueError("candidate signature or size changed")
     return selected
 

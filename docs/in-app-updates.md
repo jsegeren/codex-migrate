@@ -66,7 +66,7 @@ while the public appcast and ordinary buyer downloads still return build 16.
 Never use the canary route as a shortcut for catalog promotion or a public
 claim that automatic updates are accepted.
 
-For the exact September 24 build-17 candidate, `python3
+For the current `bed7cba` build-17 candidate, `python3
 ops/paid-update-canary-client.py prepare` verifies the archived live build-16
 ZIP and local candidate DMG against their catalog digests, then creates a
 **disposable, locally re-signed, unnotarized** build-16 app in `build/`. Only
@@ -85,6 +85,10 @@ replacement; before opening it, quit other copies, record the current update
 preferences, and use an isolated test account or restore those preferences
 and remove only the test-linked entitlement afterward. Never erase an
 existing buyer entitlement to make the test work.
+The harness requires a local byte-verified copy of the archived live build-16
+ZIP at `build/live-build16/` and the exact notarized DMG in the candidate
+build directory. The test-only catalog entry must be deployed before the
+Production canary can select it; a private Blob upload alone is insufficient.
 
 1. Bump the app's build number; commit the exact source before release build.
    Build with the Developer ID identity, obtain Apple's Accepted notarization
