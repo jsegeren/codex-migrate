@@ -2,6 +2,9 @@
 
 import importlib.util
 from pathlib import Path
+import shutil
+import subprocess
+import tempfile
 import unittest
 from xml.etree import ElementTree
 
@@ -63,6 +66,33 @@ class PaidUpdateCanaryClientTests(unittest.TestCase):
             CANARY.add_piped_test_token(source + source)
         with self.assertRaises(ValueError):
             CANARY.add_piped_test_token(modified)
+
+    @unittest.skipUnless(shutil.which("xcrun"), "Swift compiler requires macOS")
+    def test_piped_test_token_compiles_and_falls_back_without_a_valid_token(self):
+        # A disposable stand-in for build 16's lookup: no purchase credential
+        # or Keychain item is used by this executable fixture.
+        source = ("import Foundation\n"
+                  "enum UpdateEntitlement {\n"
+                  "    static func token(from value: String) -> String? {\n"
+                  "        value.trimmingCharacters(in: .whitespacesAndNewlines) == \"test_fixture\" ? \"test_fixture\" : nil\n"
+                  "    }\n"
+                  + CANARY.TOKEN_LOOKUP
+                  + "        return \"fixture_fallback\"\n"
+                    "    }\n"
+                    "}\n"
+                    "@main struct Fixture {\n"
+                    "    static func main() { print(UpdateEntitlement.savedToken() ?? \"missing\") }\n"
+                    "}\n")
+        with tempfile.TemporaryDirectory(prefix="paid-canary-hook-test-") as directory:
+            swift_file = Path(directory) / "Fixture.swift"
+            executable = Path(directory) / "Fixture"
+            swift_file.write_text(CANARY.add_piped_test_token(source))
+            subprocess.run(["xcrun", "swiftc", "-parse-as-library", str(swift_file), "-o", str(executable)],
+                           check=True, capture_output=True, text=True)
+            for supplied, expected in ((b"test_fixture\n", "test_fixture\n"),
+                                       (b"not-a-token\n", "fixture_fallback\n")):
+                completed = subprocess.run([str(executable)], input=supplied, capture_output=True, check=True)
+                self.assertEqual(completed.stdout.decode(), expected)
 
 
 if __name__ == "__main__":

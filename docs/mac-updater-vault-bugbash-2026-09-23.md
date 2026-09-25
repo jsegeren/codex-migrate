@@ -891,3 +891,11 @@ removed its disposable Keychain key and temporary data; the image was
 detached. This repeats the helper-level guard against the current candidate;
 it still does not prove a full Sparkle replacement during a restore or a
 pristine buyer-account installation.
+
+The exact held build-17 DMG was also mounted read-only for a bounded package
+audit. A filename inventory found no packaged `.env`, `auth.json`, private-key
+file, `.codex`, `.ssh`, `.git`, or `.vercel` directory. A byte-pattern scan found
+no matches for the application's live purchase-token format, Stripe live-secret
+format, SendGrid key format, or PEM private-key headers. The image was detached
+afterward. This is a negative check for those known patterns, not proof that
+every possible secret format is absent.
