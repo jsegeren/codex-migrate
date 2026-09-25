@@ -1119,3 +1119,16 @@ promotion; a new exact artifact must be built and tested after provisioning.
 The existing CI Keychain smoke/portability jobs compile the explicit
 profile-free test mode; green CI alone cannot certify the provisioned release
 path or the live legacy-key transition.
+
+The opt-in `tests/physical_vault_key_transition.py` acceptance fixture is
+ready for that provisioned artifact. On a logged-in test Mac, point it at the
+old notarized Vault helper and the new signed, provisioned helper with
+`CODEX_VAULT_DP_ACCEPTANCE=yes PYTHONPATH=src python3
+tests/physical_vault_key_transition.py OLD_HELPER NEW_HELPER`. It creates one
+synthetic legacy Vault, verifies that the new helper can read it without
+changing its recovery key, confirms the old helper can no longer read the
+legacy Keychain copy, verifies again, and deletes its disposable key. It
+checks the new helper's signature and exact signed Keychain-group entitlement
+before making any Keychain change. This fixture has not yet run: no valid
+Developer ID profile or new release helper exists, so it is not acceptance
+evidence until a dated physical receipt records its result.
