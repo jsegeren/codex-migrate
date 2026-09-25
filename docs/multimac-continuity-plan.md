@@ -1,9 +1,12 @@
 # Multi-Mac continuity: proposed next product wave
 
-Status: product and engineering plan, not a shipped feature. The current Codex
-Migrate + Vault release remains scoped to backup, find, recover, and one-time
-Mac migration. Do not describe it as a sync product until the acceptance gates
-below pass on two physical Macs.
+Status: **parked research, not the current Codex Migrate roadmap or a shipped
+feature.** The current product priority is to finish excellent backup, search,
+recovery, and one-time Mac migration, then find customers. DevOS owns the
+long-term machine-independent thread and manager layer; building it again
+inside Vault would create a competing control plane. The gates below describe
+what a narrowly scoped Codex bridge would need if demand later justifies it.
+Do not describe Codex Migrate as a sync product.
 
 ## Customer outcome
 
@@ -75,14 +78,15 @@ execution. This is a product comparison, not an allegation about its author.
   decrypt test is mandatory. No silent key escrow or new subscription is part
   of the first wave.
 
-## Delivery sequence and acceptance gates
+## Conditional bridge sequence and acceptance gates
 
-### Gate 0 — finish today's release
+### Gate 0 — finish the current Vault release
 
 Complete the existing Vault/updater signing, installation, purchase, and
-two-Mac acceptance work separately. Do not hold the current customer's backup
-or search release for speculative sync architecture. Capture baseline version,
-Mac configuration, and data-format receipts for both devices.
+two-Mac acceptance work separately. Find and support customers for its actual
+backup, search, recovery, and migration jobs. Do not hold this release for
+speculative sync architecture. Capture baseline version, Mac configuration,
+and data-format receipts for both devices.
 
 ### Gate 1 — safe two-Mac visibility (first buildable slice)
 
@@ -163,7 +167,10 @@ agent workspaces and shared, searchable conversation context.**
 
 ## Decision checkpoint
 
-Build Gate 1 after Gate 0's release proof. Gate 2 is the differentiating
-simultaneous-work milestone and should be scoped before marketing this as a
-multi-Mac solution. Gate 3 is optional convenience; it does not replace Gate
-2. Review each gate's actual two-device evidence before expanding the claim.
+Do **not** begin Gate 1 automatically after the Vault release. First decide
+whether customers need an independent Codex bridge that DevOS cannot provide;
+otherwise keep this as research and implement the single thread/control plane
+in DevOS. If a bridge is authorized, Gate 2 is the differentiating
+simultaneous-work milestone and must pass before marketing this as a multi-Mac
+solution. Gate 3 is optional convenience, not a substitute for Gate 2. Review
+each gate's actual two-device evidence before expanding any claim.
