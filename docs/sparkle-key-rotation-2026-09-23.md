@@ -263,3 +263,10 @@ The catalog entry remains `testingOnly: true` and `accepted: false`; build 16
 remains the live paid release. Physical paid-update, idle/busy-operation,
 failure-path, and clean-account acceptance are still required for this exact
 candidate before promotion.
+
+On the Founder's second Apple-silicon Mac (macOS 26.5), the same DMG was
+transferred to a temporary directory and its SHA-256 matched. A read-only
+mount passed strict deep code-signature verification, notarized Developer ID
+Gatekeeper assessment, and stapled-ticket validation. The image was detached
+and the temporary copy removed. The app was not launched and no Codex or Vault
+data on that Mac was changed; this is artifact compatibility evidence only.
