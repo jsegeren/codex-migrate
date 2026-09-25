@@ -899,3 +899,12 @@ no matches for the application's live purchase-token format, Stripe live-secret
 format, SendGrid key format, or PEM private-key headers. The image was detached
 afterward. This is a negative check for those known patterns, not proof that
 every possible secret format is absent.
+
+The September 24 updater-location review found that a symlinked app path could
+hide an actual Downloads or mounted-image location from the first-open guard.
+Source `9afee8a` now checks both the visible and resolved app path. A native
+filesystem test covers an app symlink and a parent-directory symlink into a
+disposable Downloads folder; all 18 focused desktop tests passed (two expected
+fixture skips). This source change is newer than the held notarized build-17
+DMG, so that image remains mechanism evidence only. Rebuild, notarize, sign,
+and repeat the exact-candidate installation checks before release.
