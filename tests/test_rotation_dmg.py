@@ -68,6 +68,37 @@ class RotationDiskImageTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     rotation.source_release(source)
 
+    def test_packaging_refuses_stale_or_dirty_checkout(self):
+        receipt = {"source_revision": "a" * 40}
+
+        def git_result(command, **_):
+            if command[:3] == ["git", "rev-parse", "HEAD"]:
+                return SimpleNamespace(stdout=git_result.revision + "\n")
+            if command[:3] == ["git", "status", "--porcelain"]:
+                return SimpleNamespace(stdout=git_result.changes)
+            raise AssertionError("unexpected Git command")
+
+        git_result.revision = "b" * 40
+        git_result.changes = ""
+        with patch.object(rotation.subprocess, "run", side_effect=git_result):
+            with self.assertRaisesRegex(ValueError, "stale"):
+                rotation.require_current_source(receipt)
+            git_result.revision = receipt["source_revision"]
+            git_result.changes = " M desktop/CodexMigrate.swift\n"
+            with self.assertRaisesRegex(ValueError, "dirty"):
+                rotation.require_current_source(receipt)
+            git_result.changes = ""
+            rotation.require_current_source(receipt)
+
+    def test_package_checks_source_freshness_before_signing(self):
+        with patch.object(rotation, "source_release", return_value=(Path("fixture.app"),
+                                                                      {"source_revision": "a" * 40})), \
+                patch.object(rotation, "require_current_source", side_effect=ValueError("stale source")), \
+                patch.object(rotation, "signed_team", side_effect=AssertionError("signing started")):
+            with self.assertRaisesRegex(ValueError, "stale source"):
+                rotation.package("unused", "Developer ID Application: Test (1234567890)",
+                                 profile="notary")
+
     def test_output_requires_accepted_dmg_receipt_and_valid_udif(self):
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary)
@@ -136,6 +167,7 @@ class RotationDiskImageTests(unittest.TestCase):
             (output / "notary-submission.json").write_text(json.dumps({
                 "id": "abcdef12-1234-1234-1234-123456789abc", "status": "Submitted"}))
             with patch.object(rotation, "ROOT", root), patch.object(rotation, "source_release", return_value=(app, receipt)), \
+                    patch.object(rotation, "require_current_source"), \
                     patch.object(rotation, "signed_team", return_value="1234567890"), \
                     patch.object(rotation, "same_developer_certificate"):
                 with self.assertRaisesRegex(ValueError, "changed after notarization"):
@@ -160,6 +192,7 @@ class RotationDiskImageTests(unittest.TestCase):
                 "id": "abcdef12-1234-1234-1234-123456789abc", "status": "Accepted"}))
             with patch.object(rotation, "ROOT", root), \
                     patch.object(rotation, "source_release", return_value=(app, receipt)), \
+                    patch.object(rotation, "require_current_source"), \
                     patch.object(rotation, "signed_team", return_value="1234567890"), \
                     patch.object(rotation, "same_developer_certificate"), \
                     patch.object(rotation, "run"), \

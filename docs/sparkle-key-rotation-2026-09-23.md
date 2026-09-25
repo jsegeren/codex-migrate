@@ -33,7 +33,9 @@ the signer must verify its output against the final DMG bytes.
    promoted as this rotation update.
 3. Run `desktop/package_rotation_dmg.py` against that exact build directory,
    using the same Developer ID Application identity and a working Apple
-   notarization credential. The command signs the disk image, records its
+   notarization credential. The packager refuses a stale source receipt or
+   dirty checkout; resume from the original clean source commit if the branch
+   has moved since submission. The command signs the disk image, records its
    separate Apple submission, staples it, verifies Gatekeeper, and produces an
    exact DMG receipt. If Apple's submission is interrupted, resume its saved
    output directory; do not submit another copy blindly. The submitted image

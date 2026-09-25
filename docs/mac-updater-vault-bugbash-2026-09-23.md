@@ -968,3 +968,11 @@ helper race. The focused desktop suite passed (17 tests, 2 fixture skips) and
 native Swift typechecking passed. This is a source-level failure-path fix, not
 a physical dropped-response or notarized updater receipt; the prior DMG must
 not be promoted.
+
+The release-packager review found it could accept an old, valid notarized
+source app after the branch had advanced. Source now requires the app receipt
+to match the clean current checkout before a new or resumed DMG operation;
+eight focused rotation-packager tests pass, including stale and dirty checkout
+refusals. To resume an interrupted Apple submission after moving branches,
+return to the original clean source commit rather than packaging a superseded
+image as the current release. No Apple submission was made by this test.

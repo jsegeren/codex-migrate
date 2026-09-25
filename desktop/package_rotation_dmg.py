@@ -82,6 +82,17 @@ def source_release(directory):
     return app, receipt
 
 
+def require_current_source(receipt):
+    revision = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT,
+                              capture_output=True, text=True, check=True).stdout.strip()
+    if revision != receipt["source_revision"]:
+        raise ValueError("source release is stale; rebuild from the current checkout")
+    changes = subprocess.run(["git", "status", "--porcelain", "--untracked-files=normal"],
+                             cwd=ROOT, capture_output=True, text=True, check=True).stdout
+    if changes.strip():
+        raise ValueError("source checkout is dirty; commit or remove changes before packaging")
+
+
 def finish(output, candidate, receipt, notary):
     if notary.get("status") != "Accepted":
         raise ValueError("disk image notarization was not Accepted")
@@ -150,6 +161,7 @@ def package(source_directory, identity, profile=None, keychain=None,
     if not identity.startswith("Developer ID Application:"):
         raise ValueError("a Developer ID Application identity is required")
     app, receipt = source_release(source_directory)
+    require_current_source(receipt)
     if not identity.endswith(f"({signed_team(app)})"):
         raise ValueError("disk image must use the source app's Developer ID team")
     same_developer_certificate(app)
