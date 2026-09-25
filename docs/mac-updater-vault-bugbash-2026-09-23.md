@@ -772,6 +772,20 @@ real Codex history or backup schedule was changed. This closes the packaged
 helper's restore-contention check on the second physical Mac, not a full
 Sparkle replacement, clean-account first launch, or real-history backup.
 
+On September 25, a separate two-version Vault smoke ran under that same
+second Mac's GUI login session with the exact 10,397,434-byte notarized
+build-17 DMG (SHA-256 `09159745ee1e5ba08a3dc9e9baf37d23419310a4a49daca16032de890e15dd6e`).
+Its packaged engine encrypted two versions of a synthetic transcript,
+verified both snapshots, restored each byte-for-byte to a separate folder,
+and excluded synthetic `auth.json` and `installation_id`. The LaunchAgent
+exited 0 with an empty error log; the test deleted its disposable Keychain
+item. The job was booted out, the DMG detached, and all temporary files
+removed. An initial SSH-only invocation had failed at Keychain access, so
+the passing receipt is specifically the GUI-session run. This proves
+packaged Vault versioning on the second physical Mac, not recovery-key
+portability, the buyer GUI, a clean account, scheduled real-history backup,
+or cloud completion.
+
 An opt-in packaged-engine test now puts a synthetic Codex source home on a
 **case-sensitive APFS** volume with two distinct transcripts whose filenames
 differ only by case. The exact build-17 engine backed up and verified both,
