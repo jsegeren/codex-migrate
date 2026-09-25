@@ -929,3 +929,14 @@ accepted a retry after space was freed. The tests used synthetic conversations,
 removed their temporary Keychain keys, detached the images, and removed their
 disposable data. This expands exact-source filesystem evidence; the package is
 not notarized and does not prove a paid Sparkle install or a clean-account run.
+
+On September 24, all four required Python 3.9/3.12 CI jobs passed for the
+documentation-only PR head `f48294f`; the opt-in portability jobs were
+skipped as configured. The same clean source built a Developer ID signed
+local arm64 app whose embedded build receipt named `f48294f`. Strict
+code-signature verification passed. Its packaged engine passed the opt-in
+process-interruption fixture: a forced kill during an encrypted backup left
+the previous snapshot verified and the source untouched, and a retry produced
+a new verified snapshot. The synthetic test key and data were removed. This
+local app is **not notarized** and is not a release candidate; the test does
+not prove buyer installation, automatic update, or a clean account.
