@@ -227,6 +227,7 @@ footer { padding: 68px 0 24px; background: var(--ink); color: #d7d4cb; }
 footer .brand { color: var(--white); }
 footer h2 { margin-bottom: 14px; color: #8e8b83; font-size: 14px; letter-spacing: .1em; text-transform: uppercase; }
 footer a:not(.brand) { display: block; width: fit-content; margin: 8px 0; color: #d7d4cb; font-size: 15px; text-decoration: none; }
+footer p a:not(.brand) { display: inline; width: auto; margin: 0; }
 footer a:hover { color: var(--white); }
 footer p { color: #8e8b83; font-size: 14px; }
 .footer-bottom { margin-top: 48px; padding-top: 22px; display: flex; justify-content: space-between; border-top: 1px solid #353530; }
