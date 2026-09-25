@@ -917,3 +917,15 @@ and shutdown endpoints closed during a 128-MiB Vault restore, then permitted
 shutdown only after the recovered transcript matched. The test Keychain item
 and temporary data were removed. This ad-hoc-signed package is not notarized,
 distributed, or proof of a paid buyer update.
+
+From clean PR source `134d4f2`, a disposable local-only arm64 build reported
+build 17 and the same source revision in its packaged receipt. All four opt-in
+external-volume Vault tests passed with that packaged engine on real APFS disk
+images: ordinary and case-sensitive volumes did not silently become local
+Vaults when unavailable; a case-sensitive source with colliding names restored
+on case-sensitive APFS but refused to merge on ordinary APFS; and an external
+volume filled during a new backup retained its last verified snapshot, then
+accepted a retry after space was freed. The tests used synthetic conversations,
+removed their temporary Keychain keys, detached the images, and removed their
+disposable data. This expands exact-source filesystem evidence; the package is
+not notarized and does not prove a paid Sparkle install or a clean-account run.
