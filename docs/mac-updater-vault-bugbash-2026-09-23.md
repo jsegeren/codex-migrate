@@ -736,10 +736,14 @@ Python 3.9 in 0.34 seconds for the complete test. A separate read-only search
 of the Founder's existing 1,984 active and 69 archived local transcripts,
 using a phrase the Founder supplied, returned the first 25 matches; inspection
 plus search took 1.04 seconds and printed no conversation content. These
-checks cover local file-count and current source-code search, not packaged
-browser latency, very large individual transcripts, or an exhaustive count of
-all matches. The synthetic probe is in `tests/test_vault.py` and is skipped
-by ordinary CI.
+checks cover local file-count and current source-code search. The exact
+Developer ID signed, notarized build-17 DMG from source `27ef9bf` was then
+mounted read-only; its bundled engine returned the first 25 matches from the
+same live history in 1.53 seconds without printing conversation content. The
+image was detached and the temporary mount directory removed. This still
+does not measure browser rendering, very large individual transcripts, or an
+exhaustive count of all matches. The synthetic probe is in `tests/test_vault.py`
+and is skipped by ordinary CI.
 The backup test file also deterministically rewrites a synthetic transcript
 immediately after the encrypted chunk helper reads it. On Python 3.9 and
 3.12, backup rejected the changed source, published no new snapshot
