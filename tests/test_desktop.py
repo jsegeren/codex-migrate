@@ -97,7 +97,7 @@ class DesktopTests(unittest.TestCase):
         binary = os.environ.get("CODEX_MIGRATE_TEST_ENGINE")
         if not binary:
             self.skipTest("set CODEX_MIGRATE_TEST_ENGINE to a packaged engine")
-        helper = Path(binary).resolve().parents[1] / "CodexVaultCrypto"
+        helper = Path(binary).resolve().parents[2] / "Helpers/CodexVaultCrypto.app/Contents/MacOS/CodexVaultCrypto"
         self.assertTrue(helper.is_file())
         env = {key: value for key, value in os.environ.items()
                if not key.startswith(("PYTHON", "DYLD_"))}

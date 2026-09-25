@@ -120,7 +120,8 @@ def _helper_path(explicit: Optional[str]) -> Path:
         candidate = Path(explicit).expanduser()
     else:
         executable = Path(sys.executable)
-        candidate = executable.parents[1] / "CodexVaultCrypto"
+        bundled = (executable.parents[2] / "Helpers/CodexVaultCrypto.app/Contents/MacOS/CodexVaultCrypto")
+        candidate = bundled if bundled.is_file() else executable.parents[1] / "CodexVaultCrypto"
     if not candidate.is_absolute():
         raise ValueError("crypto helper path must be absolute")
     try:

@@ -39,7 +39,7 @@ class ExternalVolumeVaultTests(unittest.TestCase):
         packaged_engine = os.environ.get("CODEX_MIGRATE_TEST_ENGINE")
         if not packaged_engine:
             self.skipTest("set CODEX_MIGRATE_TEST_ENGINE to a packaged engine")
-        helper = Path(packaged_engine).resolve().parents[1] / "CodexVaultCrypto"
+        helper = Path(packaged_engine).resolve().parents[2] / "Helpers/CodexVaultCrypto.app/Contents/MacOS/CodexVaultCrypto"
         self.assertTrue(helper.is_file())
         root = Path(tempfile.mkdtemp(prefix="codex-vault-case-source-test-")).resolve()
         sensitive_mount = root / "case-sensitive"
@@ -139,7 +139,7 @@ class ExternalVolumeVaultTests(unittest.TestCase):
         mount = root / "mounted"
         mount.mkdir()
         image = root / "fixture.sparseimage"
-        helper = Path(packaged_engine).resolve().parents[1] / "CodexVaultCrypto"
+        helper = Path(packaged_engine).resolve().parents[2] / "Helpers/CodexVaultCrypto.app/Contents/MacOS/CodexVaultCrypto"
         self.assertTrue(helper.is_file())
         key_id = None
         try:
@@ -225,7 +225,7 @@ class ExternalVolumeVaultTests(unittest.TestCase):
         try:
             if shutil.disk_usage(root).free < 2 * 1024**3:
                 self.skipTest("External-volume acceptance requires 2 GiB free")
-            self.tool("xcrun", "swiftc", "-parse-as-library", "-O",
+            self.tool("xcrun", "swiftc", "-parse-as-library", "-O", "-D", "CODEX_VAULT_TEST_LEGACY_KEYCHAIN",
                       "-target", platform.machine() + "-apple-macos13.0",
                       "desktop/CodexVaultCrypto.swift", "-o", str(helper))
             self.tool("/usr/bin/hdiutil", "create", "-size", "512m", "-fs", filesystem,

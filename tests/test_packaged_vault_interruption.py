@@ -28,7 +28,7 @@ class PackagedVaultInterruptionTests(unittest.TestCase):
         if not engine_name:
             self.skipTest("set CODEX_MIGRATE_TEST_ENGINE to a packaged engine")
         engine = Path(engine_name).resolve()
-        helper = engine.parents[1] / "CodexVaultCrypto"
+        helper = engine.parents[2] / "Helpers/CodexVaultCrypto.app/Contents/MacOS/CodexVaultCrypto"
         self.assertTrue(engine.is_file() and helper.is_file())
         env = {key: value for key, value in os.environ.items()
                if not key.startswith(("PYTHON", "DYLD_"))}

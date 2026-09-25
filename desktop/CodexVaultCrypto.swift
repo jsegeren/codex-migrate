@@ -133,7 +133,7 @@ private func canonicalKeyID(_ value: String) throws -> String {
     return identifier.uuidString.lowercased()
 }
 
-private func keyQuery(_ keyID: String) -> [CFString: Any] {
+private func legacyKeyQuery(_ keyID: String) -> [CFString: Any] {
     // Backup and scheduled runs must fail closed rather than summon a password
     // dialog from a helper process. The app can report the failure explicitly.
     let authentication = LAContext()
@@ -146,13 +146,27 @@ private func keyQuery(_ keyID: String) -> [CFString: Any] {
     ]
 }
 
+private func keyQuery(_ keyID: String) -> [CFString: Any] {
+    var query = legacyKeyQuery(keyID)
+#if !CODEX_VAULT_TEST_LEGACY_KEYCHAIN
+    // The accessibility class below has no device-only meaning for a legacy
+    // file-based macOS Keychain item. Release builds require a provisioned,
+    // signed helper with this exact keychain access group.
+    query[kSecUseDataProtectionKeychain] = true
+    query[kSecAttrAccessGroup] = "P9J3JK79KQ.com.segeren.codex-migrate.vault-crypto"
+#endif
+    return query
+}
+
 private func storeKey(_ data: Data, keyID: String) throws {
     guard data.count == 32 else {
         throw VaultError.message("the encryption key has an invalid size")
     }
     var query = keyQuery(keyID)
     query[kSecValueData] = data
-    query[kSecAttrAccessible] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+    // Daily LaunchAgent backups may run while the screen is locked, but never
+    // before the user has unlocked the Mac once after a restart.
+    query[kSecAttrAccessible] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
     let status = SecItemAdd(query as CFDictionary, nil)
     guard status == errSecSuccess else {
         if status == errSecInteractionNotAllowed {
@@ -166,18 +180,63 @@ private func storeKey(_ data: Data, keyID: String) throws {
 }
 
 private func loadKey(_ keyID: String) throws -> SymmetricKey {
-    var query = keyQuery(keyID)
-    query[kSecReturnData] = true
-    query[kSecMatchLimit] = kSecMatchLimitOne
-    var item: CFTypeRef?
-    let status = SecItemCopyMatching(query as CFDictionary, &item)
+    func read(_ base: [CFString: Any]) -> (OSStatus, Data?) {
+        var query = base
+        query[kSecReturnData] = true
+        query[kSecMatchLimit] = kSecMatchLimitOne
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        return (status, item as? Data)
+    }
+    let (status, data) = read(keyQuery(keyID))
     if status == errSecInteractionNotAllowed {
         throw VaultError.message(keychainInteractionError)
     }
-    guard status == errSecSuccess, let data = item as? Data, data.count == 32 else {
+#if !CODEX_VAULT_TEST_LEGACY_KEYCHAIN
+    if status == errSecSuccess, let data = data, data.count == 32 {
+        // An interrupted migration can leave both items. Never call the key
+        // device-only while a readable legacy copy still exists.
+        let (oldStatus, oldData) = read(legacyKeyQuery(keyID))
+        if oldStatus == errSecSuccess {
+            guard oldData == data else {
+                throw VaultError.message("Vault found conflicting Keychain copies; no backup was published")
+            }
+            try deleteLegacyKey(keyID)
+        } else if oldStatus != errSecItemNotFound {
+            throw VaultError.message("Vault could not verify removal of its old Keychain copy")
+        }
+        return SymmetricKey(data: data)
+    }
+    if status == errSecItemNotFound {
+        let (oldStatus, oldData) = read(legacyKeyQuery(keyID))
+        if oldStatus == errSecSuccess, let oldData = oldData, oldData.count == 32 {
+            try storeKey(oldData, keyID: keyID)
+            let (newStatus, newData) = read(keyQuery(keyID))
+            guard newStatus == errSecSuccess, newData == oldData else {
+                throw VaultError.message("Vault could not verify the protected Keychain copy")
+            }
+            try deleteLegacyKey(keyID)
+            return SymmetricKey(data: oldData)
+        }
+        if oldStatus == errSecInteractionNotAllowed {
+            throw VaultError.message(keychainInteractionError)
+        }
+    }
+#endif
+    guard status == errSecSuccess, let data = data, data.count == 32 else {
         throw VaultError.message("the encryption key is unavailable; import its recovery key on this Mac")
     }
     return SymmetricKey(data: data)
+}
+
+private func deleteLegacyKey(_ keyID: String) throws {
+    let status = SecItemDelete(legacyKeyQuery(keyID) as CFDictionary)
+    if status == errSecInteractionNotAllowed {
+        throw VaultError.message(keychainInteractionError)
+    }
+    guard status == errSecSuccess || status == errSecItemNotFound else {
+        throw VaultError.message("the old Keychain copy could not be removed")
+    }
 }
 
 private func deleteKey(_ keyID: String) throws {
@@ -188,6 +247,9 @@ private func deleteKey(_ keyID: String) throws {
     guard status == errSecSuccess || status == errSecItemNotFound else {
         throw VaultError.message("the encryption key could not be removed from Keychain")
     }
+#if !CODEX_VAULT_TEST_LEGACY_KEYCHAIN
+    try deleteLegacyKey(keyID)
+#endif
 }
 
 private func rawKey(_ key: SymmetricKey) -> Data {
@@ -328,6 +390,9 @@ private func createKeyCommand() throws {
     let key = SymmetricKey(size: .bits256)
     let material = rawKey(key)
     try storeKey(material, keyID: keyID)
+    guard rawKey(try loadKey(keyID)) == material else {
+        throw VaultError.message("the new Vault key could not be verified")
+    }
     try printJSON(KeyResult(key_id: keyID,
                             recovery_key: "CV1-" + base64URL(material),
                             imported: nil, deleted: nil))
@@ -342,7 +407,11 @@ private func importKeyCommand(_ arguments: [String]) throws {
     guard trimmed.hasPrefix("CV1-") else {
         throw VaultError.message("the recovery key is invalid")
     }
-    try storeKey(try decodeBase64URL(String(trimmed.dropFirst(4))), keyID: keyID)
+    let material = try decodeBase64URL(String(trimmed.dropFirst(4)))
+    try storeKey(material, keyID: keyID)
+    guard rawKey(try loadKey(keyID)) == material else {
+        throw VaultError.message("the imported key could not be verified")
+    }
     try printJSON(KeyResult(key_id: keyID, recovery_key: nil,
                             imported: true, deleted: nil))
 }

@@ -1094,3 +1094,28 @@ Codex homes and removed their temporary data and Keychain keys. This is a
 **local-test** build, not an Apple-notarized release; no paid buyer install or
 unattended update is established by it. The existing build-17 notarized DMGs
 are stale and remain ineligible for promotion.
+
+On September 25, the Apple Developer account's live provisioning page showed
+the direct-distribution **Developer ID** profile type, but no registered App
+IDs or profiles for this team. Creating the dedicated Vault helper App ID and
+profile is a separate Apple-account change awaiting Founder approval. Apple
+requires a profile-authorized Keychain access group in an app-like bundle for
+the Data Protection Keychain; this does not require a Mac App Store listing.
+
+Unreleased source on PR #26 now packages `CodexVaultCrypto` as a nested helper
+app, refuses release builds without a matching Developer ID profile, and
+selects the Data Protection Keychain with a device-only accessibility class.
+`AfterFirstUnlockThisDeviceOnly` is selected so daily scheduled backups can
+run after the first unlock following a restart, including while the screen is
+subsequently locked. The helper attempts a verified, fail-closed migration of
+matching legacy login-Keychain keys; it refuses conflicting or unremovable
+copies. Profile-free local-test builds remain explicitly nondistributable and
+use a legacy-Keychain test mode. The full 873-test suite passed, and a new
+ad-hoc local-test app with the nested helper passed a packaged interrupted-
+backup/retry fixture. None of this establishes actual profile authorization,
+locked-screen scheduling, a clean-account recovery round trip, or notarized
+buyer delivery. The old notarized build-17 DMG remains ineligible for
+promotion; a new exact artifact must be built and tested after provisioning.
+The existing CI Keychain smoke/portability jobs compile the explicit
+profile-free test mode; green CI alone cannot certify the provisioned release
+path or the live legacy-key transition.

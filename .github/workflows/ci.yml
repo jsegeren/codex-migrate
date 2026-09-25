@@ -52,7 +52,7 @@ jobs:
           PY
       - name: Exercise Vault Keychain without interactive prompts
         run: |
-          xcrun swiftc -parse-as-library desktop/CodexVaultCrypto.swift -o "$RUNNER_TEMP/CodexVaultCryptoSmoke"
+          xcrun swiftc -parse-as-library -D CODEX_VAULT_TEST_LEGACY_KEYCHAIN desktop/CodexVaultCrypto.swift -o "$RUNNER_TEMP/CodexVaultCryptoSmoke"
           python tests/keychain_ci_smoke.py "$RUNNER_TEMP/CodexVaultCryptoSmoke"
       - name: Test
         run: PYTHONPATH=src python -m unittest discover -s tests -v
@@ -85,7 +85,7 @@ jobs:
           python-version: "3.12"
       - name: Create synthetic encrypted snapshot on producer Mac
         run: |
-          xcrun swiftc -parse-as-library desktop/CodexVaultCrypto.swift -o "$RUNNER_TEMP/CodexVaultCrypto"
+          xcrun swiftc -parse-as-library -D CODEX_VAULT_TEST_LEGACY_KEYCHAIN desktop/CodexVaultCrypto.swift -o "$RUNNER_TEMP/CodexVaultCrypto"
           PYTHONPATH=src python tests/portable_vault_roundtrip.py produce "$RUNNER_TEMP/vault-portability" "$RUNNER_TEMP/CodexVaultCrypto"
       - uses: actions/upload-artifact@v4
         with:
@@ -110,5 +110,5 @@ jobs:
           path: ${{ runner.temp }}/vault-portability
       - name: Import and restore on independent Mac
         run: |
-          xcrun swiftc -parse-as-library desktop/CodexVaultCrypto.swift -o "$RUNNER_TEMP/CodexVaultCrypto"
+          xcrun swiftc -parse-as-library -D CODEX_VAULT_TEST_LEGACY_KEYCHAIN desktop/CodexVaultCrypto.swift -o "$RUNNER_TEMP/CodexVaultCrypto"
           PYTHONPATH=src python tests/portable_vault_roundtrip.py consume "$RUNNER_TEMP/vault-portability" "$RUNNER_TEMP/CodexVaultCrypto"

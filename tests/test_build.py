@@ -1,5 +1,6 @@
 """Release orchestration proofs; these do not contact Apple or certify signing."""
 import importlib.util
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import plistlib
@@ -22,6 +23,45 @@ def response(status="Accepted", identifier=SUBMISSION, returncode=0):
 
 
 class ReleaseBuildTests(unittest.TestCase):
+    def test_vault_helper_entitlement_and_bundle_match_release_group(self):
+        root = Path(__file__).resolve().parents[1] / "desktop"
+        with (root / "CodexVaultCrypto.entitlements").open("rb") as stream:
+            claims = plistlib.load(stream)
+        with (root / "CodexVaultCrypto-Info.plist").open("rb") as stream:
+            info = plistlib.load(stream)
+        self.assertEqual(info["CFBundleIdentifier"], build.VAULT_HELPER_APP_ID)
+        self.assertEqual(claims["com.apple.application-identifier"], build.VAULT_KEYCHAIN_GROUP)
+        self.assertEqual(claims["keychain-access-groups"], [build.VAULT_KEYCHAIN_GROUP])
+
+    def test_vault_profile_requires_exact_helper_authority_and_valid_expiry(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "Vault.provisionprofile"
+            path.write_bytes(b"fixture")
+            valid = {
+                "TeamIdentifier": ["P9J3JK79KQ"],
+                "Entitlements": {
+                    "com.apple.application-identifier": build.VAULT_KEYCHAIN_GROUP,
+                    "keychain-access-groups": ["P9J3JK79KQ.*"],
+                },
+                "ExpirationDate": datetime.now(timezone.utc) + timedelta(days=30),
+            }
+            with patch.object(build.subprocess, "check_output", return_value=plistlib.dumps(valid)):
+                self.assertEqual(build.vault_profile(path), path)
+            for change in (
+                {"TeamIdentifier": ["WRONGTEAM"]},
+                {"Entitlements": {"com.apple.application-identifier": "WRONG", "keychain-access-groups": []}},
+                {"ExpirationDate": datetime.now(timezone.utc) - timedelta(days=1)},
+            ):
+                with self.subTest(change=change):
+                    candidate = dict(valid, **change)
+                    with patch.object(build.subprocess, "check_output", return_value=plistlib.dumps(candidate)), \
+                            self.assertRaises(ValueError):
+                        build.vault_profile(path)
+            alias = path.parent / "alias.provisionprofile"
+            alias.symlink_to(path)
+            with self.assertRaises(ValueError):
+                build.vault_profile(alias)
+
     def test_bundled_customer_setup_copy_matches_live_paid_beta(self):
         setup = (Path(__file__).resolve().parents[1] / "docs/desktop-setup.md").read_text()
         self.assertIn("signed, notarized Mac beta is available", setup)
@@ -99,12 +139,16 @@ class ReleaseBuildTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary, patch.object(build, "ROOT", Path(temporary)):
             path = Path(temporary) / "desktop/Info.plist"
             path.parent.mkdir()
+            vault_path = path.parent / "CodexVaultCrypto-Info.plist"
             for version, number, valid in (("0.1.0", "1", True), ("../bad", "1", False),
                                           ("0.1", "1", False), ("0.1.0", "0", False),
                                           ("0.1.0", 1, False)):
                 with self.subTest(version=version, number=number):
                     path.write_bytes(plistlib.dumps(dict(CFBundleShortVersionString=version,
                                                          CFBundleVersion=number)))
+                    vault_path.write_bytes(plistlib.dumps(dict(CFBundleIdentifier=build.VAULT_HELPER_APP_ID,
+                                                               CFBundleShortVersionString=version,
+                                                               CFBundleVersion=number)))
                     if valid:
                         self.assertEqual(build.bundle_version(), dict(version=version, bundle_version=number))
                     else:
@@ -371,6 +415,14 @@ class ReleaseBuildTests(unittest.TestCase):
                 (root / "docs").mkdir()
                 (root / "desktop/Info.plist").write_bytes(plistlib.dumps(
                     dict(CFBundleShortVersionString="0.1.0", CFBundleVersion="1")))
+                (root / "desktop/CodexVaultCrypto-Info.plist").write_bytes(plistlib.dumps(
+                    dict(CFBundleIdentifier=build.VAULT_HELPER_APP_ID,
+                         CFBundleShortVersionString="0.1.0", CFBundleVersion="1")))
+                (root / "desktop/CodexVaultCrypto.entitlements").write_bytes(plistlib.dumps(
+                    {"com.apple.application-identifier": build.VAULT_KEYCHAIN_GROUP,
+                     "keychain-access-groups": [build.VAULT_KEYCHAIN_GROUP]}))
+                profile = root / "Vault.provisionprofile"
+                profile.write_bytes(b"fixture profile")
                 for name in ("LICENSE", "docs/desktop-setup.md", "docs/recovery.md", "docs/security-model.md", "docs/support.md"):
                     (root / name).write_text("fixture")
                 sparkle = root / "sparkle-fixture"
@@ -431,7 +483,9 @@ class ReleaseBuildTests(unittest.TestCase):
                 with patch.object(build, "ROOT", root), patch.object(build.sys, "platform", "darwin"), \
                      patch.object(build.platform, "machine", return_value="arm64"), \
                      patch.object(build.sys, "argv", ["build.py", "--release", "--identity",
-                                                    "Developer ID Application: Fixture", "--notary-profile", "profile"]), \
+                                                    "Developer ID Application: Fixture", "--vault-profile", str(profile),
+                                                    "--notary-profile", "profile"]), \
+                     patch.object(build, "vault_profile", return_value=profile), \
                      patch.object(build, "source_receipt", side_effect=[receipt, second_receipt]), \
                      patch.object(build, "sparkle_distribution", return_value=sparkle), \
                      patch.object(build, "run", side_effect=run), \

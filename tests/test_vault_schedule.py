@@ -42,7 +42,7 @@ class VaultScheduleTests(unittest.TestCase):
         if not binary:
             self.skipTest("set CODEX_MIGRATE_TEST_ENGINE to a packaged engine")
         engine = Path(binary).resolve()
-        helper = engine.parents[1] / "CodexVaultCrypto"
+        helper = engine.parents[2] / "Helpers/CodexVaultCrypto.app/Contents/MacOS/CodexVaultCrypto"
         self.assertTrue(engine.is_file() and helper.is_file())
         service = "gui/%d/%s" % (os.getuid(), LABEL)
         if subprocess.run(["/bin/launchctl", "print", service],
