@@ -1,4 +1,20 @@
 {
+  "codex-migrate-build17-vault-crypto-arm64": {
+    "id": "codex-migrate-build17-vault-crypto-arm64",
+    "kind": "signed-notarized",
+    "testingOnly": true,
+    "accepted": false,
+    "source": "1fdf64094096d60554e3986c24131ca9b1d887b7",
+    "sha256": "e365674834112941ce1085ec92b78f030f883a0223491e829b51c6c73b03cbf3",
+    "filename": "Codex-Migrate-0.1.0-build17-arm64.dmg",
+    "size": 10513015,
+    "pathname": "sandbox/e365674834112941ce1085ec92b78f030f883a0223491e829b51c6c73b03cbf3/Codex-Migrate-0.1.0-build17-arm64.dmg",
+    "diskImageNotarization": {
+      "status": "Accepted",
+      "id": "572cffeb-c372-4338-88fc-739767058399"
+    },
+    "sparkleSignature": "A/2LGcZEsydVI2lY2LcPpbNLcAQgqgYfE0Rfou/pqrZOmOlVxVAUpBxpRC+V6KBStf005IMbSV3yLrLxqZC9CA=="
+  },
   "codex-migrate-build17-bed7cba-arm64": {
     "id": "codex-migrate-build17-bed7cba-arm64",
     "kind": "signed-notarized",
