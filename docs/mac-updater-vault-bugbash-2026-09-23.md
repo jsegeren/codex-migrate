@@ -1095,12 +1095,13 @@ Codex homes and removed their temporary data and Keychain keys. This is a
 unattended update is established by it. The existing build-17 notarized DMGs
 are stale and remain ineligible for promotion.
 
-On September 25, the Apple Developer account's live provisioning page showed
-the direct-distribution **Developer ID** profile type, but no registered App
-IDs or profiles for this team. Creating the dedicated Vault helper App ID and
-profile is a separate Apple-account change awaiting Founder approval. Apple
-requires a profile-authorized Keychain access group in an app-like bundle for
-the Data Protection Keychain; this does not require a Mac App Store listing.
+On September 25, with Founder approval, the Apple Developer team registered
+the explicit direct-distribution App ID
+`com.segeren.codex-migrate.vault-crypto` and generated a Developer ID
+provisioning profile for its Keychain access group (profile ID `HQ2UU39X8C`,
+expiry September 7, 2031). The owner-only profile is stored outside Git and
+the release build validated its exact App ID, team and expiry. This is for
+Developer ID distribution, **not** a Mac App Store listing.
 
 Unreleased source on PR #26 now packages `CodexVaultCrypto` as a nested helper
 app, refuses release builds without a matching Developer ID profile, and
@@ -1120,15 +1121,43 @@ The existing CI Keychain smoke/portability jobs compile the explicit
 profile-free test mode; green CI alone cannot certify the provisioned release
 path or the live legacy-key transition.
 
-The opt-in `tests/physical_vault_key_transition.py` acceptance fixture is
-ready for that provisioned artifact. On a logged-in test Mac, point it at the
-old notarized Vault helper and the new signed, provisioned helper with
-`CODEX_VAULT_DP_ACCEPTANCE=yes PYTHONPATH=src python3
-tests/physical_vault_key_transition.py OLD_HELPER NEW_HELPER`. It creates one
-synthetic legacy Vault, verifies that the new helper can read it without
-changing its recovery key, confirms the old helper can no longer read the
-legacy Keychain copy, verifies again, and deletes its disposable key. It
-checks the new helper's signature and exact signed Keychain-group entitlement
-before making any Keychain change. This fixture has not yet run: no valid
-Developer ID profile or new release helper exists, so it is not acceptance
-evidence until a dated physical receipt records its result.
+The first provisioned artifact exposed a real legacy-Keychain ACL prompt:
+the new app-bundle helper could not silently read the key created by build
+16's standalone helper. That image was superseded, not shipped. Source
+`1fdf64094096d60554e3986c24131ca9b1d887b7` bundles an additional
+Developer ID signed legacy helper with the **old designated requirement**.
+The new provisioned helper verifies that binary's code signature and exact
+team/identifier before asking it over a private pipe to inspect the legacy
+key; it then verifies the protected copy and removal of the old copy. A
+Keychain read that still requires UI fails closed without summoning a password
+dialog during a scheduled backup. Conflicting keys and incomplete cleanup
+also fail closed. No key travels in arguments, logs, or a disk file.
+
+That clean source produced a Developer ID signed, Apple-notarized and stapled
+build-17 app (Apple Accepted submission
+`24e55e7e-2009-4908-9f9f-c99c75b85dc3`) and a separately signed,
+notarized and stapled 10,513,015-byte rotation DMG (Apple Accepted submission
+`572cffeb-c372-4338-88fc-739767058399`). Final DMG SHA-256 is
+`e365674834112941ce1085ec92b78f030f883a0223491e829b51c6c73b03cbf3`.
+Its Sparkle signature verified against the key embedded in the signed app;
+strict code-signature and Gatekeeper checks passed. Both Python 3.9 and 3.12
+GitHub CI jobs passed on push and PR runs for the exact source commit. This
+artifact was uploaded to the private **sandbox** Blob store and read back
+with the exact 10,513,015-byte length and SHA-256 above. Its new catalog
+entry is `testingOnly: true`, `accepted: false`; it is **not** in the live
+appcast or buyer delivery. Build 16 remains live.
+
+The opt-in `tests/physical_vault_key_transition.py` fixture passed on this
+Mac with the actual build-16 helper and exact new provisioned helper. It
+created a synthetic encrypted Vault, verified migration of its key to the
+device-only Keychain group without changing the recovery key, confirmed the
+old helper could no longer read a legacy copy, reverified the snapshot and
+removed its disposable key. A separate fresh-key test created and verified
+an encrypted snapshot directly with the new helper. On the Founder's second
+Mac, a scoped synthetic test unpacked this signed app to a temporary folder,
+imported the recovery key through SSH stdin, and verified the encrypted
+snapshot. The disposable Keychain keys and temporary data were removed from
+both Macs; no Codex workspace or existing Vault was read or changed there.
+This proves cross-Mac recovery-key decryption, **not** two-Mac scheduled backup
+behavior, a clean buyer-account install, a paid in-app update, or a Mac-loss
+restore without a separately preserved recovery key and off-device snapshot.
