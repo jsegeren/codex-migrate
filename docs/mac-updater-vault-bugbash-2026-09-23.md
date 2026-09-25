@@ -976,3 +976,17 @@ eight focused rotation-packager tests pass, including stale and dirty checkout
 refusals. To resume an interrupted Apple submission after moving branches,
 return to the original clean source commit rather than packaging a superseded
 image as the current release. No Apple submission was made by this test.
+
+The clean PR head `9ce7812ff7d87735e3b383185c374bbbd8da7be3` passed all four
+Python 3.9/3.12 push and pull-request CI jobs. Its locally built arm64 app
+embeds that exact source revision and build 17, and passes strict Developer ID
+code-signature verification. The bundled engine passed 18 of 19 focused
+desktop tests, with only the case-sensitive-filesystem fixture skipped on
+this volume. Four opt-in packaged tests passed against the same engine:
+two actual filesystem-permission denials, a 128-MiB synthetic Vault restore
+that blocked updater shutdown until completion, and a killed-backup/retry
+that preserved the last verified snapshot. These tests used disposable
+Codex homes and removed their temporary data and Keychain keys. This is a
+**local-test** build, not an Apple-notarized release; no paid buyer install or
+unattended update is established by it. The existing build-17 notarized DMGs
+are stale and remain ineligible for promotion.
