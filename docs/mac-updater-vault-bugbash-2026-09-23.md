@@ -901,6 +901,20 @@ Apple references: [Mac keychain implementations](https://developer.apple.com/doc
 [Data Protection Keychain](https://developer.apple.com/documentation/security/ksecusedataprotectionkeychain),
 and [access-group entitlement checks](https://developer.apple.com/documentation/security/errsecmissingentitlement).
 
+On September 25, an isolated ad-hoc-signed probe explicitly requested the
+Data Protection Keychain and `WhenUnlockedThisDeviceOnly` for a disposable
+item. `SecItemAdd` returned `-34018` (missing entitlement), so it created no
+key; the probe and executable were removed. Apple's [distribution-signing
+guide](https://developer.apple.com/documentation/xcode/creating-distribution-signed-code-for-the-mac)
+requires a distribution provisioning profile for restricted keychain-group
+claims, and a standalone executable cannot embed that profile. This probe
+does not establish the eventual Developer ID/profile configuration. The
+release may accurately say that the Vault key is in macOS Keychain, but it
+must not claim the stronger LT `ThisDeviceOnly` custody guarantee until a
+provisioned or otherwise proven implementation, existing-key transition,
+scheduled-helper access, and clean-Mac recovery round trip all pass. On the
+Founder-approved LT spec, build 17 is not security-acceptance-complete yet.
+
 On September 24, the synthetic recovery-key portability test passed on two
 independent GitHub-hosted macOS runners in
 [CI run 36058234998](https://github.com/jsegeren/codex-migrate/actions/runs/36058234998).
