@@ -2,6 +2,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import time
 import unittest
 
 from codex_migrate.errors import MigrationError
@@ -76,6 +77,39 @@ class VaultTests(unittest.TestCase):
             self.assertEqual(len(older), 11)
             self.assertFalse({match.transcript for match in matches}
                              & {match.transcript for match in older})
+
+    @unittest.skipUnless(
+        os.environ.get("CODEX_MIGRATE_LARGE_HISTORY_PROBE") == "1",
+        "opt-in physical large-history probe",
+    )
+    def test_large_history_search_finds_old_and_new_message_text(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            folder = root / ".codex/sessions/2026/09/24"
+            folder.mkdir(parents=True)
+            for index in range(2048):
+                text = f"Synthetic conversation {index:04d}"
+                if index == 7:
+                    text += " buried-unification-foundation"
+                if index == 2047:
+                    text += " recent-unification-foundation"
+                transcript = folder / f"thread-{index:04d}.jsonl"
+                transcript.write_text(
+                    json.dumps({"payload": {"message": {"content": text}}}) + "\n",
+                    encoding="utf-8",
+                )
+                timestamp = 1_000_000_000 + index
+                os.utime(transcript, (timestamp, timestamp))
+
+            started = time.monotonic()
+            matches = search(str(root), "unification-foundation", limit=25)
+            elapsed = time.monotonic() - started
+            self.assertEqual(
+                [match.transcript for match in matches],
+                ["2026/09/24/thread-2047.jsonl", "2026/09/24/thread-0007.jsonl"],
+            )
+            self.assertTrue(all(match.line == 1 for match in matches))
+            self.assertLess(elapsed, 10, f"2,048-thread synthetic search took {elapsed:.2f}s")
 
     def test_search_result_includes_current_title_when_indexed(self):
         with tempfile.TemporaryDirectory() as temporary:

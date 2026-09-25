@@ -729,7 +729,18 @@ Python 3.12 in 53.3 and 52.7 seconds respectively. This exercises file-count
 and incremental-backup behavior, not multi-gigabyte histories, live Codex
 data, search latency, or a scheduled run. The opt-in test is in
 `tests/test_vault_backup.py`; ordinary CI skips it.
-The same test file now deterministically rewrites a synthetic transcript
+An opt-in 2,048-thread synthetic **search** probe now verifies that one query
+finds both the newest and a near-oldest matching conversation in recency
+order. It passed on this Mac under Python 3.12 in 0.30 seconds and system
+Python 3.9 in 0.34 seconds for the complete test. A separate read-only search
+of the Founder's existing 1,984 active and 69 archived local transcripts,
+using a phrase the Founder supplied, returned the first 25 matches; inspection
+plus search took 1.04 seconds and printed no conversation content. These
+checks cover local file-count and current source-code search, not packaged
+browser latency, very large individual transcripts, or an exhaustive count of
+all matches. The synthetic probe is in `tests/test_vault.py` and is skipped
+by ordinary CI.
+The backup test file also deterministically rewrites a synthetic transcript
 immediately after the encrypted chunk helper reads it. On Python 3.9 and
 3.12, backup rejected the changed source, published no new snapshot
 reference, and the previous snapshot still verified. This checks the
