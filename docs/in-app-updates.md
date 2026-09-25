@@ -199,3 +199,24 @@ higher build number.
   purchase-link update through the Production proxy, automatic scheduled
   installation, or a clean-user-account first launch. Keep those as explicit
   post-deployment checks and retain the original-email download fallback.
+
+## Private paid build-17 canary — September 25, 2026
+
+Catalog-only PR #34 passed main-branch CI and was deployed with build 17
+`testingOnly: true`, `accepted: false`; the public appcast stayed on build 16.
+A two-hour canary scoped to an already-paid Founder session streamed the exact
+10,397,434-byte build-17 rotation DMG (SHA-256
+`09159745ee1e5ba08a3dc9e9baf37d23419310a4a49daca16032de890e15dd6e`).
+A disposable, Developer ID re-signed copy derived from the archived live
+build-16 ZIP retained the old Sparkle public key, used a loopback feed and
+test-only canary header, and read the paid token from closed stdin. Sparkle
+fetched the Production-paid archive, installed it in place on graceful quit,
+and relaunched build 17 with a healthy helper. The installed source receipt,
+strict code signature, and Notarized Developer ID Gatekeeper check passed.
+
+The four canary settings and the unaliased canary deployment were removed.
+Afterward, the same paid token received 403 for the canary and still downloaded
+the exact build-16 ZIP through the normal paid route; the public appcast
+remained build 16. This is **not** proof of an unmodified buyer client's
+purchase-link setup or idle installation without a quit. Clean-account and
+remaining failure-path acceptance still gate public build-17 promotion.

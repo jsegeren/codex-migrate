@@ -644,10 +644,17 @@ See [the rotation runbook](sparkle-key-rotation-2026-09-23.md).
 2. The rebuilt clean-source app, rotation DMG, Sparkle signature, private
    sandbox Blob readback, isolated build-16-to-17 quit-path install, and
    candidate-code idle install/relaunch with an app-owned synthetic token pass.
-   The real paid entitlement streamed this candidate from the staged hosted
-   server and the temporary canary was disabled afterward. This is not a
-   buyer-app update or release approval; the sandbox-only catalog entry stays
-   unaccepted. Directly observe
+   On September 25, the real paid entitlement streamed the exact `bed7cba`
+   candidate through a short-lived Production canary. A disposable client
+   derived from the archived live build-16 ZIP retained the old Sparkle key,
+   used a loopback feed and test-only canary header, and received its paid
+   token through closed stdin. Sparkle installed the paid DMG in place on
+   quit; the installed build 17 passed strict signing and Gatekeeper and
+   relaunched one healthy helper. The canary settings and unaliased test
+   deployment were removed. The same paid token then received 403 for the
+   canary and the exact build-16 ZIP through the ordinary route; the public
+   appcast stayed on build 16. This is not an unmodified buyer-app update or
+   release approval; the catalog entry stays unaccepted. Directly observe
    that the duplicate-launch warning is absent and prove periodic checks still
    run after relaunch. A synthetic scheduled backup now proves the full
    replacement waits and resumes safely. An opt-in physical test using the
