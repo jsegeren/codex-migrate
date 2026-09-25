@@ -857,6 +857,19 @@ and the existing developer app/helper remained running. Computer-use control
 timed out before its alert could be observed, so this is **not** first-open UI
 acceptance. The test process was stopped, and the extra ZIP and extracted app
 were moved to Trash, where they remain recoverable.
+The exact held build-17 DMG from source `27ef9bf` then passed a separate
+synthetic-quarantine first-open UI test. Its digest still matched the private
+test-only catalog; a copied app passed strict signing and Gatekeeper as
+Notarized Developer ID. With a current Safari-style quarantine attribute,
+macOS displayed its downloaded-app approval, reported that Apple found no
+malicious software, and launched the disposable app from an actual
+`AppTranslocation` path after approval. Computer-use inspection captured the
+app's **Move Codex Migrate to Applications** warning. No second helper started;
+dismissing the warning exited only the disposable app while the original
+developer app/helper remained running. The image was detached and the test
+copy moved to Trash. This closes the warning observation for the exact
+notarized candidate under *synthetic* quarantine, not the browser-downloaded
+build-16 ZIP or a clean buyer-account first launch.
 Safari verified the same purchase, but its first primary-button click opened
 the browser's site-specific **Allow Downloads** permission. That permission
 was not granted without Founder approval; the prompt was canceled and the
