@@ -834,6 +834,18 @@ matched build 16's exact published SHA-256. Thus the live first-party buyer
 flow works in a second browser surface, while this Chrome profile's block is
 still unexplained. This is not a Safari/Firefox or pristine-Chrome acceptance
 result, and the browser-quarantined app has not been installed from that ZIP.
+The same ZIP's macOS quarantine attribute propagated to an extracted app.
+Gatekeeper assessed that quarantined app as Notarized Developer ID. Opening
+the disposable copy from outside Applications triggered App Translocation;
+the test process ran from a translocated path, while no second helper started
+and the existing developer app/helper remained running. Computer-use control
+timed out before its alert could be observed, so this is **not** first-open UI
+acceptance. The test process was stopped, and the extra ZIP and extracted app
+were moved to Trash, where they remain recoverable.
+Safari verified the same purchase, but its first primary-button click opened
+the browser's site-specific **Allow Downloads** permission. That permission
+was not granted without Founder approval; the prompt was canceled and the
+temporary tab closed. No Safari file-save conclusion can be drawn yet.
 The same Production handler's `original` choice returned HTTP 200 and the
 same verified build-16 byte count and digest, as expected while build 16 is
 both the paid original and the latest live release. This does not exercise
