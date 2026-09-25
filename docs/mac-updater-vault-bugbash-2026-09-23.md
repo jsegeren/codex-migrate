@@ -641,6 +641,21 @@ See [the rotation runbook](sparkle-key-rotation-2026-09-23.md).
    [Chrome download guidance](https://support.google.com/chrome/answer/6261569)
    explicitly lists uncommon files and ZIP archives as possible reasons for a
    “Suspicious” classification.
+   On September 25, the exact build-17 **DMG** from private sandbox Blob was
+   opened through a short-lived, locally hosted trusted-click redirect in the
+   Founder's regular Chrome profile. Chrome displayed
+   `ERR_BLOCKED_BY_CLIENT` for the private Blob hostname before any download.
+   The same exact DMG had already downloaded with matching bytes in a clean
+   headless Chrome context. This narrows the direct-link failure to that
+   browser profile/client, not the DMG bytes or Blob availability. The
+   responsible client component remains unidentified; do not claim that a
+   different artifact format fixes direct Blob links in this profile.
+   A separate localhost server streamed the same verified DMG bytes without
+   redirecting to Blob. This Chrome profile also returned
+   `ERR_BLOCKED_BY_CLIENT` for the local attachment route, including when its
+   path matched `/api/purchase-archive`; `curl` received all 10,397,434 bytes.
+   Localhost is not the live `migrate.segeren.com` origin, so this does **not**
+   prove that the Production first-party DMG route will be blocked or allowed.
 2. The rebuilt clean-source app, rotation DMG, Sparkle signature, private
    sandbox Blob readback, isolated build-16-to-17 quit-path install, and
    candidate-code idle install/relaunch with an app-owned synthetic token pass.
