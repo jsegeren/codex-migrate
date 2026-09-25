@@ -270,3 +270,12 @@ mount passed strict deep code-signature verification, notarized Developer ID
 Gatekeeper assessment, and stapled-ticket validation. The image was detached
 and the temporary copy removed. The app was not launched and no Codex or Vault
 data on that Mac was changed; this is artifact compatibility evidence only.
+The exact packaged `bed7cba` engine also passed the opt-in physical Vault
+restore/update-contention test: the helper refused both idle and shutdown
+requests while a disposable restore ran, wrote no update guard, and permitted
+shutdown only after the restored transcript verified. A separate packaged
+backup-interruption test killed an in-progress disposable backup, verified the
+previous published snapshot and unchanged source, then retried successfully.
+The local Python suite passed 872 tests with 22 skips. These are synthetic
+fixture and helper-level results, not a paid Sparkle replacement or a clean
+user-account acceptance receipt.
