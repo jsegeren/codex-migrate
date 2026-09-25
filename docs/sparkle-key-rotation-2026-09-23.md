@@ -315,4 +315,6 @@ ordinary paid request still returned the exact 9,591,579-byte build-16 ZIP
 with catalog SHA-256
 `60eff4dcb07088d01c966587e808f21d5fa74b8afb4eba45ed326543f07241f7`.
 The public appcast still advertised build 16 and no canary setting remained
-in the Production environment. Build 17 remains private and unaccepted.
+in the Production environment. The unaliased test-only canary deployment
+was removed by exact deployment ID; the current Production deployment remained
+ready and still advertised build 16. Build 17 remains private and unaccepted.
