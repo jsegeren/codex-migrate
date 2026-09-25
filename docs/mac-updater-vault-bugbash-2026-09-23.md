@@ -908,3 +908,12 @@ disposable Downloads folder; all 18 focused desktop tests passed (two expected
 fixture skips). This source change is newer than the held notarized build-17
 DMG, so that image remains mechanism evidence only. Rebuild, notarize, sign,
 and repeat the exact-candidate installation checks before release.
+
+A local-only arm64 app was built from clean source `5f913b2` with the new
+location guard. Strict code-signature verification passed. Its packaged engine
+completed a synthetic encrypted backup and restore without moving authentication
+or installation identity; a second opt-in physical test kept the updater idle
+and shutdown endpoints closed during a 128-MiB Vault restore, then permitted
+shutdown only after the recovered transcript matched. The test Keychain item
+and temporary data were removed. This ad-hoc-signed package is not notarized,
+distributed, or proof of a paid buyer update.
