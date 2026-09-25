@@ -285,3 +285,34 @@ and all 10,397,434 downloaded bytes matched the staged SHA-256. The signed
 Blob URL stayed inside the operator process. This checks candidate browser
 transport only, not paid delivery, an ordinary buyer Chrome profile, or
 first launch.
+
+On September 25, catalog-only PR #34 merged as `56bafd9` and passed the
+main-branch Python 3.9 and 3.12 CI. That exact main revision was deployed to
+Production with the `bed7cba` entry still testing-only and unaccepted; the
+public appcast continued to advertise build 16. A short-lived Production
+canary was limited to an already-paid Founder Checkout session and the exact
+candidate ID and SHA-256. The paid `/api/update-archive` response returned
+10,397,434 bytes with SHA-256
+`09159745ee1e5ba08a3dc9e9baf37d23419310a4a49daca16032de890e15dd6e`.
+Without a purchase token, the same canary route returned 403.
+
+A disposable client was derived from the archived live build-16 ZIP. It kept
+the old embedded Sparkle public key and build number, but was locally re-signed
+after test-only changes to use a loopback appcast, send the private canary
+header, and read the paid token from a closed stdin pipe. Its automatic
+background check fetched the exact Production-paid DMG. On graceful quit,
+Sparkle replaced that client in place with build 17. The installed bundle
+reported source `bed7cba5c85f2f4316ca9f2c10a67af6b807c92c`, passed strict
+code-signature verification and Notarized Developer ID Gatekeeper assessment,
+and relaunched one healthy local helper. This proves the paid server stream
+and old-key-to-new-key Sparkle installation in a physical test, but **not** the
+unmodified buyer app's token-linking flow, an idle installation without a
+manual quit, or clean-account first launch.
+
+All four canary settings were removed and Production redeployed. With the
+same paid Founder token, the canary request then returned 403, while the
+ordinary paid request still returned the exact 9,591,579-byte build-16 ZIP
+with catalog SHA-256
+`60eff4dcb07088d01c966587e808f21d5fa74b8afb4eba45ed326543f07241f7`.
+The public appcast still advertised build 16 and no canary setting remained
+in the Production environment. Build 17 remains private and unaccepted.
