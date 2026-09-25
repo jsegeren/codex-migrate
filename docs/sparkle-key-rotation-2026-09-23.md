@@ -247,3 +247,19 @@ and Gatekeeper as Notarized Developer ID. The mounted app reported build 17,
 the rotated public key, and the `27ef9bf` source receipt. The mount was
 detached and the disposable image moved to Trash without launching the app.
 This is artifact compatibility evidence, not a second-Mac install test.
+
+The next exact-source candidate is clean commit
+`bed7cba5c85f2f4316ca9f2c10a67af6b807c92c`. Apple Accepted the signed
+and stapled app (`9837371b-3677-476a-9c5c-c9a5a8719b8c`) and separately
+signed and stapled rotation DMG (`741699d3-7c88-4c12-bf55-32ec38bcf578`).
+The final 10,397,434-byte DMG has SHA-256
+`09159745ee1e5ba08a3dc9e9baf37d23419310a4a49daca16032de890e15dd6e`;
+its Sparkle signature
+`lxYQ9ErXTBxP4qS42HcrKaodZ0K7AE4OYWKeMD4uNFhOA3RF/IfiCoj73e8BL+PhjyiVD3XkGPZeW6Sw2R7oAg==`
+verified against those exact bytes. Apple staple, strict signing, and
+Gatekeeper checks passed. The exact image was uploaded to the private sandbox
+store and independently read back in full with matching length and SHA-256.
+The catalog entry remains `testingOnly: true` and `accepted: false`; build 16
+remains the live paid release. Physical paid-update, idle/busy-operation,
+failure-path, and clean-account acceptance are still required for this exact
+candidate before promotion.
