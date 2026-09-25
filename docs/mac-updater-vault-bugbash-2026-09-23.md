@@ -718,6 +718,22 @@ See [the rotation runbook](sparkle-key-rotation-2026-09-23.md).
    on Python 3.9 and 3.12. This proves Vault destination disk-pressure
    recovery, not insufficient-space handling inside Sparkle's app update.
 
+On September 25, both Founder Macs had OneDrive running. A tiny, nonsensitive
+file placed in the proposed sync folder on the first Mac appeared in the
+second Mac's matching folder, and its later deletion propagated. This proves
+one small-file sync round trip, not a completed encrypted Vault upload,
+provider health guarantee, or usable recovery key. The probe was removed.
+
+The exact 10,397,434-byte build-17 DMG was also copied to the second Mac over
+verified SSH; its SHA-256 matched the held release, and its mounted app passed
+strict code-signature verification. A disposable packaged-engine Vault test
+could not create its first synthetic backup because the second Mac's login
+Keychain refused noninteractive access from that SSH session. The test did not
+read or change real Codex history, did not open the app, and did not reach the
+restore-contention assertion. Its disk image was detached and temporary files
+removed. Run this acceptance from the second Mac's GUI login session; do not
+reinterpret the SSH failure as a product pass or bypass Keychain interaction.
+
 An opt-in packaged-engine test now puts a synthetic Codex source home on a
 **case-sensitive APFS** volume with two distinct transcripts whose filenames
 differ only by case. The exact build-17 engine backed up and verified both,
