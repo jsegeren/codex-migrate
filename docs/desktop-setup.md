@@ -270,6 +270,7 @@ Release also requires a Developer ID distribution provisioning profile for the
 bundled Vault helper App ID `com.segeren.codex-migrate.vault-crypto`. It must
 authorize the exact `P9J3JK79KQ.com.segeren.codex-migrate.vault-crypto`
 Keychain group; the build checks this and refuses release without the profile.
+It also inspects the signed helper's final entitlements before notarization.
 This is direct distribution, not a Mac App Store submission. Local test builds
 without that profile deliberately use a legacy-Keychain test mode and must not
 be distributed as a Vault security release.

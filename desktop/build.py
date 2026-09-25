@@ -53,6 +53,21 @@ def vault_profile(path):
     return candidate
 
 
+def verify_vault_entitlements(app):
+    """Inspect what codesign actually placed on the provisioned helper."""
+    try:
+        encoded = subprocess.check_output(
+            ["codesign", "-d", "--entitlements", ":-", str(app)],
+            stderr=subprocess.DEVNULL)
+        claims = plistlib.loads(encoded)
+    except (subprocess.CalledProcessError, OSError, plistlib.InvalidFileException):
+        raise ValueError("signed Vault helper entitlements are unreadable") from None
+    if (not isinstance(claims, dict) or
+            claims.get("com.apple.application-identifier") != VAULT_KEYCHAIN_GROUP or
+            claims.get("keychain-access-groups") != [VAULT_KEYCHAIN_GROUP]):
+        raise ValueError("signed Vault helper does not claim its provisioned Keychain group")
+
+
 def sparkle_distribution(build_root):
     cache = build_root / ("sparkle-" + SPARKLE_VERSION)
     archive = cache / ("Sparkle-" + SPARKLE_VERSION + ".tar.xz")
@@ -470,6 +485,8 @@ def main():
             vault_signing += ["--entitlements", ROOT / "desktop/CodexVaultCrypto.entitlements"]
         run(*vault_signing, vault_app)
         run("codesign", "--verify", "--deep", "--strict", vault_app)
+        if args.vault_profile:
+            verify_vault_entitlements(vault_app)
         run(*signing, app)
         run("codesign", "--verify", "--deep", "--strict", app)
         engine_version = subprocess.check_output(

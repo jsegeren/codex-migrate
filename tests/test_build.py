@@ -23,6 +23,22 @@ def response(status="Accepted", identifier=SUBMISSION, returncode=0):
 
 
 class ReleaseBuildTests(unittest.TestCase):
+    def test_signed_vault_helper_must_claim_exact_keychain_group(self):
+        expected = {"com.apple.application-identifier": build.VAULT_KEYCHAIN_GROUP,
+                    "keychain-access-groups": [build.VAULT_KEYCHAIN_GROUP]}
+        helper = Path("/private/fixture/CodexVaultCrypto.app")
+        with patch.object(build.subprocess, "check_output", return_value=plistlib.dumps(expected)):
+            build.verify_vault_entitlements(helper)
+        for claim in (
+            dict(expected, **{"keychain-access-groups": ["P9J3JK79KQ.other"]}),
+            dict(expected, **{"com.apple.application-identifier": "P9J3JK79KQ.other"}),
+            {},
+        ):
+            with self.subTest(claim=claim), \
+                    patch.object(build.subprocess, "check_output", return_value=plistlib.dumps(claim)), \
+                    self.assertRaises(ValueError):
+                build.verify_vault_entitlements(helper)
+
     def test_vault_helper_entitlement_and_bundle_match_release_group(self):
         root = Path(__file__).resolve().parents[1] / "desktop"
         with (root / "CodexVaultCrypto.entitlements").open("rb") as stream:
@@ -486,6 +502,7 @@ class ReleaseBuildTests(unittest.TestCase):
                                                     "Developer ID Application: Fixture", "--vault-profile", str(profile),
                                                     "--notary-profile", "profile"]), \
                      patch.object(build, "vault_profile", return_value=profile), \
+                     patch.object(build, "verify_vault_entitlements"), \
                      patch.object(build, "source_receipt", side_effect=[receipt, second_receipt]), \
                      patch.object(build, "sparkle_distribution", return_value=sparkle), \
                      patch.object(build, "run", side_effect=run), \
