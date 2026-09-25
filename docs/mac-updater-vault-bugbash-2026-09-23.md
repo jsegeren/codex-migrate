@@ -736,6 +736,19 @@ second Mac's matching folder, and its later deletion propagated. This proves
 one small-file sync round trip, not a completed encrypted Vault upload,
 provider health guarantee, or usable recovery key. The probe was removed.
 
+The exact held build-17 DMG's packaged engine then completed a **read-only
+planning preflight** against the Founder's real Codex history on both Macs.
+On the first Mac it enumerated 2,053 transcripts totaling 56,636,675,501
+bytes; on the second, 2,251 transcripts totaling 85,767,896,197 bytes. Each
+plan validated a distinct, currently absent folder under that Mac's physical
+OneDrive CloudStorage path. The image digest matched the release receipt on
+the second Mac before mounting. Both images were detached; the second Mac's
+temporary copy and both mount points were removed. Planning reads file
+metadata; it did not create a Vault,
+encrypt or upload data, save a recovery key, install a backup schedule, or
+prove that OneDrive has enough cloud quota. Real encrypted snapshots and
+cross-Mac recovery remain unverified.
+
 The exact 10,397,434-byte build-17 DMG was also copied to the second Mac over
 verified SSH; its SHA-256 matched the held release, and its mounted app passed
 strict code-signature verification. A disposable packaged-engine Vault test
