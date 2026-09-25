@@ -734,6 +734,19 @@ restore-contention assertion. Its disk image was detached and temporary files
 removed. Run this acceptance from the second Mac's GUI login session; do not
 reinterpret the SSH failure as a product pass or bypass Keychain interaction.
 
+The same opt-in test was then run from a uniquely labelled, nonpersistent
+LaunchAgent in that Mac's logged-in GUI session, using the exact mounted
+build-17 engine and only a disposable Codex home. It created and verified a
+synthetic encrypted snapshot, held both updater-idle and update-shutdown while
+a 128-MiB Vault restore ran, verified the restored transcript and unchanged
+source, then accepted shutdown and wrote the target-build guard. The test
+reported `OK` and the LaunchAgent's last exit code was 0. Its temporary Vault
+Keychain item was removed by the test; the job was booted out, the image
+detached, and all disposable files removed. No app window was opened and no
+real Codex history or backup schedule was changed. This closes the packaged
+helper's restore-contention check on the second physical Mac, not a full
+Sparkle replacement, clean-account first launch, or real-history backup.
+
 An opt-in packaged-engine test now puts a synthetic Codex source home on a
 **case-sensitive APFS** volume with two distinct transcripts whose filenames
 differ only by case. The exact build-17 engine backed up and verified both,
