@@ -279,3 +279,9 @@ previous published snapshot and unchanged source, then retried successfully.
 The local Python suite passed 872 tests with 22 skips. These are synthetic
 fixture and helper-level results, not a paid Sparkle replacement or a clean
 user-account acceptance receipt.
+The private sandbox object also passed a clean headless Chrome trusted-click
+download: Chrome emitted a download attachment with the expected DMG filename,
+and all 10,397,434 downloaded bytes matched the staged SHA-256. The signed
+Blob URL stayed inside the operator process. This checks candidate browser
+transport only, not paid delivery, an ordinary buyer Chrome profile, or
+first launch.
