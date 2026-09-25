@@ -656,6 +656,18 @@ See [the rotation runbook](sparkle-key-rotation-2026-09-23.md).
    path matched `/api/purchase-archive`; `curl` received all 10,397,434 bytes.
    Localhost is not the live `migrate.segeren.com` origin, so this does **not**
    prove that the Production first-party DMG route will be blocked or allowed.
+   A fresh browser comparison narrowed the regular Chrome-profile failure.
+   Direct top-level GET navigation to both live `/api/purchase-archive` and
+   the public `/api/appcast` returned `ERR_BLOCKED_BY_CLIENT` in that profile.
+   The same `/api/purchase-archive` GET in a new Chrome Incognito window,
+   with no extension controls visible, reached the server and returned the
+   expected HTTP 405 because downloads require POST. Safari recognized the
+   public appcast as an RSS feed rather than blocking it. This localizes the
+   observed top-level failure to the regular Chrome client/profile, not a
+   server outage or the build-17 bytes. It does not identify which extension
+   or setting is responsible, prove that a paid POST download works in
+   Incognito, or make the ordinary-profile buyer path reliable. No browser
+   protections were changed.
 2. The rebuilt clean-source app, rotation DMG, Sparkle signature, private
    sandbox Blob readback, isolated build-16-to-17 quit-path install, and
    candidate-code idle install/relaunch with an app-owned synthetic token pass.
