@@ -387,3 +387,25 @@ the exact build-16 ZIP through the normal paid route; the public appcast
 remained build 16. This is **not** proof of an unmodified buyer client's
 purchase-link setup or idle installation without a quit. Clean-account and
 remaining failure-path acceptance still gate public build-17 promotion.
+
+### Build 18 synthetic cross-Mac recovery — September 26, 2026
+
+The exact signed build-18 helper from source `d421c462831b362df71b89e5a6fcb03f94d108d9`
+created and verified an encrypted snapshot of a disposable one-thread Codex
+home on the first Mac. Its disposable recovery key and encrypted test bundle
+were transferred over SSH to the second Mac. A temporary LaunchAgent in that
+Mac's logged-in GUI session imported the key, verified the snapshot, and
+restored the transcript byte-for-byte using the exact signed build-18 helper.
+The producer and consumer test keys were deleted, the LaunchAgent was booted
+out, and the remote temporary files were removed; local test files were moved
+to Trash.
+
+The first consumer attempt failed because the test transfer copied only the
+nested crypto helper, omitting its signed companion legacy-key helper. The
+import had created a disposable Keychain entry before the helper's subsequent
+verification failed. After reconstructing the exact packaged `Contents`
+layout, the entry was verified and deleted; a clean repeat passed. This was a
+test-fixture packaging error, not evidence of a shipped build-18 defect. This
+proof covers synthetic cross-Mac recovery only—not real-history backup,
+off-device storage, scheduled protection on both Macs, a pristine buyer
+account, or the paid native update path.
