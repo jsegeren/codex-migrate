@@ -446,10 +446,13 @@ the public appcast continued to offer build 16.
 
 A disposable Developer ID signed build-16 client and loopback feed were
 prepared for a physical Sparkle test. Launch was refused by the app's
-duplicate-instance guard because the separate acceptance-test macOS account
-still had its Applications copy running. The disposable client was quit; no
-native update was installed or counted as accepted. The test feed was stopped
-and the disposable client moved to Trash. All four temporary Production canary
+duplicate-instance guard. A later read-only process check disproved the
+initial theory that the separate acceptance-test macOS account caused this:
+its app can coexist with the Founder's app. Other copies were also running
+under the Founder's macOS account, but the exact lock holder at the refused
+launch was not established. The disposable client was quit; no native update
+was installed or counted as accepted. The test feed was stopped and the
+disposable client moved to Trash. All four temporary Production canary
 variables were removed and Production was redeployed without them. The paid
 token again received 403 on the canary route while its ordinary purchase link
 still selected build 16; anonymous canary access remained 403 and the public
