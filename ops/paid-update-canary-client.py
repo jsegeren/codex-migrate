@@ -19,14 +19,14 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 OLD_SOURCE = "c6d2bdf81e7093a044886dd35e1b97ed8ce40ea3"
-CURRENT_SOURCE = "1fdf64094096d60554e3986c24131ca9b1d887b7"
+CURRENT_SOURCE = "3d990b96fda666ceee9ae548a5e5349a14767a10"
 OLD_SHA256 = "60eff4dcb07088d01c966587e808f21d5fa74b8afb4eba45ed326543f07241f7"
 OLD_PUBLIC_KEY = "xm7MLPjJBQcWcm2t8rXSoOoPk5ENifmVZPI52GwUoHs="
 CANARY_ID = "codex-migrate-build17-vault-crypto-arm64"
-CANARY_SHA256 = "e365674834112941ce1085ec92b78f030f883a0223491e829b51c6c73b03cbf3"
-CANARY_SIGNATURE = "A/2LGcZEsydVI2lY2LcPpbNLcAQgqgYfE0Rfou/pqrZOmOlVxVAUpBxpRC+V6KBStf005IMbSV3yLrLxqZC9CA=="
+CANARY_SHA256 = "3697889980f5fcb0a3717752cb0c46068efe0d207b181f6266980f87ae218401"
+CANARY_SIGNATURE = "Ohxtz0yaBy1dUItBlS/LIlbG6NprSVf2azKPzrXAL65fOuWhv72yKCH0JKNjBLbXmf7zJaZ8bKki/ftMzvYSAA=="
 ARCHIVE = ROOT / "build/live-build16/Codex-Migrate-0.1.0-build16-arm64.zip"
-CANDIDATE_DMG = ROOT / "build/desktop-rotation-xe3_aj8m/Codex-Migrate-0.1.0-build17-arm64.dmg"
+CANDIDATE_DMG = ROOT / "build/desktop-rotation-saub0ldf/Codex-Migrate-0.1.0-build17-arm64.dmg"
 HEADER_HOOK = 'request.setValue("Bearer \\(token)", forHTTPHeaderField: "Authorization")'
 TOKEN_LOOKUP = '    static func savedToken() -> String? {\n'
 HELPER_START = '        _ = updaterController\n        startHelper()\n'
@@ -55,11 +55,11 @@ def canary():
         raise ValueError("candidate source changed")
     if selected.get("sha256") != CANARY_SHA256:
         raise ValueError("candidate artifact changed")
-    if (selected.get("size") != 10513015 or
+    if (selected.get("size") != 10512566 or
             selected.get("sparkleSignature") != CANARY_SIGNATURE or
             selected.get("pathname") != f"sandbox/{CANARY_SHA256}/Codex-Migrate-0.1.0-build17-arm64.dmg" or
             selected.get("diskImageNotarization") != {
-                "status": "Accepted", "id": "572cffeb-c372-4338-88fc-739767058399"}):
+                "status": "Accepted", "id": "a7580574-c429-4f53-a1a3-000cba3f7e50"}):
         raise ValueError("candidate signature or size changed")
     return selected
 

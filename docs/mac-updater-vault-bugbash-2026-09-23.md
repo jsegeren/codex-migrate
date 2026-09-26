@@ -1260,3 +1260,19 @@ prove purchase-link entitlement, backup, restore, scheduling, or a clean
 buyer-browser download in that account. The installed Applications copy is
 being retained solely for further acceptance testing; public build 16 remains
 unchanged.
+
+On September 25, PR #37's paginated-fork history fix was merged into the held
+updater branch as `3d990b96fda666ceee9ae548a5e5349a14767a10`, alongside the
+pre-backup size warning. Both GitHub CI runs passed Python 3.9 and 3.12. A
+clean-source, provisioned Developer ID app from that exact commit received Apple
+Accepted notarization `c2d834b4-96d8-45b6-8bd3-74e6591cff25`; its packaged
+engine passed 18 desktop checks with one expected filesystem skip. The matching
+Developer ID signed and stapled rotation DMG received Apple Accepted
+notarization `a7580574-c429-4f53-a1a3-000cba3f7e50`. Its final 10,512,566
+bytes have SHA-256
+`3697889980f5fcb0a3717752cb0c46068efe0d207b181f6266980f87ae218401`,
+and Sparkle's new-key signature verified against those exact bytes. Its catalog
+entry remains `testingOnly: true`, `accepted: false`. No private Blob upload,
+buyer delivery, public appcast change, or paid upgrade has been claimed for
+this new image; the superseded installed acceptance-account app is not this
+build. Complete those exact-image and clean-account gates before promotion.
