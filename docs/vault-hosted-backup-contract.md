@@ -46,15 +46,18 @@ hosting/API compute, payment fees, monitoring, failed retries, support, and
 retained versions still cost money. See the [R2 pricing](https://developers.cloudflare.com/r2/pricing/)
 and [presigned-URL contract](https://developers.cloudflare.com/r2/api/s3/presigned-urls/).
 
-At the measured **approximately 75 GB** first restorable backup across the
-Founder's two Macs, R2 storage alone is about **$1.13/month** before retention
+At **75 GB stored**, R2 storage alone is about **$1.13/month** before retention
 growth and other costs. At 250 GB it is $3.75/month; at 500 GB it is
-$7.50/month. A $10 flat *unlimited* plan is not defensible. A **250 GB included
-allowance** is the initial candidate, not a launched entitlement: measure
-incremental version growth and worst-case operations, then approve the exact
-allowance and price before publishing a subscription. Near the limit, warn and
-stop new uploads without deleting the last good snapshot or adding an
-unapproved overage charge. A second capacity tier requires a visible choice.
+$7.50/month. These are pricing scenarios, not measurements of a complete
+encrypted backup. Source-folder size does not establish stored size after
+compression and version retention; measure actual encrypted bytes on both Macs
+before locking an allowance. A $10 flat *unlimited* plan is not defensible. A
+**250 GB included allowance** is the initial candidate, not a launched
+entitlement: measure incremental version growth and worst-case operations,
+then approve the exact allowance and price before publishing a subscription.
+Near the limit, warn and stop new uploads without deleting the last good
+snapshot or adding an unapproved overage charge. A second capacity tier
+requires a visible choice.
 
 Backblaze B2 remains a fallback candidate. It charges for storage, provides
 free upload and usually free egress up to three times average monthly storage,
