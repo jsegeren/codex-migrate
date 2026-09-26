@@ -85,9 +85,10 @@ egress allowance. Do not claim that B2 restores are always free. See its
   to that customer's remote Vault. Never ship bucket credentials in the app or
   accept caller-supplied bucket/key prefixes. Treat a presigned URL as a bearer
   secret and keep it out of logs, analytics, and support email.
-- A provider-neutral subscription upload gate now checks a freshly retrieved
-  Stripe Subscription against a server-held enrollment record. Only the
-  exact customer, subscription, $10 monthly price, environment, and
+- A provider-neutral subscription upload gate is implemented for a future
+  service to call with a freshly retrieved Stripe Subscription and its
+  server-held enrollment record. Only the exact customer, subscription,
+  $10 monthly price, environment, and
   `trialing` or `active` status can pass; paused collection and every other
   status fail closed. This evaluator does not create customer identity,
   checkout, enrollment, a signed webhook, a purchase-refund check, or an
