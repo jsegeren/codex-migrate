@@ -1,7 +1,7 @@
 // Validate a client's staged-object claim before any hosted snapshot can be
-// published. The caller supplies an account/Vault-scoped verifier backed by
-// provider-validated checksums or storage-adjacent reads; this module never
-// treats a client receipt, a bare PUT response, or an ETag as proof.
+// published. The caller supplies server-owned account/Vault IDs and a verifier
+// backed by provider-validated checksums or storage-adjacent reads; this
+// module never treats a client receipt, a bare PUT response, or an ETag as proof.
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const HEX = /^[0-9a-f]{64}$/;
@@ -59,14 +59,28 @@ function validateReceipt(receipt, maxReceiptBytes) {
   }))), totalBytes };
 }
 
-async function verifyStagedReceipt(receipt, maxReceiptBytes, verifyObject) {
+function storagePrefix(scope) {
+  // These IDs must come from the authenticated service's records, never from
+  // a client-provided bucket name or prefix. A valid shape alone is not proof
+  // that the caller owns either ID.
+  if (!exactKeys(scope, ['accountId', 'vaultId']) ||
+      !UUID.test(scope.accountId) || !UUID.test(scope.vaultId)) {
+    throw new HostedReceiptError();
+  }
+  return `accounts/${scope.accountId}/vaults/${scope.vaultId}/`;
+}
+
+async function verifyStagedReceipt(receipt, maxReceiptBytes, scope, verifyObject) {
   if (typeof verifyObject !== 'function') throw new HostedReceiptError();
   const validated = validateReceipt(receipt, maxReceiptBytes);
+  const prefix = storagePrefix(scope);
   for (const item of validated.objects) {
     // The service's verifier must independently establish the stored byte
     // count and SHA-256 within the authenticated account/Vault namespace.
     try {
-      if (await verifyObject(item) !== true) throw new HostedReceiptError();
+      if (await verifyObject(Object.freeze({ ...item, key: prefix + item.key })) !== true) {
+        throw new HostedReceiptError();
+      }
     } catch { throw new HostedReceiptError(); }
   }
   return Object.freeze({ snapshotId: validated.snapshotId,
