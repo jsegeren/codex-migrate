@@ -41,6 +41,7 @@ def parser() -> argparse.ArgumentParser:
     launch.add_argument("--state-dir", default=str(Path.home() / ".local/state/codex-migrate-browser"))
     launch.add_argument("--port", type=_port, default=0)
     launch.add_argument("--no-open", action="store_true")
+    launch.add_argument("--resume-after-update-build", type=int, help=argparse.SUPPRESS)
 
     inventory = commands.add_parser("inventory", help="Inspect local data without changing it")
     inventory.add_argument("--source-home", default=str(Path.home()))
@@ -243,7 +244,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     try:
         if args.command == "launch":
             from codex_migrate.setup import SetupDashboard
-            SetupDashboard(args.source_home, args.state_dir, args.port).serve(open_browser=not args.no_open)
+            dashboard = SetupDashboard(args.source_home, args.state_dir, args.port)
+            if args.resume_after_update_build is not None:
+                from codex_migrate.vault_schedule import resume_after_update
+                resume_after_update(args.source_home, args.resume_after_update_build)
+            dashboard.serve(open_browser=not args.no_open)
             return 0
         if args.command == "inventory":
             result = collect(args.source_home, args.workspace)

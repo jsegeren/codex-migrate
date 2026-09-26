@@ -17,6 +17,150 @@ from codex_migrate.cli import _port
 
 
 class DesktopTests(unittest.TestCase):
+    def test_unsafe_launch_exits_before_sparkle_or_helper_and_keychain_reads_are_silent(self):
+        root = Path(__file__).resolve().parents[1]
+        source = (root / "desktop/CodexMigrate.swift").read_text()
+        launch = source.split("func applicationDidFinishLaunching", 1)[1].split(
+            "func applicationShouldHandleReopen", 1)[0]
+        self.assertIn("showFailure(\"Quit this copy", launch)
+        self.assertIn("NSApplication.shared.terminate(nil)\n            return\n        }\n        _ = updaterController\n        startHelper()", launch)
+        helper = source.split("private func startHelper()", 1)[1].split("private func consume", 1)[0]
+        self.assertIn("guard !InstallLocation.needsMoveToApplications(", helper)
+        self.assertLess(helper.index("guard !InstallLocation.needsMoveToApplications("), helper.index("let child = Process()"))
+        entitlement = (root / "desktop/UpdateEntitlement.swift").read_text()
+        self.assertIn("context.interactionNotAllowed = true", entitlement)
+        self.assertIn("kSecUseAuthenticationContext as String: context", entitlement)
+        self.assertIn("DispatchQueue.global(qos: .userInitiated).async", source)
+
+    def test_native_quit_handoff_does_not_wait_for_main_queue_reply(self):
+        source = (Path(__file__).resolve().parents[1] / "desktop/CodexMigrate.swift").read_text()
+        self.assertIn("return .terminateCancel", source)
+        self.assertNotIn("reply(toApplicationShouldTerminate:", source)
+        self.assertNotIn("return .terminateLater", source)
+
+    def test_update_quit_waits_for_confirmed_guard_when_helper_exits_first(self):
+        source = (Path(__file__).resolve().parents[1] / "desktop/CodexMigrate.swift").read_text()
+        self.assertIn("private var quitRequiresUpdateGuard = false", source)
+        self.assertIn("private var quitShutdownConfirmed = false", source)
+        self.assertIn("private var updateShutdownAuthorized = false", source)
+        self.assertIn("if !self.quitRequiresUpdateGuard || self.quitShutdownConfirmed", source)
+        self.assertIn("if self.process?.isRunning != true", source)
+        self.assertIn("if (updatePending || updateArchiveReady ||", source)
+        self.assertIn("!updateShutdownAuthorized &&", source)
+        self.assertIn("self.quitShutdownConfirmed = true", source)
+        self.assertIn("self.startHelper()", source)
+
+    def test_lost_shutdown_reply_recovers_dashboard_after_helper_exit(self):
+        source = (Path(__file__).resolve().parents[1] / "desktop/CodexMigrate.swift").read_text()
+        termination = source.split("func applicationShouldTerminate", 1)[1].split(
+            "private func helperRequest", 1)[0]
+        failure = termination.split("guard (response as? HTTPURLResponse)?.statusCode == 200 else {", 1)[1].split(
+            "self.quitShutdownConfirmed = true", 1)[0]
+        self.assertIn("self.quitting = false", failure)
+        missing, running = failure.split("} else if self.process?.isRunning == true {", 1)
+        self.assertIn("if self.process == nil {", missing)
+        self.assertIn("self.startHelper()", missing)
+        self.assertIn("self.openMigration()", running.split("}", 1)[0])
+        self.assertNotIn("self.process = nil", failure)
+
+    def test_idle_update_uses_sparkle_relaunch_after_helper_shutdown(self):
+        source = (Path(__file__).resolve().parents[1] / "desktop/CodexMigrate.swift").read_text()
+        self.assertIn("idleInstallHandler = install", source)
+        self.assertIn("return true", source)
+        self.assertIn("self.shutdownHelperForIdleInstall()", source)
+        self.assertIn('helperRequest("/api/update-shutdown", method: "POST", targetBuild: updateTargetBuild)', source)
+        self.assertIn('"--resume-after-update-build"', source)
+        self.assertIn('"X-Codex-Migrate-Target-Build"', source)
+        self.assertIn("process == nil, let install = idleInstallHandler", source)
+        self.assertIn("install() // Sparkle owns signature verification", source)
+
+    def test_check_or_incomplete_download_does_not_reserve_vault_update_guard(self):
+        source = (Path(__file__).resolve().parents[1] / "desktop/CodexMigrate.swift").read_text()
+        self.assertIn("private var updateArchiveReady = false", source)
+        self.assertIn("func updater(_ updater: SPUUpdater, didDownloadUpdate item: SUAppcastItem)", source)
+        self.assertIn("func updater(_ updater: SPUUpdater, willInstallUpdate item: SUAppcastItem)", source)
+        self.assertIn("let updatePending = updateScheduledForQuit || updateArchiveReady", source)
+        self.assertNotIn("updateScheduledForQuit || updaterController.updater.sessionInProgress", source)
+
+    def test_aborted_update_discards_readiness_before_an_ordinary_quit(self):
+        source = (Path(__file__).resolve().parents[1] / "desktop/CodexMigrate.swift").read_text()
+        self.assertIn("func updater(_ updater: SPUUpdater, didAbortWithError error: Error)", source)
+        cleanup = source.split("private func discardUncommittedUpdate()", 1)[1].split(
+            "func updater(_ updater: SPUUpdater, willInstallUpdate", 1)[0]
+        self.assertIn("guard !quitting, !idleInstallShutdownPending, !updateShutdownAuthorized", cleanup)
+        self.assertIn("updateScheduledForQuit = false", cleanup)
+        self.assertIn("updateArchiveReady = false", cleanup)
+        self.assertIn("idleInstallHandler = nil", cleanup)
+
+    @unittest.skipUnless(sys.platform == "darwin", "packaged Vault requires macOS CryptoKit")
+    def test_packaged_engine_backs_up_and_restores_without_authentication(self):
+        binary = os.environ.get("CODEX_MIGRATE_TEST_ENGINE")
+        if not binary:
+            self.skipTest("set CODEX_MIGRATE_TEST_ENGINE to a packaged engine")
+        helper = Path(binary).resolve().parents[2] / "Helpers/CodexVaultCrypto.app/Contents/MacOS/CodexVaultCrypto"
+        self.assertTrue(helper.is_file())
+        env = {key: value for key, value in os.environ.items()
+               if not key.startswith(("PYTHON", "DYLD_"))}
+        env["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            codex = source / ".codex"
+            sessions = codex / "sessions"
+            sessions.mkdir(parents=True)
+            transcript = sessions / "fixture.jsonl"
+            transcript.write_text(json.dumps({"payload": {"message": {"content": "Disposable work"}}}) + "\n")
+            (codex / "auth.json").write_text("TEST-AUTH-MUST-NOT-BACK-UP")
+            (codex / "installation_id").write_text("TEST-IDENTITY-MUST-NOT-BACK-UP")
+            vault = root / "vault"
+            restored = root / "restored"
+            restored_latest = root / "restored-latest"
+            original = transcript.read_bytes()
+
+            def vault_command(*arguments):
+                result = subprocess.run(
+                    [binary, "vault", "--source-home", str(source), *arguments],
+                    env=env, capture_output=True, text=True, timeout=60,
+                )
+                self.assertEqual(result.returncode, 0, "packaged Vault command failed")
+                return json.loads(result.stdout)
+
+            try:
+                plan = vault_command("backup", "--destination", str(vault), "--json")
+                self.assertFalse(plan["applied"])
+                self.assertFalse(vault.exists())
+                saved = vault_command("backup", "--destination", str(vault), "--apply", "--json")
+                self.assertTrue(saved["recovery_key"].startswith("CV1-"))
+                self.assertEqual(saved["transcript_files"], 1)
+                transcript.write_bytes(original + b'{"type":"message","payload":"Later work"}\n')
+                later = vault_command("backup", "--destination", str(vault), "--apply", "--json")
+                self.assertIsNone(later["recovery_key"])
+                self.assertNotEqual(saved["snapshot_id"], later["snapshot_id"])
+                versions = vault_command("snapshots", "--vault", str(vault), "--json")
+                self.assertEqual([item["snapshot_id"] for item in versions],
+                                 [later["snapshot_id"], saved["snapshot_id"]])
+                checked = vault_command("verify", "--vault", str(vault), "--json")
+                self.assertEqual(checked["snapshot_id"], later["snapshot_id"])
+                checked_old = vault_command("verify", "--vault", str(vault),
+                                            "--snapshot", saved["snapshot_id"], "--json")
+                self.assertEqual(checked_old["snapshot_id"], saved["snapshot_id"])
+                vault_command("restore", "--vault", str(vault), "--output", str(restored),
+                              "--snapshot", saved["snapshot_id"], "--apply", "--json")
+                vault_command("restore", "--vault", str(vault), "--output", str(restored_latest),
+                              "--apply", "--json")
+                self.assertEqual((restored / "sessions/fixture.jsonl").read_bytes(), original)
+                self.assertEqual((restored_latest / "sessions/fixture.jsonl").read_bytes(),
+                                 transcript.read_bytes())
+                for destination in (restored, restored_latest):
+                    self.assertFalse((destination / "auth.json").exists())
+                    self.assertFalse((destination / "installation_id").exists())
+            finally:
+                metadata = vault / "vault.json"
+                if metadata.exists():
+                    key_id = json.loads(metadata.read_text())["key_id"]
+                    subprocess.run([str(helper), "delete-key", "--key-id", key_id],
+                                   check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
     def test_real_engine_rejects_nested_filename_collision(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
@@ -255,6 +399,34 @@ class DesktopTests(unittest.TestCase):
                 if process.poll() is None:
                     process.kill()
                 process.communicate(timeout=5)
+
+    @unittest.skipUnless(sys.platform == "darwin", "native macOS persistence")
+    def test_native_install_location_guidance(self):
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as temporary:
+            binary = Path(temporary) / "install-location-checks"
+            subprocess.run(["xcrun", "swiftc", "-parse-as-library",
+                            str(root / "desktop/InstallLocation.swift"),
+                            str(root / "tests/InstallLocationChecks.swift"), "-o", str(binary)],
+                           check=True, capture_output=True, text=True, timeout=60)
+            result = subprocess.run([str(binary)], capture_output=True,
+                                    text=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Install location checks passed", result.stdout)
+
+    @unittest.skipUnless(sys.platform == "darwin", "native macOS persistence")
+    def test_native_duplicate_launch_guidance(self):
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as temporary:
+            binary = Path(temporary) / "duplicate-launch-checks"
+            subprocess.run(["xcrun", "swiftc", "-parse-as-library",
+                            str(root / "desktop/DuplicateLaunch.swift"),
+                            str(root / "tests/DuplicateLaunchChecks.swift"), "-o", str(binary)],
+                           check=True, capture_output=True, text=True, timeout=60)
+            result = subprocess.run([str(binary)], capture_output=True,
+                                    text=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Duplicate launch checks passed", result.stdout)
 
     @unittest.skipUnless(sys.platform == "darwin", "native macOS persistence")
     def test_native_saved_setup_permissions_and_recovery(self):

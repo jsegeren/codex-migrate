@@ -16,9 +16,16 @@ from codex_migrate.vault_backup import BackupPlan, BackupResult
 from codex_migrate.vault_install import InstallResult, ThreadInstallResult
 from codex_migrate.vault_recovery import RestoreResult, SnapshotInfo
 from codex_migrate.vault_schedule import SchedulePlan
+from codex_migrate.vault_dashboard import VAULT_HTML
 
 
 class SetupTests(unittest.TestCase):
+    def test_backup_preflight_shows_exact_history_size_without_claiming_compression(self):
+        self.assertIn('id="backup-footprint"', VAULT_HTML)
+        self.assertIn('fmt(data.transcript_bytes)', VAULT_HTML)
+        self.assertIn('Current Vault does not compress', VAULT_HTML)
+        self.assertIn('the first backup needs roughly this much free space', VAULT_HTML)
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.home = Path(self.temporary.name).resolve()
@@ -831,6 +838,7 @@ class SetupTests(unittest.TestCase):
 
     def test_browser_shutdown_requires_local_token_and_stops_idle_server(self):
         self.assertEqual(self.request("/api/shutdown", {}, authorized=False)[0], 403)
+        self.assertEqual(self.request("/api/update-shutdown", {}, authorized=False)[0], 403)
         self.assertEqual(self.request("/api/shutdown", {}, extra_headers={"Origin": "https://example.com"})[0], 403)
         self.assertFalse(self.helper._closing)
         self.assertEqual(self.request("/api/shutdown", {})[0], 200)
@@ -852,15 +860,35 @@ class SetupTests(unittest.TestCase):
         self.assertFalse(self.helper._closing)
 
     def test_scheduled_vault_backup_blocks_update_and_quit(self):
+        update_headers = {"X-Codex-Migrate-Target-Build": "17"}
         with patch("codex_migrate.setup.vault_schedule_status", return_value={
             "enabled": True, "last_run": {"status": "running"}}):
             self.assertEqual(self.request("/api/update-idle"), (409, {"idle": False}))
             self.assertEqual(self.request("/api/shutdown", {})[0], 409)
+            self.assertEqual(self.request("/api/update-shutdown", {}, extra_headers=update_headers)[0], 409)
         with patch("codex_migrate.setup.vault_schedule_status", side_effect=MigrationError("unsafe")):
             self.assertEqual(self.request("/api/update-idle"), (409, {"idle": False}))
             self.assertEqual(self.request("/api/shutdown", {})[0], 409)
         self.assertFalse(self.helper._closing)
         self.assertEqual(self.request("/api/update-idle"), (200, {"idle": True}))
+
+    def test_scheduled_backup_starting_after_idle_probe_cancels_update_quit(self):
+        # The updater probes first, then requests shutdown. The second check
+        # must catch a LaunchAgent backup that started between those requests.
+        schedule = {"enabled": True, "last_run": {"status": "completed"}}
+        update_headers = {"X-Codex-Migrate-Target-Build": "17"}
+        with patch("codex_migrate.setup.vault_schedule_status", side_effect=lambda _: schedule):
+            self.assertEqual(self.request("/api/update-idle"), (200, {"idle": True}))
+            schedule["last_run"] = {"status": "running"}
+            self.assertEqual(self.request("/api/update-shutdown", {}, extra_headers=update_headers)[0], 409)
+            self.assertFalse(self.helper._closing)
+            schedule["last_run"] = {"status": "completed"}
+            self.assertEqual(self.request("/api/update-shutdown", {})[0], 409)
+            self.assertEqual(self.request("/api/update-shutdown", {}, extra_headers=update_headers)[0], 200)
+        guard = self.home / "Library/Application Support/Codex Vault/update.json"
+        self.assertTrue(guard.exists())
+        self.thread.join(timeout=2)
+        self.assertFalse(self.thread.is_alive())
 
     def test_browser_shutdown_cannot_interrupt_running_paused_or_worker(self):
         self.helper.configure(self.config())

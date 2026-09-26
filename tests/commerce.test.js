@@ -17,10 +17,14 @@ const env = { COMMERCE_MODE: 'sandbox', COMMERCE_STRIPE_KEY: 'rk_test_fixture', 
   COMMERCE_WEBHOOK_SECRET: 'whsec_fixture', COMMERCE_RELEASE: release.id, COMMERCE_BLOB_STORE_ID: 'fixturestore' };
 const config = configuration(env, { [release.id]: release });
 test('unaccepted paid-update canaries cannot become the live release', () => {
-  const releases = require('../commerce/releases.json');
-  for (const id of ['codex-migrate-0.1.0-build17-abort-guard-arm64',
-    'codex-migrate-build18-vault-integrated-arm64']) {
-    const candidate = releases[id];
+  const catalog = require('../commerce/releases.json');
+  for (const id of [
+    'codex-migrate-build17-vault-crypto-arm64',
+    'codex-migrate-0.1.0-build17-abort-guard-arm64',
+    'codex-migrate-build18-vault-integrated-arm64',
+    'codex-migrate-build19-vault-integrated-arm64',
+  ]) {
+    const candidate = catalog[id];
     assert.equal(candidate.testingOnly, true);
     assert.equal(candidate.accepted, false);
     assert.equal(validRelease(candidate, false), true);
@@ -120,6 +124,7 @@ test('beta delivery email includes the remaining checks and both operator alerts
   assert.deepEqual(mail.personalizations.slice(1).map(item => item.to[0].email), PURCHASE_NOTIFY_EMAILS);
   assert.equal(mail.personalizations[0].subject, 'Your Codex Migrate download');
   assert.match(mail.personalizations[0].substitutions['%details%'], /private/);
+  assert.match(mail.personalizations[0].substitutions['%details%'], /Unzip.*Applications.*Downloads/);
   for (const alert of mail.personalizations.slice(1)) {
     assert.equal(alert.subject, '[Codex Migrate] New purchase — $54.00 USD');
     assert.match(alert.substitutions['%details%'], /buyer@example\.invalid/);
@@ -128,6 +133,15 @@ test('beta delivery email includes the remaining checks and both operator alerts
     assert.doesNotMatch(alert.substitutions['%details%'] + alert.substitutions['%closing%'], /private/);
   }
   assert.equal(mail.tracking_settings.open_tracking.enable, false);
+});
+test('DMG buyer delivery gives install and eject instructions', async () => {
+  let mail;
+  assert.equal(await deliveryMail({ to: 'buyer@example.invalid', live: true, link: 'https://example.invalid/private',
+    release: { ...release, filename: 'fixture.dmg' }, amountTotal: 4900 },
+  { LAUNCH_FROM_EMAIL: 'sender@example.invalid', SENDGRID_API_KEY: 'fixture' },
+  async (url, options) => { mail = JSON.parse(options.body); return { status: 202 }; }), 'accepted');
+  assert.match(mail.personalizations[0].substitutions['%details%'], /disk image.*Applications.*eject/);
+  assert.doesNotMatch(mail.personalizations[1].substitutions['%details%'], /private/);
 });
 test('valid paid purchase verifies actual product, charge, and email', () => {
   assert.equal(validatePurchase(fixture().s, config).sessionId, 'cs_test_fixture');

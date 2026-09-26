@@ -9,7 +9,7 @@
   <key>CFBundleShortVersionString</key><string>0.1.0</string>
   <key>CFBundleVersion</key><string>17</string>
   <key>SUFeedURL</key><string>https://migrate.segeren.com/api/appcast</string>
-  <key>SUPublicEDKey</key><string>xm7MLPjJBQcWcm2t8rXSoOoPk5ENifmVZPI52GwUoHs=</string>
+  <key>SUPublicEDKey</key><string>yFTFQ4PptkxpiW2K402K8NaMKsvfyG6tUffSqtRxrKg=</string>
   <key>SUEnableAutomaticChecks</key><false/>
   <key>SUVerifyUpdateBeforeExtraction</key><true/>
   <key>LSMinimumSystemVersion</key><string>13.0</string>

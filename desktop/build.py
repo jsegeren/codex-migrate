@@ -22,6 +22,50 @@ import uuid
 ROOT = Path(__file__).resolve().parents[1]
 SPARKLE_VERSION = "2.10.0"
 SPARKLE_ARCHIVE_SHA256 = "c2bf58aa8387266ac179357b1415d6f2635f044da8be41042af32425dae6da0c"
+VAULT_HELPER_APP_ID = "com.segeren.codex-migrate.vault-crypto"
+VAULT_KEYCHAIN_GROUP = "P9J3JK79KQ." + VAULT_HELPER_APP_ID
+
+
+def vault_profile(path):
+    """Validate the Developer ID profile before embedding it in the helper."""
+    candidate = Path(path).expanduser()
+    if not candidate.is_absolute() or candidate.is_symlink() or not candidate.is_file():
+        raise ValueError("Vault Developer ID profile must be an absolute regular file")
+    try:
+        decoded = subprocess.check_output(
+            ["security", "cms", "-D", "-i", str(candidate)], stderr=subprocess.DEVNULL)
+        profile = plistlib.loads(decoded)
+    except (subprocess.CalledProcessError, OSError, plistlib.InvalidFileException):
+        raise ValueError("Vault Developer ID profile is unreadable or invalid") from None
+    if not isinstance(profile, dict) or not isinstance(profile.get("Entitlements"), dict):
+        raise ValueError("Vault Developer ID profile has an invalid shape")
+    entitlements = profile["Entitlements"]
+    teams = profile.get("TeamIdentifier")
+    groups = entitlements.get("keychain-access-groups")
+    if (not isinstance(teams, list) or "P9J3JK79KQ" not in teams or
+            entitlements.get("com.apple.application-identifier") != VAULT_KEYCHAIN_GROUP or
+            not isinstance(groups, list) or
+            not any(group in (VAULT_KEYCHAIN_GROUP, "P9J3JK79KQ.*") for group in groups)):
+        raise ValueError("Vault profile does not authorize its exact helper Keychain group")
+    expiry = profile.get("ExpirationDate")
+    if not isinstance(expiry, datetime) or expiry.replace(tzinfo=timezone.utc) <= datetime.now(timezone.utc):
+        raise ValueError("Vault Developer ID profile has expired")
+    return candidate
+
+
+def verify_vault_entitlements(app):
+    """Inspect what codesign actually placed on the provisioned helper."""
+    try:
+        encoded = subprocess.check_output(
+            ["codesign", "-d", "--entitlements", ":-", str(app)],
+            stderr=subprocess.DEVNULL)
+        claims = plistlib.loads(encoded)
+    except (subprocess.CalledProcessError, OSError, plistlib.InvalidFileException):
+        raise ValueError("signed Vault helper entitlements are unreadable") from None
+    if (not isinstance(claims, dict) or
+            claims.get("com.apple.application-identifier") != VAULT_KEYCHAIN_GROUP or
+            claims.get("keychain-access-groups") != [VAULT_KEYCHAIN_GROUP]):
+        raise ValueError("signed Vault helper does not claim its provisioned Keychain group")
 
 
 def sparkle_distribution(build_root):
@@ -104,6 +148,12 @@ def bundle_version():
         raise ValueError("app version must have three numeric components")
     if not isinstance(build, str) or not re.fullmatch(r"[1-9][0-9]*", build):
         raise ValueError("app build number must be a positive integer")
+    with (ROOT / "desktop/CodexVaultCrypto-Info.plist").open("rb") as stream:
+        vault_info = plistlib.load(stream)
+    if (vault_info.get("CFBundleIdentifier") != VAULT_HELPER_APP_ID or
+            vault_info.get("CFBundleShortVersionString") != version or
+            vault_info.get("CFBundleVersion") != build):
+        raise ValueError("Vault helper bundle identity/version must match the app")
     return {"version": version, "bundle_version": build}
 
 
@@ -324,6 +374,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--release", action="store_true")
     parser.add_argument("--identity", help="Developer ID Application identity already in Keychain")
+    parser.add_argument("--vault-profile", help="Developer ID provisioning profile for the Vault helper")
     parser.add_argument("--notary-profile", help="Existing notarytool Keychain profile")
     parser.add_argument("--notary-keychain",
                         help="Optional explicit Keychain file containing the notary profile")
@@ -336,7 +387,7 @@ def main():
     if sys.platform != "darwin":
         parser.error("macOS is required")
     if args.resume_notarization:
-        if args.release or args.identity:
+        if args.release or args.identity or args.vault_profile:
             parser.error("resume-notarization cannot rebuild or re-sign the saved app")
         try:
             notary_auth_options(args.notary_profile, args.notary_keychain,
@@ -350,9 +401,18 @@ def main():
     if args.release:
         if not args.identity:
             parser.error("release requires a Developer ID identity; no unsigned release fallback")
+        if not args.vault_profile:
+            parser.error("release requires the Vault helper Developer ID profile")
         try:
             notary_auth_options(args.notary_profile, args.notary_keychain,
                                 args.notary_api_key, args.notary_key_id, args.notary_issuer)
+        except ValueError as error:
+            parser.error(str(error))
+    if args.vault_profile:
+        if not args.identity:
+            parser.error("Vault profile requires a Developer ID signing identity")
+        try:
+            vault_profile(args.vault_profile)
         except ValueError as error:
             parser.error(str(error))
     if args.identity and not args.identity.startswith("Developer ID Application:"):
@@ -383,15 +443,21 @@ def main():
         executable = contents / "MacOS/CodexMigrate"
         resources = contents / "Resources"
         frameworks = contents / "Frameworks"
-        vault_crypto = resources / "CodexVaultCrypto"
+        vault_app = contents / "Helpers/CodexVaultCrypto.app"
+        vault_contents = vault_app / "Contents"
+        vault_crypto = vault_contents / "MacOS/CodexVaultCrypto"
         executable.parent.mkdir(parents=True)
         resources.mkdir()
+        vault_crypto.parent.mkdir(parents=True)
         shutil.copytree(sparkle / "Sparkle.framework", frameworks / "Sparkle.framework", symlinks=True)
         shutil.copy2(sparkle / "LICENSE", resources / "Sparkle LICENSE.txt")
         shutil.copytree(scratch / "dist/codex-migrate-engine", resources / "engine", symlinks=True)
         seal_embedded_frameworks(resources / "engine", args.identity)
         verify_embedded_code(resources / "engine")
         shutil.copy2(ROOT / "desktop/Info.plist", contents / "Info.plist")
+        shutil.copy2(ROOT / "desktop/CodexVaultCrypto-Info.plist", vault_contents / "Info.plist")
+        if args.vault_profile:
+            shutil.copy2(vault_profile(args.vault_profile), vault_contents / "embedded.provisionprofile")
         shutil.copy2(ROOT / "LICENSE", resources / "LICENSE.txt")
         shutil.copy2(ROOT / "docs/desktop-setup.md", resources / "Read me.md")
         for document in ("recovery.md", "security-model.md", "support.md"):
@@ -401,16 +467,36 @@ def main():
             "-F", frameworks, "-framework", "Sparkle", "-Xlinker", "-rpath",
             "-Xlinker", "@executable_path/../Frameworks",
             ROOT / "desktop/CodexMigrate.swift", ROOT / "desktop/UpdateEntitlement.swift",
+            ROOT / "desktop/InstallLocation.swift",
+            ROOT / "desktop/DuplicateLaunch.swift",
             ROOT / "desktop/SavedSetup.swift", "-o", executable)
-        run("xcrun", "swiftc", "-parse-as-library", "-O", "-target", arch + "-apple-macos13.0",
-            ROOT / "desktop/CodexVaultCrypto.swift", "-o", vault_crypto)
+        vault_compiler = ["xcrun", "swiftc", "-parse-as-library", "-O", "-target",
+                          arch + "-apple-macos13.0"]
+        if not args.vault_profile:
+            vault_compiler += ["-D", "CODEX_VAULT_TEST_LEGACY_KEYCHAIN"]
+        run(*vault_compiler, ROOT / "desktop/CodexVaultCrypto.swift", "-o", vault_crypto)
+        legacy_crypto = resources / "CodexVaultCrypto"
+        if args.vault_profile:
+            # Preserve the old helper's designated requirement so an existing
+            # Vault key can move to the provisioned helper without a Keychain
+            # password dialog. The two helpers exchange it only over pipes.
+            run("xcrun", "swiftc", "-parse-as-library", "-O", "-D",
+                "CODEX_VAULT_TEST_LEGACY_KEYCHAIN", "-target", arch + "-apple-macos13.0",
+                ROOT / "desktop/CodexVaultCrypto.swift", "-o", legacy_crypto)
         signing = ["codesign", "--force", "--sign", args.identity or "-"]
         if args.identity:
             signing += ["--options", "runtime", "--timestamp"]
         run(*signing[:2], "--deep", *signing[2:], frameworks / "Sparkle.framework")
         run("codesign", "--verify", "--deep", "--strict", frameworks / "Sparkle.framework")
-        run(*signing, vault_crypto)
-        run("codesign", "--verify", "--strict", vault_crypto)
+        vault_signing = signing[:]
+        if args.vault_profile:
+            vault_signing += ["--entitlements", ROOT / "desktop/CodexVaultCrypto.entitlements"]
+        run(*vault_signing, vault_app)
+        run("codesign", "--verify", "--deep", "--strict", vault_app)
+        if args.vault_profile:
+            verify_vault_entitlements(vault_app)
+            run(*signing, legacy_crypto)
+            run("codesign", "--verify", "--strict", legacy_crypto)
         run(*signing, app)
         run("codesign", "--verify", "--deep", "--strict", app)
         engine_version = subprocess.check_output(

@@ -7,6 +7,7 @@ const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { createHash } = require('node:crypto');
 const blob = require('@vercel/blob');
+const { releaseContentType } = require('../commerce/config');
 
 const ROOT = path.resolve(__dirname, '..');
 const STORE = 'Ksz4f7gOIH2qRu9I';
@@ -24,15 +25,21 @@ function prepareArchive(receipt, bytes, id, sandbox = false) {
       receipt.notarization?.status !== 'Accepted' ||
       !/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(receipt.notarization?.id || '') ||
       !Number.isFinite(Date.parse(receipt.built_at))) throw Error('invalid_release_receipt');
-  const filename = `Codex-Migrate-${receipt.version}-build${receipt.bundle_version}-${receipt.architecture}.zip`;
+  const format = receipt.artifact?.endsWith('.dmg') ? 'dmg' : 'zip';
+  const filename = `Codex-Migrate-${receipt.version}-build${receipt.bundle_version}-${receipt.architecture}.${format}`;
   if (receipt.artifact !== filename || filename.length > 125 || !Buffer.isBuffer(bytes) ||
-      bytes.length < 4 || bytes.length > LIMIT || bytes.readUInt32LE(0) !== 0x04034b50 ||
+      bytes.length < (format === 'dmg' ? 512 : 4) || bytes.length > LIMIT ||
+      (format === 'zip' && bytes.readUInt32LE(0) !== 0x04034b50) ||
+      (format === 'dmg' && (bytes.subarray(-512, -508).toString() !== 'koly' ||
+        receipt.diskImageNotarization?.status !== 'Accepted' ||
+        !/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(receipt.diskImageNotarization?.id || ''))) ||
       !/^[a-f0-9]{64}$/.test(receipt.sha256 || '') || digest(bytes) !== receipt.sha256) {
     throw Error('archive_receipt_mismatch');
   }
   return { id, kind: 'signed-notarized', source: receipt.source_revision,
     sha256: receipt.sha256, filename, size: bytes.length,
     pathname: `${sandbox ? 'sandbox' : 'live'}/${receipt.sha256}/${filename}`,
+    ...(format === 'dmg' ? { diskImageNotarization: receipt.diskImageNotarization } : {}),
     accepted: false, ...(sandbox ? { testingOnly: true } : {}) };
 }
 async function readOwned(file, maximum) {
@@ -48,7 +55,10 @@ async function uploadCandidate(candidate, bytes, sdk = blob) {
   // Called with prepared, immutable in-memory bytes. A changed or partial remote
   // object never becomes accepted and is never overwritten on a retry.
   if (!Buffer.isBuffer(bytes) || bytes.length > LIMIT || candidate.accepted !== false || candidate.kind !== 'signed-notarized' ||
-      !/^Codex-Migrate-\d+\.\d+\.\d+-build[1-9]\d*-(arm64|x86_64)\.zip$/.test(candidate.filename || '') ||
+      !/^Codex-Migrate-\d+\.\d+\.\d+-build[1-9]\d*-(arm64|x86_64)\.(?:zip|dmg)$/.test(candidate.filename || '') ||
+      (candidate.filename.endsWith('.dmg') &&
+        (candidate.diskImageNotarization?.status !== 'Accepted' ||
+         !/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(candidate.diskImageNotarization.id || ''))) ||
       candidate.sha256 !== digest(bytes) ||
       ![undefined, true].includes(candidate.testingOnly) ||
       candidate.pathname !== `${candidate.testingOnly === true ? 'sandbox' : 'live'}/${digest(bytes)}/${candidate.filename}` || candidate.size !== bytes.length) {
@@ -60,12 +70,12 @@ async function uploadCandidate(candidate, bytes, sdk = blob) {
   let remote = await sdk.get(url, options());
   if (!remote) {
     await sdk.put(candidate.pathname, bytes, { ...options(), addRandomSuffix: false,
-      allowOverwrite: false, contentType: 'application/zip' });
+      allowOverwrite: false, contentType: releaseContentType(candidate) });
     remote = await sdk.get(url, options());
   }
   if (!remote || remote.statusCode !== 200 || remote.blob.url !== url ||
       remote.blob.pathname !== candidate.pathname || remote.blob.size !== candidate.size ||
-      remote.blob.contentType !== 'application/zip') {
+      remote.blob.contentType !== releaseContentType(candidate)) {
     await remote?.stream?.cancel(); throw Error('uploaded_metadata_mismatch');
   }
   const hash = createHash('sha256'); let length = 0;
@@ -93,7 +103,7 @@ async function main(args = process.argv.slice(2)) {
   if (path.dirname(directory) !== path.join(ROOT, 'build') || await fs.realpath(directory) !== directory) throw Error('invalid_build_directory');
   const receipt = JSON.parse((await readOwned(path.join(directory, 'build-info.json'), 16384)).toString('utf8'));
   // Validate basename before touching the archive path supplied by the receipt.
-  if (!/^Codex-Migrate-\d+\.\d+\.\d+-build[1-9]\d*-(arm64|x86_64)\.zip$/.test(receipt.artifact || '')) throw Error('invalid_release_archive');
+  if (!/^Codex-Migrate-\d+\.\d+\.\d+-build[1-9]\d*-(arm64|x86_64)\.(?:zip|dmg)$/.test(receipt.artifact || '')) throw Error('invalid_release_archive');
   const bytes = await readOwned(path.join(directory, receipt.artifact), LIMIT);
   const candidate = prepareArchive(receipt, bytes, id, sandbox);
   execFileSync('git', ['cat-file', '-e', `${candidate.source}^{commit}`], { cwd: ROOT, stdio: 'pipe', timeout: 10000 });

@@ -76,7 +76,7 @@ class EncryptedHistoryTests(unittest.TestCase):
         cls.build = tempfile.TemporaryDirectory()
         cls.helper = Path(cls.build.name) / "CodexVaultCrypto"
         subprocess.run([
-            "xcrun", "swiftc", "-parse-as-library", "-O",
+            "xcrun", "swiftc", "-parse-as-library", "-O", "-D", "CODEX_VAULT_TEST_LEGACY_KEYCHAIN",
             "-target", platform.machine() + "-apple-macos13.0",
             "desktop/CodexVaultCrypto.swift", "-o", str(cls.helper),
         ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)

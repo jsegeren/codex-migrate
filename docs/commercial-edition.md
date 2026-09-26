@@ -33,10 +33,11 @@ best-effort help with setup, Vault backup, migration, verification, and recovery
 On September 7 the Founder explicitly authorized opening self-service paid beta
 downloads while the remaining acceptance checks continue. This supersedes the
 earlier manual-only beta policy below. The current approved artifact is signed
-and notarized build 13 for Apple silicon. Build 13 keeps the tested migration
-and Vault machinery, makes daily automatic backup the recommended initial
-choice while retaining manual-only backup, and includes complete and
-selected-thread recovery. The
+and notarized for Apple silicon; its exact build is recorded in
+`commerce/releases.json` and selected by `COMMERCE_RELEASE`. The beta keeps the
+tested migration and Vault machinery, makes daily automatic backup the
+recommended initial choice while retaining manual-only backup, and includes
+complete and selected-thread recovery. The
 migration path has passed VoiceOver, a real macOS permission-denial check, and
 physical Wi-Fi interruption/resume testing. Guided permission recovery,
 direct-cable interruption, pristine-Mac installation, and broader hardware

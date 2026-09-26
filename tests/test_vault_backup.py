@@ -7,8 +7,10 @@ import tempfile
 import unittest
 import uuid
 from datetime import datetime, timezone
+from unittest.mock import patch
 
 from codex_migrate.errors import MigrationError
+from codex_migrate import vault_backup
 from codex_migrate.vault_backup import backup, plan
 from codex_migrate.vault_recovery import (
     export_recovery_key, import_recovery_key, list_snapshots, restore_snapshot,
@@ -23,7 +25,7 @@ class VaultBackupTests(unittest.TestCase):
         cls.build = tempfile.TemporaryDirectory()
         cls.helper = Path(cls.build.name) / "CodexVaultCrypto"
         subprocess.run([
-            "xcrun", "swiftc", "-parse-as-library", "-O",
+            "xcrun", "swiftc", "-parse-as-library", "-O", "-D", "CODEX_VAULT_TEST_LEGACY_KEYCHAIN",
             "-target", platform.machine() + "-apple-macos13.0",
             "desktop/CodexVaultCrypto.swift", "-o", str(cls.helper),
         ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -124,6 +126,46 @@ class VaultBackupTests(unittest.TestCase):
             finally:
                 self.delete_key(destination)
 
+    @unittest.skipUnless(
+        os.environ.get("CODEX_MIGRATE_LARGE_HISTORY_PROBE") == "1",
+        "opt-in physical large-history probe",
+    )
+    def test_large_history_incremental_backup_keeps_unchanged_chunks(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            destination = root / "vault"
+            sessions = source / ".codex/sessions/2026/09/24"
+            sessions.mkdir(parents=True)
+            for index in range(2048):
+                (sessions / f"thread-{index:04d}.jsonl").write_text(
+                    json.dumps({"thread": index, "text": f"synthetic-{index:04d}"}) + "\n",
+                    encoding="utf-8",
+                )
+            try:
+                first = backup(str(source), str(destination), crypto_helper=str(self.helper))
+                self.assertEqual(first.transcript_files, 2048)
+                self.assertEqual(
+                    verify_snapshot(str(destination), crypto_helper=str(self.helper)).transcript_files,
+                    2048,
+                )
+                first_objects = set((destination / "objects").rglob("*.cvchunk"))
+                changed = sessions / "thread-1024.jsonl"
+                changed.write_text(changed.read_text(encoding="utf-8") +
+                                   json.dumps({"text": "later synthetic work"}) + "\n",
+                                   encoding="utf-8")
+                second = backup(str(source), str(destination), crypto_helper=str(self.helper))
+                self.assertEqual(second.transcript_files, 2048)
+                self.assertNotEqual(second.snapshot_id, first.snapshot_id)
+                second_objects = set((destination / "objects").rglob("*.cvchunk"))
+                self.assertEqual(len(second_objects - first_objects), 1)
+                self.assertEqual(
+                    verify_snapshot(str(destination), crypto_helper=str(self.helper)).snapshot_id,
+                    second.snapshot_id,
+                )
+            finally:
+                self.delete_key(destination)
+
     def test_tampered_chunk_fails_closed_without_new_reference(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -148,6 +190,47 @@ class VaultBackupTests(unittest.TestCase):
                 self.assertEqual(len(references), 1)
                 latest = json.loads((destination / "latest.json").read_text(encoding="utf-8"))
                 self.assertEqual(latest["snapshot_id"], first.snapshot_id)
+            finally:
+                self.delete_key(destination)
+
+    def test_transcript_rewrite_during_backup_keeps_previous_snapshot(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            destination = root / "vault"
+            self.fixture(source)
+            transcript = source / ".codex/sessions/2026/09/17/active.jsonl"
+            try:
+                first = backup(str(source), str(destination), crypto_helper=str(self.helper))
+                original_run_helper = vault_backup._run_helper
+                rewritten = False
+
+                def rewrite_after_chunk_store(helper, arguments, **kwargs):
+                    nonlocal rewritten
+                    result = original_run_helper(helper, arguments, **kwargs)
+                    input_file = kwargs.get("input_file")
+                    if (arguments[0] == "store-chunks" and input_file is not None
+                            and os.fstat(input_file.fileno()).st_ino == transcript.stat().st_ino
+                            and not rewritten):
+                        transcript.write_text(
+                            transcript.read_text(encoding="utf-8")
+                            + json.dumps({"type": "response_item", "payload": "later"}) + "\n",
+                            encoding="utf-8",
+                        )
+                        rewritten = True
+                    return result
+
+                with patch.object(vault_backup, "_run_helper", side_effect=rewrite_after_chunk_store):
+                    with self.assertRaisesRegex(MigrationError, "changed during backup"):
+                        backup(str(source), str(destination), crypto_helper=str(self.helper))
+                self.assertTrue(rewritten)
+                latest = json.loads((destination / "latest.json").read_text(encoding="utf-8"))
+                self.assertEqual(latest["snapshot_id"], first.snapshot_id)
+                self.assertEqual(len(list((destination / "refs").glob("*.json"))), 1)
+                self.assertEqual(
+                    verify_snapshot(str(destination), crypto_helper=str(self.helper)).snapshot_id,
+                    first.snapshot_id,
+                )
             finally:
                 self.delete_key(destination)
 

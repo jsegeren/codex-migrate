@@ -26,11 +26,24 @@ paths.
 ## Key derivation and storage
 
 The macOS helper creates a random 256-bit master key with CryptoKit and stores
-it as a generic-password item in the login Keychain:
+it as a generic-password item in macOS Keychain:
 
 - service: `com.segeren.codex-vault`
 - account: the random Vault key UUID
-- accessibility: `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`
+- release accessibility: `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` in the
+  Data Protection Keychain, under the provisioned Vault helper access group
+
+The previously notarized build-17 candidate used the legacy login Keychain;
+its requested accessibility class was not a verified device-only property.
+New release builds of this source require a separately provisioned helper app
+and use `kSecUseDataProtectionKeychain` for all new keys. On first use of an
+existing legacy key, the helper must write and read back the Data Protection
+copy, remove the matching legacy item, and fail closed on conflicts or failed
+removal. An interrupted transition is retried; an unreadable old item requires
+recovery-key import or support. The local-test helper without a profile still
+uses the legacy Keychain and is not distributable. Device-only custody remains
+an **unverified release claim** until the provisioned helper, legacy-key
+transition, and independent-Mac recovery tests physically pass.
 
 The master key is not written into the Vault folder. Its one-time recovery
 encoding is `CV1-` followed by unpadded base64url of the 32 key bytes. Users

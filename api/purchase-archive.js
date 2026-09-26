@@ -1,7 +1,7 @@
 const { Readable } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
 const { runtime } = require('../commerce/runtime');
-const { CommerceError, configuration, commerceSite, validRelease } = require('../commerce/config');
+const { CommerceError, configuration, commerceSite, validRelease, releaseContentType } = require('../commerce/config');
 const { tokenSession } = require('../commerce/service');
 
 async function fields(req, origin) {
@@ -69,7 +69,7 @@ function makeHandler(load = runtime, request = fetch, env = process.env, configu
         throw new CommerceError('release_unavailable');
       }
       res.statusCode = 200;
-      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Type', releaseContentType(release));
       res.setHeader('Content-Length', String(release.size));
       res.setHeader('Content-Disposition', `attachment; filename="${release.filename}"`);
       await pipeline(Readable.fromWeb(upstream.body), res);

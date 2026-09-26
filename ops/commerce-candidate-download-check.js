@@ -4,6 +4,7 @@
 const assert = require('node:assert/strict');
 const blob = require('@vercel/blob');
 const uploader = require('./commerce-upload');
+const { releaseContentType } = require('../commerce/config');
 const { verifyBrowserDownload } = require('./commerce-browser-download-check');
 const STORE = 'Ksz4f7gOIH2qRu9I';
 const ORIGIN = `https://${STORE.toLowerCase()}.private.blob.vercel-storage.com`;
@@ -33,7 +34,7 @@ async function main(args = process.argv.slice(2), env = process.env,
   assert.equal(metadata.url, expected);
   assert.equal(metadata.pathname, release.pathname);
   assert.equal(metadata.size, release.size);
-  assert.equal(metadata.contentType, 'application/zip');
+  assert.equal(metadata.contentType, releaseContentType(release));
   const validUntil = Date.now() + 120000;
   stage = 'link-authorization';
   const token = await sdk.issueSignedToken({ ...auth, pathname: release.pathname,

@@ -256,7 +256,8 @@ offline setup, recovery, and security documents. The ZIP has a SHA-256 checksum
 and a matching build receipt beside it. Its filename includes the app version,
 build number and architecture, for example
 `Codex-Migrate-0.1.0-build1-arm64.zip`; engineering ZIPs additionally include
-`LOCAL-UNSIGNED`. Update the app's version/build in `desktop/Info.plist` for each
+`LOCAL-UNSIGNED`. Update the app's version/build in `desktop/Info.plist` and
+`desktop/CodexVaultCrypto-Info.plist` for each
 release and keep the engine/package version in sync. The builder rejects an
 engine/app version mismatch. Release builds require a clean committed source
 tree and recheck its revision before submitting to Apple, so a distributed
@@ -264,6 +265,15 @@ artifact can be traced to reviewed source. Do not edit source during a build.
 The final ZIP name appears in the output folder only after archiving, hashing
 and writing its completion metadata succeed. A failed packaging step must not
 be distributed as a partial download.
+
+Release also requires a Developer ID distribution provisioning profile for the
+bundled Vault helper App ID `com.segeren.codex-migrate.vault-crypto`. It must
+authorize the exact `P9J3JK79KQ.com.segeren.codex-migrate.vault-crypto`
+Keychain group; the build checks this and refuses release without the profile.
+It also inspects the signed helper's final entitlements before notarization.
+This is direct distribution, not a Mac App Store submission. Local test builds
+without that profile deliberately use a legacy-Keychain test mode and must not
+be distributed as a Vault security release.
 
 Release requires an existing Developer ID Application identity and either an
 existing notarytool Keychain profile or an App Store Connect Team API key. Never put
@@ -275,6 +285,7 @@ Keychain, not the separate Developer ID signing-identity requirement.
 ```sh
 .venv/bin/python desktop/build.py --release \
   --identity 'Developer ID Application: Your Name (TEAMID)' \
+  --vault-profile /absolute/path/to/Vault-Developer-ID.provisionprofile \
   --notary-profile your-existing-keychain-profile
 ```
 
@@ -292,6 +303,7 @@ Keychain profile.
 ```sh
 .venv/bin/python desktop/build.py --release \
   --identity 'Developer ID Application: Your Name (TEAMID)' \
+  --vault-profile /absolute/path/to/Vault-Developer-ID.provisionprofile \
   --notary-api-key /absolute/private/path/AuthKey_ID.p8 \
   --notary-key-id YOUR_KEY_ID \
   --notary-issuer YOUR_TEAM_ISSUER_UUID

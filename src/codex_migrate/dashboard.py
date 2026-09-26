@@ -82,13 +82,9 @@ HTML = r"""<!doctype html>
 <body>
 <div class="app">
 <aside class="sidebar">
-  <div class="brand"><div class="brand-mark">CM</div><div><strong>Codex Migrate</strong><small>Vault + Migration</small></div></div>
+  <div class="brand"><div class="brand-mark">CM</div><div><strong>Codex Migrate</strong><small>Mac migration</small></div></div>
   <nav class="nav" aria-label="Product">
-    <a data-route href="/?view=overview"><span class="nav-icon">⌂</span>Overview</a>
-    <a data-route href="/vault?view=backup"><span class="nav-icon">⟳</span>Backups</a>
-    <a data-route href="/vault?view=conversations"><span class="nav-icon">⌕</span>Conversations</a>
-    <a data-route href="/vault?view=recovery"><span class="nav-icon">↺</span>Recovery</a>
-    <a class="active" href="/migration"><span class="nav-icon">⇢</span>Move Macs</a>
+    <a class="active" href="/"><span class="nav-icon">⇢</span>Move Macs</a>
   </nav>
   <div class="sidebar-note"><strong>Your Macs stay in control</strong><br>The old Mac is never changed. Transfer data does not pass through our servers.</div>
 </aside>

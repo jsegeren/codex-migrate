@@ -12,6 +12,29 @@ test('upload preparation binds exact bytes and leaves human acceptance false', (
   assert.equal(candidate.accepted, false); assert.equal(candidate.size, bytes.length);
   assert.equal(candidate.pathname, `live/${receipt.sha256}/${receipt.artifact}`);
 });
+test('rotated-key disk image requires its own Accepted notarization receipt', () => {
+  const image = Buffer.alloc(1024);
+  image.write('koly', image.length - 512);
+  const diskReceipt = { ...receipt, artifact: 'Codex-Migrate-0.1.0-build1-arm64.dmg',
+    sha256: createHash('sha256').update(image).digest('hex'),
+    diskImageNotarization: { id: 'abcdef12-1234-1234-1234-123456789abc', status: 'Accepted' } };
+  const disk = prepareArchive(diskReceipt, image, 'disk-image');
+  assert.equal(disk.filename, diskReceipt.artifact);
+  assert.equal(disk.accepted, false);
+  assert.deepEqual(disk.diskImageNotarization, diskReceipt.diskImageNotarization);
+  const { validRelease } = require('../commerce/config');
+  assert.equal(validRelease({ ...disk, channel: 'beta',
+    acceptance: 'founder-approved-paid-beta-2026-09-07', accepted: true }, true), true);
+  assert.equal(validRelease({ ...disk, diskImageNotarization: undefined,
+    channel: 'beta', acceptance: 'founder-approved-paid-beta-2026-09-07', accepted: true }, true), false);
+  for (const changed of [{ diskImageNotarization: undefined },
+    { diskImageNotarization: { ...diskReceipt.diskImageNotarization, status: 'Submitted' } }]) {
+    assert.throws(() => prepareArchive({ ...diskReceipt, ...changed }, image, 'disk-image'));
+  }
+  const corrupt = Buffer.from(image); corrupt.write('junk', corrupt.length - 512);
+  assert.throws(() => prepareArchive({ ...diskReceipt,
+    sha256: createHash('sha256').update(corrupt).digest('hex') }, corrupt, 'disk-image'));
+});
 for (const patch of [{ build_mode: 'local-test' }, { source_dirty: true }, { source_revision: 'bad' },
   { architecture: 'other' }, { version: '../bad' }, { bundle_version: '0' }, { notarization: { status: 'Submitted' } },
   { artifact: '../secrets.zip' }, { sha256: 'a'.repeat(64) }, { built_at: 'bad' }]) {
