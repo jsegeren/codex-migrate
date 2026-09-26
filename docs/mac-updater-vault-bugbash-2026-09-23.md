@@ -1170,3 +1170,16 @@ helper remained alive until deliberately stopped. The canary was removed and
 the paid canary route returned 403 again while the public appcast stayed on
 build 16. This is not buyer acceptance; the exact limitations and remaining
 gates are recorded in `docs/in-app-updates.md`.
+
+The same exact notarized DMG was mounted read-only on this Mac for two more
+opt-in physical packaged-engine tests, both against disposable Codex homes.
+A 128-MiB encrypted restore held both updater idle and shutdown at HTTP 409
+until its recovered transcript matched the source; shutdown then succeeded.
+A real, temporary macOS LaunchAgent completed a second encrypted snapshot,
+kept updater shutdown blocked while it ran, preserved the last verified
+snapshot when a guarded run was deferred, and exited cleanly. Both fixtures
+passed with system Python 3.9. The test removed its disposable Keychain key,
+unloaded its temporary LaunchAgent, and the DMG was detached. Neither test
+accessed the Founder's real Codex home or constituted a paid Sparkle bundle
+replacement while busy. The second Mac's scheduled-backup receipt and the
+unmodified buyer flow remain open.

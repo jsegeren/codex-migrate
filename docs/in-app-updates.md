@@ -214,6 +214,10 @@ higher build number.
   adverse-path injections, clean-account first install, and scheduled-backup
   receipts on both Macs still require physical acceptance. Build 17 remains
   testing-only and unaccepted.
+- Separate packaged-engine fixtures with this exact notarized image passed
+  restore contention and a real scheduled-backup/updater-guard interaction on
+  this Mac using disposable histories. Those checks do not replace the
+  full-app Sparkle test during a busy operation or the second-Mac schedule run.
 
 ## Build 16 physical update receipt — September 23, 2026
 
