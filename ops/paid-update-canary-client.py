@@ -1,4 +1,4 @@
-"""Prepare a disposable build-16 client for the private paid build-17 canary.
+"""Prepare a disposable build-16 client for the private paid build-19 canary.
 
 This never edits the shipped archive, live appcast, or release catalog. It
 contains no purchase credential. Use only with the bounded Production canary
@@ -10,8 +10,10 @@ import base64
 import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import os
 from pathlib import Path
 import plistlib
+import re
 import shutil
 import subprocess
 import tempfile
@@ -19,17 +21,18 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 OLD_SOURCE = "c6d2bdf81e7093a044886dd35e1b97ed8ce40ea3"
-CURRENT_SOURCE = "3d990b96fda666ceee9ae548a5e5349a14767a10"
+CURRENT_SOURCE = "ac0bfa37a3498a7cf0f6d820e7ea9c07dbabeb31"
 OLD_SHA256 = "60eff4dcb07088d01c966587e808f21d5fa74b8afb4eba45ed326543f07241f7"
 OLD_PUBLIC_KEY = "xm7MLPjJBQcWcm2t8rXSoOoPk5ENifmVZPI52GwUoHs="
-CANARY_ID = "codex-migrate-build17-vault-crypto-arm64"
-CANARY_SHA256 = "3697889980f5fcb0a3717752cb0c46068efe0d207b181f6266980f87ae218401"
-CANARY_SIGNATURE = "Ohxtz0yaBy1dUItBlS/LIlbG6NprSVf2azKPzrXAL65fOuWhv72yKCH0JKNjBLbXmf7zJaZ8bKki/ftMzvYSAA=="
+CANARY_ID = "codex-migrate-build19-vault-integrated-arm64"
+CANARY_SHA256 = "5f5c30f960cbca0a75a72d882c4a391ce4a5ad35cdd5ec15c4abe87562f36e85"
+CANARY_SIGNATURE = "HBpeR7n7SOf2M+bzJTOIqJWIcynQb2COYbFPhvoVfKDAk4OUBta+uBr4glSIpQsUjxUXQ1KM+tcTds3XcovXBQ=="
 ARCHIVE = ROOT / "build/live-build16/Codex-Migrate-0.1.0-build16-arm64.zip"
-CANDIDATE_DMG = ROOT / "build/desktop-rotation-saub0ldf/Codex-Migrate-0.1.0-build17-arm64.dmg"
+CANDIDATE_DMG = ROOT / "build/desktop-rotation-qcej_6v5/Codex-Migrate-0.1.0-build19-arm64.dmg"
 HEADER_HOOK = 'request.setValue("Bearer \\(token)", forHTTPHeaderField: "Authorization")'
 TOKEN_LOOKUP = '    static func savedToken() -> String? {\n'
 HELPER_START = '        _ = updaterController\n        startHelper()\n'
+HELPER_ARGUMENTS = '        var arguments = ["launch", "--port", "0", "--no-open"]\n'
 CANARY_TOKEN_LOOKUP = '''    // Disposable test client only: consume a private token from a closed stdin pipe.
     // Nothing is written to Keychain, argv, the environment, the helper, or disk.
     private static let pipedCanaryToken: String? = {
@@ -55,11 +58,11 @@ def canary():
         raise ValueError("candidate source changed")
     if selected.get("sha256") != CANARY_SHA256:
         raise ValueError("candidate artifact changed")
-    if (selected.get("size") != 10512566 or
+    if (selected.get("size") != 11226440 or
             selected.get("sparkleSignature") != CANARY_SIGNATURE or
-            selected.get("pathname") != f"sandbox/{CANARY_SHA256}/Codex-Migrate-0.1.0-build17-arm64.dmg" or
+            selected.get("pathname") != f"sandbox/{CANARY_SHA256}/Codex-Migrate-0.1.0-build19-arm64.dmg" or
             selected.get("diskImageNotarization") != {
-                "status": "Accepted", "id": "a7580574-c429-4f53-a1a3-000cba3f7e50"}):
+                "status": "Accepted", "id": "8225c4d2-233b-40bd-960e-08f7dea6330a"}):
         raise ValueError("candidate signature or size changed")
     return selected
 
@@ -69,8 +72,8 @@ def appcast_xml(selected, archive_url="https://migrate.segeren.com/api/update-ar
     return (f'<?xml version="1.0" encoding="UTF-8"?>\n'
             '<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">'
             '<channel><title>Codex Migrate private canary</title>'
-            '<item><title>Codex Migrate 0.1.0 (build 17)</title>'
-            '<sparkle:version>17</sparkle:version>'
+            '<item><title>Codex Migrate 0.1.0 (build 19)</title>'
+            '<sparkle:version>19</sparkle:version>'
             '<sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>'
             '<sparkle:minimumSystemVersion>13.0.0</sparkle:minimumSystemVersion>'
             '<sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>'
@@ -105,10 +108,35 @@ def add_piped_test_token(source):
     return source.replace(TOKEN_LOOKUP, CANARY_TOKEN_LOOKUP)
 
 
-def prepare(output, port, identity, local_archive=False, current_app=None):
+def add_disposable_source_home(source, home):
+    """Keep an operator's real Codex home outside a local-only native test."""
+    approved_parents = {Path("/private/tmp").resolve(), Path(tempfile.gettempdir()).resolve()}
+    try:
+        resolved = home.resolve(strict=True)
+    except OSError as error:
+        raise ValueError("test source home must be an existing disposable directory") from error
+    value = str(resolved)
+    if (not re.fullmatch(r"/[A-Za-z0-9_./-]+", value)
+            or resolved.parent not in approved_parents
+            or not resolved.name.startswith("codex-vault-idle.")
+            or not resolved.is_dir()
+            or resolved.stat().st_uid != os.geteuid()
+            or resolved.stat().st_mode & 0o077):
+        raise ValueError("test source home must be an owner-only disposable directory in the OS temp folder")
+    if source.count(HELPER_ARGUMENTS) != 1:
+        raise ValueError("current helper launch arguments changed")
+    return source.replace(HELPER_ARGUMENTS, '        var arguments = ["launch", "--source-home", "'
+                          + value + '", "--state-dir", "' + value
+                          + '/.local/state/codex-migrate-browser", "--port", "0", "--no-open"]\n')
+
+
+def prepare(output, port, identity, local_archive=False, current_app=None,
+            test_source_home=None):
     selected = canary()
     if current_app is not None and not local_archive:
         raise ValueError("current-source synthetic client requires local-only archive mode")
+    if test_source_home is not None and (current_app is None or not local_archive):
+        raise ValueError("disposable source home requires current-source local-only mode")
     if output.exists() or output.is_symlink() or output.parent.resolve() != (ROOT / "build").resolve():
         raise ValueError("output must be a new direct child of build/")
     if current_app is None and hashlib.sha256(ARCHIVE.read_bytes()).hexdigest() != OLD_SHA256:
@@ -124,9 +152,9 @@ def prepare(output, port, identity, local_archive=False, current_app=None):
         with (current_app / "Contents/Info.plist").open("rb") as stream:
             current_info = plistlib.load(stream)
         if (receipt.get("source_revision") != CURRENT_SOURCE or
-                receipt.get("bundle_version") != "17" or
-                current_info.get("CFBundleVersion") != "17"):
-            raise ValueError("current-source base app does not match exact build 17")
+                receipt.get("bundle_version") != "19" or
+                current_info.get("CFBundleVersion") != "19"):
+            raise ValueError("current-source base app does not match exact build 19")
         run("codesign", "--verify", "--deep", "--strict", current_app)
     output.mkdir(mode=0o700)
     app = output / "Codex Migrate.app"
@@ -140,13 +168,13 @@ def prepare(output, port, identity, local_archive=False, current_app=None):
     info_path = app / "Contents/Info.plist"
     with info_path.open("rb") as stream:
         info = plistlib.load(stream)
-    if (info.get("CFBundleVersion") != ("17" if current_app else "16") or
+    if (info.get("CFBundleVersion") != ("19" if current_app else "16") or
             (current_app is None and info.get("SUPublicEDKey") != OLD_PUBLIC_KEY) or
             info.get("SUFeedURL") != "https://migrate.segeren.com/api/appcast"):
         raise ValueError("base app identity/feed does not match the selected build")
     if current_app is not None:
         # A disposable current-code client must appear older to exercise
-        # build 17's own automatic-idle path against the exact signed DMG.
+        # build 19's own automatic-idle path against the exact signed DMG.
         # It is never notarized or delivered to buyers.
         info["CFBundleVersion"] = "16"
         info["SUPublicEDKey"] = OLD_PUBLIC_KEY
@@ -166,7 +194,11 @@ def prepare(output, port, identity, local_archive=False, current_app=None):
                 ["git", "show", f"{CURRENT_SOURCE if current_app else OLD_SOURCE}:desktop/{filename}"],
                 cwd=ROOT, text=True)
             if filename == "CodexMigrate.swift":
-                source = add_background_check(source if local_archive else add_canary_header(source))
+                if not local_archive:
+                    source = add_canary_header(source)
+                source = add_background_check(source)
+                if test_source_home is not None:
+                    source = add_disposable_source_home(source, test_source_home)
             elif filename == "UpdateEntitlement.swift":
                 source = add_piped_test_token(source)
             path = Path(scratch) / filename
@@ -256,12 +288,15 @@ def main():
     parser.add_argument("--local-archive", action="store_true",
                         help="serve exact local DMG without any Production canary or paid credential")
     parser.add_argument("--current-app", type=Path,
-                        help="with --local-archive, use exact signed build-17 app code in a disposable build-16 wrapper")
+                        help="with --local-archive, use exact signed build-19 app code in a disposable build-16 wrapper")
+    parser.add_argument("--test-source-home", type=Path,
+                        help="local current-code test only: launch the helper with disposable Codex data")
     parser.add_argument("--fault", choices=("none", "archive-404", "corrupt-archive", "bad-signature"),
                         default="none", help="with local serve only, inject one updater failure")
     args = parser.parse_args()
     if args.command == "prepare":
-        prepare(args.output, args.port, args.identity, args.local_archive, args.current_app)
+        prepare(args.output, args.port, args.identity, args.local_archive,
+                args.current_app, args.test_source_home)
     else:
         serve(args.port, args.local_archive, args.fault)
 

@@ -6,10 +6,14 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from codex_migrate.errors import MigrationError
 from codex_migrate.vault import search
 from codex_migrate.vault_backup import backup
 from codex_migrate.vault_history import _group_key, search_titles, thread_timeline
-from codex_migrate.vault_identity import loss_warnings, peek_identity
+from codex_migrate import vault_identity
+from codex_migrate.vault_identity import (
+    TranscriptChanged, loss_warnings, peek_identity, scan_transcript,
+)
 from codex_migrate.vault_recovery import snapshot_catalog, verify_snapshot
 
 
@@ -21,6 +25,28 @@ def record(kind, payload):
 
 
 class IdentityTests(unittest.TestCase):
+    def test_static_malformed_record_is_not_retried_as_a_live_change(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "broken.jsonl"
+            path.write_bytes(b'{"type":')
+            with self.assertRaises(MigrationError) as raised:
+                scan_transcript(path, path.name, {})
+            self.assertNotIsInstance(raised.exception, TranscriptChanged)
+
+    def test_partial_record_with_concurrent_append_is_retryable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "active.jsonl"
+            path.write_text(record("session_meta", {"id": THREAD_ID}))
+
+            def append_then_fail(raw):
+                with path.open("a", encoding="utf-8") as handle:
+                    handle.write(record("response_item", {"role": "user", "content": "later"}))
+                raise json.JSONDecodeError("incomplete concurrent record", "{", 0)
+
+            with patch.object(vault_identity.json, "loads", side_effect=append_then_fail):
+                with self.assertRaises(TranscriptChanged):
+                    scan_transcript(path, path.name, {})
+
     def test_conflicted_same_path_versions_are_not_one_thread(self):
         base = {"collection": "codex", "path": "sessions/rollout.jsonl",
                 "transcript": "sessions/rollout.jsonl",

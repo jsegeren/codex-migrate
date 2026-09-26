@@ -42,8 +42,8 @@ until those checks pass.
 
 ### Private paid-path canary (not release approval)
 
-The update archive handler has an opt-in operator test route for the exact
-build-17 sandbox artifact. It remains off unless Production has all three
+The update archive handler has an opt-in operator test route for an exact
+reviewed sandbox artifact. It remains off unless Production has all three
 `COMMERCE_UPDATER_CANARY_RELEASE`, `COMMERCE_UPDATER_CANARY_SHA256`, and
 `COMMERCE_UPDATER_CANARY_SESSION` set to the reviewed catalog ID, exact DMG
 digest, and one already-paid Founder Checkout session. A fourth setting,
@@ -66,7 +66,7 @@ while the public appcast and ordinary buyer downloads still return build 16.
 Never use the canary route as a shortcut for catalog promotion or a public
 claim that automatic updates are accepted.
 
-For the current `1fdf640` provisioned-Vault build-17 candidate, `python3
+For the current `ac0bfa3` integrated-Vault build-19 candidate, `python3
 ops/paid-update-canary-client.py prepare` verifies the archived live build-16
 ZIP and local candidate DMG against their catalog digests, then creates a
 **disposable, locally re-signed, unnotarized** build-16 app in `build/`. Only
@@ -89,10 +89,12 @@ The harness requires a local byte-verified copy of the archived live build-16
 ZIP at `build/live-build16/` and the exact notarized DMG in the candidate
 build directory. The test-only catalog entry must be deployed before the
 Production canary can select it; a private Blob upload alone is insufficient.
-This candidate has passed signing, notarization, the synthetic legacy-key
-transition, second-Mac recovery-key decryption, and the limited paid native
-process-exit installation canary recorded below. The remaining buyer release gates are
-still open.
+This build-18 candidate has passed signing, notarization, a packaged synthetic
+Vault backup and exact-byte restore, and read-only second-Mac signature and
+Gatekeeper checks. Its loopback feed served the exact signed DMG. Those checks
+do not prove the paid native update, clean-account first launch, or real-history
+backup and recovery; the buyer release gates remain open. The older build-17
+receipts below are historical evidence, not acceptance of build 18.
 
 1. Bump the app's build number; commit the exact source before release build.
    Build with the Developer ID identity, obtain Apple's Accepted notarization
@@ -251,10 +253,10 @@ install/relaunch and busy-operation full replacement gates remain open.
 
 ### Local-only automatic-idle check with current updater code
 
-The harness's `--current-app` option accepts only the exact signed build-17
-source receipt and `--local-archive`. It creates a disposable test wrapper
-that reports build 16 to Sparkle while compiling the exact build-17 native
-updater code and retaining the provisioned build-17 engine/helper. It replaces
+The September 25 `--current-app` run accepted only the exact signed build-17
+source receipt and `--local-archive`. It created a disposable test wrapper
+that reported build 16 to Sparkle while compiling the exact build-17 native
+updater code and retaining the provisioned build-17 engine/helper. It replaced
 only that test wrapper's Sparkle feed and public key, adds a one-shot background
 check and synthetic stdin entitlement, and locally re-signs the wrapper. It
 does not alter the notarized DMG, public appcast, buyer app, or Production.
@@ -385,3 +387,240 @@ the exact build-16 ZIP through the normal paid route; the public appcast
 remained build 16. This is **not** proof of an unmodified buyer client's
 purchase-link setup or idle installation without a quit. Clean-account and
 remaining failure-path acceptance still gate public build-17 promotion.
+
+### Build 18 synthetic cross-Mac recovery — September 26, 2026
+
+The exact signed build-18 helper from source `d421c462831b362df71b89e5a6fcb03f94d108d9`
+created and verified an encrypted snapshot of a disposable one-thread Codex
+home on the first Mac. Its disposable recovery key and encrypted test bundle
+were transferred over SSH to the second Mac. A temporary LaunchAgent in that
+Mac's logged-in GUI session imported the key, verified the snapshot, and
+restored the transcript byte-for-byte using the exact signed build-18 helper.
+The producer and consumer test keys were deleted, the LaunchAgent was booted
+out, and the remote temporary files were removed; local test files were moved
+to Trash.
+
+The first consumer attempt failed because the test transfer copied only the
+nested crypto helper, omitting its signed companion legacy-key helper. The
+import had created a disposable Keychain entry before the helper's subsequent
+verification failed. After reconstructing the exact packaged `Contents`
+layout, the entry was verified and deleted; a clean repeat passed. This was a
+test-fixture packaging error, not evidence of a shipped build-18 defect. This
+proof covers synthetic cross-Mac recovery only—not real-history backup,
+off-device storage, scheduled protection on both Macs, a pristine buyer
+account, or the paid native update path.
+
+### Build 18 local automatic-idle update — September 26, 2026
+
+A disposable Developer ID signed wrapper used the exact build-18 native code
+but reported build 16 to Sparkle. It read only a synthetic, format-valid
+purchase token from closed stdin. A `127.0.0.1` appcast offered the exact
+11,228,811-byte build-18 rotation DMG with its verified Sparkle signature;
+the loopback server observed successful appcast and archive requests. Without
+a manual Quit, the app installed the signed image while idle and relaunched.
+The installed bundle reported build 18 and embedded source
+`d421c462831b362df71b89e5a6fcb03f94d108d9`; strict code-signature
+verification and Notarized Developer ID Gatekeeper assessment passed. One
+native process and one healthy packaged helper were running after relaunch.
+
+The subsequent normal AppleScript Quit reported `User canceled (-128)` while
+the asynchronous termination callback completed; both app and helper exited.
+The loopback server stopped, the original developer app was reopened, and
+the disposable installed copy was moved to Trash. This is a local exact-image
+automatic-idle proof, **not** an unmodified paid-client update through
+Production, a backup-in-progress retry, or buyer-account acceptance. Public
+build 16 and its appcast were not changed.
+
+### Build 18 paid Production stream — September 26, 2026
+
+Catalog-only PR #46 added the exact signed build-18 DMG as `testingOnly: true`,
+`accepted: false` and passed the Python 3.9/3.12 CI matrix. The reviewed main
+commit was deployed with the canary disabled; the public appcast still offered
+build 16 and anonymous canary access returned 403. A bounded, two-hour
+Production canary then selected only the build-18 catalog ID and SHA-256 for
+an already-paid Founder Checkout session. That purchase's private token passed
+the live entitlement check. With the exact canary header, the paid archive
+route returned 200 and streamed 11,228,811 bytes whose SHA-256 matched the
+notarized build-18 DMG. Without the paid token, the same route returned 403;
+the public appcast continued to offer build 16.
+
+A disposable Developer ID signed build-16 client and loopback feed were
+prepared for a physical Sparkle test. Launch was refused by the app's
+duplicate-instance guard. A later read-only process check disproved the
+initial theory that the separate acceptance-test macOS account caused this:
+its app can coexist with the Founder's app. Other copies were also running
+under the Founder's macOS account, but the exact lock holder at the refused
+launch was not established. The disposable client was quit; no native update
+was installed or counted as accepted. The test feed was stopped and the
+disposable client moved to Trash. All four temporary Production canary
+variables were removed and Production was redeployed without them. The paid
+token again received 403 on the canary route while its ordinary purchase link
+still selected build 16; anonymous canary access remained 403 and the public
+appcast remained build 16. The subsequent paid native test is recorded below;
+unmodified buyer-client installation, busy-operation deferral, and clean
+buyer-account acceptance remain release gates.
+
+### Build 18 paid native install-on-quit — September 26, 2026
+
+A second bounded Production canary selected only the same testing-only build-18
+catalog entry, its exact SHA-256, and the already-paid Founder purchase. The
+public appcast continued to advertise build 16; an anonymous canary request
+returned 403. The paid canary route returned 200 and the exact 11,228,811-byte
+notarized DMG with SHA-256
+`e4ef0890fc2b64bd09177e95fc2aebaf38ba9505a584a31c70afeb9b037df9d7`.
+
+The disposable, locally re-signed build-16 client used three test-only hooks:
+it read that purchase token from closed stdin rather than Keychain, added the
+exact canary header, and requested one background update check. It was not a
+shipped buyer client. Sparkle started its Autoupdate and Updater processes.
+While the app remained open its bundle was still build 16. A normal macOS
+Quit cleanly stopped the app and helper; Sparkle then replaced the disposable
+bundle in place with build 18. The installed bundle embedded exact source
+`d421c462831b362df71b89e5a6fcb03f94d108d9`, passed strict code-signature
+verification, and Gatekeeper accepted it as Notarized Developer ID. It did not
+relaunch automatically after the user-requested Quit. Opening that installed
+copy explicitly started one build-18 app and one healthy packaged helper with
+`--resume-after-update-build 18`; its protected `/api/update-idle` returned
+200 with `idle: true`. A normal Quit stopped both processes.
+
+All four temporary canary variables were removed and Production was redeployed
+without them. The paid token again received 403 on the canary route; its
+ordinary update-archive route returned the exact 9,591,579-byte build-16 ZIP
+with SHA-256
+`60eff4dcb07088d01c966587e808f21d5fa74b8afb4eba45ed326543f07241f7`.
+Anonymous canary access remained 403 and the public appcast remained build 16.
+The loopback feed stopped. This proves the modified-client paid native download
+and install-on-quit handoff plus first open of the installed build, **not**
+an unmodified buyer-client install, unattended install/relaunch while the app
+stays open, busy-operation retry, or clean buyer-account acceptance. The test
+copy was not installed in `/Applications`, and build 18 remains unaccepted.
+
+### Build 18 local updater failure-path probes — September 26, 2026
+
+The exact signed, notarized build-18 app code was placed in a disposable,
+locally re-signed build-16 wrapper with a loopback appcast. A synthetic-format
+test token was supplied through closed stdin; no purchase token, Production
+canary, buyer archive, or real Codex history was used. Each run made one
+background update request, then was stopped with a normal macOS Quit.
+
+Three separate loopback fixtures returned an intentionally corrupt archive,
+an archive with a wrong Sparkle EdDSA signature, and HTTP 404 for the archive.
+For each, the app fetched the appcast and attempted the archive request, the
+installed wrapper remained build 16, its packaged helper stayed healthy and
+idle, and normal Quit stopped both. No fixture replaced the app or left a
+stuck helper. The fixture server was stopped, the disposable wrapper was moved
+to Trash, and the original idle developer app was reopened. These are local
+modified-client safety probes, not proof of unmodified buyer-client failures,
+busy-operation deferral/retry, or release acceptance. Public build 16 was
+unchanged.
+
+### Build 18 packaged restore/update contention — September 26, 2026
+
+The opt-in `test_packaged_update_restore_contention.py` passed against the
+engine inside the exact notarized build-18 DMG. It created a disposable
+transcript and encrypted Vault, launched the packaged helper with that
+disposable source home, and began a real restore into a separate folder.
+While restore was running, `/api/update-idle` and `/api/update-shutdown`
+returned 409, the helper stayed alive, and no update marker was written.
+After restore completed, the original and recovered transcript checksums
+matched; the same endpoints allowed guarded shutdown and wrote the expected
+build-17 test marker. The fixture key was removed, temporary files were
+cleaned, and the read-only DMG was detached. This proves the packaged helper's
+restore boundary, not the native app's 60-second retry or Sparkle's eventual
+automatic installation while the app remains open.
+
+### Build 18 local native automatic idle/retry — September 26, 2026
+
+A disposable, locally re-signed build-16 wrapper used the exact build-18
+Swift app code and packaged helper, the public build-16 Sparkle key, a
+synthetic-format token from closed stdin, and a loopback feed serving the
+exact signed/notarized build-18 DMG. A test-only helper argument confined
+Codex data, state, and fast-search cache to a 128 MiB synthetic source home.
+No Production canary, purchase credential, real transcript, or real Vault was
+used.
+
+In the idle run, Sparkle fetched the appcast and archive, replaced the wrapper
+in place with build 18 **without a manual Quit**, and relaunched the build-18
+app and packaged helper. In the busy run, the packaged helper started a real
+fast-search indexing job against only that synthetic source and was then
+temporarily suspended. Sparkle again downloaded build 18, but the wrapper
+remained running as build 16 while the helper could not respond to the idle
+probe. The helper was resumed; indexing completed, `/api/update-idle` returned
+200 with `idle: true`, and the app's scheduled retry installed and relaunched
+build 18 without a manual Quit. The installed app passed strict code-signature
+verification and notarized Developer ID Gatekeeper assessment; its helper
+started with `--resume-after-update-build 18`.
+
+Both test apps and helpers were quit normally, the loopback feed was stopped,
+the synthetic source was removed, the two disposable app folders were moved
+to Trash, and the original idle developer app was reopened. The preexisting
+Sparkle automatic-check/download preferences remained enabled. This is a
+physical **modified-client, local-feed** idle/retry proof, not an unmodified
+paid buyer-client installation, a native 409-during-restore retry, a clean
+buyer-account test, or approval to promote build 18. The separate packaged
+restore-contention receipt above covers the real helper's 409 boundary.
+
+### Build 19 signed image and local automatic update — September 26, 2026
+
+Clean source `ac0bfa37a3498a7cf0f6d820e7ea9c07dbabeb31` produced a
+Developer ID signed, Apple-notarized build-19 app and separately signed,
+notarized rotation DMG. The final DMG is 11,226,440 bytes with SHA-256
+`5f5c30f960cbca0a75a72d882c4a391ce4a5ad35cdd5ec15c4abe87562f36e85`;
+its Sparkle EdDSA signature verified against the exact bytes. The mounted app
+passed strict code-signature and Notarized Developer ID Gatekeeper checks on
+both Founder Macs. The second-Mac check was read-only: it did not launch the
+app or touch Codex data, and the temporary DMG was detached and removed.
+
+The exact build-19 DMG was then served only from a `127.0.0.1` test appcast.
+A disposable, locally re-signed wrapper used the build-19 native updater code
+but reported build 16 to Sparkle, with a synthetic-format token supplied on
+closed stdin and a separate disposable source home. Sparkle fetched the
+appcast and archive, installed the notarized image **without a manual Quit**,
+and relaunched exactly one build-19 app and helper. The installed app's source
+receipt and version matched the frozen source; strict signing and Gatekeeper
+passed. A normal Quit stopped the app and helper. The local feed stopped, the
+test app and source folder were moved to Trash, and the original developer app
+was reopened. The other macOS account's installed app was not replaced.
+
+This passes a local exact-image automatic-idle mechanism check, **not** the
+unmodified paid-buyer path, clean-account first launch, build-19 native busy
+retry, paid failure-path matrix, or a real-history off-device backup. The new
+catalog entry is testing-only and unaccepted. Catalog-only PR #47 was merged
+as `a0c00564a08bff39772512ed14a9918420748a44` and that exact clean main
+was deployed to Production as `dpl_D8k5ZEcCd5E54kbLabbCP8CiCYcv` on
+September 26. The live public appcast still offered build 16, availability
+still reported the $49 Apple-silicon beta, and an anonymous build-19 canary
+archive request returned 403. Buyer delivery remains unchanged. Do not claim
+automatic updates to customers or promote build 19 from this receipt alone.
+
+The exact DMG was uploaded to the product's private Blob store under its
+`sandbox/` digest pathname using the existing Development-scoped Vercel
+connection. The operator uploader independently read back all 11,226,440
+bytes and verified the SHA-256 above. No credential was written into Git or
+the release receipt. This proves artifact storage, not paid entitlement,
+buyer download, or Production catalog availability.
+
+Three further disposable build-19-code wrappers exercised separate loopback
+failure fixtures: wrong Sparkle EdDSA signature, archive HTTP 404, and a
+full-length archive with one corrupted byte. Each fetched its appcast and
+attempted the archive request. In every case the old wrapper stayed on build
+16, its packaged helper remained running, and no update marker appeared in
+the isolated source home. A normal macOS Quit then stopped both app and
+helper. The servers were stopped, disposable apps and source homes were moved
+to Trash, and the original developer app was reopened. These checks used no
+paid credential or Production archive, so they do not establish the paid
+missing/refunded-entitlement or network-unavailable behavior.
+
+### Build 19 packaged restore/update contention — September 26, 2026
+
+The opt-in packaged contention fixture passed against the engine in the exact
+signed and notarized build-19 DMG above. It used only a disposable 128 MiB
+transcript, encrypted Vault, and restore destination. During a real restore,
+both updater-idle and updater-shutdown returned 409, the packaged helper stayed
+alive, and no update marker was written. After restore completed, the source
+and recovered transcript digests matched; the same endpoints allowed guarded
+shutdown and recorded target build 19. The fixture removed its test Keychain
+item and temporary data, and the read-only DMG was detached. The Founder's
+Codex history and Vault schedules were not used. This proves the exact
+packaged helper's busy-operation boundary, not the native app's automatic
+retry, an unmodified paid-client upgrade, or clean-account acceptance.

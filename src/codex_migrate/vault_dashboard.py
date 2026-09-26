@@ -12,6 +12,7 @@ VAULT_HTML = r'''<!doctype html>
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 20% 0,#172038 0,transparent 36%),var(--bg);color:var(--text);font:500 16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--light)}header{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:28px}h1{font-size:clamp(34px,7vw,58px);letter-spacing:-.045em;line-height:1;margin:10px 0}.lede,.muted{color:var(--muted)}.lede{font-size:18px;max-width:680px;margin:0}.panel{background:color-mix(in srgb,var(--panel) 95%,transparent);border:1px solid var(--line);border-radius:18px;padding:22px;margin:18px 0}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.metric{border:1px solid var(--line);border-radius:13px;padding:14px}.metric span{display:block;color:var(--muted);font-size:14px}.metric strong{font-size:22px}form,.actions{display:flex;gap:10px;flex-wrap:wrap}input,select,textarea,button,a.button{font:inherit;border-radius:10px;border:1px solid #8996ad;padding:11px 14px}input,select,textarea{background:#080b10;color:var(--text);flex:1;min-width:220px}textarea{display:block;width:100%;resize:none}button,a.button{background:var(--purple);color:white;font-weight:750;cursor:pointer;text-decoration:none}button.secondary,a.secondary{background:transparent}button:disabled,select:disabled{opacity:.55;cursor:wait}.result{width:100%;text-align:left;background:#151d2a;margin:10px 0;padding:15px;line-height:1.45}.result small{display:block;color:var(--muted);margin-bottom:5px}.entry{border-top:1px solid var(--line);padding:20px 0}.entry:first-child{border-top:0}.entry h3{margin:0 0 4px;font-size:17px}.entry time{display:block;color:var(--muted);font-size:14px;margin-bottom:10px}.entry p{white-space:pre-wrap;overflow-wrap:anywhere;margin:0}#error,#backup-error,#schedule-error,#restore-error,#install-error{color:#ffc3c8}#status,#backup-status,#schedule-status,#restore-status,#install-status{color:var(--muted)}#recovery{border-left:4px solid var(--light);padding-left:16px;margin-top:18px}.subsection{border-top:1px solid var(--line);margin-top:22px;padding-top:18px}[hidden]{display:none!important}fieldset{margin:18px 0;padding:0;border:0}legend{margin-bottom:10px;font-weight:750}fieldset label{display:flex;gap:11px;padding:13px 14px;margin:8px 0;border:1px solid var(--line);border-radius:11px;cursor:pointer}fieldset input{flex:0 0 auto;min-width:0;width:19px;height:19px;margin:3px 0 0;accent-color:var(--purple)}fieldset label span,fieldset label small{display:block}fieldset label small{margin-top:3px;color:var(--muted);font-size:14px}.retention-note{font-size:14px;margin-top:10px}
 .result strong{display:block;margin-bottom:4px}#browse-error,#thread-restore-error{color:#ffc3c8}#browse-status,#thread-restore-status{color:var(--muted)}
+#index-error{color:#ffc3c8}#index-status{color:var(--muted)}
 .app{min-height:100vh;display:grid;grid-template-columns:238px 1fr}.sidebar{position:sticky;top:0;height:100vh;padding:28px 18px 24px;border-right:1px solid var(--line);background:#0c1018;display:flex;flex-direction:column}.brand{display:flex;gap:12px;align-items:center;padding:0 8px 26px}.brand-mark{width:36px;height:36px;display:grid;place-items:center;border-radius:11px;background:linear-gradient(145deg,#9475ff,#5735d6);font-size:14px;font-weight:850;box-shadow:0 10px 30px #6f4cff44}.brand strong,.brand small{display:block}.brand small{color:var(--muted);font-size:12px}.nav{display:grid;gap:8px}.nav a{display:flex;align-items:center;gap:12px;padding:12px 14px;color:#aeb8ca;border-radius:11px;text-decoration:none;font-weight:700}.nav a:hover,.nav a.active{color:white;background:#1d2434}.nav-icon{width:18px;text-align:center;color:#a991ff}.protection{margin-top:auto;border-top:1px solid var(--line);padding:18px 8px 0;font-size:13px;color:var(--muted)}.protection strong{color:var(--text)}.dot{display:inline-block;width:9px;height:9px;margin-right:8px;border-radius:50%;background:#45dfa0;box-shadow:0 0 0 5px #45dfa014}.content{min-width:0}.topline{font-size:14px;color:var(--muted);font-weight:750}.view-head h1{font-size:clamp(38px,5vw,58px)}.view-head{align-items:center;margin-bottom:26px}.panel h2{margin-top:0}.storage-assessment{border:1px solid var(--line);border-radius:13px;padding:14px 16px;margin:14px 0;background:#0c121d}.storage-assessment strong,.storage-assessment span{display:block}.storage-assessment span{color:var(--muted);font-size:14px;margin-top:3px}.storage-assessment.cloud_sync{border-color:#25654d;background:#0d251c}.storage-assessment.cloud_sync strong{color:#5ee5aa}.storage-assessment.local{border-color:#7a5824;background:#2c210f}.storage-assessment.local strong{color:#ffd58a}.storage-assessment.external_or_network{border-color:#4c5a74}.view-backup .summary,.view-recovery .summary,.view-backup #restore-panel,.view-backup #search-panel,.view-backup #results-panel,.view-backup #thread,.view-conversations #backup-panel,.view-conversations #restore-panel,.view-recovery #backup-panel,.view-recovery #search-panel,.view-recovery #results-panel,.view-recovery #thread{display:none!important}.view-conversations main{width:min(1120px,calc(100% - 48px))}.view-conversations #search-panel{margin-bottom:12px}.view-conversations #results-panel{width:36%;float:left;margin-right:14px}.view-conversations #thread{overflow:hidden;min-height:420px}.view-conversations #status,.view-conversations #error{clear:both}.view-recovery main{width:min(980px,calc(100% - 48px))}
 @media(max-width:820px){.app{display:block}.sidebar{position:static;width:auto;height:auto;padding:16px}.brand{padding-bottom:12px}.nav{display:flex;overflow-x:auto}.nav a{white-space:nowrap}.protection{display:none}.view-conversations #results-panel{float:none;width:auto;margin-right:0}.view-conversations #thread{min-height:0}}
 @media(max-width:620px){header{display:block}.view-head a.button{display:inline-block;margin-top:16px}.summary{grid-template-columns:1fr}.panel{padding:16px}main,.view-conversations main,.view-recovery main{width:min(100% - 24px,960px);margin-top:22px}.nav a{padding:10px}.nav-icon{display:none}}
@@ -101,6 +102,7 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 <button id="backup" disabled>Create backup + turn on daily backup</button>
 </div>
 <p class="muted retention-note">Existing snapshots are kept. Daily backup is not real-time sync.</p>
+<p class="muted" id="vault-usage" role="status" aria-live="polite" hidden></p>
 <p id="backup-status" role="status" aria-live="polite">
 </p>
 <p id="backup-error" role="alert">
@@ -189,7 +191,18 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 <input id="query" required autocomplete="off">
 <button type="submit">Search</button>
 </form>
-<p class="muted">Remember an old name? Search this Mac's titles first. Full-text search reads local conversations and may take longer for large histories. All saved titles searches dated encrypted snapshots; open a version to search its full text.</p>
+<p class="muted">Search this Mac's text or titles. For older versions, search saved titles, then open a backup to search its full text.</p>
+<div class="subsection" id="index-controls">
+<h3>Speed up search</h3>
+<p class="muted">For large histories, build a local cache instead of scanning every conversation. It may use several GB and stores <strong>unencrypted text fragments</strong> visible to your Mac account. Search and backups work without it; you can delete it anytime.</p>
+<div class="actions">
+<button id="index-build" type="button" class="secondary">Make search faster</button>
+<button id="index-stop" type="button" class="secondary" hidden>Stop indexing</button>
+<button id="index-remove" type="button" class="secondary" hidden>Delete search cache</button>
+</div>
+<p id="index-status" role="status" aria-live="polite">Checking fast search…</p>
+<p id="index-error" role="alert"></p>
+</div>
 </section>
 <section class="panel" id="results-panel" hidden>
 <h2>Results</h2>
@@ -401,6 +414,46 @@ async function runSearch(append=false){
 }
 $("search").onsubmit=event=>{event.preventDefault();void runSearch()};
 $("more-results").onclick=()=>void runSearch(true);
+let indexTimer=null;
+function indexView(data){
+  const running=data.status==="running"||data.status==="stopping";
+  $("index-build").disabled=running||!data.available;
+  $("index-build").textContent=data.present?"Refresh search cache":"Make search faster";
+  $("index-stop").hidden=!running;
+  $("index-stop").disabled=data.status==="stopping";
+  $("index-remove").hidden=!data.present||running;
+  $("index-error").textContent=data.status==="failed"&&data.available?(data.error||"Fast search needs attention."):"";
+  if(!data.available)$("index-status").textContent="Fast search is unavailable on this Mac. Regular conversation search still works.";
+  else if(data.status==="running")$("index-status").textContent=data.total?
+    `Indexing ${data.completed||0} of ${data.total} conversations. Search remains available.`:
+    "Preparing local conversation index…";
+  else if(data.status==="stopping")$("index-status").textContent="Stopping safely after the current record…";
+  else if(data.status==="ready")$("index-status").textContent=
+    `Fast search is ready · ${data.total} conversations · ${fmt(data.index_bytes)} on this Mac.`+
+    (data.skipped?` ${data.skipped} changed during indexing and will be searched directly; refresh later.`:"");
+  else if(data.status==="stopped")$("index-status").textContent="Indexing stopped. Search still works; refresh to continue.";
+  else if(data.status==="failed")$("index-status").textContent="Search still works without this cache.";
+  else $("index-status").textContent=data.present?
+    "A local search cache is present. Refresh it to include recent conversations faster.":
+    "Fast search is off. Search still reads your original conversations.";
+  if(running&&!indexTimer)indexTimer=setInterval(refreshIndex,1000);
+  if(!running&&indexTimer){clearInterval(indexTimer);indexTimer=null}
+}
+async function refreshIndex(){try{indexView(await api("/api/vault/search-index-status"))}catch(error){$("index-error").textContent=error.message}}
+$("index-build").onclick=async()=>{
+  if(!confirm("Build a local search cache? It stores unencrypted three-character text fragments, may use several GB, and is not a backup. You can delete it later."))return;
+  try{$("index-error").textContent="";indexView(await api("/api/vault/search-index",{apply:true}))}
+  catch(error){$("index-error").textContent=error.message;await refreshIndex()}
+};
+$("index-stop").onclick=async()=>{
+  try{indexView(await api("/api/vault/search-index-stop",{apply:true}))}
+  catch(error){$("index-error").textContent=error.message}
+};
+$("index-remove").onclick=async()=>{
+  if(!confirm("Delete only the local search cache? Your Codex conversations and Vault backups will remain unchanged."))return;
+  try{indexView(await api("/api/vault/search-index-remove",{apply:true}))}
+  catch(error){$("index-error").textContent=error.message}
+};
 async function markdownFile(){if(!selected)throw Error("Open a conversation first");const text=await api("/api/vault/export?"+params(selected));return new File([text],"codex-conversation.md",{type:"text/markdown"})}
 $("download").onclick=async()=>{try{
   if(!selected)throw Error("Open a conversation first");
@@ -414,10 +467,11 @@ let backupTimer=null;
 let installRunning=false;
 let verifiedBackup=false;
 let pendingAutomaticBackup=false;
+let lastSizedSnapshot="";
 function storageView(storage){const panel=$("storage-assessment");if(!storage){panel.hidden=true;return}panel.hidden=false;panel.className="storage-assessment "+storage.kind;$("storage-heading").textContent=storage.heading;$("storage-detail").textContent=storage.detail}
 async function refreshStorage(path){if(!path){storageView(null);return}try{storageView(await api("/api/vault/storage?path="+encodeURIComponent(path)))}catch(error){storageView({kind:"external_or_network",heading:"Storage protection unverified",detail:"Codex Migrate could not classify this location. Confirm how it is backed up before relying on it after loss of the Mac."})}}
 function backupFrequencyView(){const daily=$("backup-frequency-daily").checked;$("backup").textContent=daily?"Create backup + turn on daily backup":"Create encrypted backup"}
-function backupView(data){const running=data.status==="running";if(data.storage)storageView(data.storage);if(data.destination&&!$("vault-folder").value){$("vault-folder").value=data.destination;if(!data.storage)refreshStorage(data.destination)}if(data.destination&&!$("restore-vault").value){$("restore-vault").value=data.destination;refreshSnapshots()}verifiedBackup=["completed","needs_attention"].includes(data.status)&&!data.recovery_key;$("choose-vault").disabled=running||installRunning;$("backup-frequency-daily").disabled=running||installRunning||scheduleEnabled;$("backup-frequency-manual").disabled=running||installRunning||scheduleEnabled;$("backup").disabled=running||installRunning||!$("vault-folder").value||Boolean(data.recovery_key);$("backup-error").textContent=data.status==="failed"?(data.error||"Encrypted backup stopped safely."):"";if(running){const files=`${data.completed_files||0} of ${data.total_files||0} files`;const bytes=data.total_bytes?` · ${Math.round(100*(data.completed_bytes||0)/data.total_bytes)}% of ${fmt(data.total_bytes)}`:"";$("backup-status").textContent="Encrypting and verifying… "+files+bytes}else if(data.status==="completed"){$("backup-status").textContent=`Verified snapshot complete · ${data.transcript_files.toLocaleString()} files · ${fmt(data.transcript_bytes)}`}else if(data.status==="needs_attention"){$("backup-status").textContent=`Verified snapshot saved, but ${data.at_risk_threads} conversation${data.at_risk_threads===1?"":"s"} may have lost content. Open an earlier saved version for review.`}else if(data.status==="failed"){$("backup-status").textContent=""}else{$("backup-status").textContent="No backup is running."}if(data.recovery_key){$("recovery-key").value=data.recovery_key;$("recovery").hidden=false}else{$("recovery-key").value="";$("recovery").hidden=true}if(running&&!backupTimer)backupTimer=setInterval(refreshBackup,1500);if(!running&&backupTimer){clearInterval(backupTimer);backupTimer=null}refreshScheduleButton();refreshRestoreButton();if(verifiedBackup&&data.status!=="needs_attention"&&pendingAutomaticBackup&&!scheduleEnabled)void enableRequestedSchedule()}
+function backupView(data){const running=data.status==="running";if(data.storage)storageView(data.storage);if(data.destination&&!$("vault-folder").value){$("vault-folder").value=data.destination;if(!data.storage)refreshStorage(data.destination)}if(data.destination&&!$("restore-vault").value){$("restore-vault").value=data.destination;refreshSnapshots()}verifiedBackup=["completed","needs_attention"].includes(data.status)&&!data.recovery_key;$("choose-vault").disabled=running||installRunning;$("backup-frequency-daily").disabled=running||installRunning||scheduleEnabled;$("backup-frequency-manual").disabled=running||installRunning||scheduleEnabled;$("backup").disabled=running||installRunning||!$("vault-folder").value||Boolean(data.recovery_key);$("backup-error").textContent=data.status==="failed"?(data.error||"Encrypted backup stopped safely."):"";if(running){const files=`${data.completed_files||0} of ${data.total_files||0} files`;const bytes=data.total_bytes?` · ${Math.round(100*(data.completed_bytes||0)/data.total_bytes)}% of ${fmt(data.total_bytes)}`:"";$("backup-status").textContent="Encrypting and verifying… "+files+bytes}else if(data.status==="completed"){$("backup-status").textContent=`Verified snapshot complete · ${data.transcript_files.toLocaleString()} files · ${fmt(data.transcript_bytes)}`}else if(data.status==="needs_attention"){$("backup-status").textContent=`Verified snapshot saved, but ${data.at_risk_threads} conversation${data.at_risk_threads===1?"":"s"} may have lost content. Open an earlier saved version for review.`}else if(data.status==="failed"){$("backup-status").textContent=""}else{$("backup-status").textContent="No backup is running."}if(data.recovery_key){$("recovery-key").value=data.recovery_key;$("recovery").hidden=false}else{$("recovery-key").value="";$("recovery").hidden=true}if(running&&!backupTimer)backupTimer=setInterval(refreshBackup,1500);if(!running&&backupTimer){clearInterval(backupTimer);backupTimer=null}if(data.snapshot_id&&["completed","needs_attention"].includes(data.status)&&data.snapshot_id!==lastSizedSnapshot){lastSizedSnapshot=data.snapshot_id;if(data.destination){$("restore-vault").value=data.destination;void refreshSnapshots()}}refreshScheduleButton();refreshRestoreButton();if(verifiedBackup&&data.status!=="needs_attention"&&pendingAutomaticBackup&&!scheduleEnabled)void enableRequestedSchedule()}
 async function refreshBackup(){try{backupView(await api("/api/vault/backup-status"))}catch(error){$("backup-error").textContent=error.message}}
 $("choose-vault").onclick=async()=>{try{$("backup-error").textContent="";const result=await api("/api/vault/folder",{});if(result.path){$("vault-folder").value=result.path;$("restore-vault").value=result.path;storageView(result.storage);verifiedBackup=false;$("backup").disabled=false;$("backup-status").textContent="Folder selected. Review its protection, then create the backup when ready.";refreshScheduleButton();await refreshSnapshots()}}catch(error){$("backup-error").textContent=error.message}};
 $("backup-frequency-daily").onchange=backupFrequencyView;
@@ -437,7 +491,41 @@ let restoreTimer=null;
 let browseRunning=false;
 let selectedRecoveryRunning=false;
 function refreshRestoreButton(){const chosen=$("restore-vault").value&&$("restore-snapshot").value;$("browse-backup").disabled=installRunning||browseRunning||selectedRecoveryRunning||!chosen;$("restore").disabled=installRunning||browseRunning||selectedRecoveryRunning||!chosen||!$("restore-output").value;$("install").disabled=installRunning||browseRunning||selectedRecoveryRunning||!chosen}
-async function refreshSnapshots(){const vault=$("restore-vault").value;const select=$("restore-snapshot");const selected=select.dataset.requested||select.value;select.dataset.ready="";select.disabled=true;select.replaceChildren(new Option(vault?"Loading backup history…":"Choose a Vault to see backups",""));refreshRestoreButton();if(!vault)return;try{const data=await api("/api/vault/snapshots?vault="+encodeURIComponent(vault));if(!data.snapshots.length){select.replaceChildren(new Option("No published backups found",""));return}select.replaceChildren(...data.snapshots.map(item=>{const when=new Date(item.created_at);const label=(Number.isNaN(when.getTime())?item.created_at:when.toLocaleString())+(item.latest?" · Latest":"");return new Option(label,item.snapshot_id)}));if(selected&&[...select.options].some(option=>option.value===selected))select.value=selected;select.dataset.ready="true";select.disabled=false;$("restore-error").textContent=""}catch(error){select.replaceChildren(new Option("Backup history unavailable",""));$("restore-error").textContent=error.message}finally{refreshRestoreButton()}}
+async function refreshSnapshots(){
+  const vault=$("restore-vault").value;
+  const select=$("restore-snapshot");
+  const usage=$("vault-usage");
+  const selected=select.dataset.requested||select.value;
+  select.dataset.ready="";
+  select.disabled=true;
+  select.replaceChildren(new Option(vault?"Loading backup history…":"Choose a Vault to see backups",""));
+  usage.hidden=!vault;
+  usage.textContent=vault?"Measuring saved Vault files…":"";
+  refreshRestoreButton();
+  if(!vault)return;
+  try{
+    const data=await api("/api/vault/snapshots?vault="+encodeURIComponent(vault));
+    if($("restore-vault").value!==vault)return;
+    usage.textContent=Number.isSafeInteger(data.storage_bytes)&&data.storage_bytes>=0
+      ?`Vault files: ${fmt(data.storage_bytes)} · ${data.snapshots.length>=1000?"at least ":""}${data.snapshots.length.toLocaleString()} saved ${data.snapshots.length===1?"version":"versions"}.`
+      :"Saved Vault size unavailable. Your backup versions remain accessible.";
+    if(!data.snapshots.length){select.replaceChildren(new Option("No published backups found",""));return}
+    select.replaceChildren(...data.snapshots.map(item=>{
+      const when=new Date(item.created_at);
+      const label=(Number.isNaN(when.getTime())?item.created_at:when.toLocaleString())+(item.latest?" · Latest":"");
+      return new Option(label,item.snapshot_id)
+    }));
+    if(selected&&[...select.options].some(option=>option.value===selected))select.value=selected;
+    select.dataset.ready="true";
+    select.disabled=false;
+    $("restore-error").textContent="";
+  }catch(error){
+    if($("restore-vault").value!==vault)return;
+    select.replaceChildren(new Option("Backup history unavailable",""));
+    usage.textContent="Saved Vault size unavailable. Existing backups were not changed.";
+    $("restore-error").textContent=error.message;
+  }finally{refreshRestoreButton()}
+}
 function restoreView(data){const running=data.status==="running";if(data.snapshot||data.snapshot_id)$("restore-snapshot").dataset.requested=data.snapshot||data.snapshot_id;if(data.vault&&!$("restore-vault").value){$("restore-vault").value=data.vault;refreshSnapshots()}if(data.output&&!$("restore-output").value)$("restore-output").value=data.output;$("choose-restore-vault").disabled=running||installRunning;$("choose-restore-output").disabled=running||installRunning;$("restore-snapshot").disabled=running||installRunning||$("restore-snapshot").dataset.ready!=="true";$("restore").disabled=running||installRunning||!$("restore-vault").value||!$("restore-snapshot").value||!$("restore-output").value;$("restore-error").textContent=data.status==="failed"?(data.error||"Recovery stopped safely."):"";if(running){$("restore-status").textContent="Verifying and recovering the selected backup…"}else if(data.status==="completed"){$("restore-status").textContent=`Recovered copy ready · ${data.transcript_files.toLocaleString()} files · ${fmt(data.transcript_bytes)}`}else if(data.status==="failed"){$("restore-status").textContent=""}else{$("restore-status").textContent="No recovery is running."}if(running&&!restoreTimer)restoreTimer=setInterval(refreshRestore,1500);if(!running&&restoreTimer){clearInterval(restoreTimer);restoreTimer=null}}
 async function refreshRestore(){try{restoreView(await api("/api/vault/restore-status"))}catch(error){$("restore-error").textContent=error.message}}
 $("choose-restore-vault").onclick=async()=>{try{$("restore-error").textContent="";const result=await api("/api/vault/folder",{});if(result.path){$("restore-vault").value=result.path;await refreshSnapshots()}}catch(error){$("restore-error").textContent=error.message}};
@@ -458,13 +546,14 @@ let selectedRecoveryTimer=null;
 function selectedRecoveryView(data){selectedRecoveryRunning=data.status==="running";const attention=data.status==="needs_attention";$("restore-thread").disabled=selectedRecoveryRunning||installRunning||attention;$("thread-restore-error").textContent=(data.status==="failed"||attention)?(data.error||"Selected recovery stopped safely."):"";if(data.status==="running"){$("thread-restore-status").textContent="Verifying the backup again and recovering this conversation…"}else if(data.status==="installed"){$("thread-restore-status").textContent="Conversation restored and verified. Reopen Codex to use it."}else if(data.status==="already_present"){$("thread-restore-status").textContent="This exact conversation is already present. Nothing was changed."}else if(data.status==="failed"||attention){$("thread-restore-status").textContent=""}if(selectedRecoveryRunning&&!selectedRecoveryTimer)selectedRecoveryTimer=setInterval(refreshSelectedRecovery,1000);if(!selectedRecoveryRunning&&selectedRecoveryTimer){clearInterval(selectedRecoveryTimer);selectedRecoveryTimer=null}refreshRestoreButton()}
 async function refreshSelectedRecovery(){try{selectedRecoveryView(await api("/api/vault/thread-install-status"))}catch(error){$("thread-restore-error").textContent=error.message}}
 $("restore-thread").onclick=async()=>{if(!selected||selected.source!=="backup")return;if(!confirm("Restore only this verified conversation into Codex? Close Codex and its CLI sessions first. Existing conversations will not be overwritten or merged."))return;try{$("thread-restore-error").textContent="";selectedRecoveryView(await api("/api/vault/install-thread",{collection:selected.collection,transcript:selected.transcript,apply:true}))}catch(error){$("thread-restore-error").textContent=error.message}};
-api("/api/vault/summary").then(data=>{const files=data.active_transcripts+data.archived_transcripts;$("active").textContent=data.active_transcripts.toLocaleString();$("archived").textContent=data.archived_transcripts.toLocaleString();$("bytes").textContent=fmt(data.transcript_bytes);$("backup-footprint").textContent=files?`History to protect: ${fmt(data.transcript_bytes)} in ${files.toLocaleString()} conversation ${files===1?"file":"files"}. Current Vault does not compress; the first backup needs roughly this much free space.`:"No local Codex conversation files were found on this Mac.";$("status").textContent="Ready."}).catch(error=>{$("backup-footprint").textContent="Could not measure conversation history. Check free space before starting a backup.";fail(error)});
+api("/api/vault/summary").then(data=>{const files=data.active_transcripts+data.archived_transcripts;$("active").textContent=data.active_transcripts.toLocaleString();$("archived").textContent=data.archived_transcripts.toLocaleString();$("bytes").textContent=fmt(data.transcript_bytes);$("backup-footprint").textContent=files?`History to protect: ${fmt(data.transcript_bytes)} in ${files.toLocaleString()} conversation ${files===1?"file":"files"}. Vault compresses new backup data when useful, so the saved size may be smaller. Keep space for the full source size plus overhead until the first backup verifies.`:"No local Codex conversation files were found on this Mac.";$("status").textContent="Ready."}).catch(error=>{$("backup-footprint").textContent="Could not measure conversation history. Check free space before starting a backup.";fail(error)});
 refreshBackup();
 refreshSchedule();
 refreshRestore();
 refreshInstall();
 refreshBrowse();
 refreshSelectedRecovery();
+refreshIndex();
 backupFrequencyView();
 </script>
 </body>

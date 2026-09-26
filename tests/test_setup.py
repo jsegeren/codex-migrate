@@ -17,14 +17,19 @@ from codex_migrate.vault_install import InstallResult, ThreadInstallResult
 from codex_migrate.vault_recovery import RestoreResult, SnapshotInfo
 from codex_migrate.vault_schedule import SchedulePlan
 from codex_migrate.vault_dashboard import VAULT_HTML
+from codex_migrate.vault_search_index import IndexCancelled, supported as search_index_supported
 
 
 class SetupTests(unittest.TestCase):
-    def test_backup_preflight_shows_exact_history_size_without_claiming_compression(self):
+    def test_backup_preflight_shows_source_size_and_conservative_compression_guidance(self):
         self.assertIn('id="backup-footprint"', VAULT_HTML)
+        self.assertIn('id="vault-usage"', VAULT_HTML)
+        self.assertIn('Vault files:', VAULT_HTML)
+        self.assertIn('data.snapshots.length>=1000?"at least ":""', VAULT_HTML)
+        self.assertIn('saved ${data.snapshots.length===1?', VAULT_HTML)
         self.assertIn('fmt(data.transcript_bytes)', VAULT_HTML)
-        self.assertIn('Current Vault does not compress', VAULT_HTML)
-        self.assertIn('the first backup needs roughly this much free space', VAULT_HTML)
+        self.assertIn('Vault compresses new backup data when useful', VAULT_HTML)
+        self.assertIn('Keep space for the full source size plus overhead', VAULT_HTML)
 
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
@@ -88,6 +93,8 @@ class SetupTests(unittest.TestCase):
         self.assertIn("Print / Save PDF", shell)
         self.assertIn("Share thread", shell)
         self.assertIn("Create encrypted backup", shell)
+        self.assertIn("Speed up search", shell)
+        self.assertIn("unencrypted text fragments", shell)
         self.assertIn("Save this recovery key", shell)
         self.assertIn("Automatic backup", shell)
         self.assertIn("Turn on daily backup", shell)
@@ -109,6 +116,7 @@ class SetupTests(unittest.TestCase):
                      "/api/vault/thread?collection=active&transcript=2026/09/thread.jsonl",
                      "/api/vault/export?collection=active&transcript=2026/09/thread.jsonl",
                      "/api/vault/backup-status", "/api/vault/schedule",
+                     "/api/vault/search-index-status",
                      "/api/vault/storage?path=/private/tmp/vault",
                      "/api/vault/restore-status",
                      "/api/vault/install-status",
@@ -122,6 +130,9 @@ class SetupTests(unittest.TestCase):
                      "/api/vault/restore", "/api/vault/install",
                      "/api/vault/install-recover", "/api/vault/browse",
                      "/api/vault/install-thread"):
+            self.assertEqual(self.request(path, {}, authorized=False)[0], 403)
+        for path in ("/api/vault/search-index", "/api/vault/search-index-stop",
+                     "/api/vault/search-index-remove"):
             self.assertEqual(self.request(path, {}, authorized=False)[0], 403)
         code, page = self.request(
             "/api/vault/thread?collection=active&transcript=2026%2F09%2Fthread.jsonl")
@@ -154,6 +165,59 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertEqual([entry["text"] for entry in page["entries"]], ["Set up Clerk now"])
         self.assertEqual(self.request(path.replace("match=clerk", "match=missing"))[0], 400)
+
+    @unittest.skipUnless(search_index_supported(), "requires SQLite FTS5 contentless-delete")
+    def test_fast_search_requires_confirmation_and_can_be_deleted_without_source_changes(self):
+        transcript = self.home / ".codex/sessions/thread.jsonl"
+        transcript.parent.mkdir(parents=True)
+        transcript.write_text(json.dumps({"payload": {"message": {"content": "Clerk setup"}}})
+                              + "\n", encoding="utf-8")
+        self.assertFalse(self.request("/api/vault/search-index-status")[1]["present"])
+        self.assertEqual(self.request("/api/vault/search-index", {})[0], 400)
+        self.assertEqual(self.request("/api/vault/search-index", {"apply": False})[0], 400)
+        self.assertEqual(self.request("/api/vault/search-index-remove", {})[0], 400)
+        self.assertEqual(self.request("/api/vault/search-index", {"apply": True})[0], 202)
+        self.helper._search_index_thread.join(timeout=3)
+        status = self.request("/api/vault/search-index-status")[1]
+        self.assertEqual(status["status"], "ready")
+        self.assertTrue(status["present"])
+        self.assertEqual(self.request("/api/vault/search?q=clerk")[1]["results"][0]["transcript"],
+                         "thread.jsonl")
+        code, removed = self.request("/api/vault/search-index-remove", {"apply": True})
+        self.assertEqual(code, 200)
+        self.assertTrue(removed["removed"])
+        self.assertTrue(transcript.exists())
+        self.assertEqual(self.request("/api/vault/search?q=clerk")[1]["results"][0]["transcript"],
+                         "thread.jsonl")
+
+    @unittest.skipUnless(search_index_supported(), "requires SQLite FTS5 contentless-delete")
+    def test_fast_search_can_stop_and_prevents_quit_while_writing_cache(self):
+        entered = threading.Event()
+
+        def until_stopped(_home, *, apply, progress, cancelled):
+            entered.set()
+            cancelled.wait(3)
+            raise IndexCancelled()
+
+        with patch("codex_migrate.setup.build_vault_search_index", side_effect=until_stopped):
+            self.assertEqual(self.request("/api/vault/search-index", {"apply": True})[0], 202)
+            self.assertTrue(entered.wait(1))
+            self.assertEqual(self.request("/api/shutdown", {})[0], 409)
+            self.assertEqual(self.request("/api/vault/search-index-remove", {"apply": True})[0], 400)
+            self.assertEqual(self.request("/api/vault/search-index-stop", {"apply": True})[0], 200)
+            self.helper._search_index_thread.join(timeout=3)
+        self.assertEqual(self.request("/api/vault/search-index-status")[1]["status"], "stopped")
+
+    def test_fast_search_unavailable_is_not_an_error_for_normal_search(self):
+        transcript = self.home / ".codex/sessions/thread.jsonl"
+        transcript.parent.mkdir(parents=True)
+        transcript.write_text(json.dumps({"message": {"content": "Clerk note"}}) + "\n")
+        with patch("codex_migrate.setup.vault_search_index_supported", return_value=False):
+            self.assertFalse(self.request("/api/vault/search-index-status")[1]["available"])
+            code, error = self.request("/api/vault/search-index", {"apply": True})
+            self.assertEqual(code, 400)
+            self.assertIn("unavailable", error["error"])
+        self.assertEqual(len(self.request("/api/vault/search?q=Clerk")[1]["results"]), 1)
 
     def test_vault_backup_can_be_opened_searched_and_selected_thread_installed(self):
         (self.home / ".codex").mkdir()
@@ -443,13 +507,25 @@ class SetupTests(unittest.TestCase):
             created_at="2026-09-18T06:00:00+00:00", latest=True,
         )
         with patch("codex_migrate.setup.list_vault_snapshots",
-                   return_value=[snapshot]) as listed:
+                   return_value=[snapshot]) as listed, patch(
+                       "codex_migrate.setup.vault_storage_usage",
+                       return_value={"storage_bytes": 8192, "storage_files": 4}) as usage:
             code, body = self.request(
                 "/api/vault/snapshots?vault=" + vault)
         self.assertEqual(code, 200)
-        self.assertEqual(body, {"snapshots": [snapshot.as_dict()]})
+        self.assertEqual(body, {"snapshots": [snapshot.as_dict()],
+                                "storage_bytes": 8192, "storage_files": 4})
         listed.assert_called_once_with(vault, limit=1000)
+        usage.assert_called_once_with(vault)
         self.assertNotIn("content", json.dumps(body).lower())
+
+        with patch("codex_migrate.setup.list_vault_snapshots", return_value=[snapshot]), patch(
+                "codex_migrate.setup.vault_storage_usage",
+                side_effect=MigrationError("Storage size cannot be measured")):
+            code, body = self.request("/api/vault/snapshots?vault=" + vault)
+        self.assertEqual(code, 200)
+        self.assertEqual(body["snapshots"], [snapshot.as_dict()])
+        self.assertIsNone(body["storage_bytes"])
 
     def test_vault_backup_waits_for_active_restore(self):
         vault = str(self.home / "vault")

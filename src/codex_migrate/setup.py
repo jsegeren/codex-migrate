@@ -34,6 +34,7 @@ from codex_migrate.vault_dashboard import VAULT_HTML
 from codex_migrate.vault_history import search_titles, thread_timeline
 from codex_migrate.vault_recovery import export_recovery_key
 from codex_migrate.vault_recovery import list_snapshots as list_vault_snapshots
+from codex_migrate.vault_recovery import vault_storage_usage
 from codex_migrate.vault_recovery import snapshot_catalog
 from codex_migrate.vault_recovery import restore_snapshot as restore_vault_snapshot
 from codex_migrate.vault_install import install_snapshot as install_vault_snapshot
@@ -47,6 +48,12 @@ from codex_migrate.vault_schedule import (
     schedule_status as vault_schedule_status,
 )
 from codex_migrate.vault_storage import classify_vault_storage
+from codex_migrate.vault_search_index import (
+    IndexCancelled,
+    build as build_vault_search_index,
+    remove as remove_vault_search_index,
+    supported as vault_search_index_supported,
+)
 
 FOLDER_PICKER_ERROR = (
     "Folder selection could not finish. Close any open folder dialog and try again, "
@@ -434,6 +441,9 @@ class SetupDashboard(Dashboard):
         self._vault_lock = threading.Lock()
         self._vault_thread = None
         self._vault_status = {"status": "idle"}
+        self._search_index_thread = None
+        self._search_index_cancel = threading.Event()
+        self._search_index_status = {"status": "idle"}
         self._restore_thread = None
         self._restore_status = {"status": "idle"}
         self._install_thread = None
@@ -532,6 +542,8 @@ class SetupDashboard(Dashboard):
                 and not (self._browse_thread and self._browse_thread.is_alive())
                 and not (self._thread_install_thread
                          and self._thread_install_thread.is_alive())
+                and not (self._search_index_thread
+                         and self._search_index_thread.is_alive())
                 and not self._vault_status.get("recovery_key")
             )
         if not vault_idle:
@@ -633,6 +645,84 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
         with self._vault_lock:
             return dict(self._vault_status)
 
+    def vault_search_index_status(self):
+        with self._vault_lock:
+            current = dict(self._search_index_status)
+        if current["status"] == "idle":
+            current["present"] = remove_vault_search_index(self.source_home)["present"]
+        current["available"] = vault_search_index_supported()
+        return current
+
+    def start_vault_search_index(self):
+        if not vault_search_index_supported():
+            raise MigrationError("Fast search is unavailable in this Mac's SQLite. "
+                                 "Regular conversation search still works.")
+
+        def progress(completed, total):
+            with self._vault_lock:
+                self._search_index_status.update(completed=completed, total=total)
+
+        def run():
+            try:
+                result = build_vault_search_index(
+                    self.source_home, apply=True, progress=progress,
+                    cancelled=self._search_index_cancel)
+                with self._vault_lock:
+                    self._search_index_status = {
+                        "status": "ready", "present": True,
+                        "total": result["transcripts"],
+                        "skipped": result["skipped"],
+                        "index_bytes": result["index_bytes"],
+                    }
+            except IndexCancelled:
+                try:
+                    present = remove_vault_search_index(self.source_home)["present"]
+                except MigrationError:
+                    present = False
+                with self._vault_lock:
+                    self._search_index_status = {
+                        "status": "stopped", "present": present,
+                        "error": "Indexing stopped. Completed files remain searchable; refresh when ready.",
+                    }
+            except Exception:
+                try:
+                    present = remove_vault_search_index(self.source_home)["present"]
+                except MigrationError:
+                    present = False
+                with self._vault_lock:
+                    self._search_index_status = {
+                        "status": "failed", "present": present,
+                        "error": "Fast search could not finish. Your conversations were not changed. "
+                                 "Search still works without the cache; you can retry or delete it.",
+                    }
+
+        worker = threading.Thread(target=run, daemon=True)
+        with self._vault_lock:
+            if self._search_index_thread and self._search_index_thread.is_alive():
+                raise MigrationError("Fast search is already being prepared")
+            self._search_index_cancel = threading.Event()
+            self._search_index_status = {"status": "running", "present": True,
+                                         "completed": 0, "total": 0}
+            self._search_index_thread = worker
+            worker.start()
+        return self.vault_search_index_status()
+
+    def stop_vault_search_index(self):
+        with self._vault_lock:
+            if not self._search_index_thread or not self._search_index_thread.is_alive():
+                raise MigrationError("No fast-search operation is running")
+            self._search_index_cancel.set()
+            self._search_index_status["status"] = "stopping"
+        return self.vault_search_index_status()
+
+    def clear_vault_search_index(self):
+        with self._vault_lock:
+            if self._search_index_thread and self._search_index_thread.is_alive():
+                raise MigrationError("Stop fast-search indexing before deleting its cache")
+            result = remove_vault_search_index(self.source_home, apply=True)
+            self._search_index_status = {"status": "idle", "present": False}
+        return {**self.vault_search_index_status(), "removed": result["applied"]}
+
     def vault_schedule(self):
         result = vault_schedule_status(self.source_home)
         if result.get("vault"):
@@ -670,9 +760,13 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
     def vault_snapshots(self, vault):
         if not isinstance(vault, str) or len(vault) > 4096:
             raise MigrationError("Choose a valid existing Vault folder")
-        return {"snapshots": [
-            item.as_dict() for item in list_vault_snapshots(vault, limit=1000)
-        ]}
+        snapshots = [item.as_dict() for item in list_vault_snapshots(vault, limit=1000)]
+        try:
+            usage = vault_storage_usage(vault)
+        except MigrationError:
+            # An optional size estimate must not block access to saved versions.
+            usage = {"storage_bytes": None, "storage_files": None}
+        return {"snapshots": snapshots, **usage}
 
     @staticmethod
     def _vault_snapshot(snapshot):
@@ -1173,6 +1267,9 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                         if parsed.path == "/api/vault/backup-status" and not query:
                             self._json(200, setup.vault_status())
                             return
+                        if parsed.path == "/api/vault/search-index-status" and not query:
+                            self._json(200, setup.vault_search_index_status())
+                            return
                         if parsed.path == "/api/vault/schedule" and not query:
                             self._json(200, setup.vault_schedule())
                             return
@@ -1356,6 +1453,8 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                         self._json(400, {"error": "The saved conversation could not be prepared for export."})
                     return
                 if self.path in ("/api/vault/folder", "/api/vault/backup",
+                                 "/api/vault/search-index", "/api/vault/search-index-stop",
+                                 "/api/vault/search-index-remove",
                                  "/api/vault/recovery-saved", "/api/vault/schedule",
                                  "/api/vault/schedule-remove", "/api/vault/restore-folder",
                                  "/api/vault/restore", "/api/vault/install",
@@ -1367,12 +1466,24 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                             raise MigrationError("Invalid Vault request size")
                         payload = json.loads(self.rfile.read(length))
                         if (payload != {} and self.path not in (
+                                "/api/vault/search-index", "/api/vault/search-index-stop",
+                                "/api/vault/search-index-remove",
                                 "/api/vault/backup", "/api/vault/schedule",
                                 "/api/vault/schedule-remove", "/api/vault/restore",
                                 "/api/vault/install", "/api/vault/install-recover",
                                 "/api/vault/browse", "/api/vault/install-thread")):
                             raise MigrationError("Invalid Vault request")
-                        if self.path == "/api/vault/folder":
+                        if self.path in ("/api/vault/search-index", "/api/vault/search-index-stop",
+                                         "/api/vault/search-index-remove"):
+                            if payload != {"apply": True}:
+                                raise MigrationError("Fast search changes require explicit confirmation")
+                            if self.path == "/api/vault/search-index":
+                                self._json(202, setup.start_vault_search_index())
+                            elif self.path == "/api/vault/search-index-stop":
+                                self._json(200, setup.stop_vault_search_index())
+                            else:
+                                self._json(200, setup.clear_vault_search_index())
+                        elif self.path == "/api/vault/folder":
                             path = setup.choose_vault_folder()
                             self._json(200, {
                                 "path": path,
