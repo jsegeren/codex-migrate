@@ -585,8 +585,12 @@ was reopened. The other macOS account's installed app was not replaced.
 This passes a local exact-image automatic-idle mechanism check, **not** the
 unmodified paid-buyer path, clean-account first launch, build-19 native busy
 retry, paid failure-path matrix, or a real-history off-device backup. The new
-catalog entry is testing-only and unaccepted; it has not been deployed.
-Public build 16 and buyer delivery remain unchanged. Do not claim
+catalog entry is testing-only and unaccepted. Catalog-only PR #47 was merged
+as `a0c00564a08bff39772512ed14a9918420748a44` and that exact clean main
+was deployed to Production as `dpl_D8k5ZEcCd5E54kbLabbCP8CiCYcv` on
+September 26. The live public appcast still offered build 16, availability
+still reported the $49 Apple-silicon beta, and an anonymous build-19 canary
+archive request returned 403. Buyer delivery remains unchanged. Do not claim
 automatic updates to customers or promote build 19 from this receipt alone.
 
 The exact DMG was uploaded to the product's private Blob store under its
