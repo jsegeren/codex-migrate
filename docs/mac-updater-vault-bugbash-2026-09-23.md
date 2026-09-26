@@ -1228,3 +1228,17 @@ guard all passed. The temporary app, build output, loopback feed and DMG mount
 were removed or moved to Trash; the original developer app was reopened.
 This proves the current updater code's idle path with exact signed bytes,
 **not** a paid unmodified buyer-client update or a backup-in-progress retry.
+
+The same current-code disposable wrapper then ran three physical local
+negative-update fixtures: archive 404, a full-length archive with its first
+byte corrupted, and a wrong Sparkle Ed25519 appcast signature. The loopback
+server observed both appcast and archive requests for each fixture. Each
+attempt left the test app on build 16 with its helper running and no Vault
+update guard. The test app and helper stopped on the subsequent Apple Quit
+event; all fixture resources were cleaned up. The AppleScript caller reported
+`User canceled (-128)` even though the process and helper exited, consistent
+with the app's asynchronous termination callback; a buyer using its menu Quit
+does not see that AppleScript result. Treat this as a native-automation UX
+quirk to revisit, not as proof of user-visible failed Quit. These fixtures
+do not prove customer Vault bytes were unchanged or cover paid entitlement,
+refund/dispute, offline, wrong-architecture, or Sparkle disk-pressure paths.

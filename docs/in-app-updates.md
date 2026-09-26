@@ -272,6 +272,21 @@ starting app was deliberately modified and the token synthetic. The real paid
 unmodified buyer flow, full-app contention/retry, adverse update paths, and
 clean-account first launch still gate the public build-17 release.
 
+### Local-only updater failure checks
+
+The same disposable current-code wrapper was restarted against three
+loopback-only failure fixtures: archive HTTP 404, a full-length DMG with its
+first byte altered, and an appcast with an incorrect Sparkle Ed25519
+signature. Server-side fixture output confirmed an appcast and archive request
+in each case (the bad-signature fixture still fetched the archive). After each
+attempt, the app remained at build 16 with its helper running and no Vault
+update guard. A native Quit then stopped the test app and helper. The loopback
+server, mounted image, app and generated wrapper were cleaned up, and the
+original developer app was reopened. These are physical negative-path checks
+for the modified local wrapper, not proof of a paid buyer-client failure path,
+refund/dispute handling, offline reconnection, low disk space during Sparkle
+installation, or untouched customer Vault contents.
+
 ## Build 16 physical update receipt — September 23, 2026
 
 - The final Developer ID signed, Apple-notarized and stapled arm64 archive is

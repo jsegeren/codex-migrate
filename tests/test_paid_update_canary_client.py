@@ -45,6 +45,18 @@ class PaidUpdateCanaryClientTests(unittest.TestCase):
             CANARY.prepare(CANARY.ROOT / "build/current-code-should-not-exist",
                            8898, "unused", current_app=Path("/nonexistent"))
 
+    def test_bad_signature_feed_cannot_reuse_valid_signature(self):
+        selected = CANARY.canary()
+        root = ElementTree.fromstring(CANARY.appcast_xml(
+            selected, "http://127.0.0.1:8898/archive", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="))
+        enclosure = root.find("channel/item/enclosure")
+        self.assertNotEqual(enclosure.get("{http://www.andymatuschak.org/xml-namespaces/sparkle}edSignature"),
+                            selected["sparkleSignature"])
+
+    def test_fault_injection_refuses_production_mode(self):
+        with self.assertRaisesRegex(ValueError, "local-only"):
+            CANARY.serve(8898, fault="archive-404")
+
     def test_only_exact_old_request_hook_can_gain_canary_header(self):
         source = "before\n        " + CANARY.HEADER_HOOK + "\nafter\n"
         modified = CANARY.add_canary_header(source)

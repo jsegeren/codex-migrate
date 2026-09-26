@@ -6,6 +6,7 @@ documented in docs/in-app-updates.md; this is not release acceptance.
 """
 
 import argparse
+import base64
 import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -63,7 +64,8 @@ def canary():
     return selected
 
 
-def appcast_xml(selected, archive_url="https://migrate.segeren.com/api/update-archive"):
+def appcast_xml(selected, archive_url="https://migrate.segeren.com/api/update-archive",
+                signature_override=None):
     return (f'<?xml version="1.0" encoding="UTF-8"?>\n'
             '<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">'
             '<channel><title>Codex Migrate private canary</title>'
@@ -73,7 +75,7 @@ def appcast_xml(selected, archive_url="https://migrate.segeren.com/api/update-ar
             '<sparkle:minimumSystemVersion>13.0.0</sparkle:minimumSystemVersion>'
             '<sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>'
             f'<enclosure url="{archive_url}" '
-            f'sparkle:edSignature="{selected["sparkleSignature"]}" '
+            f'sparkle:edSignature="{signature_override or selected["sparkleSignature"]}" '
             f'length="{selected["size"]}" type="application/x-apple-diskimage"/>'
             '</item></channel></rss>\n').encode()
 
@@ -188,28 +190,43 @@ def prepare(output, port, identity, local_archive=False, current_app=None):
           "(sandbox-only; public release unchanged)")
 
 
-def serve(port, local_archive=False):
+def serve(port, local_archive=False, fault="none"):
     selected = canary()
+    if fault not in ("none", "archive-404", "corrupt-archive", "bad-signature"):
+        raise ValueError("unknown local update fault")
+    if fault != "none" and not local_archive:
+        raise ValueError("fault injection is local-only")
     if local_archive and (CANDIDATE_DMG.stat().st_size != selected["size"] or
                           hashlib.sha256(CANDIDATE_DMG.read_bytes()).hexdigest() != selected["sha256"]):
         raise ValueError("local DMG does not match the exact sandbox candidate")
     xml = appcast_xml(selected, f"http://127.0.0.1:{port}/archive" if local_archive else
-                      "https://migrate.segeren.com/api/update-archive")
+                      "https://migrate.segeren.com/api/update-archive",
+                      base64.b64encode(bytes(64)).decode() if fault == "bad-signature" else None)
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             if self.path == "/archive" and local_archive:
+                if fault == "archive-404":
+                    print("local_fixture_archive_http=404", flush=True)
+                    self.send_error(404)
+                    return
+                print("local_fixture_archive_http=200 fault=" + fault, flush=True)
                 self.send_response(200)
                 self.send_header("Content-Type", "application/x-apple-diskimage")
                 self.send_header("Content-Length", str(selected["size"]))
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
                 with CANDIDATE_DMG.open("rb") as archive:
+                    if fault == "corrupt-archive":
+                        first = archive.read(1)
+                        self.wfile.write(bytes([first[0] ^ 1]))
                     shutil.copyfileobj(archive, self.wfile)
                 return
             if self.path != "/appcast":
                 self.send_error(404)
                 return
+            if local_archive:
+                print("local_fixture_appcast_http=200 fault=" + fault, flush=True)
             self.send_response(200)
             self.send_header("Content-Type", "application/rss+xml; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
@@ -240,11 +257,13 @@ def main():
                         help="serve exact local DMG without any Production canary or paid credential")
     parser.add_argument("--current-app", type=Path,
                         help="with --local-archive, use exact signed build-17 app code in a disposable build-16 wrapper")
+    parser.add_argument("--fault", choices=("none", "archive-404", "corrupt-archive", "bad-signature"),
+                        default="none", help="with local serve only, inject one updater failure")
     args = parser.parse_args()
     if args.command == "prepare":
         prepare(args.output, args.port, args.identity, args.local_archive, args.current_app)
     else:
-        serve(args.port, args.local_archive)
+        serve(args.port, args.local_archive, args.fault)
 
 
 if __name__ == "__main__":
