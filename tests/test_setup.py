@@ -16,7 +16,7 @@ from codex_migrate.vault_backup import BackupPlan, BackupResult
 from codex_migrate.vault_install import InstallResult, ThreadInstallResult
 from codex_migrate.vault_recovery import RestoreResult, SnapshotInfo
 from codex_migrate.vault_schedule import SchedulePlan
-from codex_migrate.vault_search_index import IndexCancelled
+from codex_migrate.vault_search_index import IndexCancelled, supported as search_index_supported
 
 
 class SetupTests(unittest.TestCase):
@@ -155,6 +155,7 @@ class SetupTests(unittest.TestCase):
         self.assertEqual([entry["text"] for entry in page["entries"]], ["Set up Clerk now"])
         self.assertEqual(self.request(path.replace("match=clerk", "match=missing"))[0], 400)
 
+    @unittest.skipUnless(search_index_supported(), "requires SQLite FTS5 contentless-delete")
     def test_fast_search_requires_confirmation_and_can_be_deleted_without_source_changes(self):
         transcript = self.home / ".codex/sessions/thread.jsonl"
         transcript.parent.mkdir(parents=True)
@@ -178,6 +179,7 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(self.request("/api/vault/search?q=clerk")[1]["results"][0]["transcript"],
                          "thread.jsonl")
 
+    @unittest.skipUnless(search_index_supported(), "requires SQLite FTS5 contentless-delete")
     def test_fast_search_can_stop_and_prevents_quit_while_writing_cache(self):
         entered = threading.Event()
 

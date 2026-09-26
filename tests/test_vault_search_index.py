@@ -10,7 +10,9 @@ from unittest.mock import patch
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault import _transcripts, search
-from codex_migrate.vault_search_index import IndexCancelled, _path, build, candidates, remove
+from codex_migrate.vault_search_index import (
+    IndexCancelled, _path, build, candidates, remove, supported,
+)
 
 
 def write_thread(path: Path, *texts: str) -> None:
@@ -38,6 +40,7 @@ class SearchIndexTests(unittest.TestCase):
             self.assertFalse(_path(temporary).exists())
             self.assertEqual(len(search(temporary, "Clerk")), 1)
 
+    @unittest.skipUnless(supported(), "requires SQLite FTS5 contentless-delete")
     def test_clear_requires_apply_and_keeps_source(self):
         with tempfile.TemporaryDirectory() as temporary:
             thread = Path(temporary) / ".codex/sessions/one.jsonl"
@@ -54,6 +57,7 @@ class SearchIndexTests(unittest.TestCase):
             self.assertEqual(len(search(temporary, "Clerk")), 1)
             self.assertTrue(thread.exists())
 
+    @unittest.skipUnless(supported(), "requires SQLite FTS5 contentless-delete")
     def test_opt_in_index_preserves_exact_results_and_is_owner_only(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
@@ -81,6 +85,7 @@ class SearchIndexTests(unittest.TestCase):
             finally:
                 connection.close()
 
+    @unittest.skipUnless(supported(), "requires SQLite FTS5 contentless-delete")
     def test_changed_and_new_files_are_scanned_until_explicit_refresh(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
@@ -103,6 +108,7 @@ class SearchIndexTests(unittest.TestCase):
             self.assertEqual([item.transcript for item in search(temporary, "Clerk")],
                              ["two.jsonl"])
 
+    @unittest.skipUnless(supported(), "requires SQLite FTS5 contentless-delete")
     def test_unicode_casefold_and_long_string_boundary(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
@@ -115,6 +121,7 @@ class SearchIndexTests(unittest.TestCase):
             self.assertEqual(len(search(temporary, "STRASSE")), 1)
             self.assertEqual(len(search(temporary, "AI")), 0)  # Short queries use full scan.
 
+    @unittest.skipUnless(supported(), "requires SQLite FTS5 contentless-delete")
     def test_text_after_nul_remains_searchable(self):
         with tempfile.TemporaryDirectory() as temporary:
             thread = Path(temporary) / ".codex/sessions/nul.jsonl"
@@ -123,6 +130,7 @@ class SearchIndexTests(unittest.TestCase):
             self.assertEqual(len(search(temporary, "Clerk")), 1)
             self.assertEqual(len(search(temporary, "\x00Clerk")), 1)
 
+    @unittest.skipUnless(supported(), "requires SQLite FTS5 contentless-delete")
     def test_index_candidates_never_drop_synthetic_unicode_substrings(self):
         generator = random.Random(92226)
         alphabet = 'abCde  .,#"\\\n\t\x00\x01éßK移行🧠🚀'
@@ -142,6 +150,7 @@ class SearchIndexTests(unittest.TestCase):
                         continue
                     self.assertIn(thread, candidates(temporary, query, discovered))
 
+    @unittest.skipUnless(supported(), "requires SQLite FTS5 contentless-delete")
     def test_unsafe_or_corrupt_cache_never_hides_source_results(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
@@ -155,6 +164,7 @@ class SearchIndexTests(unittest.TestCase):
             _path(temporary).write_bytes(b"not a sqlite database")
             self.assertEqual(len(search(temporary, "Clerk")), 1)
 
+    @unittest.skipUnless(supported(), "requires SQLite FTS5 contentless-delete")
     def test_failed_refresh_keeps_last_committed_index_and_full_search_detects_error(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
@@ -168,6 +178,7 @@ class SearchIndexTests(unittest.TestCase):
             with self.assertRaisesRegex(MigrationError, "unreadable JSON"):
                 search(temporary, "missing")
 
+    @unittest.skipUnless(supported(), "requires SQLite FTS5 contentless-delete")
     def test_stopping_after_one_file_keeps_search_complete(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
@@ -186,6 +197,7 @@ class SearchIndexTests(unittest.TestCase):
                              {"a.jsonl", "b.jsonl"})
             self.assertEqual(build(temporary, apply=True)["indexed"], 1)
 
+    @unittest.skipUnless(supported(), "requires SQLite FTS5 contentless-delete")
     def test_parent_match_remains_visible_in_a_paginated_child(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
