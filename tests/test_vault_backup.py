@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -184,6 +185,29 @@ class VaultBackupTests(unittest.TestCase):
                 with self.assertRaises(MigrationError):
                     verify_snapshot(str(destination), snapshot=first.snapshot_id,
                                     crypto_helper=str(self.helper))
+            finally:
+                self.delete_key(destination)
+
+    def test_incompressible_chunks_keep_raw_format(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            destination = root / "vault"
+            self.fixture(source)
+            try:
+                backup(str(source), str(destination), crypto_helper=str(self.helper))
+                key_id = json.loads((destination / "vault.json").read_text())["key_id"]
+                random_bytes = hashlib.shake_256(b"vault-incompressible-fixture").digest(64 * 1024)
+                stored = subprocess.run([
+                    str(self.helper), "store-chunks", "--key-id", key_id,
+                    "--object-dir", str(destination / "objects"),
+                    "--chunk-size", str(64 * 1024),
+                ], input=random_bytes, check=True, stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE)
+                chunks = json.loads(stored.stdout)["chunks"]
+                self.assertEqual(len(chunks), 1)
+                self.assertEqual(set(chunks[0]), {"id", "size"})
+                self.assertEqual(chunks[0]["size"], len(random_bytes))
             finally:
                 self.delete_key(destination)
 
