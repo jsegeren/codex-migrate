@@ -610,3 +610,17 @@ helper. The servers were stopped, disposable apps and source homes were moved
 to Trash, and the original developer app was reopened. These checks used no
 paid credential or Production archive, so they do not establish the paid
 missing/refunded-entitlement or network-unavailable behavior.
+
+### Build 19 packaged restore/update contention — September 26, 2026
+
+The opt-in packaged contention fixture passed against the engine in the exact
+signed and notarized build-19 DMG above. It used only a disposable 128 MiB
+transcript, encrypted Vault, and restore destination. During a real restore,
+both updater-idle and updater-shutdown returned 409, the packaged helper stayed
+alive, and no update marker was written. After restore completed, the source
+and recovered transcript digests matched; the same endpoints allowed guarded
+shutdown and recorded target build 19. The fixture removed its test Keychain
+item and temporary data, and the read-only DMG was detached. The Founder's
+Codex history and Vault schedules were not used. This proves the exact
+packaged helper's busy-operation boundary, not the native app's automatic
+retry, an unmodified paid-client upgrade, or clean-account acceptance.

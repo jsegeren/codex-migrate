@@ -3,6 +3,7 @@
 Run on macOS with CODEX_MIGRATE_RESTORE_CONTENTION_TEST=yes and
 CODEX_MIGRATE_TEST_ENGINE pointing at an exact packaged app engine. The test
 never reads or changes the account's real Codex home or Vault schedule.
+CODEX_MIGRATE_TEST_TARGET_BUILD selects the update marker (default 17).
 """
 
 import hashlib
@@ -27,6 +28,8 @@ class PackagedRestoreContentionTests(unittest.TestCase):
         binary = os.environ.get("CODEX_MIGRATE_TEST_ENGINE")
         if not binary:
             self.skipTest("set CODEX_MIGRATE_TEST_ENGINE to a packaged engine")
+        target_build = int(os.environ.get("CODEX_MIGRATE_TEST_TARGET_BUILD", "17"))
+        self.assertGreater(target_build, 0)
         engine = Path(binary).resolve()
         helper = engine.parents[2] / "Helpers/CodexVaultCrypto.app/Contents/MacOS/CodexVaultCrypto"
         self.assertTrue(engine.is_file() and helper.is_file())
@@ -92,7 +95,7 @@ class PackagedRestoreContentionTests(unittest.TestCase):
                             headers["Content-Type"] = "application/json"
                             body = json.dumps(payload)
                         if path == "/api/update-shutdown":
-                            headers["X-Codex-Migrate-Target-Build"] = "17"
+                            headers["X-Codex-Migrate-Target-Build"] = str(target_build)
                         connection.request(method, path, body=body, headers=headers)
                         response = connection.getresponse()
                         data = json.loads(response.read())
@@ -132,7 +135,7 @@ class PackagedRestoreContentionTests(unittest.TestCase):
                 dashboard.stdout.close()
                 dashboard = None
                 marker = home / "Library/Application Support/Codex Vault/update.json"
-                self.assertEqual(json.loads(marker.read_text())["target_build"], 17)
+                self.assertEqual(json.loads(marker.read_text())["target_build"], target_build)
             finally:
                 if dashboard is not None:
                     dashboard.terminate()
