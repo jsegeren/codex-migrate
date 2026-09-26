@@ -16,7 +16,11 @@ from codex_migrate.vault_recovery import (
 )
 
 
-TRANSCRIPT = b'{"type":"response_item","payload":{"content":"portable synthetic work"}}\n'
+TRANSCRIPT = (
+    b'{"type":"response_item","payload":{"content":"'
+    + b"portable synthetic work " * 8192
+    + b'"}}\n'
+)
 RELATIVE = Path("sessions/2026/09/24/portable.jsonl")
 
 
@@ -47,6 +51,9 @@ def produce(bundle: Path, helper: Path) -> None:
         receipt = verify_snapshot(str(vault), crypto_helper=str(helper))
         if receipt.snapshot_id != result.snapshot_id:
             raise AssertionError("Producer snapshot verification failed")
+        encrypted_bytes = sum(path.stat().st_size for path in (vault / "objects").rglob("*.cvchunk"))
+        if encrypted_bytes >= len(TRANSCRIPT) // 2:
+            raise AssertionError("Synthetic portability fixture did not exercise compression")
         descriptor = os.open(bundle / "recovery-key.txt", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(descriptor, "w", encoding="utf-8") as output:
             output.write(result.recovery_key + "\n")
