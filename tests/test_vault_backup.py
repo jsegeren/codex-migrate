@@ -15,7 +15,7 @@ from codex_migrate import vault_backup
 from codex_migrate.vault_backup import backup, plan
 from codex_migrate.vault_recovery import (
     export_recovery_key, import_recovery_key, list_snapshots, restore_snapshot,
-    verify_snapshot,
+    vault_storage_usage, verify_snapshot,
 )
 
 
@@ -119,6 +119,11 @@ class VaultBackupTests(unittest.TestCase):
                     [item.snapshot_id for item in history],
                     [second.snapshot_id, first.snapshot_id],
                 )
+                storage = vault_storage_usage(str(destination))
+                self.assertEqual(storage["storage_bytes"], sum(
+                    path.stat().st_size for path in destination.rglob("*") if path.is_file()))
+                self.assertEqual(storage["storage_files"], sum(
+                    path.is_file() for path in destination.rglob("*")))
                 self.assertEqual([item.latest for item in history], [True, False])
                 self.assertEqual(
                     [item.snapshot_id for item in list_snapshots(
@@ -134,6 +139,16 @@ class VaultBackupTests(unittest.TestCase):
                 self.assertNotIn(b"NEVER-COPY-ID", stored)
             finally:
                 self.delete_key(destination)
+
+    def test_storage_usage_refuses_linked_entries(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            vault = root / "vault"
+            vault.mkdir()
+            (vault / "regular").write_bytes(b"fixture")
+            (vault / "linked").symlink_to(root / "outside")
+            with self.assertRaisesRegex(MigrationError, "unsupported storage entry"):
+                vault_storage_usage(str(vault))
 
     @unittest.skipUnless(
         os.environ.get("CODEX_MIGRATE_LARGE_HISTORY_PROBE") == "1",
