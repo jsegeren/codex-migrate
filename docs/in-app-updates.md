@@ -409,3 +409,24 @@ test-fixture packaging error, not evidence of a shipped build-18 defect. This
 proof covers synthetic cross-Mac recovery only—not real-history backup,
 off-device storage, scheduled protection on both Macs, a pristine buyer
 account, or the paid native update path.
+
+### Build 18 local automatic-idle update — September 26, 2026
+
+A disposable Developer ID signed wrapper used the exact build-18 native code
+but reported build 16 to Sparkle. It read only a synthetic, format-valid
+purchase token from closed stdin. A `127.0.0.1` appcast offered the exact
+11,228,811-byte build-18 rotation DMG with its verified Sparkle signature;
+the loopback server observed successful appcast and archive requests. Without
+a manual Quit, the app installed the signed image while idle and relaunched.
+The installed bundle reported build 18 and embedded source
+`d421c462831b362df71b89e5a6fcb03f94d108d9`; strict code-signature
+verification and Notarized Developer ID Gatekeeper assessment passed. One
+native process and one healthy packaged helper were running after relaunch.
+
+The subsequent normal AppleScript Quit reported `User canceled (-128)` while
+the asynchronous termination callback completed; both app and helper exited.
+The loopback server stopped, the original developer app was reopened, and
+the disposable installed copy was moved to Trash. This is a local exact-image
+automatic-idle proof, **not** an unmodified paid-client update through
+Production, a backup-in-progress retry, or buyer-account acceptance. Public
+build 16 and its appcast were not changed.
