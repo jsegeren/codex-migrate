@@ -93,9 +93,12 @@ egress allowance. Do not claim that B2 restores are always free. See its
   bytes, returning a receipt of object key, byte count, and SHA-256 digest;
   that receipt is a client assertion, not service proof. It does not write
   `latest` or claim protection. The service must independently read and hash
-  every listed object, validate the complete snapshot object set and account
-  scope, and only then atomically advance the remote `latest` pointer. Failed
-  uploads leave the previous verified remote snapshot intact
+  every listed object, enforce account scope and required metadata/manifest/
+  reference presence, and only then atomically advance the remote `latest`
+  pointer. The service cannot decrypt the manifest or independently infer its
+  chunk list; the native client must first authenticate that list, and the
+  clean-account recovery test must prove the combined contract. Failed uploads
+  leave the previous verified remote snapshot intact
   and visible as the last good backup. Do not label a backup "protected"
   because a local snapshot or PUT alone succeeded.
 - Preserve old snapshot references under a declared retention policy. Deleting
