@@ -287,6 +287,16 @@ for the modified local wrapper, not proof of a paid buyer-client failure path,
 refund/dispute handling, offline reconnection, low disk space during Sparkle
 installation, or untouched customer Vault contents.
 
+On September 25, after the temporary Production canary was removed, the
+Founder's existing paid purchase token still streamed the normal public
+build-16 archive through `/api/update-archive`: HTTP 200, exactly 9,591,579
+bytes, SHA-256
+`60eff4dcb07088d01c966587e808f21d5fa74b8afb4eba45ed326543f07241f7`.
+The token was passed only through closed stdin and was not saved in this test
+or recorded in the receipt. This verifies paid archive continuity after
+canary cleanup, not the unmodified app's purchase-link UI or build-17 paid
+promotion.
+
 ## Build 16 physical update receipt — September 23, 2026
 
 - The final Developer ID signed, Apple-notarized and stapled arm64 archive is
