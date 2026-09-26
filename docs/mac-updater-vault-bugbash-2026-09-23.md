@@ -1163,10 +1163,12 @@ behavior, a clean buyer-account install, a paid in-app update, or a Mac-loss
 restore without a separately preserved recovery key and off-device snapshot.
 
 On September 25, the exact provisioned DMG passed a scoped paid Production
-archive stream and native Sparkle install-on-quit test from a disposable,
-modified build-16 client. The installed build 17 passed source-receipt,
-signature and notarization checks. It did not visibly relaunch; the old test
-helper remained alive until deliberately stopped. The canary was removed and
+archive stream and native Sparkle installation after a disposable, modified
+build-16 client's process received `SIGTERM`. This was not the app's Quit menu
+and did not exercise its protected termination callback. The installed build
+17 passed source-receipt, signature and notarization checks. It did not
+visibly relaunch; the old test helper remained alive until deliberately
+stopped. The canary was removed and
 the paid canary route returned 403 again while the public appcast stayed on
 build 16. This is not buyer acceptance; the exact limitations and remaining
 gates are recorded in `docs/in-app-updates.md`.

@@ -91,7 +91,7 @@ build directory. The test-only catalog entry must be deployed before the
 Production canary can select it; a private Blob upload alone is insufficient.
 This candidate has passed signing, notarization, the synthetic legacy-key
 transition, second-Mac recovery-key decryption, and the limited paid native
-install-on-quit canary recorded below. The remaining buyer release gates are
+process-exit installation canary recorded below. The remaining buyer release gates are
 still open.
 
 1. Bump the app's build number; commit the exact source before release build.
@@ -193,13 +193,16 @@ higher build number.
   disposable Developer ID re-signed build-16 test app used the old shipped
   Sparkle key, a loopback appcast, a test-only canary header, and a paid token
   passed through closed stdin. Sparkle fetched the paid DMG and replaced the
-  test app in `/Applications` after a graceful quit. The installed build 17
+  test app in `/Applications` after its process received `SIGTERM`. That is
+  **not** a user Quit action and does not exercise the app's normal termination
+  callback or protected helper shutdown. The installed build 17
   embedded source receipt `1fdf640`, passed strict code-signature verification,
   and Gatekeeper accepted it as Notarized Developer ID.
-- The app **did not visibly relaunch** after that quit. Its old test helper
+- The app **did not visibly relaunch** after that signal-induced exit. Its old test helper
   remained running independently and was stopped before cleanup. This test
-  therefore proves paid native download and install-on-quit, not unattended
-  idle installation, relaunch, or clean helper handoff. Because the starting
+  therefore proves paid native download and installation after process exit,
+  not a normal Quit handoff, unattended idle installation, relaunch, or clean
+  helper handoff. Because the starting
   client was a modified disposable build 16 launched directly for the canary,
   do not attribute the old-helper behavior to the unmodified buyer client or
   count this as the final update experience.
@@ -210,7 +213,8 @@ higher build number.
   the test helper was stopped, the disposable app was moved to Trash, and the
   original developer app was reopened. No token or session ID is recorded here.
 - **Release gate remains closed.** The unmodified buyer-client purchase-link
-  flow, automatic idle install and relaunch, busy-operation deferral/retry,
+  flow, native menu Quit handoff, automatic idle install and relaunch,
+  busy-operation deferral/retry,
   adverse-path injections, clean-account first install, and scheduled-backup
   receipts on both Macs still require physical acceptance. Build 17 remains
   testing-only and unaccepted.
