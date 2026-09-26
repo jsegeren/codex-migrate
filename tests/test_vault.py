@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+import sqlite3
 import tempfile
 import time
 import unittest
@@ -238,6 +239,20 @@ class VaultTests(unittest.TestCase):
             self.assertIn("Design the launch checklist.", document)
             self.assertNotIn("/private/customer/path", document)
             self.assertNotIn("secret-id", document)
+
+    def test_search_and_export_survive_missing_codex_thread_store_table(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.fixture(root)
+            database = root / ".codex/state_5.sqlite"
+            with sqlite3.connect(str(database)) as connection:
+                connection.execute("CREATE TABLE unrelated (id INTEGER PRIMARY KEY)")
+            original = database.read_bytes()
+
+            match = search(str(root), "launch checklist", limit=1)[0]
+            thread = read_thread(str(root), match.collection, match.transcript)
+            self.assertIn("Design the launch checklist.", markdown(thread))
+            self.assertEqual(database.read_bytes(), original)
 
     def test_thread_identifier_cannot_escape_discovered_transcripts(self):
         with tempfile.TemporaryDirectory() as temporary:
