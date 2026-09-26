@@ -25,7 +25,7 @@ class SetupTests(unittest.TestCase):
         self.assertIn('id="backup-footprint"', VAULT_HTML)
         self.assertIn('id="vault-usage"', VAULT_HTML)
         self.assertIn('Saved Vault files:', VAULT_HTML)
-        self.assertIn('Existing versions are kept', VAULT_HTML)
+        self.assertIn('not verified cloud storage', VAULT_HTML)
         self.assertIn('fmt(data.transcript_bytes)', VAULT_HTML)
         self.assertIn('Vault compresses new backup data when useful', VAULT_HTML)
         self.assertIn('Keep space for the full source size plus overhead', VAULT_HTML)
