@@ -430,3 +430,28 @@ the disposable installed copy was moved to Trash. This is a local exact-image
 automatic-idle proof, **not** an unmodified paid-client update through
 Production, a backup-in-progress retry, or buyer-account acceptance. Public
 build 16 and its appcast were not changed.
+
+### Build 18 paid Production stream — September 26, 2026
+
+Catalog-only PR #46 added the exact signed build-18 DMG as `testingOnly: true`,
+`accepted: false` and passed the Python 3.9/3.12 CI matrix. The reviewed main
+commit was deployed with the canary disabled; the public appcast still offered
+build 16 and anonymous canary access returned 403. A bounded, two-hour
+Production canary then selected only the build-18 catalog ID and SHA-256 for
+an already-paid Founder Checkout session. That purchase's private token passed
+the live entitlement check. With the exact canary header, the paid archive
+route returned 200 and streamed 11,228,811 bytes whose SHA-256 matched the
+notarized build-18 DMG. Without the paid token, the same route returned 403;
+the public appcast continued to offer build 16.
+
+A disposable Developer ID signed build-16 client and loopback feed were
+prepared for a physical Sparkle test. Launch was refused by the app's
+duplicate-instance guard because the separate acceptance-test macOS account
+still had its Applications copy running. The disposable client was quit; no
+native update was installed or counted as accepted. The test feed was stopped
+and the disposable client moved to Trash. All four temporary Production canary
+variables were removed and Production was redeployed without them. The paid
+token again received 403 on the canary route while its ordinary purchase link
+still selected build 16; anonymous canary access remained 403 and the public
+appcast remained build 16. Native paid install/relaunch, busy-operation
+deferral, and clean buyer-account acceptance are still release gates.
