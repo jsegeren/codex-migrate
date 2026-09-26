@@ -584,7 +584,18 @@ was reopened. The other macOS account's installed app was not replaced.
 
 This passes a local exact-image automatic-idle mechanism check, **not** the
 unmodified paid-buyer path, clean-account first launch, build-19 native busy
-retry, failure-path matrix, or a real-history off-device backup. The new
+retry, paid failure-path matrix, or a real-history off-device backup. The new
 catalog entry is testing-only and unaccepted; it has not been uploaded or
 deployed. Public build 16 and buyer delivery remain unchanged. Do not claim
 automatic updates to customers or promote build 19 from this receipt alone.
+
+Three further disposable build-19-code wrappers exercised separate loopback
+failure fixtures: wrong Sparkle EdDSA signature, archive HTTP 404, and a
+full-length archive with one corrupted byte. Each fetched its appcast and
+attempted the archive request. In every case the old wrapper stayed on build
+16, its packaged helper remained running, and no update marker appeared in
+the isolated source home. A normal macOS Quit then stopped both app and
+helper. The servers were stopped, disposable apps and source homes were moved
+to Trash, and the original developer app was reopened. These checks used no
+paid credential or Production archive, so they do not establish the paid
+missing/refunded-entitlement or network-unavailable behavior.
