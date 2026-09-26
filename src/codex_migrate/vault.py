@@ -107,9 +107,19 @@ def _transcripts(source_home: str) -> Iterator[Tuple[str, Path, str]]:
             raise MigrationError("Codex conversation history could not be read safely.") from error
 
 
+def _rollout_map(discovered: List[Tuple[str, Path, str]]) -> Dict[str, List[Path]]:
+    by_rollout: Dict[str, List[Path]] = {}
+    for _, candidate, relative in discovered:
+        rollout_id = filename_id(relative)
+        if rollout_id:
+            by_rollout.setdefault(rollout_id, []).append(candidate)
+    return by_rollout
+
+
 def _lineage_segments(
     source_home: str, path: Path,
     transcripts: Optional[List[Tuple[str, Path, str]]] = None,
+    rollouts: Optional[Dict[str, List[Path]]] = None,
 ) -> List[Tuple[Path, int]]:
     """Resolve the physical, byte-bounded rollout prefixes visible in a fork.
 
@@ -118,11 +128,7 @@ def _lineage_segments(
     followed; missing, ambiguous, cyclic, or torn references fail closed.
     """
     discovered = transcripts if transcripts is not None else list(_transcripts(source_home))
-    by_rollout: Dict[str, List[Path]] = {}
-    for _, candidate, relative in discovered:
-        rollout_id = filename_id(relative)
-        if rollout_id:
-            by_rollout.setdefault(rollout_id, []).append(candidate)
+    by_rollout = rollouts if rollouts is not None else _rollout_map(discovered)
 
     def resolve(candidate: Path, cutoff: Optional[int], expected_ordinal: Optional[int],
                 seen: set) -> List[Tuple[Path, int]]:
@@ -355,6 +361,11 @@ def search(
         for item in (catalog or [])
     }
     discovered = list(_transcripts(source_home))
+    rollouts = _rollout_map(discovered) if not titles_only else None
+    indexed_candidates = None
+    if not titles_only:
+        from codex_migrate.vault_search_index import candidates
+        indexed_candidates = candidates(source_home, query.strip(), discovered)
     transcripts = []
     for folder, path, relative in discovered:
         try:
@@ -384,8 +395,11 @@ def search(
                                               len(query.strip())),
             )
         elif not titles_only:
-            for record, cursor, line_number in _lineage_records(
-                    _lineage_segments(source_home, path, discovered)):
+            segments = _lineage_segments(source_home, path, discovered, rollouts)
+            if (indexed_candidates is not None
+                    and not any(part in indexed_candidates for part, _ in segments)):
+                continue
+            for record, cursor, line_number in _lineage_records(segments):
                 seen = set()
                 for text in _strings(record):
                     if text in seen:

@@ -76,6 +76,29 @@ browser, Markdown/PDF/share exports, and versioned client-side encrypted
 backup. Vault backs up only active and archived transcript trees. It does not
 copy `auth.json`, `installation_id`, SSH keys, logs, caches, or runtime locks.
 
+For large local histories, the source CLI has an optional fast-search cache:
+
+```bash
+codex-migrate vault search-index          # plan only
+codex-migrate vault search-index --apply  # build or refresh
+codex-migrate vault search-index-remove --apply
+```
+
+The cache is not a Vault backup and is never required for search or recovery.
+It is an owner-only, rebuildable SQLite file under
+`~/Library/Caches/Codex Migrate`. It stores searchable three-character terms,
+not full transcript bodies, but those terms can reveal short fragments to
+someone who can read the Mac account; **the cache itself is not encrypted**.
+It is not included in encrypted Vault snapshots. Building it can take minutes
+and several gigabytes of local disk on a very large history. Once built, Vault
+still verifies candidate matches against the original conversations. New or
+changed transcripts that have not been refreshed are searched directly, so a
+stale cache cannot silently hide a matching thread. Short or unsupported
+queries use the normal full scan. Removing the cache does not change Codex or
+any Vault snapshot. The packaged app's fast-search setup and progress UI are
+still in development; this CLI feature is not a claim that the current paid
+build already has indexed search.
+
 Planning is read-only:
 
 ```bash
