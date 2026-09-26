@@ -47,6 +47,16 @@ class SearchIndexTests(unittest.TestCase):
                        side_effect=PermissionError("cache folder unavailable")):
                 self.assertEqual(len(search(temporary, "Clerk")), 1)
 
+    def test_unreadable_codex_title_index_does_not_block_full_text(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            write_thread(home / ".codex/sessions/one.jsonl", "Clerk history survives")
+            (home / ".codex/session_index.jsonl").write_bytes(b"not-json\n")
+            results = search(temporary, "Clerk")
+            self.assertEqual([item.transcript for item in results], ["one.jsonl"])
+            with self.assertRaisesRegex(MigrationError, "title index is unreadable"):
+                search(temporary, "Clerk", titles_only=True)
+
     @unittest.skipUnless(supported(), "requires SQLite FTS5 contentless-delete")
     def test_clear_requires_apply_and_keeps_source(self):
         with tempfile.TemporaryDirectory() as temporary:
