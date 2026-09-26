@@ -146,9 +146,19 @@ def estimate(source_home: str) -> Dict[str, Union[int, str, bool]]:
                     totals["readable_record_source_bytes"] += len(raw) + 1
                     totals["readable_text_bytes"] += len(text)
                     totals["readable_text_gzip_bytes"] += len(text_compressor.compress(text))
-            if skipping or pending:
+            if skipping:
                 totals["unreadable_or_oversized_records"] += 1
-                totals["unreadable_or_oversized_bytes"] += skipping + len(pending)
+                totals["unreadable_or_oversized_bytes"] += skipping
+            elif pending:
+                try:
+                    text = _record_text(pending)
+                except ValueError:
+                    totals["unreadable_or_oversized_records"] += 1
+                    totals["unreadable_or_oversized_bytes"] += len(pending)
+                else:
+                    totals["readable_record_source_bytes"] += len(pending)
+                    totals["readable_text_bytes"] += len(text)
+                    totals["readable_text_gzip_bytes"] += len(text_compressor.compress(text))
             after = os.fstat(stream.fileno())
             if observed != before.st_size or (
                 before.st_dev, before.st_ino, before.st_size,
