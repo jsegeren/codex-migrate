@@ -14,11 +14,13 @@ Vault format:
    cloud-sync provider. A detected cloud folder is not proof that its remote
    copy has synced; a local-only folder does not insure against Mac loss.
 2. **Segeren-hosted backup.** An optional subscription priced at **no less than
-   $10/month**, additive to the Mac app. It uploads already encrypted Vault
+   $10/month**. It uploads already encrypted Vault
    objects to operated object storage and independently reports the last
    remotely verified snapshot. Existing Mac-app buyers retain their local
-   edition and may add hosting without repurchasing it. A subscription is not
-   needed to browse/search current local history or backups they control.
+   edition and must not repurchase it to add hosting. Whether a new hosted
+   subscriber also pays the one-time app fee is a separate packaging decision
+   before checkout opens. A subscription is not needed to browse/search current
+   local history or backups the customer controls.
 
 The hosted tier protects the supported Codex active and archived conversation
 transcripts that Vault currently snapshots. It is not a whole-Mac backup, a
@@ -90,9 +92,10 @@ egress allowance. Do not claim that B2 restores are always free. See its
 ## Build sequence and release gates
 
 1. **Freeze the billing contract:** exact monthly price (at least $10), included
-   bytes, over-limit behavior, taxes/refunds, cancellation/read-only recovery
-   period, and storage-region disclosure. Model heavy histories and retained
-   versions without relying on account-wide free quotas.
+   bytes, whether the app fee is included or additional for new subscribers,
+   over-limit behavior, taxes/refunds, cancellation/read-only recovery period,
+   and storage-region disclosure. Model heavy histories and retained versions
+   without relying on account-wide free quotas.
 2. **Prove storage transport in sandbox:** bounded encrypted-object inventory,
    resumable and idempotent upload, duplicate avoidance, object-size and
    checksum verification against R2's actual API behavior, per-account quota,

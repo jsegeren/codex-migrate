@@ -40,10 +40,11 @@ Keep the first offer simple while the market is being proven:
   verified recovery, the complete Mac migration, updates during the beta, and
   best-effort support.
 - **Optional hosted Vault backup:** offer a second backup destination operated by
-  Segeren Studio, with client-side encryption and a separate subscription of at
-  least $10/month. The $49 app and its customer-owned-folder backup remain
-  available without a subscription. Existing app buyers need only add the
-  hosted subscription if they choose it. The hosted tier is approved product
+  Segeren Studio, with client-side encryption and a subscription of at least
+  $10/month. The $49 app and its customer-owned-folder backup remain available
+  without a subscription. Existing app buyers must not buy the app again to
+  add hosting. Whether a new hosted subscriber also pays the one-time app fee
+  is not yet decided. The hosted tier is approved product
   direction, **not a shipping feature or an open checkout**; its storage limit,
   billing, key recovery, off-device restore, and operational gates must pass
   before it is advertised as available. See
