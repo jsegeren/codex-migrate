@@ -40,6 +40,11 @@ class PaidUpdateCanaryClientTests(unittest.TestCase):
         self.assertEqual(enclosure.get("{http://www.andymatuschak.org/xml-namespaces/sparkle}edSignature"),
                          selected["sparkleSignature"])
 
+    def test_current_source_client_cannot_use_production_canary(self):
+        with self.assertRaisesRegex(ValueError, "local-only archive mode"):
+            CANARY.prepare(CANARY.ROOT / "build/current-code-should-not-exist",
+                           8898, "unused", current_app=Path("/nonexistent"))
+
     def test_only_exact_old_request_hook_can_gain_canary_header(self):
         source = "before\n        " + CANARY.HEADER_HOOK + "\nafter\n"
         modified = CANARY.add_canary_header(source)

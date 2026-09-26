@@ -1214,3 +1214,17 @@ Founder's actual Codex history and schedule were untouched. This proves the
 packaged synthetic scheduled-backup/updater-guard path on **both** Macs, not
 real-history protection, locked-screen execution, off-device sync, or a
 full-app Sparkle replacement during a live backup.
+
+The provisioned build-17 updater's **automatic idle install and relaunch**
+also passed a physical local-only smoke. A disposable Developer ID re-signed
+wrapper reported build 16 to Sparkle but used exact `1fdf640` native updater
+code and the new packaged engine/helper; its feed and exact archive bytes
+came only from a loopback server, and its synthetic entitlement arrived via
+stdin. With automatic updates enabled and no manual Quit, the app downloaded
+the notarized DMG, its helper exited, Sparkle replaced the wrapper, and build
+17 relaunched with one healthy helper. Source receipt, strict signature,
+Notarized Developer ID Gatekeeper, and absence of the post-relaunch update
+guard all passed. The temporary app, build output, loopback feed and DMG mount
+were removed or moved to Trash; the original developer app was reopened.
+This proves the current updater code's idle path with exact signed bytes,
+**not** a paid unmodified buyer-client update or a backup-in-progress retry.

@@ -18,7 +18,9 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 OLD_SOURCE = "c6d2bdf81e7093a044886dd35e1b97ed8ce40ea3"
+CURRENT_SOURCE = "1fdf64094096d60554e3986c24131ca9b1d887b7"
 OLD_SHA256 = "60eff4dcb07088d01c966587e808f21d5fa74b8afb4eba45ed326543f07241f7"
+OLD_PUBLIC_KEY = "xm7MLPjJBQcWcm2t8rXSoOoPk5ENifmVZPI52GwUoHs="
 CANARY_ID = "codex-migrate-build17-vault-crypto-arm64"
 CANARY_SHA256 = "e365674834112941ce1085ec92b78f030f883a0223491e829b51c6c73b03cbf3"
 CANARY_SIGNATURE = "A/2LGcZEsydVI2lY2LcPpbNLcAQgqgYfE0Rfou/pqrZOmOlVxVAUpBxpRC+V6KBStf005IMbSV3yLrLxqZC9CA=="
@@ -48,7 +50,7 @@ def canary():
     selected = releases[CANARY_ID]
     if selected.get("accepted") is not False or selected.get("testingOnly") is not True:
         raise ValueError("canary is no longer a sandbox-only, unaccepted candidate")
-    if selected.get("source") != "1fdf64094096d60554e3986c24131ca9b1d887b7":
+    if selected.get("source") != CURRENT_SOURCE:
         raise ValueError("candidate source changed")
     if selected.get("sha256") != CANARY_SHA256:
         raise ValueError("candidate artifact changed")
@@ -101,30 +103,51 @@ def add_piped_test_token(source):
     return source.replace(TOKEN_LOOKUP, CANARY_TOKEN_LOOKUP)
 
 
-def prepare(output, port, identity, local_archive=False):
+def prepare(output, port, identity, local_archive=False, current_app=None):
     selected = canary()
+    if current_app is not None and not local_archive:
+        raise ValueError("current-source synthetic client requires local-only archive mode")
     if output.exists() or output.is_symlink() or output.parent.resolve() != (ROOT / "build").resolve():
         raise ValueError("output must be a new direct child of build/")
-    if hashlib.sha256(ARCHIVE.read_bytes()).hexdigest() != OLD_SHA256:
+    if current_app is None and hashlib.sha256(ARCHIVE.read_bytes()).hexdigest() != OLD_SHA256:
         raise ValueError("live build-16 archive checksum mismatch")
     if (CANDIDATE_DMG.stat().st_size != selected["size"] or
             hashlib.sha256(CANDIDATE_DMG.read_bytes()).hexdigest() != selected["sha256"]):
         raise ValueError("local canary DMG does not match the sandbox catalog")
     if not 1024 <= port <= 65535:
         raise ValueError("choose a dedicated loopback port from 1024 to 65535")
+    if current_app is not None:
+        current_app = current_app.resolve(strict=True)
+        receipt = json.loads((current_app / "Contents/Resources/build-info.json").read_text())
+        with (current_app / "Contents/Info.plist").open("rb") as stream:
+            current_info = plistlib.load(stream)
+        if (receipt.get("source_revision") != CURRENT_SOURCE or
+                receipt.get("bundle_version") != "17" or
+                current_info.get("CFBundleVersion") != "17"):
+            raise ValueError("current-source base app does not match exact build 17")
+        run("codesign", "--verify", "--deep", "--strict", current_app)
     output.mkdir(mode=0o700)
-    run("ditto", "-x", "-k", ARCHIVE, output)
     app = output / "Codex Migrate.app"
+    if current_app is None:
+        run("ditto", "-x", "-k", ARCHIVE, output)
+    else:
+        run("ditto", current_app, app)
     receipt = json.loads((app / "Contents/Resources/build-info.json").read_text())
-    if receipt.get("source_revision") != OLD_SOURCE or receipt.get("bundle_version") != "16":
-        raise ValueError("archived build source receipt does not match live build 16")
+    if receipt.get("source_revision") != (CURRENT_SOURCE if current_app else OLD_SOURCE):
+        raise ValueError("app source receipt does not match selected test client")
     info_path = app / "Contents/Info.plist"
     with info_path.open("rb") as stream:
         info = plistlib.load(stream)
-    if (info.get("CFBundleVersion") != "16" or
-            info.get("SUPublicEDKey") != "xm7MLPjJBQcWcm2t8rXSoOoPk5ENifmVZPI52GwUoHs=" or
+    if (info.get("CFBundleVersion") != ("17" if current_app else "16") or
+            (current_app is None and info.get("SUPublicEDKey") != OLD_PUBLIC_KEY) or
             info.get("SUFeedURL") != "https://migrate.segeren.com/api/appcast"):
-        raise ValueError("archived app identity/feed does not match live build 16")
+        raise ValueError("base app identity/feed does not match the selected build")
+    if current_app is not None:
+        # A disposable current-code client must appear older to exercise
+        # build 17's own automatic-idle path against the exact signed DMG.
+        # It is never notarized or delivered to buyers.
+        info["CFBundleVersion"] = "16"
+        info["SUPublicEDKey"] = OLD_PUBLIC_KEY
     info["SUFeedURL"] = f"http://127.0.0.1:{port}/appcast"
     with info_path.open("wb") as stream:
         plistlib.dump(info, stream)
@@ -133,9 +156,13 @@ def prepare(output, port, identity, local_archive=False):
     executable = app / "Contents/MacOS/CodexMigrate"
     with tempfile.TemporaryDirectory(prefix="paid-canary-source-", dir=output) as scratch:
         sources = []
-        for filename in ("CodexMigrate.swift", "UpdateEntitlement.swift", "SavedSetup.swift"):
+        filenames = ("CodexMigrate.swift", "UpdateEntitlement.swift", "SavedSetup.swift")
+        if current_app is not None:
+            filenames += ("InstallLocation.swift", "DuplicateLaunch.swift")
+        for filename in filenames:
             source = subprocess.check_output(
-                ["git", "show", f"{OLD_SOURCE}:desktop/{filename}"], cwd=ROOT, text=True)
+                ["git", "show", f"{CURRENT_SOURCE if current_app else OLD_SOURCE}:desktop/{filename}"],
+                cwd=ROOT, text=True)
             if filename == "CodexMigrate.swift":
                 source = add_background_check(source if local_archive else add_canary_header(source))
             elif filename == "UpdateEntitlement.swift":
@@ -151,10 +178,13 @@ def prepare(output, port, identity, local_archive=False):
     run("codesign", "--verify", "--deep", "--strict", app)
     with info_path.open("rb") as stream:
         signed_info = plistlib.load(stream)
-    if signed_info["CFBundleVersion"] != "16" or signed_info["SUFeedURL"] != f"http://127.0.0.1:{port}/appcast":
+    if (signed_info["CFBundleVersion"] != "16" or
+            signed_info["SUPublicEDKey"] != OLD_PUBLIC_KEY or
+            signed_info["SUFeedURL"] != f"http://127.0.0.1:{port}/appcast"):
         raise ValueError("test client build/feed verification failed")
     print("Prepared disposable signed canary client:", app)
-    print("Candidate:", selected["id"], "(local archive)" if local_archive else
+    print("Candidate:", selected["id"], "(current-code local archive)" if current_app else
+          "(local archive)" if local_archive else
           "(sandbox-only; public release unchanged)")
 
 
@@ -208,9 +238,11 @@ def main():
     parser.add_argument("--identity", default="Developer ID Application: Joshua Segeren (P9J3JK79KQ)")
     parser.add_argument("--local-archive", action="store_true",
                         help="serve exact local DMG without any Production canary or paid credential")
+    parser.add_argument("--current-app", type=Path,
+                        help="with --local-archive, use exact signed build-17 app code in a disposable build-16 wrapper")
     args = parser.parse_args()
     if args.command == "prepare":
-        prepare(args.output, args.port, args.identity, args.local_archive)
+        prepare(args.output, args.port, args.identity, args.local_archive, args.current_app)
     else:
         serve(args.port, args.local_archive)
 

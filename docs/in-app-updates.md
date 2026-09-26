@@ -213,7 +213,7 @@ higher build number.
   the test helper was stopped, the disposable app was moved to Trash, and the
   original developer app was reopened. No token or session ID is recorded here.
 - **Release gate remains closed.** The unmodified buyer-client purchase-link
-  flow, paid native Quit handoff, automatic idle install and relaunch,
+  flow, paid native Quit handoff, paid automatic idle install and relaunch,
   busy-operation deferral/retry,
   adverse-path injections, clean-account first install, and scheduled backups
   of real history with off-device recovery on both Macs still require physical
@@ -246,8 +246,31 @@ that user-requested Quit. The archived build-16 client does not have build
 17's automatic-idle installation code, so this test cannot prove or disprove
 that newer path. The loopback server was stopped, the disposable app and build
 output were moved to Trash, and the original developer app was reopened.
-The unmodified buyer purchase-link, Production paid native Quit, idle automatic
+The unmodified buyer purchase-link, Production paid native Quit, paid automatic
 install/relaunch and busy-operation full replacement gates remain open.
+
+### Local-only automatic-idle check with current updater code
+
+The harness's `--current-app` option accepts only the exact signed build-17
+source receipt and `--local-archive`. It creates a disposable test wrapper
+that reports build 16 to Sparkle while compiling the exact build-17 native
+updater code and retaining the provisioned build-17 engine/helper. It replaces
+only that test wrapper's Sparkle feed and public key, adds a one-shot background
+check and synthetic stdin entitlement, and locally re-signs the wrapper. It
+does not alter the notarized DMG, public appcast, buyer app, or Production.
+
+On September 25, with automatic checks and downloads enabled, this current-code
+test client fetched the exact signed DMG from the loopback server. Without a
+manual Quit, its helper exited, Sparkle replaced the wrapper, and build 17
+**relaunched** with one helper carrying `--resume-after-update-build 17`.
+The installed source receipt matched `1fdf640`; strict signing and Notarized
+Developer ID Gatekeeper checks passed. The temporary update guard was absent
+after relaunch. The test app and generated wrapper were moved to Trash, the
+loopback feed and image were detached, and the original developer app was
+reopened. This is meaningful physical evidence for the new idle path, but the
+starting app was deliberately modified and the token synthetic. The real paid
+unmodified buyer flow, full-app contention/retry, adverse update paths, and
+clean-account first launch still gate the public build-17 release.
 
 ## Build 16 physical update receipt — September 23, 2026
 
