@@ -513,3 +513,18 @@ to Trash, and the original idle developer app was reopened. These are local
 modified-client safety probes, not proof of unmodified buyer-client failures,
 busy-operation deferral/retry, or release acceptance. Public build 16 was
 unchanged.
+
+### Build 18 packaged restore/update contention — September 26, 2026
+
+The opt-in `test_packaged_update_restore_contention.py` passed against the
+engine inside the exact notarized build-18 DMG. It created a disposable
+transcript and encrypted Vault, launched the packaged helper with that
+disposable source home, and began a real restore into a separate folder.
+While restore was running, `/api/update-idle` and `/api/update-shutdown`
+returned 409, the helper stayed alive, and no update marker was written.
+After restore completed, the original and recovered transcript checksums
+matched; the same endpoints allowed guarded shutdown and wrote the expected
+build-17 test marker. The fixture key was removed, temporary files were
+cleaned, and the read-only DMG was detached. This proves the packaged helper's
+restore boundary, not the native app's 60-second retry or Sparkle's eventual
+automatic installation while the app remains open.
