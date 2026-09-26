@@ -69,7 +69,8 @@ def _record_text(raw: bytes) -> bytes:
     return b"".join(pieces)
 
 
-def estimate(source_home: str, exclude_recent_seconds: int = 0) -> Dict[str, Union[int, str, bool]]:
+def estimate(source_home: str, exclude_recent_seconds: int = 0,
+             storage_only: bool = False) -> Dict[str, Union[int, str, bool]]:
     """Read the same transcript trees/chunk boundaries as Vault backup.
 
     The first-backup object byte count models an empty v2 Vault and excludes
@@ -93,7 +94,7 @@ def estimate(source_home: str, exclude_recent_seconds: int = 0) -> Dict[str, Uni
         "skipped_recent_transcripts": 0,
         "skipped_recent_bytes": 0,
     }
-    text_compressor = zlib.compressobj(level=6, wbits=31)
+    text_compressor = None if storage_only else zlib.compressobj(level=6, wbits=31)
     recent_cutoff_ns = time.time_ns() - exclude_recent_seconds * 1_000_000_000
     for _, path, _ in _transcripts(source_home):
         before = path.lstat()
@@ -125,6 +126,8 @@ def estimate(source_home: str, exclude_recent_seconds: int = 0) -> Dict[str, Uni
                     stored, _ = _encoded_size(chunk, encode)
                     totals["empty_vault_object_bytes"] += stored + AES_GCM_OVERHEAD
                     totals["unique_chunks"] += 1
+                if storage_only:
+                    continue
                 if skipping:
                     end = chunk.find(b"\n")
                     if end < 0:
@@ -154,10 +157,10 @@ def estimate(source_home: str, exclude_recent_seconds: int = 0) -> Dict[str, Uni
                     totals["readable_record_source_bytes"] += len(raw) + 1
                     totals["readable_text_bytes"] += len(text)
                     totals["readable_text_gzip_bytes"] += len(text_compressor.compress(text))
-            if skipping:
+            if not storage_only and skipping:
                 totals["unreadable_or_oversized_records"] += 1
                 totals["unreadable_or_oversized_bytes"] += skipping
-            elif pending:
+            elif not storage_only and pending:
                 try:
                     text = _record_text(pending)
                 except ValueError:
@@ -178,9 +181,11 @@ def estimate(source_home: str, exclude_recent_seconds: int = 0) -> Dict[str, Uni
                 raise ValueError("a transcript changed while being sized")
         totals["raw_transcript_bytes"] += observed
         totals["transcripts"] += 1
-    totals["readable_text_gzip_bytes"] += len(text_compressor.flush())
+    if text_compressor is not None:
+        totals["readable_text_gzip_bytes"] += len(text_compressor.flush())
     totals["readable_text_estimate_complete"] = (
-        totals["unreadable_or_oversized_records"] == 0
+        not storage_only
+        and totals["unreadable_or_oversized_records"] == 0
         and totals["skipped_recent_transcripts"] == 0
     )
     totals["estimate_complete"] = totals["skipped_recent_transcripts"] == 0
@@ -189,8 +194,11 @@ def estimate(source_home: str, exclude_recent_seconds: int = 0) -> Dict[str, Uni
         "Encrypted objects in an empty Vault; excludes manifests, refs, and file-system overhead."
     )
     totals["readable_text_warning"] = (
+        "Not computed in storage-only mode."
+        if storage_only else
         "Gzipped recognized text is a hypothetical reading copy, not a restorable backup."
     )
+    totals["storage_only"] = storage_only
     return totals
 
 
@@ -200,11 +208,14 @@ def main() -> int:
                         help="explicit Mac home directory; never printed")
     parser.add_argument("--exclude-recent-seconds", type=int, default=0,
                         help="omit recently modified transcripts and report their aggregate bytes")
+    parser.add_argument("--storage-only", action="store_true",
+                        help="skip readable-text estimation while preserving exact object sizing")
     args = parser.parse_args()
     try:
         if args.exclude_recent_seconds < 0:
             raise ValueError("recent exclusion must be nonnegative")
-        print(json.dumps(estimate(args.source_home, args.exclude_recent_seconds), sort_keys=True))
+        print(json.dumps(estimate(args.source_home, args.exclude_recent_seconds,
+                                  storage_only=args.storage_only), sort_keys=True))
     except Exception as error:
         # No transcript path, text, or hash may escape through an exception.
         print("Sizing stopped safely (%s); no aggregate was produced." %

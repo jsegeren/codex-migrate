@@ -15,8 +15,10 @@ Vault format:
    cloud-sync provider. A detected cloud folder is not proof that its remote
    copy has synced; a local-only folder does not insure against Mac loss.
 2. **Segeren-hosted backup.** A buyer may opt in after buying the $49 Mac app.
-   Their **first hosted month is free**, then hosting costs **$10/month** while
-   active. It uploads client-encrypted transcript objects and required
+   Their **first hosted month is free**. The earlier $10/month flat-price
+   direction is under capacity review: a limited $10 tier and a higher tier
+   are candidates, but exact allowances and higher-tier price are not approved
+   or live. It uploads client-encrypted transcript objects and required
    non-content Vault metadata to operated object storage, then reports the last
    remotely verified snapshot. Existing Mac-app buyers retain their local
    edition, must not repurchase it to add hosting, and receive the same one-time
@@ -37,7 +39,12 @@ existing one-time checkout must remain operable independently.
 ## Storage and price economics
 
 Use **R2 Standard** as the first provider candidate, subject to a proof with
-realistic object counts and a clean-Mac restore. Its published September 2026
+realistic object counts and a clean-Mac restore. Vercel Blob is a technically
+plausible alternative because private signed URLs permit direct transfers, but
+its first-time download transfer charges make large disaster restores and a
+flat $10 allowance materially riskier. See the
+[measured sizing and provider comparison](vault-hosted-economics-2026-09-26.md).
+R2's published September 2026
 pricing is $0.015/GB-month, $4.50/million Class A writes, $0.36/million Class B
 reads, and no R2 ingress or direct egress bandwidth charge. The account-wide
 free allowance must not be treated as a per-customer subsidy. Presigned direct
@@ -52,9 +59,10 @@ $7.50/month. These are pricing scenarios, not measurements of a complete
 encrypted backup. Source-folder size does not establish stored size after
 compression and version retention; measure actual encrypted bytes on both Macs
 before locking an allowance. A $10 flat *unlimited* plan is not defensible. A
-**250 GB included allowance** is the initial candidate, not a launched
-entitlement: measure incremental version growth and worst-case operations,
-then approve the exact allowance and price before publishing a subscription.
+**250 GB at $10** is no longer a defensible initial allowance. Candidate
+capacity tiers are recorded in the linked economics note, not launched
+entitlements: measure incremental version growth and worst-case operations,
+then approve the exact allowances and prices before publishing a subscription.
 Near the limit, warn and stop new uploads without deleting the last good
 snapshot or adding an unapproved overage charge. A second capacity tier
 requires a visible choice.
@@ -136,7 +144,8 @@ egress allowance. Do not claim that B2 restores are always free. See its
 ## Build sequence and release gates
 
 1. **Freeze the billing contract:** $49 for the app, an explicitly opted-in
-   one-time free hosted month for any buyer, then $10/month while active;
+   one-time free hosted month for any buyer, then the approved capacity-tier
+   subscription while active;
    define the exact trial start and renewal dates, existing-buyer enrollment,
    included bytes, over-limit behavior, taxes/refunds, cancellation/read-only recovery period, and
    storage-region disclosure. Model heavy histories and retained versions

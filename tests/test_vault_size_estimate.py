@@ -61,6 +61,23 @@ class VaultSizeEstimateTests(unittest.TestCase):
             self.assertEqual(result["unreadable_or_oversized_records"], 2)
             self.assertEqual(result["unreadable_or_oversized_bytes"], 2 * len(bad))
 
+    def test_storage_only_preserves_object_sizing_without_parsing_text(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary) / "home"
+            self.fixture(home, b"not-json\n" * 1000)
+            full = estimator()(str(home))
+            storage = estimator()(str(home), storage_only=True)
+            self.assertEqual(storage["empty_vault_object_bytes"],
+                             full["empty_vault_object_bytes"])
+            self.assertEqual(storage["unique_chunks"], full["unique_chunks"])
+            self.assertEqual(storage["raw_transcript_bytes"],
+                             full["raw_transcript_bytes"])
+            self.assertTrue(storage["storage_only"])
+            self.assertFalse(storage["readable_text_estimate_complete"])
+            self.assertEqual(storage["readable_text_bytes"], 0)
+            self.assertEqual(storage["readable_text_gzip_bytes"], 0)
+            self.assertEqual(storage["unreadable_or_oversized_records"], 0)
+
     def test_valid_final_record_without_newline_is_counted_as_readable(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary) / "home"
@@ -111,6 +128,15 @@ class VaultSizeEstimateTests(unittest.TestCase):
             self.assertEqual(json.loads(result.stdout)["transcripts"], 2)
             self.assertNotIn("PRIVATE-FIXTURE-TEXT", result.stdout + result.stderr)
             self.assertNotIn(str(home), result.stdout + result.stderr)
+
+            storage_result = subprocess.run(
+                [sys.executable, str(SCRIPT), "--source-home", str(home),
+                 "--storage-only"], stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, text=True, check=True,
+            )
+            self.assertTrue(json.loads(storage_result.stdout)["storage_only"])
+            self.assertNotIn("PRIVATE-FIXTURE-TEXT",
+                             storage_result.stdout + storage_result.stderr)
 
             linked_home = Path(temporary) / "linked-home"
             linked_home.mkdir()
