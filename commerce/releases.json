@@ -1,4 +1,68 @@
 {
+  "codex-migrate-build19-vault-integrated-arm64": {
+    "id": "codex-migrate-build19-vault-integrated-arm64",
+    "kind": "signed-notarized",
+    "testingOnly": true,
+    "accepted": false,
+    "source": "ac0bfa37a3498a7cf0f6d820e7ea9c07dbabeb31",
+    "sha256": "5f5c30f960cbca0a75a72d882c4a391ce4a5ad35cdd5ec15c4abe87562f36e85",
+    "filename": "Codex-Migrate-0.1.0-build19-arm64.dmg",
+    "size": 11226440,
+    "pathname": "sandbox/5f5c30f960cbca0a75a72d882c4a391ce4a5ad35cdd5ec15c4abe87562f36e85/Codex-Migrate-0.1.0-build19-arm64.dmg",
+    "diskImageNotarization": {
+      "status": "Accepted",
+      "id": "8225c4d2-233b-40bd-960e-08f7dea6330a"
+    },
+    "sparkleSignature": "HBpeR7n7SOf2M+bzJTOIqJWIcynQb2COYbFPhvoVfKDAk4OUBta+uBr4glSIpQsUjxUXQ1KM+tcTds3XcovXBQ=="
+  },
+  "codex-migrate-build18-vault-integrated-arm64": {
+    "id": "codex-migrate-build18-vault-integrated-arm64",
+    "kind": "signed-notarized",
+    "testingOnly": true,
+    "accepted": false,
+    "source": "d421c462831b362df71b89e5a6fcb03f94d108d9",
+    "sha256": "e4ef0890fc2b64bd09177e95fc2aebaf38ba9505a584a31c70afeb9b037df9d7",
+    "filename": "Codex-Migrate-0.1.0-build18-arm64.dmg",
+    "size": 11228811,
+    "pathname": "sandbox/e4ef0890fc2b64bd09177e95fc2aebaf38ba9505a584a31c70afeb9b037df9d7/Codex-Migrate-0.1.0-build18-arm64.dmg",
+    "diskImageNotarization": {
+      "status": "Accepted",
+      "id": "1e58f6f5-6aad-4552-b3cf-b7abd75d7e6f"
+    },
+    "sparkleSignature": "vNLcNuqk8gwZ4rjYeWIzI+fMi2+m0E/5JtzEC1iLq+8O54iQ0bPc0jdL43kpT1xOrHhhTMuDxSUzmcAAgOVuCg=="
+  },
+  "codex-migrate-build17-vault-sizecopy-arm64": {
+    "id": "codex-migrate-build17-vault-sizecopy-arm64",
+    "kind": "signed-notarized",
+    "testingOnly": true,
+    "accepted": false,
+    "source": "0c7091f14beae51425771f697011026f71611cf6",
+    "sha256": "083d4a2c61c7b94fd66cd424927b1b1562ac1c539058aefef07635886e27a617",
+    "filename": "Codex-Migrate-0.1.0-build17-arm64.dmg",
+    "size": 11226092,
+    "pathname": "sandbox/083d4a2c61c7b94fd66cd424927b1b1562ac1c539058aefef07635886e27a617/Codex-Migrate-0.1.0-build17-arm64.dmg",
+    "diskImageNotarization": {
+      "status": "Accepted",
+      "id": "0e21601f-9af6-4a9b-8824-97ff18a69ffd"
+    },
+    "sparkleSignature": "017pIP7Em72HmCz7Kkfxs3HHKfNKPabuDM7IZ1vHodioRd8GWTyk6QinME2Ah7/FGV3MR9FDZmvk4ztpPpbRCg=="
+  },
+  "codex-migrate-build17-vault-integrated-arm64": {
+    "id": "codex-migrate-build17-vault-integrated-arm64",
+    "kind": "signed-notarized",
+    "testingOnly": true,
+    "accepted": false,
+    "source": "fe1ebea10e51ea2a999d6dfe32e8f21c9dfd2b25",
+    "sha256": "62615a110984a933cd1dd11ad95440be374228294e14e745bf9b1768f7d02118",
+    "filename": "Codex-Migrate-0.1.0-build17-arm64.dmg",
+    "size": 11224541,
+    "pathname": "sandbox/62615a110984a933cd1dd11ad95440be374228294e14e745bf9b1768f7d02118/Codex-Migrate-0.1.0-build17-arm64.dmg",
+    "diskImageNotarization": {
+      "status": "Accepted",
+      "id": "d27e3814-d9d2-4227-8d4d-9c09565ee5d2"
+    },
+    "sparkleSignature": "LmfjnSfRymcMZo5a+Y02Vpj77dNUPwmGU+u64NIS1HUb8+/npoGDArtOKSsw0JeSVQM2NTLaUJG78mq5VWGPCQ=="
+  },
   "codex-migrate-build17-vault-crypto-arm64": {
     "id": "codex-migrate-build17-vault-crypto-arm64",
     "kind": "signed-notarized",
