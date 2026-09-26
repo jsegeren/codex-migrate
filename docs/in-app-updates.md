@@ -90,8 +90,9 @@ ZIP at `build/live-build16/` and the exact notarized DMG in the candidate
 build directory. The test-only catalog entry must be deployed before the
 Production canary can select it; a private Blob upload alone is insufficient.
 This candidate has passed signing, notarization, the synthetic legacy-key
-transition, and second-Mac recovery-key decryption. It has **not** passed
-this exact paid updater canary or the remaining buyer release gates.
+transition, second-Mac recovery-key decryption, and the limited paid native
+install-on-quit canary recorded below. The remaining buyer release gates are
+still open.
 
 1. Bump the app's build number; commit the exact source before release build.
    Build with the Developer ID identity, obtain Apple's Accepted notarization
@@ -177,6 +178,42 @@ higher build number.
   install/relaunch while the app stays open, busy-operation retry, failure
   injection, or a clean-account purchase/download/install test. Build 17
   remains unaccepted and the public release remains build 16.
+
+## Provisioned Vault build-17 paid canary — September 25, 2026
+
+- Catalog-only PR #36 placed the exact `1fdf640` provisioned Vault DMG in
+  Production's release catalog as `testingOnly: true`, `accepted: false`.
+  Production continued to advertise build 16 to ordinary buyers. The
+  temporary canary was limited to an already-paid Founder session, the exact
+  catalog ID and SHA-256, and a two-hour expiry.
+- The authenticated first-party archive stream returned HTTP 200 and exactly
+  10,513,015 bytes. SHA-256 was
+  `e365674834112941ce1085ec92b78f030f883a0223491e829b51c6c73b03cbf3`,
+  matching the notarized DMG and private sandbox-storage readback. The
+  disposable Developer ID re-signed build-16 test app used the old shipped
+  Sparkle key, a loopback appcast, a test-only canary header, and a paid token
+  passed through closed stdin. Sparkle fetched the paid DMG and replaced the
+  test app in `/Applications` after a graceful quit. The installed build 17
+  embedded source receipt `1fdf640`, passed strict code-signature verification,
+  and Gatekeeper accepted it as Notarized Developer ID.
+- The app **did not visibly relaunch** after that quit. Its old test helper
+  remained running independently and was stopped before cleanup. This test
+  therefore proves paid native download and install-on-quit, not unattended
+  idle installation, relaunch, or clean helper handoff. Because the starting
+  client was a modified disposable build 16 launched directly for the canary,
+  do not attribute the old-helper behavior to the unmodified buyer client or
+  count this as the final update experience.
+- All four temporary Production canary variables were removed, and Production
+  was redeployed without them. A paid-token canary request again returned
+  HTTP 403; an anonymous canary request also returned 403. The public
+  `/api/appcast` still advertised build 16. The loopback feed was stopped,
+  the test helper was stopped, the disposable app was moved to Trash, and the
+  original developer app was reopened. No token or session ID is recorded here.
+- **Release gate remains closed.** The unmodified buyer-client purchase-link
+  flow, automatic idle install and relaunch, busy-operation deferral/retry,
+  adverse-path injections, clean-account first install, and scheduled-backup
+  receipts on both Macs still require physical acceptance. Build 17 remains
+  testing-only and unaccepted.
 
 ## Build 16 physical update receipt — September 23, 2026
 
