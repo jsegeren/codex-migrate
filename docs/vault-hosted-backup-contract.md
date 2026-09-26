@@ -94,13 +94,16 @@ egress allowance. Do not claim that B2 restores are always free. See its
   accept caller-supplied bucket/key prefixes. Treat a presigned URL as a bearer
   secret and keep it out of logs, analytics, and support email.
 - A provider-neutral subscription upload gate is implemented for a future
-  service to call with a freshly retrieved Stripe Subscription and its
-  server-held enrollment record. Only the exact customer, subscription,
-  $10 monthly price, environment, and
-  `trialing` or `active` status can pass; paused collection and every other
-  status fail closed. This evaluator does not create customer identity,
-  checkout, enrollment, a signed webhook, a purchase-refund check, or an
-  upload capability. Those are still mandatory before any service is exposed.
+  service to call with a freshly retrieved Stripe Subscription, its
+  server-held enrollment record, and a server-held catalog of approved price
+  IDs, monthly prices, and byte allowances. Only the exact customer,
+  subscription, catalog price and amount, environment, and `trialing` or
+  `active` status can pass; paused collection and every other status fail
+  closed. The returned allowance is not aggregate usage enforcement, and no
+  candidate tier is activated merely by a test fixture. This evaluator does
+  not create customer identity, checkout, enrollment, a signed webhook, a
+  purchase-refund check, or an upload capability. Those are still mandatory
+  before any service is exposed.
 - An upload first sends immutable encrypted objects and manifest, then a
   reference. Remote metadata is stored per snapshot under
   `metadata/<snapshot-id>.json`, never overwritten as a single mutable
