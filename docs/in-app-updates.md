@@ -215,13 +215,17 @@ higher build number.
 - **Release gate remains closed.** The unmodified buyer-client purchase-link
   flow, paid native Quit handoff, automatic idle install and relaunch,
   busy-operation deferral/retry,
-  adverse-path injections, clean-account first install, and scheduled-backup
-  receipts on both Macs still require physical acceptance. Build 17 remains
+  adverse-path injections, clean-account first install, and scheduled backups
+  of real history with off-device recovery on both Macs still require physical
+  acceptance. Build 17 remains
   testing-only and unaccepted.
 - Separate packaged-engine fixtures with this exact notarized image passed
-  restore contention and a real scheduled-backup/updater-guard interaction on
-  this Mac using disposable histories. Those checks do not replace the
-  full-app Sparkle test during a busy operation or the second-Mac schedule run.
+  restore contention on this Mac and a real scheduled-backup/updater-guard
+  interaction on **both** Founder Macs using disposable histories. The
+  second-Mac test ran inside its logged-in GUI session, exited 0, and removed
+  its temporary Keychain item and LaunchAgent. These checks do not replace a
+  full-app Sparkle test during a busy operation, a locked-screen run, or
+  scheduled backups of the Founder's real history to an off-device folder.
 
 ### Local-only native Quit check with the exact provisioned image
 

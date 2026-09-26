@@ -1198,3 +1198,19 @@ automatic-idle path. The loopback server, test app and test output were
 removed or moved to Trash, and the original developer app was reopened.
 This closes only the local old-client native Quit check, not the unmodified
 paid-client or automatic idle/relaunch release gates.
+
+The exact provisioned DMG was also byte-verified on the second Mac (SHA-256
+`e365674834112941ce1085ec92b78f030f883a0223491e829b51c6c73b03cbf3`),
+mounted read-only, and its app passed strict code-signature verification.
+From a uniquely labelled LaunchAgent in that Mac's logged-in GUI session,
+the packaged-engine schedule fixture passed with system Python 3.9. It used
+only a disposable synthetic Codex home and Vault: a real temporary scheduled
+run added a verified encrypted snapshot, updater idle/shutdown were refused
+while it ran, and the prior verified snapshot survived a guarded deferred
+run. The test's Keychain item and Vault backup LaunchAgent were removed; the
+outer GUI runner exited 0 and was booted out. The DMG was detached and the
+test directory moved to Trash for recovery. No app UI was opened and the
+Founder's actual Codex history and schedule were untouched. This proves the
+packaged synthetic scheduled-backup/updater-guard path on **both** Macs, not
+real-history protection, locked-screen execution, off-device sync, or a
+full-app Sparkle replacement during a live backup.
