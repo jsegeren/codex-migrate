@@ -427,7 +427,9 @@ function indexView(data){
     `Indexing ${data.completed||0} of ${data.total} conversations. Search remains available.`:
     "Preparing local conversation index…";
   else if(data.status==="stopping")$("index-status").textContent="Stopping safely after the current record…";
-  else if(data.status==="ready")$("index-status").textContent=`Fast search is ready · ${data.total} conversations · ${fmt(data.index_bytes)} on this Mac.`;
+  else if(data.status==="ready")$("index-status").textContent=
+    `Fast search is ready · ${data.total} conversations · ${fmt(data.index_bytes)} on this Mac.`+
+    (data.skipped?` ${data.skipped} changed during indexing and will be searched directly; refresh later.`:"");
   else if(data.status==="stopped")$("index-status").textContent="Indexing stopped. Search still works; refresh to continue.";
   else if(data.status==="failed")$("index-status").textContent="Search still works without this cache.";
   else $("index-status").textContent=data.present?

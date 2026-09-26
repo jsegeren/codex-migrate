@@ -29,6 +29,10 @@ class IndexCancelled(Exception):
     """The user stopped a refresh; committed files remain safe to search."""
 
 
+class SourceChanged(MigrationError):
+    """A live transcript changed; leave it uncached for direct search."""
+
+
 def supported() -> bool:
     """Probe the actual Python SQLite build without writing customer data."""
     if sqlite3.sqlite_version_info < (3, 43, 0):
@@ -95,9 +99,12 @@ def _cache_lock(parent: Path) -> Iterator[None]:
 
 
 def _source_stamp(path: Path) -> Tuple[int, int, int, int, int]:
-    info = path.lstat()
+    try:
+        info = path.lstat()
+    except OSError as error:
+        raise SourceChanged("A conversation changed before it could be indexed.") from error
     if not stat.S_ISREG(info.st_mode):
-        raise MigrationError("A conversation changed before it could be indexed.")
+        raise SourceChanged("A conversation changed before it could be indexed.")
     return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
 
 
@@ -177,7 +184,7 @@ def _add_file(connection: sqlite3.Connection, collection: str,
         descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         with os.fdopen(descriptor, "rb") as handle:
             if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
-                raise MigrationError("A conversation changed before it could be indexed.")
+                raise SourceChanged("A conversation changed before it could be indexed.")
             while True:
                 if cancelled is not None and cancelled.is_set():
                     raise IndexCancelled()
@@ -189,6 +196,8 @@ def _add_file(connection: sqlite3.Connection, collection: str,
                 try:
                     record = json.loads(raw)
                 except (UnicodeError, json.JSONDecodeError) as error:
+                    if _source_stamp(path) != before:
+                        raise SourceChanged("A conversation changed while it was indexed.") from error
                     raise MigrationError("A conversation contains unreadable JSON.") from error
                 for text in _strings(record):
                     for block in _text_blocks(text):
@@ -201,7 +210,7 @@ def _add_file(connection: sqlite3.Connection, collection: str,
             after = os.fstat(handle.fileno())
         if before != (after.st_dev, after.st_ino, after.st_size,
                       after.st_mtime_ns, after.st_ctime_ns) or before != _source_stamp(path):
-            raise MigrationError("A conversation changed while it was being indexed.")
+            raise SourceChanged("A conversation changed while it was being indexed.")
         flush()
     except OSError as error:
         raise MigrationError("A conversation could not be indexed safely.") from error
@@ -216,7 +225,7 @@ def build(source_home: str, apply: bool = False,
 
     discovered = list(_transcripts(source_home))
     result = {"applied": False, "transcripts": len(discovered), "indexed": 0,
-              "blocks": 0, "index": str(_path(source_home))}
+              "blocks": 0, "skipped": 0, "index": str(_path(source_home))}
     if _owned_regular(_path(source_home)):
         result["index_bytes"] = _path(source_home).stat().st_size
     if not apply:
@@ -245,7 +254,7 @@ def _refresh(target: Path, discovered: List[Tuple[str, Path, str]],
         connection = sqlite3.connect(str(target), timeout=5)
         try:
             _schema(connection)
-            indexed = blocks = 0
+            indexed = blocks = skipped = 0
             wanted = set()
             if progress is not None:
                 progress(0, len(discovered))
@@ -253,7 +262,13 @@ def _refresh(target: Path, discovered: List[Tuple[str, Path, str]],
                 if cancelled is not None and cancelled.is_set():
                     raise IndexCancelled()
                 wanted.add((collection, relative))
-                stamp = _source_stamp(path)
+                try:
+                    stamp = _source_stamp(path)
+                except SourceChanged:
+                    skipped += 1
+                    if progress is not None:
+                        progress(completed, len(discovered))
+                    continue
                 prior = connection.execute(
                     "SELECT dev,ino,size,mtime_ns,ctime_ns FROM files "
                     "WHERE collection=? AND relative=?", (collection, relative)).fetchone()
@@ -261,8 +276,14 @@ def _refresh(target: Path, discovered: List[Tuple[str, Path, str]],
                     if progress is not None:
                         progress(completed, len(discovered))
                     continue
-                with connection:
-                    blocks += _add_file(connection, collection, relative, path, cancelled)
+                try:
+                    with connection:
+                        blocks += _add_file(connection, collection, relative, path, cancelled)
+                except SourceChanged:
+                    skipped += 1
+                    if progress is not None:
+                        progress(completed, len(discovered))
+                    continue
                 indexed += 1
                 if progress is not None:
                     progress(completed, len(discovered))
@@ -279,7 +300,7 @@ def _refresh(target: Path, discovered: List[Tuple[str, Path, str]],
                             "SELECT id FROM blocks WHERE file_id=?", (file_id,)).fetchall():
                         connection.execute("DELETE FROM text_terms WHERE rowid=?", (block_id,))
                     connection.execute("DELETE FROM files WHERE id=?", (file_id,))
-            result.update(applied=True, indexed=indexed, blocks=blocks)
+            result.update(applied=True, indexed=indexed, blocks=blocks, skipped=skipped)
         finally:
             connection.close()
     except sqlite3.Error as error:
@@ -346,8 +367,11 @@ def candidates(source_home: str, query: str,
     except sqlite3.Error:
         return None
     result = set()
-    for collection, path, relative in discovered:
-        key = (collection, relative)
-        if key in matches or indexed.get(key) != _source_stamp(path):
-            result.add(path)
+    try:
+        for collection, path, relative in discovered:
+            key = (collection, relative)
+            if key in matches or indexed.get(key) != _source_stamp(path):
+                result.add(path)
+    except SourceChanged:
+        return None
     return result

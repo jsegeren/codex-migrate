@@ -109,6 +109,37 @@ class SearchIndexTests(unittest.TestCase):
                              ["two.jsonl"])
 
     @unittest.skipUnless(supported(), "requires SQLite FTS5 contentless-delete")
+    def test_live_append_skips_only_changing_file_and_searches_it_directly(self):
+        import codex_migrate.vault as vault
+
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            first = home / ".codex/sessions/a.jsonl"
+            second = home / ".codex/sessions/b.jsonl"
+            write_thread(first, "Clerk first")
+            write_thread(second, "Clerk second")
+            first = list(_transcripts(temporary))[0][1]
+            original_strings = vault._strings
+            changed = False
+
+            def append_while_reading(record, *args):
+                nonlocal changed
+                yield from original_strings(record, *args)
+                if not changed:
+                    changed = True
+                    with first.open("a", encoding="utf-8") as handle:
+                        handle.write(json.dumps({"message": {"content": "Clerk appended"}})
+                                     + "\n")
+
+            with patch("codex_migrate.vault._strings", append_while_reading):
+                result = build(temporary, apply=True)
+            self.assertEqual(result["skipped"], 1)
+            self.assertEqual(result["indexed"], 1)
+            self.assertEqual({item.transcript for item in search(temporary, "Clerk")},
+                             {"a.jsonl", "b.jsonl"})
+            self.assertEqual(build(temporary, apply=True)["skipped"], 0)
+
+    @unittest.skipUnless(supported(), "requires SQLite FTS5 contentless-delete")
     def test_unicode_casefold_and_long_string_boundary(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)

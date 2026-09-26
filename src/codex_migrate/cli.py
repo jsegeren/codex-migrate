@@ -334,6 +334,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                     print("Conversation files: %d" % result["transcripts"])
                     if result["applied"]:
                         print("Indexed or refreshed: %d" % result["indexed"])
+                        if result["skipped"]:
+                            print("Changing conversations left for direct search: %d"
+                                  % result["skipped"])
                         print("Cache bytes: %d" % result["index_bytes"])
                         print("Local cache: %s" % result["index"])
                     else:

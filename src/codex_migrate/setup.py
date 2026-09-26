@@ -669,6 +669,7 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                     self._search_index_status = {
                         "status": "ready", "present": True,
                         "total": result["transcripts"],
+                        "skipped": result["skipped"],
                         "index_bytes": result["index_bytes"],
                     }
             except IndexCancelled:
