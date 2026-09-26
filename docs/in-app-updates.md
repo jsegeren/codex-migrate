@@ -297,6 +297,35 @@ or recorded in the receipt. This verifies paid archive continuity after
 canary cleanup, not the unmodified app's purchase-link UI or build-17 paid
 promotion.
 
+### Exact candidate first launch on the second Mac — September 26, 2026
+
+The exact testing-only build-17 DMG from source
+`3d990b96fda666ceee9ae548a5e5349a14767a10` was copied to the second
+Founder Mac. Its SHA-256 matched the catalog digest
+`3697889980f5fcb0a3717752cb0c46068efe0d207b181f6266980f87ae218401`,
+and the disk-image checksum verified. No Codex Migrate copy was installed or
+running there before this test. The app was copied from the mounted image into
+`/Applications`; the image was detached. The installed app reported build 17
+and the exact source receipt. Strict code-signature verification, Notarized
+Developer ID Gatekeeper assessment, and staple validation passed.
+
+The app launched in the logged-in user session with one native process and
+one loopback helper. The authenticated Vault dashboard found a real active
+thread by an earlier title even though its current title had changed, and a
+separate local-content search found that same thread by message text. No
+backup, restore, installation, or migration was running. A normal AppleScript
+Quit requested the app's asynchronous helper shutdown; AppleScript reported
+`-128` because `applicationShouldTerminate` initially returns
+`.terminateCancel` while shutdown completes. Both app and helper subsequently
+exited. The copied test media was moved to Trash; the exact installed app was
+left in `/Applications` for subsequent protection setup.
+
+This is an installed-app launch and real-history search check on the second
+Mac, not a clean *macOS account* test or proof that no UI/Keychain prompt
+appeared. It does not exercise purchase-link entry, paid automatic replacement,
+or real scheduled backup and off-device recovery. Those release gates remain
+open; build 17 remains testing-only and unaccepted.
+
 ## Build 16 physical update receipt — September 23, 2026
 
 - The final Developer ID signed, Apple-notarized and stapled arm64 archive is
