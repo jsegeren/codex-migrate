@@ -109,9 +109,12 @@ backup/restore variation into unpredictable customer bills. Prefer simple,
 visible capacity tiers based on **total encrypted retained bytes across a
 customer's Vaults**, with warning and safe upload pause near the allowance;
 never silently charge overages or delete the last good snapshot. Candidate
-tiers for evaluation are $10/month up to 50 GB and $20/month up to 200 GB on
+tiers for evaluation are $10/month up to 100 GB and $20/month up to 200 GB on
 R2. At their limits, R2 storage plus the illustrative Stripe fees leave
-approximately 86% and 80% of revenue respectively before other costs.
+approximately 78% and 80% of revenue respectively before other costs. The
+measured 72–76 GB first backup of this user's two separate Macs would fit the
+lower tier initially; retained version growth could later require the higher
+tier. This is a capacity choice, not metered or automatic overage billing.
 These are **not approved or active** entitlements. Recheck them after real
 incremental growth, verification costs, support, and restore testing.
 
