@@ -1289,3 +1289,10 @@ filename, 10,512,566-byte length, and SHA-256. The catalog still marks this
 entry `testingOnly: true`, `accepted: false`; neither check proves buyer
 entitlement, clean-account install, updater replacement, or a public appcast.
 The temporary Blob credential was removed after each check.
+
+The same 10,512,566-byte DMG was copied to the second Founder Mac for a
+non-interactive artifact check. Its SHA-256 matched the catalog exactly. The
+image was mounted read-only, and its app passed strict `codesign` verification,
+Gatekeeper (`Notarized Developer ID`), and stapled-ticket validation. The image
+was detached and the temporary DMG and directory removed. No app was opened,
+Codex data accessed, or first-launch/backup acceptance claimed on that Mac.
