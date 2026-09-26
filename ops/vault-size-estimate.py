@@ -94,13 +94,12 @@ def estimate(source_home: str, exclude_recent_seconds: int = 0) -> Dict[str, Uni
         "skipped_recent_bytes": 0,
     }
     text_compressor = zlib.compressobj(level=6, wbits=31)
+    recent_cutoff_ns = time.time_ns() - exclude_recent_seconds * 1_000_000_000
     for _, path, _ in _transcripts(source_home):
         before = path.lstat()
         if not stat.S_ISREG(before.st_mode):
             raise ValueError("a transcript is not a regular file")
-        if exclude_recent_seconds and before.st_mtime_ns >= (
-            time.time_ns() - exclude_recent_seconds * 1_000_000_000
-        ):
+        if exclude_recent_seconds and before.st_mtime_ns >= recent_cutoff_ns:
             totals["skipped_recent_transcripts"] += 1
             totals["skipped_recent_bytes"] += before.st_size
             continue
