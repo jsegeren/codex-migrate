@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import sqlite3
 import subprocess
 import tempfile
 import unittest
@@ -42,6 +43,32 @@ def run_packaged(command, timeout=30):
 @unittest.skipUnless(os.environ.get("CODEX_MIGRATE_PACKAGED_APP"),
                      "requires an explicit packaged app path")
 class PackagedVaultCompressionTests(unittest.TestCase):
+    def test_bundled_engine_search_ignores_missing_thread_store_table(self):
+        app = Path(os.environ["CODEX_MIGRATE_PACKAGED_APP"])
+        engine = app / "Contents/Resources/engine/codex-migrate-engine"
+        self.assertTrue(engine.is_file())
+        with tempfile.TemporaryDirectory(prefix="vault-package-search-test-") as temporary:
+            source = Path(temporary) / "source"
+            codex = source / ".codex"
+            transcript = codex / "sessions/fixture.jsonl"
+            transcript.parent.mkdir(parents=True)
+            transcript.write_text(json.dumps({"payload": {"message": {
+                "content": "Recover the missing thread-store fixture"
+            }}}) + "\n")
+            database = codex / "state_5.sqlite"
+            with sqlite3.connect(str(database)) as connection:
+                connection.execute("CREATE TABLE unrelated (id INTEGER PRIMARY KEY)")
+            original = database.read_bytes()
+
+            output = run_packaged([
+                str(engine), "vault", "--source-home", str(source), "search",
+                "missing thread-store fixture", "--json",
+            ])
+            matches = json.loads(output)
+            self.assertEqual(len(matches), 1)
+            self.assertEqual(matches[0]["transcript"], "fixture.jsonl")
+            self.assertEqual(database.read_bytes(), original)
+
     def test_bundled_engine_and_crypto_helper_restore_exact_bytes(self):
         app = Path(os.environ["CODEX_MIGRATE_PACKAGED_APP"])
         resources = app / "Contents/Resources"
