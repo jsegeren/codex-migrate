@@ -34,6 +34,7 @@ from codex_migrate.vault_dashboard import VAULT_HTML
 from codex_migrate.vault_history import search_titles, thread_timeline
 from codex_migrate.vault_recovery import export_recovery_key
 from codex_migrate.vault_recovery import list_snapshots as list_vault_snapshots
+from codex_migrate.vault_recovery import vault_storage_usage
 from codex_migrate.vault_recovery import snapshot_catalog
 from codex_migrate.vault_recovery import restore_snapshot as restore_vault_snapshot
 from codex_migrate.vault_install import install_snapshot as install_vault_snapshot
@@ -759,9 +760,13 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
     def vault_snapshots(self, vault):
         if not isinstance(vault, str) or len(vault) > 4096:
             raise MigrationError("Choose a valid existing Vault folder")
-        return {"snapshots": [
-            item.as_dict() for item in list_vault_snapshots(vault, limit=1000)
-        ]}
+        snapshots = [item.as_dict() for item in list_vault_snapshots(vault, limit=1000)]
+        try:
+            usage = vault_storage_usage(vault)
+        except MigrationError:
+            # An optional size estimate must not block access to saved versions.
+            usage = {"storage_bytes": None, "storage_files": None}
+        return {"snapshots": snapshots, **usage}
 
     @staticmethod
     def _vault_snapshot(snapshot):
