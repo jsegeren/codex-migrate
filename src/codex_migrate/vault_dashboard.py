@@ -507,7 +507,7 @@ async function refreshSnapshots(){
     const data=await api("/api/vault/snapshots?vault="+encodeURIComponent(vault));
     if($("restore-vault").value!==vault)return;
     usage.textContent=Number.isSafeInteger(data.storage_bytes)&&data.storage_bytes>=0
-      ?`Vault files: ${fmt(data.storage_bytes)} · ${data.snapshots.length.toLocaleString()} saved ${data.snapshots.length===1?"version":"versions"}.`
+      ?`Vault files: ${fmt(data.storage_bytes)} · ${data.snapshots.length>=1000?"at least ":""}${data.snapshots.length.toLocaleString()} saved ${data.snapshots.length===1?"version":"versions"}.`
       :"Saved Vault size unavailable. Your backup versions remain accessible.";
     if(!data.snapshots.length){select.replaceChildren(new Option("No published backups found",""));return}
     select.replaceChildren(...data.snapshots.map(item=>{
