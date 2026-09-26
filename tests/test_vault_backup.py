@@ -21,6 +21,13 @@ from codex_migrate.vault_recovery import (
 class VaultBackupTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        packaged = os.environ.get("CODEX_MIGRATE_TEST_VAULT_HELPER")
+        if packaged:
+            cls.build = None
+            cls.helper = Path(packaged)
+            if not cls.helper.is_file():
+                raise AssertionError("packaged Vault helper is missing")
+            return
         cls.build = tempfile.TemporaryDirectory()
         cls.helper = Path(cls.build.name) / "CodexVaultCrypto"
         subprocess.run([
@@ -31,7 +38,8 @@ class VaultBackupTests(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        cls.build.cleanup()
+        if cls.build is not None:
+            cls.build.cleanup()
 
     def fixture(self, root: Path) -> None:
         active = root / ".codex/sessions/2026/09/17/active.jsonl"
