@@ -1242,3 +1242,21 @@ does not see that AppleScript result. Treat this as a native-automation UX
 quirk to revisit, not as proof of user-visible failed Quit. These fixtures
 do not prove customer Vault bytes were unchanged or cover paid entitlement,
 refund/dispute, offline, wrong-architecture, or Sparkle disk-pressure paths.
+
+The exact stapled DMG was mounted read-only again and its app copied to
+`/Applications/Codex Migrate.app` for an existing separate macOS test account
+(`Codex Migrate Acceptance Target`, short name `codexmigratetarget`). Strict
+code-signature and Gatekeeper checks passed after installation. That account
+initially launched an older build-16 repository test copy; it was quit, and
+the Finder Applications copy then opened its local site. A process check
+confirmed the build-17 Applications binary and its packaged engine running
+under the test account, with the engine receiving
+`--resume-after-update-build 17`. The user reported no macOS or Keychain
+prompt at this launch. The superseded build-16 test app was moved to Trash
+only after its process stopped, to reduce accidental repeat launches. This is
+useful separate-account app-open evidence, but **not** a pristine account:
+the test login had previously run a Codex Migrate test copy. It also does not
+prove purchase-link entitlement, backup, restore, scheduling, or a clean
+buyer-browser download in that account. The installed Applications copy is
+being retained solely for further acceptance testing; public build 16 remains
+unchanged.
