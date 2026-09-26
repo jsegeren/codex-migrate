@@ -18,6 +18,7 @@ from codex_migrate.vault_recovery import (
     export_recovery_key, import_recovery_key, list_snapshots, restore_snapshot,
     vault_storage_usage, verify_snapshot,
 )
+from codex_migrate import vault_remote_inventory
 
 
 @unittest.skipUnless(platform.system() == "Darwin", "CryptoKit backup helper requires macOS")
@@ -138,6 +139,79 @@ class VaultBackupTests(unittest.TestCase):
                 self.assertNotIn(b"PRIVATE-ARCHIVED-CONTENT", stored)
                 self.assertNotIn(b"NEVER-COPY-AUTH", stored)
                 self.assertNotIn(b"NEVER-COPY-ID", stored)
+            finally:
+                self.delete_key(destination)
+
+    def test_remote_inventory_contains_only_verified_ciphertext_files(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, destination = root / "source", root / "vault"
+            self.fixture(source)
+            try:
+                result = backup(str(source), str(destination), crypto_helper=str(self.helper))
+                inventory = vault_remote_inventory.encrypted_snapshot_inventory(
+                    str(destination), crypto_helper=str(self.helper))
+                paths = [item.relative_path for item in inventory.files]
+                self.assertEqual(inventory.snapshot_id, result.snapshot_id)
+                self.assertTrue(inventory.publish_latest)
+                self.assertEqual(paths[0], "vault.json")
+                self.assertEqual(paths[-2:], [
+                    f"manifests/{result.snapshot_id}.cvmanifest",
+                    f"refs/{result.snapshot_id}.json",
+                ])
+                self.assertEqual(len([path for path in paths if path.startswith("objects/")]), 2)
+                self.assertEqual(inventory.ciphertext_bytes, sum(
+                    (destination / path).stat().st_size for path in paths))
+                self.assertFalse(any("auth" in path or "installation" in path for path in paths))
+                self.assertNotIn("latest.json", paths)  # publish only after remote verification
+                historical = vault_remote_inventory.encrypted_snapshot_inventory(
+                    str(destination), snapshot=result.snapshot_id,
+                    crypto_helper=str(self.helper))
+                self.assertFalse(historical.publish_latest)
+            finally:
+                self.delete_key(destination)
+
+    def test_remote_inventory_rejects_invalid_helper_ids_and_divergent_reference(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, destination = root / "source", root / "vault"
+            self.fixture(source)
+            try:
+                result = backup(str(source), str(destination), crypto_helper=str(self.helper))
+                with patch.object(vault_remote_inventory, "_run_helper", return_value={
+                    "snapshot_id": result.snapshot_id, "chunk_ids": [4],
+                }):
+                    with self.assertRaisesRegex(MigrationError, "inventory is invalid"):
+                        vault_remote_inventory.encrypted_snapshot_inventory(
+                            str(destination), crypto_helper=str(self.helper))
+                reference_path = destination / "refs" / (result.snapshot_id + ".json")
+                reference = json.loads(reference_path.read_text(encoding="utf-8"))
+                reference["created_at"] = "2025-01-01T00:00:00+00:00"
+                reference_path.write_text(json.dumps(reference), encoding="utf-8")
+                with self.assertRaisesRegex(MigrationError, "disagrees"):
+                    vault_remote_inventory.encrypted_snapshot_inventory(
+                        str(destination), crypto_helper=str(self.helper))
+            finally:
+                self.delete_key(destination)
+
+    def test_remote_inventory_refuses_corrupt_or_linked_chunk(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, destination = root / "source", root / "vault"
+            self.fixture(source)
+            try:
+                backup(str(source), str(destination), crypto_helper=str(self.helper))
+                chunk = next((destination / "objects").rglob("*.cvchunk"))
+                original = chunk.read_bytes()
+                chunk.write_bytes(original[:-1] + bytes([original[-1] ^ 1]))
+                with self.assertRaises(MigrationError):
+                    vault_remote_inventory.encrypted_snapshot_inventory(
+                        str(destination), crypto_helper=str(self.helper))
+                chunk.unlink()
+                chunk.symlink_to(source / ".codex/auth.json")
+                with self.assertRaises(MigrationError):
+                    vault_remote_inventory.encrypted_snapshot_inventory(
+                        str(destination), crypto_helper=str(self.helper))
             finally:
                 self.delete_key(destination)
 

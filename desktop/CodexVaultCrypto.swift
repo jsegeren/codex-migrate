@@ -73,6 +73,11 @@ private struct Verification: Codable {
     let bytes: Int
 }
 
+private struct EncryptedInventory: Codable {
+    let snapshot_id: String
+    let chunk_ids: [String]
+}
+
 private struct RestoreResult: Codable {
     let snapshot_id: String
     let files: Int
@@ -755,6 +760,15 @@ private func verifyCommand(_ arguments: [String]) throws {
     try printJSON(verification)
 }
 
+private func encryptedInventoryCommand(_ arguments: [String]) throws {
+    // Return only opaque identifiers after full authenticated verification.
+    // Paths, titles, message text and key material never enter this output.
+    let (manifest, _, _, verification) = try validatedSnapshot(arguments)
+    let identifiers = Set(manifest.files.flatMap { file in file.chunks.map { $0.id } })
+    try printJSON(EncryptedInventory(snapshot_id: verification.snapshot_id,
+                                     chunk_ids: identifiers.sorted()))
+}
+
 private func catalogCommand(_ arguments: [String]) throws {
     let (manifest, _, _) = try openedManifest(arguments)
     let files = manifest.files.map { file in
@@ -863,6 +877,7 @@ private func run() throws {
     case "store-chunks": try storeChunksCommand(arguments)
     case "seal-manifest": try sealManifestCommand(arguments)
     case "verify": try verifyCommand(arguments)
+    case "encrypted-inventory": try encryptedInventoryCommand(arguments)
     case "catalog": try catalogCommand(arguments)
     case "restore": try restoreCommand(arguments)
     default: throw VaultError.message("the requested command is not supported")
