@@ -1,4 +1,4 @@
-"""Read-only inventory of encrypted files needed for one hosted Vault snapshot.
+"""Read-only inventory of portable files needed for one hosted Vault snapshot.
 
 This is a transfer plan, not an upload or evidence of off-device protection.
 Every file must be reopened and checked at transfer time; a plan cannot freeze
@@ -24,20 +24,23 @@ MAX_ENCRYPTED_MANIFEST_BYTES = 128 * 1024 * 1024 + 1024
 
 
 @dataclass(frozen=True)
-class EncryptedFile:
+class VaultTransferFile:
     relative_path: str
+    remote_key: str
     bytes: int
 
 
 @dataclass(frozen=True)
 class RemoteInventory:
     snapshot_id: str
-    files: Tuple[EncryptedFile, ...]
-    ciphertext_bytes: int
-    publish_latest: bool
+    files: Tuple[VaultTransferFile, ...]
+    transfer_bytes: int
+    is_current_latest: bool
 
 
-def _regular_file(root: Path, relative: str, maximum: int) -> EncryptedFile:
+def _regular_file(
+    root: Path, relative: str, maximum: int, *, remote_key: Optional[str] = None,
+) -> VaultTransferFile:
     path = root / relative
     _require_unlinked_path(path)
     descriptor = -1
@@ -45,14 +48,14 @@ def _regular_file(root: Path, relative: str, maximum: int) -> EncryptedFile:
         descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         info = os.fstat(descriptor)
     except OSError as error:
-        raise MigrationError("A required encrypted Vault file is unavailable.") from error
+        raise MigrationError("A required Vault file is unavailable.") from error
     finally:
         if descriptor >= 0:
             os.close(descriptor)
     if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
             or info.st_size <= 0 or info.st_size > maximum):
-        raise MigrationError("A required encrypted Vault file is unsafe or unsupported.")
-    return EncryptedFile(relative, info.st_size)
+        raise MigrationError("A required Vault file is unsafe or unsupported.")
+    return VaultTransferFile(relative, remote_key or relative, info.st_size)
 
 
 def encrypted_snapshot_inventory(
@@ -61,7 +64,7 @@ def encrypted_snapshot_inventory(
     snapshot: str = "latest",
     crypto_helper: Optional[str] = None,
 ) -> RemoteInventory:
-    """Plan a snapshot's exact ciphertext objects without exporting plaintext.
+    """Plan a snapshot's exact Vault files without exporting conversation text.
 
     The native helper authenticates the entire manifest and every referenced
     chunk before returning only opaque chunk identifiers. The caller must not
@@ -92,7 +95,10 @@ def encrypted_snapshot_inventory(
             or identifiers != sorted(set(identifiers))):
         raise MigrationError("The authenticated Vault inventory is invalid.")
 
-    files = [_regular_file(root, "vault.json", 1024 * 1024)]
+    files = [_regular_file(
+        root, "vault.json", 1024 * 1024,
+        remote_key="metadata/" + snapshot_id + ".json",
+    )]
     for identifier in identifiers:
         files.append(_regular_file(
             root, "objects/" + identifier[:2] + "/" + identifier[2:] + ".cvchunk",
@@ -108,6 +114,6 @@ def encrypted_snapshot_inventory(
     return RemoteInventory(
         snapshot_id=snapshot_id,
         files=tuple(files),
-        ciphertext_bytes=sum(item.bytes for item in files),
-        publish_latest=snapshot == "latest",
+        transfer_bytes=sum(item.bytes for item in files),
+        is_current_latest=snapshot == "latest",
     )

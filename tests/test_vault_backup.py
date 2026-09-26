@@ -1,4 +1,5 @@
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -19,6 +20,29 @@ from codex_migrate.vault_recovery import (
     vault_storage_usage, verify_snapshot,
 )
 from codex_migrate import vault_remote_inventory
+from codex_migrate import vault_remote_transfer
+
+
+class MemoryObjectStore:
+    def __init__(self):
+        self.objects = {}
+        self.writes = 0
+        self.fail_on_write = None
+
+    def open_read(self, key):
+        value = self.objects.get(key)
+        return None if value is None else io.BytesIO(value)
+
+    def put_if_absent(self, key, source, length):
+        self.writes += 1
+        if self.writes == self.fail_on_write:
+            raise OSError("disposable upload interruption")
+        if key in self.objects:
+            raise AssertionError("immutable remote object was replaced")
+        value = source.read(length)
+        if len(value) != length:
+            raise AssertionError("short local upload")
+        self.objects[key] = value
 
 
 @unittest.skipUnless(platform.system() == "Darwin", "CryptoKit backup helper requires macOS")
@@ -142,7 +166,7 @@ class VaultBackupTests(unittest.TestCase):
             finally:
                 self.delete_key(destination)
 
-    def test_remote_inventory_contains_only_verified_ciphertext_files(self):
+    def test_remote_inventory_contains_only_verified_portable_files(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             source, destination = root / "source", root / "vault"
@@ -152,22 +176,25 @@ class VaultBackupTests(unittest.TestCase):
                 inventory = vault_remote_inventory.encrypted_snapshot_inventory(
                     str(destination), crypto_helper=str(self.helper))
                 paths = [item.relative_path for item in inventory.files]
+                remote_keys = [item.remote_key for item in inventory.files]
                 self.assertEqual(inventory.snapshot_id, result.snapshot_id)
-                self.assertTrue(inventory.publish_latest)
+                self.assertTrue(inventory.is_current_latest)
                 self.assertEqual(paths[0], "vault.json")
+                self.assertEqual(remote_keys[0],
+                                 f"metadata/{result.snapshot_id}.json")
                 self.assertEqual(paths[-2:], [
                     f"manifests/{result.snapshot_id}.cvmanifest",
                     f"refs/{result.snapshot_id}.json",
                 ])
                 self.assertEqual(len([path for path in paths if path.startswith("objects/")]), 2)
-                self.assertEqual(inventory.ciphertext_bytes, sum(
+                self.assertEqual(inventory.transfer_bytes, sum(
                     (destination / path).stat().st_size for path in paths))
                 self.assertFalse(any("auth" in path or "installation" in path for path in paths))
                 self.assertNotIn("latest.json", paths)  # publish only after remote verification
                 historical = vault_remote_inventory.encrypted_snapshot_inventory(
                     str(destination), snapshot=result.snapshot_id,
                     crypto_helper=str(self.helper))
-                self.assertFalse(historical.publish_latest)
+                self.assertFalse(historical.is_current_latest)
             finally:
                 self.delete_key(destination)
 
@@ -212,6 +239,107 @@ class VaultBackupTests(unittest.TestCase):
                 with self.assertRaises(MigrationError):
                     vault_remote_inventory.encrypted_snapshot_inventory(
                         str(destination), crypto_helper=str(self.helper))
+            finally:
+                self.delete_key(destination)
+
+    def test_remote_staging_is_incremental_and_restorable_without_publishing(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, destination, reconstructed = (
+                root / "source", root / "vault", root / "remote-copy")
+            self.fixture(source)
+            store = MemoryObjectStore()
+            try:
+                first = backup(str(source), str(destination), crypto_helper=str(self.helper))
+                staged = vault_remote_transfer.stage_encrypted_snapshot(
+                    str(destination), store, crypto_helper=str(self.helper))
+                self.assertEqual(staged.snapshot_id, first.snapshot_id)
+                self.assertEqual(staged.uploaded_files, len(store.objects))
+                self.assertEqual(staged.reused_files, 0)
+                self.assertNotIn("latest.json", store.objects)
+                self.assertNotIn("backup.lock", store.objects)
+                self.assertEqual(staged.remote_bytes_checked,
+                                 sum(len(value) for value in store.objects.values()))
+
+                repeated = vault_remote_transfer.stage_encrypted_snapshot(
+                    str(destination), store, crypto_helper=str(self.helper))
+                self.assertEqual(repeated.uploaded_files, 0)
+                self.assertEqual(repeated.reused_files, len(store.objects))
+
+                for remote_key, value in store.objects.items():
+                    relative = ("vault.json" if remote_key.startswith("metadata/")
+                                else remote_key)
+                    path = reconstructed / relative
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(value)
+                reference = store.objects[f"refs/{first.snapshot_id}.json"]
+                (reconstructed / "latest.json").write_bytes(reference)
+                verified = verify_snapshot(str(reconstructed), crypto_helper=str(self.helper))
+                self.assertEqual(verified.snapshot_id, first.snapshot_id)
+                self.assertEqual(verified.transcript_files, 2)
+
+                second = backup(str(source), str(destination), crypto_helper=str(self.helper))
+                next_staged = vault_remote_transfer.stage_encrypted_snapshot(
+                    str(destination), store, crypto_helper=str(self.helper))
+                self.assertEqual(next_staged.snapshot_id, second.snapshot_id)
+                self.assertIn(f"metadata/{first.snapshot_id}.json", store.objects)
+                self.assertIn(f"metadata/{second.snapshot_id}.json", store.objects)
+                self.assertEqual(next_staged.uploaded_files, 3)
+                self.assertEqual(next_staged.reused_files, 2)
+            finally:
+                self.delete_key(destination)
+
+    def test_remote_staging_failure_never_replaces_or_publishes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, destination = root / "source", root / "vault"
+            self.fixture(source)
+            store = MemoryObjectStore()
+            store.fail_on_write = 3
+            try:
+                backup(str(source), str(destination), crypto_helper=str(self.helper))
+                with self.assertRaisesRegex(OSError, "interruption"):
+                    vault_remote_transfer.stage_encrypted_snapshot(
+                        str(destination), store, crypto_helper=str(self.helper))
+                self.assertNotIn("latest.json", store.objects)
+                before = dict(store.objects)
+                store.fail_on_write = None
+                retried = vault_remote_transfer.stage_encrypted_snapshot(
+                    str(destination), store, crypto_helper=str(self.helper))
+                self.assertEqual(retried.reused_files, len(before))
+                self.assertNotIn("latest.json", store.objects)
+
+                key = next(path for path in store.objects if path.startswith("objects/"))
+                original = store.objects[key]
+                store.objects[key] = original[:-1] + bytes([original[-1] ^ 1])
+                with self.assertRaisesRegex(MigrationError, "differs"):
+                    vault_remote_transfer.stage_encrypted_snapshot(
+                        str(destination), store, crypto_helper=str(self.helper))
+                self.assertNotIn("latest.json", store.objects)
+            finally:
+                self.delete_key(destination)
+
+    def test_remote_staging_refuses_link_swapped_after_inventory(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, destination = root / "source", root / "vault"
+            self.fixture(source)
+            store = MemoryObjectStore()
+            try:
+                backup(str(source), str(destination), crypto_helper=str(self.helper))
+                inventory = vault_remote_inventory.encrypted_snapshot_inventory(
+                    str(destination), crypto_helper=str(self.helper))
+                chunk = next((destination / "objects").rglob("*.cvchunk"))
+                chunk.unlink()
+                chunk.symlink_to(source / ".codex/auth.json")
+                with patch.object(vault_remote_transfer, "encrypted_snapshot_inventory",
+                                  return_value=inventory):
+                    with self.assertRaises(MigrationError):
+                        vault_remote_transfer.stage_encrypted_snapshot(
+                            str(destination), store, crypto_helper=str(self.helper))
+                self.assertNotIn("latest.json", store.objects)
+                self.assertFalse(any(b"NEVER-COPY-AUTH" in value
+                                     for value in store.objects.values()))
             finally:
                 self.delete_key(destination)
 

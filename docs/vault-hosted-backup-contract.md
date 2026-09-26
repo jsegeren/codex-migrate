@@ -1,8 +1,9 @@
 # Optional hosted Vault backup — product and release contract
 
-Status: approved direction, **not implemented or for sale**. This document does
-not authorize a production bucket, a live subscription price, or changing the
-current $49 one-time checkout. Codex Migrate remains the product name.
+Status: approved direction with local transport-staging tests, **not a hosted
+service or for sale**. This document does not authorize a production bucket, a
+live subscription checkout, or changing the current $49 one-time checkout.
+Codex Migrate remains the product name.
 
 ## Customer choice
 
@@ -15,14 +16,13 @@ Vault format:
    copy has synced; a local-only folder does not insure against Mac loss.
 2. **Segeren-hosted backup.** A buyer may opt in after buying the $49 Mac app.
    Their **first hosted month is free**, then hosting costs **$10/month** while
-   active. It uploads already encrypted Vault
-   objects to operated object storage and independently reports the last
+   active. It uploads client-encrypted transcript objects and required
+   non-content Vault metadata to operated object storage, then reports the last
    remotely verified snapshot. Existing Mac-app buyers retain their local
    edition, must not repurchase it to add hosting, and receive the same one-time
    free hosted month when they first opt in. The trial and subsequent renewal
-   must be clear before enrollment opens. A
-   subscription is not needed to browse/search current local history or
-   backups the customer controls.
+   must be clear before enrollment opens. A subscription is not needed to
+   browse/search current local history or backups the customer controls.
 
 The hosted tier protects the supported Codex active and archived conversation
 transcripts that Vault currently snapshots. It is not a whole-Mac backup, a
@@ -74,7 +74,8 @@ egress allowance. Do not claim that B2 restores are always free. See its
 - Keep each local Vault in its own random, account-scoped remote namespace.
   Two Macs may each back up to separate Vaults under one subscription; this is
   not synchronization or a silent merge. Object names and snapshot times are
-  visible to the service, but titles, paths, and content remain encrypted.
+  visible to the service, as are the random key identifier and Vault-format
+  metadata. Titles, conversation paths, and content remain encrypted.
 - The master key stays in the customer's Keychain plus their separately saved
   recovery key. Neither Stripe nor the storage service can recover it. Losing
   both makes the ciphertext unrecoverable. Do not silently escrow keys.
@@ -85,10 +86,15 @@ egress allowance. Do not claim that B2 restores are always free. See its
   accept caller-supplied bucket/key prefixes. Treat a presigned URL as a bearer
   secret and keep it out of logs, analytics, and support email.
 - An upload first sends immutable encrypted objects and manifest, then a
-  reference. Advance a remote `latest` pointer only after remote completeness
-  and integrity have been checked. Failed uploads leave the previous verified
-  remote snapshot intact and visible as the last good backup. Do not label a
-  backup "protected" because a local snapshot or PUT alone succeeded.
+  reference. Remote metadata is stored per snapshot under
+  `metadata/<snapshot-id>.json`, never overwritten as a single mutable
+  `vault.json`; chunks, manifests, and references keep their format paths.
+  The client-side staging module reads every object back and checks its exact
+  bytes, but does not write `latest` or claim protection. Advance a remote
+  `latest` pointer only after server-side completeness and integrity have been
+  checked. Failed uploads leave the previous verified remote snapshot intact
+  and visible as the last good backup. Do not label a backup "protected"
+  because a local snapshot or PUT alone succeeded.
 - Preserve old snapshot references under a declared retention policy. Deleting
   an unreferenced chunk requires proof that no retained snapshot needs it.
   Cancellation, payment failure, account deletion, export grace, and final
