@@ -39,17 +39,24 @@ Keep the first offer simple while the market is being proven:
   automatic encrypted backup to a customer-owned folder, browse/search,
   verified recovery, the complete Mac migration, updates during the beta, and
   best-effort support.
-- **Possible Vault Cloud subscription:** later client-side encrypted managed
-  storage, off-device monitoring, and cross-device web access. Validate demand,
-  storage costs, and willingness to pay before setting a price.
+- **Optional hosted Vault backup:** offer a second backup destination operated by
+  Segeren Studio, with client-side encryption and a separate subscription of at
+  least $10/month. The $49 app and its customer-owned-folder backup remain
+  available without a subscription. Existing app buyers need only add the
+  hosted subscription if they choose it. The hosted tier is approved product
+  direction, **not a shipping feature or an open checkout**; its storage limit,
+  billing, key recovery, off-device restore, and operational gates must pass
+  before it is advertised as available. See
+  [the hosted-backup contract](vault-hosted-backup-contract.md).
 
 Existing paid Codex Migrate buyers receive the current local Vault beta rather
 than being asked to buy the same foundation twice.
 
-The present app does not promise lifetime maintenance. A later **Vault Cloud**
-tier can earn recurring revenue through managed storage, off-device health
-monitoring, and cross-device web access with an explicit storage allowance.
-Prefer monthly or annual billing over literal weekly charges.
+The present app does not promise lifetime maintenance. Hosted storage is an
+optional ongoing service, not a prerequisite for local search, customer-owned
+backup, recovery, or Mac migration. Do not imply that the first hosted version
+includes a cross-device web reader or live synchronization; those are separate
+product capabilities.
 
 ## Delivery sequence
 
@@ -173,7 +180,10 @@ for its deliberately bounded claim.
 ### 4. Optional Vault Cloud
 
 - The client encrypts before upload; the service never receives plaintext keys.
-- The hosted reader either decrypts locally in the browser or is omitted.
+- The first hosted release needs an independent-Mac download, key-import,
+  verification, and read/export test. A hosted browser reader is omitted unless
+  it can decrypt solely in the customer's browser without sending keys or
+  conversation text to the service.
 - Storage, retention, deletion, export, recovery and provider exit are explicit.
 - Keep the local/user-owned destination available so cloud service is optional.
 
