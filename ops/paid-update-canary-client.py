@@ -1,4 +1,4 @@
-"""Prepare a disposable build-16 client for the private paid build-17 canary.
+"""Prepare a disposable build-16 client for the private paid build-18 canary.
 
 This never edits the shipped archive, live appcast, or release catalog. It
 contains no purchase credential. Use only with the bounded Production canary
@@ -19,14 +19,14 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 OLD_SOURCE = "c6d2bdf81e7093a044886dd35e1b97ed8ce40ea3"
-CURRENT_SOURCE = "0c7091f14beae51425771f697011026f71611cf6"
+CURRENT_SOURCE = "d421c462831b362df71b89e5a6fcb03f94d108d9"
 OLD_SHA256 = "60eff4dcb07088d01c966587e808f21d5fa74b8afb4eba45ed326543f07241f7"
 OLD_PUBLIC_KEY = "xm7MLPjJBQcWcm2t8rXSoOoPk5ENifmVZPI52GwUoHs="
-CANARY_ID = "codex-migrate-build17-vault-sizecopy-arm64"
-CANARY_SHA256 = "083d4a2c61c7b94fd66cd424927b1b1562ac1c539058aefef07635886e27a617"
-CANARY_SIGNATURE = "017pIP7Em72HmCz7Kkfxs3HHKfNKPabuDM7IZ1vHodioRd8GWTyk6QinME2Ah7/FGV3MR9FDZmvk4ztpPpbRCg=="
+CANARY_ID = "codex-migrate-build18-vault-integrated-arm64"
+CANARY_SHA256 = "e4ef0890fc2b64bd09177e95fc2aebaf38ba9505a584a31c70afeb9b037df9d7"
+CANARY_SIGNATURE = "vNLcNuqk8gwZ4rjYeWIzI+fMi2+m0E/5JtzEC1iLq+8O54iQ0bPc0jdL43kpT1xOrHhhTMuDxSUzmcAAgOVuCg=="
 ARCHIVE = ROOT / "build/live-build16/Codex-Migrate-0.1.0-build16-arm64.zip"
-CANDIDATE_DMG = ROOT / "build/desktop-rotation-02js6aiw/Codex-Migrate-0.1.0-build17-arm64.dmg"
+CANDIDATE_DMG = ROOT / "build/desktop-rotation-fib1p7yb/Codex-Migrate-0.1.0-build18-arm64.dmg"
 HEADER_HOOK = 'request.setValue("Bearer \\(token)", forHTTPHeaderField: "Authorization")'
 TOKEN_LOOKUP = '    static func savedToken() -> String? {\n'
 HELPER_START = '        _ = updaterController\n        startHelper()\n'
@@ -55,11 +55,11 @@ def canary():
         raise ValueError("candidate source changed")
     if selected.get("sha256") != CANARY_SHA256:
         raise ValueError("candidate artifact changed")
-    if (selected.get("size") != 11226092 or
+    if (selected.get("size") != 11228811 or
             selected.get("sparkleSignature") != CANARY_SIGNATURE or
-            selected.get("pathname") != f"sandbox/{CANARY_SHA256}/Codex-Migrate-0.1.0-build17-arm64.dmg" or
+            selected.get("pathname") != f"sandbox/{CANARY_SHA256}/Codex-Migrate-0.1.0-build18-arm64.dmg" or
             selected.get("diskImageNotarization") != {
-                "status": "Accepted", "id": "0e21601f-9af6-4a9b-8824-97ff18a69ffd"}):
+                "status": "Accepted", "id": "1e58f6f5-6aad-4552-b3cf-b7abd75d7e6f"}):
         raise ValueError("candidate signature or size changed")
     return selected
 
@@ -69,8 +69,8 @@ def appcast_xml(selected, archive_url="https://migrate.segeren.com/api/update-ar
     return (f'<?xml version="1.0" encoding="UTF-8"?>\n'
             '<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">'
             '<channel><title>Codex Migrate private canary</title>'
-            '<item><title>Codex Migrate 0.1.0 (build 17)</title>'
-            '<sparkle:version>17</sparkle:version>'
+            '<item><title>Codex Migrate 0.1.0 (build 18)</title>'
+            '<sparkle:version>18</sparkle:version>'
             '<sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>'
             '<sparkle:minimumSystemVersion>13.0.0</sparkle:minimumSystemVersion>'
             '<sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>'
@@ -124,9 +124,9 @@ def prepare(output, port, identity, local_archive=False, current_app=None):
         with (current_app / "Contents/Info.plist").open("rb") as stream:
             current_info = plistlib.load(stream)
         if (receipt.get("source_revision") != CURRENT_SOURCE or
-                receipt.get("bundle_version") != "17" or
-                current_info.get("CFBundleVersion") != "17"):
-            raise ValueError("current-source base app does not match exact build 17")
+                receipt.get("bundle_version") != "18" or
+                current_info.get("CFBundleVersion") != "18"):
+            raise ValueError("current-source base app does not match exact build 18")
         run("codesign", "--verify", "--deep", "--strict", current_app)
     output.mkdir(mode=0o700)
     app = output / "Codex Migrate.app"
@@ -140,13 +140,13 @@ def prepare(output, port, identity, local_archive=False, current_app=None):
     info_path = app / "Contents/Info.plist"
     with info_path.open("rb") as stream:
         info = plistlib.load(stream)
-    if (info.get("CFBundleVersion") != ("17" if current_app else "16") or
+    if (info.get("CFBundleVersion") != ("18" if current_app else "16") or
             (current_app is None and info.get("SUPublicEDKey") != OLD_PUBLIC_KEY) or
             info.get("SUFeedURL") != "https://migrate.segeren.com/api/appcast"):
         raise ValueError("base app identity/feed does not match the selected build")
     if current_app is not None:
         # A disposable current-code client must appear older to exercise
-        # build 17's own automatic-idle path against the exact signed DMG.
+        # build 18's own automatic-idle path against the exact signed DMG.
         # It is never notarized or delivered to buyers.
         info["CFBundleVersion"] = "16"
         info["SUPublicEDKey"] = OLD_PUBLIC_KEY
@@ -256,7 +256,7 @@ def main():
     parser.add_argument("--local-archive", action="store_true",
                         help="serve exact local DMG without any Production canary or paid credential")
     parser.add_argument("--current-app", type=Path,
-                        help="with --local-archive, use exact signed build-17 app code in a disposable build-16 wrapper")
+                        help="with --local-archive, use exact signed build-18 app code in a disposable build-16 wrapper")
     parser.add_argument("--fault", choices=("none", "archive-404", "corrupt-archive", "bad-signature"),
                         default="none", help="with local serve only, inject one updater failure")
     args = parser.parse_args()

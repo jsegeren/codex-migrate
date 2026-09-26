@@ -42,8 +42,8 @@ until those checks pass.
 
 ### Private paid-path canary (not release approval)
 
-The update archive handler has an opt-in operator test route for the exact
-build-17 sandbox artifact. It remains off unless Production has all three
+The update archive handler has an opt-in operator test route for an exact
+reviewed sandbox artifact. It remains off unless Production has all three
 `COMMERCE_UPDATER_CANARY_RELEASE`, `COMMERCE_UPDATER_CANARY_SHA256`, and
 `COMMERCE_UPDATER_CANARY_SESSION` set to the reviewed catalog ID, exact DMG
 digest, and one already-paid Founder Checkout session. A fourth setting,
@@ -66,7 +66,7 @@ while the public appcast and ordinary buyer downloads still return build 16.
 Never use the canary route as a shortcut for catalog promotion or a public
 claim that automatic updates are accepted.
 
-For the current `1fdf640` provisioned-Vault build-17 candidate, `python3
+For the current `d421c46` integrated-Vault build-18 candidate, `python3
 ops/paid-update-canary-client.py prepare` verifies the archived live build-16
 ZIP and local candidate DMG against their catalog digests, then creates a
 **disposable, locally re-signed, unnotarized** build-16 app in `build/`. Only
@@ -89,10 +89,12 @@ The harness requires a local byte-verified copy of the archived live build-16
 ZIP at `build/live-build16/` and the exact notarized DMG in the candidate
 build directory. The test-only catalog entry must be deployed before the
 Production canary can select it; a private Blob upload alone is insufficient.
-This candidate has passed signing, notarization, the synthetic legacy-key
-transition, second-Mac recovery-key decryption, and the limited paid native
-process-exit installation canary recorded below. The remaining buyer release gates are
-still open.
+This build-18 candidate has passed signing, notarization, a packaged synthetic
+Vault backup and exact-byte restore, and read-only second-Mac signature and
+Gatekeeper checks. Its loopback feed served the exact signed DMG. Those checks
+do not prove the paid native update, clean-account first launch, or real-history
+backup and recovery; the buyer release gates remain open. The older build-17
+receipts below are historical evidence, not acceptance of build 18.
 
 1. Bump the app's build number; commit the exact source before release build.
    Build with the Developer ID identity, obtain Apple's Accepted notarization
