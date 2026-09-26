@@ -86,6 +86,15 @@ def parser() -> argparse.ArgumentParser:
     vault_search.add_argument("query")
     vault_search.add_argument("--limit", type=int, default=25)
     vault_search.add_argument("--json", action="store_true")
+    vault_search_index = vault_commands.add_parser(
+        "search-index", help="Build or refresh an optional local fast-search cache")
+    vault_search_index.add_argument("--apply", action="store_true",
+                                    help="Create or refresh the owner-only local cache")
+    vault_search_index.add_argument("--json", action="store_true")
+    vault_index_remove = vault_commands.add_parser(
+        "search-index-remove", help="Remove the rebuildable local search cache")
+    vault_index_remove.add_argument("--apply", action="store_true")
+    vault_index_remove.add_argument("--json", action="store_true")
     vault_backup = vault_commands.add_parser(
         "backup", help="Create a verified, client-side encrypted conversation backup")
     vault_backup.add_argument("--destination", required=True,
@@ -315,6 +324,35 @@ def main(argv: Optional[List[str]] = None) -> int:
                     print("Active conversations: %d" % result.active_transcripts)
                     print("Archived conversations: %d" % result.archived_transcripts)
                     print("Transcript bytes: %d" % result.transcript_bytes)
+                return 0
+            if args.vault_command == "search-index":
+                from codex_migrate.vault_search_index import build
+                result = build(args.source_home, apply=args.apply)
+                if args.json:
+                    print(json.dumps(result, indent=2, sort_keys=True))
+                else:
+                    print("Conversation files: %d" % result["transcripts"])
+                    if result["applied"]:
+                        print("Indexed or refreshed: %d" % result["indexed"])
+                        if result["skipped"]:
+                            print("Changing conversations left for direct search: %d"
+                                  % result["skipped"])
+                        print("Cache bytes: %d" % result["index_bytes"])
+                        print("Local cache: %s" % result["index"])
+                    else:
+                        print("Planning mode only; add --apply to build the local search cache.")
+                return 0
+            if args.vault_command == "search-index-remove":
+                from codex_migrate.vault_search_index import remove
+                result = remove(args.source_home, apply=args.apply)
+                if args.json:
+                    print(json.dumps(result, indent=2, sort_keys=True))
+                elif result["applied"]:
+                    print("Local search cache removed. Conversations and Vault backups are unchanged.")
+                elif not result["present"]:
+                    print("No local search cache is present.")
+                else:
+                    print("Planning mode only; add --apply to remove the local search cache.")
                 return 0
             if args.vault_command == "backup":
                 from codex_migrate.vault_backup import backup as backup_vault, plan as plan_vault
