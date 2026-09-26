@@ -10,6 +10,7 @@ import base64
 import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import os
 from pathlib import Path
 import plistlib
 import re
@@ -109,9 +110,19 @@ def add_piped_test_token(source):
 
 def add_disposable_source_home(source, home):
     """Keep an operator's real Codex home outside a local-only native test."""
-    value = str(home)
-    if not re.fullmatch(r"/[A-Za-z0-9_./-]+", value) or not home.is_dir():
-        raise ValueError("test source home must be an existing simple absolute path")
+    approved_parents = {Path("/private/tmp").resolve(), Path(tempfile.gettempdir()).resolve()}
+    try:
+        resolved = home.resolve(strict=True)
+    except OSError as error:
+        raise ValueError("test source home must be an existing disposable directory") from error
+    value = str(resolved)
+    if (not re.fullmatch(r"/[A-Za-z0-9_./-]+", value)
+            or resolved.parent not in approved_parents
+            or not resolved.name.startswith("codex-vault-idle.")
+            or not resolved.is_dir()
+            or resolved.stat().st_uid != os.geteuid()
+            or resolved.stat().st_mode & 0o077):
+        raise ValueError("test source home must be an owner-only disposable directory in the OS temp folder")
     if source.count(HELPER_ARGUMENTS) != 1:
         raise ValueError("current helper launch arguments changed")
     return source.replace(HELPER_ARGUMENTS, '        var arguments = ["launch", "--source-home", "'

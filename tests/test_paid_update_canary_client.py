@@ -93,20 +93,26 @@ class PaidUpdateCanaryClientTests(unittest.TestCase):
         self.assertEqual(modified.count("checkForUpdatesInBackground()"), 1)
 
     def test_disposable_source_home_replaces_only_exact_helper_launch(self):
-        with tempfile.TemporaryDirectory(prefix="paid-canary-source-home-") as directory:
+        with tempfile.TemporaryDirectory(prefix="codex-vault-idle.") as directory:
             home = Path(directory)
+            resolved_home = home.resolve()
             source = "before\n" + CANARY.HELPER_ARGUMENTS + "after\n"
             modified = CANARY.add_disposable_source_home(source, home)
             self.assertNotIn(CANARY.HELPER_ARGUMENTS, modified)
-            self.assertIn('"--source-home", "' + str(home) + '"', modified)
-            self.assertIn('"--state-dir", "' + str(home)
+            self.assertIn('"--source-home", "' + str(resolved_home) + '"', modified)
+            self.assertIn('"--state-dir", "' + str(resolved_home)
                           + '/.local/state/codex-migrate-browser"', modified)
             with self.assertRaisesRegex(ValueError, "arguments changed"):
                 CANARY.add_disposable_source_home("no helper launch", home)
             with self.assertRaisesRegex(ValueError, "arguments changed"):
                 CANARY.add_disposable_source_home(source + source, home)
-            with self.assertRaisesRegex(ValueError, "simple absolute path"):
+            with self.assertRaisesRegex(ValueError, "existing disposable directory"):
                 CANARY.add_disposable_source_home(source, home / "not-there")
+            with self.assertRaisesRegex(ValueError, "owner-only disposable directory"):
+                CANARY.add_disposable_source_home(source, Path.home())
+        with tempfile.TemporaryDirectory(prefix="other-source-home.") as directory:
+            with self.assertRaisesRegex(ValueError, "owner-only disposable directory"):
+                CANARY.add_disposable_source_home(source, Path(directory))
 
     def test_only_exact_old_entitlement_lookup_can_read_piped_test_token(self):
         source = "before\n" + CANARY.TOKEN_LOOKUP + "        return nil\n    }\n"
