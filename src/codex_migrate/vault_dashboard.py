@@ -102,6 +102,7 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 <button id="backup" disabled>Create backup + turn on daily backup</button>
 </div>
 <p class="muted retention-note">Existing snapshots are kept. Daily backup is not real-time sync.</p>
+<p class="muted" id="vault-usage" role="status" aria-live="polite" hidden></p>
 <p id="backup-status" role="status" aria-live="polite">
 </p>
 <p id="backup-error" role="alert">
@@ -466,10 +467,11 @@ let backupTimer=null;
 let installRunning=false;
 let verifiedBackup=false;
 let pendingAutomaticBackup=false;
+let lastSizedSnapshot="";
 function storageView(storage){const panel=$("storage-assessment");if(!storage){panel.hidden=true;return}panel.hidden=false;panel.className="storage-assessment "+storage.kind;$("storage-heading").textContent=storage.heading;$("storage-detail").textContent=storage.detail}
 async function refreshStorage(path){if(!path){storageView(null);return}try{storageView(await api("/api/vault/storage?path="+encodeURIComponent(path)))}catch(error){storageView({kind:"external_or_network",heading:"Storage protection unverified",detail:"Codex Migrate could not classify this location. Confirm how it is backed up before relying on it after loss of the Mac."})}}
 function backupFrequencyView(){const daily=$("backup-frequency-daily").checked;$("backup").textContent=daily?"Create backup + turn on daily backup":"Create encrypted backup"}
-function backupView(data){const running=data.status==="running";if(data.storage)storageView(data.storage);if(data.destination&&!$("vault-folder").value){$("vault-folder").value=data.destination;if(!data.storage)refreshStorage(data.destination)}if(data.destination&&!$("restore-vault").value){$("restore-vault").value=data.destination;refreshSnapshots()}verifiedBackup=["completed","needs_attention"].includes(data.status)&&!data.recovery_key;$("choose-vault").disabled=running||installRunning;$("backup-frequency-daily").disabled=running||installRunning||scheduleEnabled;$("backup-frequency-manual").disabled=running||installRunning||scheduleEnabled;$("backup").disabled=running||installRunning||!$("vault-folder").value||Boolean(data.recovery_key);$("backup-error").textContent=data.status==="failed"?(data.error||"Encrypted backup stopped safely."):"";if(running){const files=`${data.completed_files||0} of ${data.total_files||0} files`;const bytes=data.total_bytes?` · ${Math.round(100*(data.completed_bytes||0)/data.total_bytes)}% of ${fmt(data.total_bytes)}`:"";$("backup-status").textContent="Encrypting and verifying… "+files+bytes}else if(data.status==="completed"){$("backup-status").textContent=`Verified snapshot complete · ${data.transcript_files.toLocaleString()} files · ${fmt(data.transcript_bytes)}`}else if(data.status==="needs_attention"){$("backup-status").textContent=`Verified snapshot saved, but ${data.at_risk_threads} conversation${data.at_risk_threads===1?"":"s"} may have lost content. Open an earlier saved version for review.`}else if(data.status==="failed"){$("backup-status").textContent=""}else{$("backup-status").textContent="No backup is running."}if(data.recovery_key){$("recovery-key").value=data.recovery_key;$("recovery").hidden=false}else{$("recovery-key").value="";$("recovery").hidden=true}if(running&&!backupTimer)backupTimer=setInterval(refreshBackup,1500);if(!running&&backupTimer){clearInterval(backupTimer);backupTimer=null}refreshScheduleButton();refreshRestoreButton();if(verifiedBackup&&data.status!=="needs_attention"&&pendingAutomaticBackup&&!scheduleEnabled)void enableRequestedSchedule()}
+function backupView(data){const running=data.status==="running";if(data.storage)storageView(data.storage);if(data.destination&&!$("vault-folder").value){$("vault-folder").value=data.destination;if(!data.storage)refreshStorage(data.destination)}if(data.destination&&!$("restore-vault").value){$("restore-vault").value=data.destination;refreshSnapshots()}verifiedBackup=["completed","needs_attention"].includes(data.status)&&!data.recovery_key;$("choose-vault").disabled=running||installRunning;$("backup-frequency-daily").disabled=running||installRunning||scheduleEnabled;$("backup-frequency-manual").disabled=running||installRunning||scheduleEnabled;$("backup").disabled=running||installRunning||!$("vault-folder").value||Boolean(data.recovery_key);$("backup-error").textContent=data.status==="failed"?(data.error||"Encrypted backup stopped safely."):"";if(running){const files=`${data.completed_files||0} of ${data.total_files||0} files`;const bytes=data.total_bytes?` · ${Math.round(100*(data.completed_bytes||0)/data.total_bytes)}% of ${fmt(data.total_bytes)}`:"";$("backup-status").textContent="Encrypting and verifying… "+files+bytes}else if(data.status==="completed"){$("backup-status").textContent=`Verified snapshot complete · ${data.transcript_files.toLocaleString()} files · ${fmt(data.transcript_bytes)}`}else if(data.status==="needs_attention"){$("backup-status").textContent=`Verified snapshot saved, but ${data.at_risk_threads} conversation${data.at_risk_threads===1?"":"s"} may have lost content. Open an earlier saved version for review.`}else if(data.status==="failed"){$("backup-status").textContent=""}else{$("backup-status").textContent="No backup is running."}if(data.recovery_key){$("recovery-key").value=data.recovery_key;$("recovery").hidden=false}else{$("recovery-key").value="";$("recovery").hidden=true}if(running&&!backupTimer)backupTimer=setInterval(refreshBackup,1500);if(!running&&backupTimer){clearInterval(backupTimer);backupTimer=null}if(data.snapshot_id&&["completed","needs_attention"].includes(data.status)&&data.snapshot_id!==lastSizedSnapshot){lastSizedSnapshot=data.snapshot_id;if(data.destination){$("restore-vault").value=data.destination;void refreshSnapshots()}}refreshScheduleButton();refreshRestoreButton();if(verifiedBackup&&data.status!=="needs_attention"&&pendingAutomaticBackup&&!scheduleEnabled)void enableRequestedSchedule()}
 async function refreshBackup(){try{backupView(await api("/api/vault/backup-status"))}catch(error){$("backup-error").textContent=error.message}}
 $("choose-vault").onclick=async()=>{try{$("backup-error").textContent="";const result=await api("/api/vault/folder",{});if(result.path){$("vault-folder").value=result.path;$("restore-vault").value=result.path;storageView(result.storage);verifiedBackup=false;$("backup").disabled=false;$("backup-status").textContent="Folder selected. Review its protection, then create the backup when ready.";refreshScheduleButton();await refreshSnapshots()}}catch(error){$("backup-error").textContent=error.message}};
 $("backup-frequency-daily").onchange=backupFrequencyView;
@@ -489,7 +491,41 @@ let restoreTimer=null;
 let browseRunning=false;
 let selectedRecoveryRunning=false;
 function refreshRestoreButton(){const chosen=$("restore-vault").value&&$("restore-snapshot").value;$("browse-backup").disabled=installRunning||browseRunning||selectedRecoveryRunning||!chosen;$("restore").disabled=installRunning||browseRunning||selectedRecoveryRunning||!chosen||!$("restore-output").value;$("install").disabled=installRunning||browseRunning||selectedRecoveryRunning||!chosen}
-async function refreshSnapshots(){const vault=$("restore-vault").value;const select=$("restore-snapshot");const selected=select.dataset.requested||select.value;select.dataset.ready="";select.disabled=true;select.replaceChildren(new Option(vault?"Loading backup history…":"Choose a Vault to see backups",""));refreshRestoreButton();if(!vault)return;try{const data=await api("/api/vault/snapshots?vault="+encodeURIComponent(vault));if(!data.snapshots.length){select.replaceChildren(new Option("No published backups found",""));return}select.replaceChildren(...data.snapshots.map(item=>{const when=new Date(item.created_at);const label=(Number.isNaN(when.getTime())?item.created_at:when.toLocaleString())+(item.latest?" · Latest":"");return new Option(label,item.snapshot_id)}));if(selected&&[...select.options].some(option=>option.value===selected))select.value=selected;select.dataset.ready="true";select.disabled=false;$("restore-error").textContent=""}catch(error){select.replaceChildren(new Option("Backup history unavailable",""));$("restore-error").textContent=error.message}finally{refreshRestoreButton()}}
+async function refreshSnapshots(){
+  const vault=$("restore-vault").value;
+  const select=$("restore-snapshot");
+  const usage=$("vault-usage");
+  const selected=select.dataset.requested||select.value;
+  select.dataset.ready="";
+  select.disabled=true;
+  select.replaceChildren(new Option(vault?"Loading backup history…":"Choose a Vault to see backups",""));
+  usage.hidden=!vault;
+  usage.textContent=vault?"Measuring saved Vault files…":"";
+  refreshRestoreButton();
+  if(!vault)return;
+  try{
+    const data=await api("/api/vault/snapshots?vault="+encodeURIComponent(vault));
+    if($("restore-vault").value!==vault)return;
+    usage.textContent=Number.isSafeInteger(data.storage_bytes)&&data.storage_bytes>=0
+      ?`Vault files: ${fmt(data.storage_bytes)} · ${data.snapshots.length>=1000?"at least ":""}${data.snapshots.length.toLocaleString()} saved ${data.snapshots.length===1?"version":"versions"}.`
+      :"Saved Vault size unavailable. Your backup versions remain accessible.";
+    if(!data.snapshots.length){select.replaceChildren(new Option("No published backups found",""));return}
+    select.replaceChildren(...data.snapshots.map(item=>{
+      const when=new Date(item.created_at);
+      const label=(Number.isNaN(when.getTime())?item.created_at:when.toLocaleString())+(item.latest?" · Latest":"");
+      return new Option(label,item.snapshot_id)
+    }));
+    if(selected&&[...select.options].some(option=>option.value===selected))select.value=selected;
+    select.dataset.ready="true";
+    select.disabled=false;
+    $("restore-error").textContent="";
+  }catch(error){
+    if($("restore-vault").value!==vault)return;
+    select.replaceChildren(new Option("Backup history unavailable",""));
+    usage.textContent="Saved Vault size unavailable. Existing backups were not changed.";
+    $("restore-error").textContent=error.message;
+  }finally{refreshRestoreButton()}
+}
 function restoreView(data){const running=data.status==="running";if(data.snapshot||data.snapshot_id)$("restore-snapshot").dataset.requested=data.snapshot||data.snapshot_id;if(data.vault&&!$("restore-vault").value){$("restore-vault").value=data.vault;refreshSnapshots()}if(data.output&&!$("restore-output").value)$("restore-output").value=data.output;$("choose-restore-vault").disabled=running||installRunning;$("choose-restore-output").disabled=running||installRunning;$("restore-snapshot").disabled=running||installRunning||$("restore-snapshot").dataset.ready!=="true";$("restore").disabled=running||installRunning||!$("restore-vault").value||!$("restore-snapshot").value||!$("restore-output").value;$("restore-error").textContent=data.status==="failed"?(data.error||"Recovery stopped safely."):"";if(running){$("restore-status").textContent="Verifying and recovering the selected backup…"}else if(data.status==="completed"){$("restore-status").textContent=`Recovered copy ready · ${data.transcript_files.toLocaleString()} files · ${fmt(data.transcript_bytes)}`}else if(data.status==="failed"){$("restore-status").textContent=""}else{$("restore-status").textContent="No recovery is running."}if(running&&!restoreTimer)restoreTimer=setInterval(refreshRestore,1500);if(!running&&restoreTimer){clearInterval(restoreTimer);restoreTimer=null}}
 async function refreshRestore(){try{restoreView(await api("/api/vault/restore-status"))}catch(error){$("restore-error").textContent=error.message}}
 $("choose-restore-vault").onclick=async()=>{try{$("restore-error").textContent="";const result=await api("/api/vault/folder",{});if(result.path){$("restore-vault").value=result.path;await refreshSnapshots()}}catch(error){$("restore-error").textContent=error.message}};

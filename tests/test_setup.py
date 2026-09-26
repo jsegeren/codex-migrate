@@ -23,6 +23,10 @@ from codex_migrate.vault_search_index import IndexCancelled, supported as search
 class SetupTests(unittest.TestCase):
     def test_backup_preflight_shows_source_size_and_conservative_compression_guidance(self):
         self.assertIn('id="backup-footprint"', VAULT_HTML)
+        self.assertIn('id="vault-usage"', VAULT_HTML)
+        self.assertIn('Vault files:', VAULT_HTML)
+        self.assertIn('data.snapshots.length>=1000?"at least ":""', VAULT_HTML)
+        self.assertIn('saved ${data.snapshots.length===1?', VAULT_HTML)
         self.assertIn('fmt(data.transcript_bytes)', VAULT_HTML)
         self.assertIn('Vault compresses new backup data when useful', VAULT_HTML)
         self.assertIn('Keep space for the full source size plus overhead', VAULT_HTML)
@@ -503,13 +507,25 @@ class SetupTests(unittest.TestCase):
             created_at="2026-09-18T06:00:00+00:00", latest=True,
         )
         with patch("codex_migrate.setup.list_vault_snapshots",
-                   return_value=[snapshot]) as listed:
+                   return_value=[snapshot]) as listed, patch(
+                       "codex_migrate.setup.vault_storage_usage",
+                       return_value={"storage_bytes": 8192, "storage_files": 4}) as usage:
             code, body = self.request(
                 "/api/vault/snapshots?vault=" + vault)
         self.assertEqual(code, 200)
-        self.assertEqual(body, {"snapshots": [snapshot.as_dict()]})
+        self.assertEqual(body, {"snapshots": [snapshot.as_dict()],
+                                "storage_bytes": 8192, "storage_files": 4})
         listed.assert_called_once_with(vault, limit=1000)
+        usage.assert_called_once_with(vault)
         self.assertNotIn("content", json.dumps(body).lower())
+
+        with patch("codex_migrate.setup.list_vault_snapshots", return_value=[snapshot]), patch(
+                "codex_migrate.setup.vault_storage_usage",
+                side_effect=MigrationError("Storage size cannot be measured")):
+            code, body = self.request("/api/vault/snapshots?vault=" + vault)
+        self.assertEqual(code, 200)
+        self.assertEqual(body["snapshots"], [snapshot.as_dict()])
+        self.assertIsNone(body["storage_bytes"])
 
     def test_vault_backup_waits_for_active_restore(self):
         vault = str(self.home / "vault")

@@ -247,6 +247,49 @@ def list_snapshots(vault: str, *, limit: int = 100) -> List[SnapshotInfo]:
     return history[:limit]
 
 
+def vault_storage_usage(vault: str) -> Dict[str, int]:
+    """Count logical file bytes without reading Vault content or following links.
+
+    This is a folder-size report, not an estimate of APFS allocation or of a
+    cloud provider's off-device usage. A backup may change the count mid-scan.
+    """
+    root = _vault_root(vault)
+    files = 0
+    total = 0
+
+    def count(directory_fd: int, depth: int) -> None:
+        nonlocal files, total
+        if depth > 16:
+            raise MigrationError("The Vault folder is too deeply nested to measure safely.")
+        with os.scandir(directory_fd) as entries:
+            for entry in entries:
+                info = os.stat(entry.name, dir_fd=directory_fd, follow_symlinks=False)
+                if stat.S_ISDIR(info.st_mode):
+                    child = os.open(entry.name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                                    dir_fd=directory_fd)
+                    try:
+                        count(child, depth + 1)
+                    finally:
+                        os.close(child)
+                elif stat.S_ISREG(info.st_mode):
+                    files += 1
+                    total += info.st_size
+                    if files > 200000:
+                        raise MigrationError("The Vault contains too many files to measure safely.")
+                else:
+                    raise MigrationError("The Vault contains an unsupported storage entry.")
+
+    try:
+        descriptor = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            count(descriptor, 0)
+        finally:
+            os.close(descriptor)
+    except OSError as error:
+        raise MigrationError("The Vault storage size could not be measured safely.") from error
+    return {"storage_bytes": total, "storage_files": files}
+
+
 def _restore_output(source_home: str, vault: Path, output: str) -> Path:
     destination = Path(output).expanduser()
     if not destination.is_absolute():
