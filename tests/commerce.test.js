@@ -16,13 +16,17 @@ const env = { COMMERCE_MODE: 'sandbox', COMMERCE_STRIPE_KEY: 'rk_test_fixture', 
   COMMERCE_STRIPE_ACCOUNT: 'acct_fixture', COMMERCE_PRODUCT: 'prod_fixture', COMMERCE_PRICE: 'price_fixture',
   COMMERCE_WEBHOOK_SECRET: 'whsec_fixture', COMMERCE_RELEASE: release.id, COMMERCE_BLOB_STORE_ID: 'fixturestore' };
 const config = configuration(env, { [release.id]: release });
-test('current paid-update canary cannot become the live release', () => {
-  const candidate = require('../commerce/releases.json')['codex-migrate-0.1.0-build17-abort-guard-arm64'];
-  assert.equal(candidate.testingOnly, true);
-  assert.equal(candidate.accepted, false);
-  assert.equal(validRelease(candidate, false), true);
-  assert.equal(validRelease(candidate, true), false);
-  assert.equal(configuration({ ...env, COMMERCE_RELEASE: candidate.id }).release.id, candidate.id);
+test('unaccepted paid-update canaries cannot become the live release', () => {
+  const releases = require('../commerce/releases.json');
+  for (const id of ['codex-migrate-0.1.0-build17-abort-guard-arm64',
+    'codex-migrate-build18-vault-integrated-arm64']) {
+    const candidate = releases[id];
+    assert.equal(candidate.testingOnly, true);
+    assert.equal(candidate.accepted, false);
+    assert.equal(validRelease(candidate, false), true);
+    assert.equal(validRelease(candidate, true), false);
+    assert.equal(configuration({ ...env, COMMERCE_RELEASE: candidate.id }).release.id, candidate.id);
+  }
 });
 const signDownload = async r => ({ url: `https://fixturestore.private.blob.vercel-storage.com/${r.pathname}?fixture=1`, expiresAt: Date.now() + 300000, expiresInMs: 300000 });
 function fixture() {
