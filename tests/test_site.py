@@ -446,6 +446,8 @@ class SiteTests(unittest.TestCase):
         self.assertIn("30-day refund policy", text)
         self.assertIn('src="/assets/codex-vault-demo-build14-poster.jpg"', source)
         self.assertIn("daily automatic backup selected by default", source)
+        self.assertIn("The current Mac beta is signed", source)
+        self.assertNotIn("Build 14 is signed", source)
         self.assertTrue((SITE / "assets" / "codex-vault-demo-build14-poster.jpg").is_file())
 
     def test_comparison_guide_is_disclosed_and_fair(self):
