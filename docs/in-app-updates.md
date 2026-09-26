@@ -456,5 +456,41 @@ disposable client moved to Trash. All four temporary Production canary
 variables were removed and Production was redeployed without them. The paid
 token again received 403 on the canary route while its ordinary purchase link
 still selected build 16; anonymous canary access remained 403 and the public
-appcast remained build 16. Native paid install/relaunch, busy-operation
-deferral, and clean buyer-account acceptance are still release gates.
+appcast remained build 16. The subsequent paid native test is recorded below;
+unmodified buyer-client installation, busy-operation deferral, and clean
+buyer-account acceptance remain release gates.
+
+### Build 18 paid native install-on-quit — September 26, 2026
+
+A second bounded Production canary selected only the same testing-only build-18
+catalog entry, its exact SHA-256, and the already-paid Founder purchase. The
+public appcast continued to advertise build 16; an anonymous canary request
+returned 403. The paid canary route returned 200 and the exact 11,228,811-byte
+notarized DMG with SHA-256
+`e4ef0890fc2b64bd09177e95fc2aebaf38ba9505a584a31c70afeb9b037df9d7`.
+
+The disposable, locally re-signed build-16 client used three test-only hooks:
+it read that purchase token from closed stdin rather than Keychain, added the
+exact canary header, and requested one background update check. It was not a
+shipped buyer client. Sparkle started its Autoupdate and Updater processes.
+While the app remained open its bundle was still build 16. A normal macOS
+Quit cleanly stopped the app and helper; Sparkle then replaced the disposable
+bundle in place with build 18. The installed bundle embedded exact source
+`d421c462831b362df71b89e5a6fcb03f94d108d9`, passed strict code-signature
+verification, and Gatekeeper accepted it as Notarized Developer ID. It did not
+relaunch automatically after the user-requested Quit. Opening that installed
+copy explicitly started one build-18 app and one healthy packaged helper with
+`--resume-after-update-build 18`; its protected `/api/update-idle` returned
+200 with `idle: true`. A normal Quit stopped both processes.
+
+All four temporary canary variables were removed and Production was redeployed
+without them. The paid token again received 403 on the canary route; its
+ordinary update-archive route returned the exact 9,591,579-byte build-16 ZIP
+with SHA-256
+`60eff4dcb07088d01c966587e808f21d5fa74b8afb4eba45ed326543f07241f7`.
+Anonymous canary access remained 403 and the public appcast remained build 16.
+The loopback feed stopped. This proves the modified-client paid native download
+and install-on-quit handoff plus first open of the installed build, **not**
+an unmodified buyer-client install, unattended install/relaunch while the app
+stays open, busy-operation retry, or clean buyer-account acceptance. The test
+copy was not installed in `/Applications`, and build 18 remains unaccepted.

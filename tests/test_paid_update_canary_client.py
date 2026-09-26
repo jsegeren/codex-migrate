@@ -81,6 +81,12 @@ class PaidUpdateCanaryClientTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             CANARY.add_background_check(modified)
 
+    def test_paid_client_can_add_header_and_one_background_check(self):
+        source = CANARY.HELPER_START + "before\n        " + CANARY.HEADER_HOOK + "\n"
+        modified = CANARY.add_background_check(CANARY.add_canary_header(source))
+        self.assertEqual(modified.count("X-Codex-Migrate-Canary"), 1)
+        self.assertEqual(modified.count("checkForUpdatesInBackground()"), 1)
+
     def test_only_exact_old_entitlement_lookup_can_read_piped_test_token(self):
         source = "before\n" + CANARY.TOKEN_LOOKUP + "        return nil\n    }\n"
         modified = CANARY.add_piped_test_token(source)

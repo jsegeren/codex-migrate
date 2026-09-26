@@ -166,7 +166,9 @@ def prepare(output, port, identity, local_archive=False, current_app=None):
                 ["git", "show", f"{CURRENT_SOURCE if current_app else OLD_SOURCE}:desktop/{filename}"],
                 cwd=ROOT, text=True)
             if filename == "CodexMigrate.swift":
-                source = add_background_check(source if local_archive else add_canary_header(source))
+                if not local_archive:
+                    source = add_canary_header(source)
+                source = add_background_check(source)
             elif filename == "UpdateEntitlement.swift":
                 source = add_piped_test_token(source)
             path = Path(scratch) / filename
