@@ -1185,3 +1185,16 @@ unloaded its temporary LaunchAgent, and the DMG was detached. Neither test
 accessed the Founder's real Codex home or constituted a paid Sparkle bundle
 replacement while busy. The second Mac's scheduled-backup receipt and the
 unmodified buyer flow remain open.
+
+The same image then passed a **local-only native Quit** Sparkle smoke from a
+disposable, Developer ID re-signed copy of the archived build-16 app. A
+loopback appcast and archive server offered only the digest-verified DMG; a
+synthetic format-valid token came from stdin and no Production canary or
+Keychain entitlement was involved. The app staged the image, a real Apple
+Quit event stopped its helper, and Sparkle installed build 17 in place. The
+installed source receipt, strict code signature and Gatekeeper check passed.
+It did not relaunch after that user Quit; build 16 does not have the new
+automatic-idle path. The loopback server, test app and test output were
+removed or moved to Trash, and the original developer app was reopened.
+This closes only the local old-client native Quit check, not the unmodified
+paid-client or automatic idle/relaunch release gates.

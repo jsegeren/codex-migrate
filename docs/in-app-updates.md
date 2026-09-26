@@ -213,7 +213,7 @@ higher build number.
   the test helper was stopped, the disposable app was moved to Trash, and the
   original developer app was reopened. No token or session ID is recorded here.
 - **Release gate remains closed.** The unmodified buyer-client purchase-link
-  flow, native menu Quit handoff, automatic idle install and relaunch,
+  flow, paid native Quit handoff, automatic idle install and relaunch,
   busy-operation deferral/retry,
   adverse-path injections, clean-account first install, and scheduled-backup
   receipts on both Macs still require physical acceptance. Build 17 remains
@@ -222,6 +222,28 @@ higher build number.
   restore contention and a real scheduled-backup/updater-guard interaction on
   this Mac using disposable histories. Those checks do not replace the
   full-app Sparkle test during a busy operation or the second-Mac schedule run.
+
+### Local-only native Quit check with the exact provisioned image
+
+The canary harness also supports `--local-archive`: it verifies the exact DMG
+digest, serves that image only from `127.0.0.1`, and builds a disposable
+Developer ID re-signed copy of the archived build-16 client. The test uses a
+synthetic, format-valid purchase token passed through stdin; it does not call
+Production's archive route, create a Keychain entitlement, or require a
+Production canary. Its loopback appcast retains the exact Sparkle signature.
+
+On September 25, this local-only build-16 app downloaded and staged the exact
+provisioned build-17 DMG. It remained on build 16 while open. A native Apple
+Quit event, rather than `SIGTERM`, caused its helper to exit and Sparkle to
+replace the app in `/Applications`. The installed app reported build 17 and
+embedded source `1fdf640`; strict code-signature verification passed and
+Gatekeeper accepted it as Notarized Developer ID. It did not relaunch after
+that user-requested Quit. The archived build-16 client does not have build
+17's automatic-idle installation code, so this test cannot prove or disprove
+that newer path. The loopback server was stopped, the disposable app and build
+output were moved to Trash, and the original developer app was reopened.
+The unmodified buyer purchase-link, Production paid native Quit, idle automatic
+install/relaunch and busy-operation full replacement gates remain open.
 
 ## Build 16 physical update receipt — September 23, 2026
 

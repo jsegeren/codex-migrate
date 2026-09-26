@@ -11,6 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
 import plistlib
+import shutil
 import subprocess
 import tempfile
 
@@ -60,7 +61,7 @@ def canary():
     return selected
 
 
-def appcast_xml(selected):
+def appcast_xml(selected, archive_url="https://migrate.segeren.com/api/update-archive"):
     return (f'<?xml version="1.0" encoding="UTF-8"?>\n'
             '<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">'
             '<channel><title>Codex Migrate private canary</title>'
@@ -69,7 +70,7 @@ def appcast_xml(selected):
             '<sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>'
             '<sparkle:minimumSystemVersion>13.0.0</sparkle:minimumSystemVersion>'
             '<sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>'
-            '<enclosure url="https://migrate.segeren.com/api/update-archive" '
+            f'<enclosure url="{archive_url}" '
             f'sparkle:edSignature="{selected["sparkleSignature"]}" '
             f'length="{selected["size"]}" type="application/x-apple-diskimage"/>'
             '</item></channel></rss>\n').encode()
@@ -100,7 +101,7 @@ def add_piped_test_token(source):
     return source.replace(TOKEN_LOOKUP, CANARY_TOKEN_LOOKUP)
 
 
-def prepare(output, port, identity):
+def prepare(output, port, identity, local_archive=False):
     selected = canary()
     if output.exists() or output.is_symlink() or output.parent.resolve() != (ROOT / "build").resolve():
         raise ValueError("output must be a new direct child of build/")
@@ -136,7 +137,7 @@ def prepare(output, port, identity):
             source = subprocess.check_output(
                 ["git", "show", f"{OLD_SOURCE}:desktop/{filename}"], cwd=ROOT, text=True)
             if filename == "CodexMigrate.swift":
-                source = add_background_check(add_canary_header(source))
+                source = add_background_check(source if local_archive else add_canary_header(source))
             elif filename == "UpdateEntitlement.swift":
                 source = add_piped_test_token(source)
             path = Path(scratch) / filename
@@ -153,14 +154,29 @@ def prepare(output, port, identity):
     if signed_info["CFBundleVersion"] != "16" or signed_info["SUFeedURL"] != f"http://127.0.0.1:{port}/appcast":
         raise ValueError("test client build/feed verification failed")
     print("Prepared disposable signed canary client:", app)
-    print("Candidate:", selected["id"], "(sandbox-only; public release unchanged)")
+    print("Candidate:", selected["id"], "(local archive)" if local_archive else
+          "(sandbox-only; public release unchanged)")
 
 
-def serve(port):
-    xml = appcast_xml(canary())
+def serve(port, local_archive=False):
+    selected = canary()
+    if local_archive and (CANDIDATE_DMG.stat().st_size != selected["size"] or
+                          hashlib.sha256(CANDIDATE_DMG.read_bytes()).hexdigest() != selected["sha256"]):
+        raise ValueError("local DMG does not match the exact sandbox candidate")
+    xml = appcast_xml(selected, f"http://127.0.0.1:{port}/archive" if local_archive else
+                      "https://migrate.segeren.com/api/update-archive")
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
+            if self.path == "/archive" and local_archive:
+                self.send_response(200)
+                self.send_header("Content-Type", "application/x-apple-diskimage")
+                self.send_header("Content-Length", str(selected["size"]))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                with CANDIDATE_DMG.open("rb") as archive:
+                    shutil.copyfileobj(archive, self.wfile)
+                return
             if self.path != "/appcast":
                 self.send_error(404)
                 return
@@ -190,11 +206,13 @@ def main():
     parser.add_argument("--port", type=int, default=8898)
     parser.add_argument("--output", type=Path, default=ROOT / "build/paid-update-canary-client")
     parser.add_argument("--identity", default="Developer ID Application: Joshua Segeren (P9J3JK79KQ)")
+    parser.add_argument("--local-archive", action="store_true",
+                        help="serve exact local DMG without any Production canary or paid credential")
     args = parser.parse_args()
     if args.command == "prepare":
-        prepare(args.output, args.port, args.identity)
+        prepare(args.output, args.port, args.identity, args.local_archive)
     else:
-        serve(args.port)
+        serve(args.port, args.local_archive)
 
 
 if __name__ == "__main__":

@@ -30,6 +30,16 @@ class PaidUpdateCanaryClientTests(unittest.TestCase):
         self.assertIs(selected["testingOnly"], True)
         self.assertIs(selected["accepted"], False)
 
+    def test_local_appcast_uses_only_loopback_archive_with_same_signature(self):
+        selected = CANARY.canary()
+        root = ElementTree.fromstring(CANARY.appcast_xml(
+            selected, "http://127.0.0.1:8898/archive"))
+        enclosure = root.find("channel/item/enclosure")
+        self.assertEqual(enclosure.get("url"), "http://127.0.0.1:8898/archive")
+        self.assertEqual(enclosure.get("length"), str(selected["size"]))
+        self.assertEqual(enclosure.get("{http://www.andymatuschak.org/xml-namespaces/sparkle}edSignature"),
+                         selected["sparkleSignature"])
+
     def test_only_exact_old_request_hook_can_gain_canary_header(self):
         source = "before\n        " + CANARY.HEADER_HOOK + "\nafter\n"
         modified = CANARY.add_canary_header(source)
