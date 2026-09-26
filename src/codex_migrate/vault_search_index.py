@@ -212,6 +212,8 @@ def _add_file(connection: sqlite3.Connection, collection: str,
                       after.st_mtime_ns, after.st_ctime_ns) or before != _source_stamp(path):
             raise SourceChanged("A conversation changed while it was being indexed.")
         flush()
+    except FileNotFoundError as error:
+        raise SourceChanged("A conversation moved while it was being indexed.") from error
     except OSError as error:
         raise MigrationError("A conversation could not be indexed safely.") from error
     return blocks
