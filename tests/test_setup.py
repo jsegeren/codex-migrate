@@ -21,11 +21,11 @@ from codex_migrate.vault_search_index import IndexCancelled, supported as search
 
 
 class SetupTests(unittest.TestCase):
-    def test_backup_preflight_shows_exact_history_size_without_claiming_compression(self):
+    def test_backup_preflight_shows_source_size_and_conservative_compression_guidance(self):
         self.assertIn('id="backup-footprint"', VAULT_HTML)
         self.assertIn('fmt(data.transcript_bytes)', VAULT_HTML)
-        self.assertIn('Current Vault does not compress', VAULT_HTML)
-        self.assertIn('the first backup needs roughly this much free space', VAULT_HTML)
+        self.assertIn('Vault compresses new backup data when useful', VAULT_HTML)
+        self.assertIn('Keep space for the full source size plus overhead', VAULT_HTML)
 
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
