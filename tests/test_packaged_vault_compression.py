@@ -47,6 +47,8 @@ class PackagedVaultCompressionTests(unittest.TestCase):
         resources = app / "Contents/Resources"
         engine = resources / "engine/codex-migrate-engine"
         helper = resources / "CodexVaultCrypto"
+        if not helper.is_file():
+            helper = app / "Contents/Helpers/CodexVaultCrypto.app/Contents/MacOS/CodexVaultCrypto"
         self.assertTrue(engine.is_file() and helper.is_file())
         with tempfile.TemporaryDirectory(prefix="vault-package-test-") as temporary:
             root = Path(temporary)
