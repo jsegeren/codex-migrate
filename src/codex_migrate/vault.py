@@ -544,11 +544,12 @@ def markdown_chunks(source_home: str, collection: str, transcript: str):
     must keep that copy alive until the iterator is exhausted.
     """
     path = _find_transcript(source_home, collection, transcript)
+    segments = _lineage_segments(source_home, path)
     header = "# Codex conversation\n\n- Collection: %s\n- Transcript: `%s`\n\n" % (
         collection, transcript.replace("`", "\\`"))
     yield header.encode("utf-8")
     index = 0
-    for record, _, _ in _lineage_records(_lineage_segments(source_home, path), stable=True):
+    for record, _, _ in _lineage_records(segments, stable=True):
         seen = set()
         for body in _strings(record):
             if body in seen:

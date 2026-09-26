@@ -328,6 +328,8 @@ class VaultTests(unittest.TestCase):
                     "end_ordinal_exclusive": 1, "end_byte_offset": 3}}}) + "\n")
             with self.assertRaisesRegex(MigrationError, "parent is missing"):
                 read_thread(str(root), "active", child.name)
+            with self.assertRaisesRegex(MigrationError, "parent is missing"):
+                next(markdown_chunks(str(root), "active", child.name))
             parent = active / ("rollout-" + parent_id + ".jsonl")
             parent.write_text(json.dumps({"type": "session_meta", "payload": {
                 "id": parent_id}}) + "\n", encoding="utf-8")
