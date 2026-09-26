@@ -89,6 +89,12 @@ The harness requires a local byte-verified copy of the archived live build-16
 ZIP at `build/live-build16/` and the exact notarized DMG in the candidate
 build directory. The test-only catalog entry must be deployed before the
 Production canary can select it; a private Blob upload alone is insufficient.
+`--test-source-home` isolates only the disposable app's **pre-update** helper.
+Sparkle relaunches the unmodified candidate in the macOS account's real home;
+therefore run this local test only in a separate account without existing Codex
+history. The generated wrapper now refuses to start Sparkle when that account
+already has a `.codex` directory. A temporary `HOME` environment variable is
+not account isolation and must not be used to claim a safe post-update test.
 This build-18 candidate has passed signing, notarization, a packaged synthetic
 Vault backup and exact-byte restore, and read-only second-Mac signature and
 Gatekeeper checks. Its loopback feed served the exact signed DMG. Those checks
@@ -624,3 +630,22 @@ item and temporary data, and the read-only DMG was detached. The Founder's
 Codex history and Vault schedules were not used. This proves the exact
 packaged helper's busy-operation boundary, not the native app's automatic
 retry, an unmodified paid-client upgrade, or clean-account acceptance.
+
+### Build 19 signed-wrapper isolation finding — September 26, 2026
+
+An additional Developer ID-signed disposable build-16 wrapper fetched the
+loopback appcast and the exact build-19 DMG, installed build 19 without a
+manual Quit, and relaunched one app and helper. The installed source receipt,
+strict code signature, and Notarized Developer ID Gatekeeper check passed.
+However, the test wrapper was launched with a temporary `HOME`, and the
+unmodified app relaunched by Sparkle used the real macOS account home for its
+helper. A process-file check showed the helper holding the real account's
+Codex Migrate state lock, while the pre-update marker remained in the
+temporary home. The relaunched test app was immediately quit; its app and
+helper exited, the loopback feed stopped, and the disposable app and temporary
+home were moved to Trash. The original developer app was reopened. No backup,
+restore, migration, or source-history write was requested during this probe.
+This is **not** an isolated native retry or customer-data acceptance test. The
+test harness now refuses this mode when the account has existing `.codex`
+history; the remaining native update gates require a dedicated macOS test
+account, not only a temporary source path.

@@ -96,12 +96,15 @@ class PaidUpdateCanaryClientTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="codex-vault-idle.") as directory:
             home = Path(directory)
             resolved_home = home.resolve()
-            source = "before\n" + CANARY.HELPER_ARGUMENTS + "after\n"
+            source = "before\n" + CANARY.HELPER_START + CANARY.HELPER_ARGUMENTS + "after\n"
             modified = CANARY.add_disposable_source_home(source, home)
             self.assertNotIn(CANARY.HELPER_ARGUMENTS, modified)
             self.assertIn('"--source-home", "' + str(resolved_home) + '"', modified)
             self.assertIn('"--state-dir", "' + str(resolved_home)
                           + '/.local/state/codex-migrate-browser"', modified)
+            self.assertIn('FileManager.default.homeDirectoryForCurrentUser', modified)
+            self.assertIn('Run this update test in a separate macOS account', modified)
+            self.assertEqual(modified.count(CANARY.HELPER_START), 1)
             with self.assertRaisesRegex(ValueError, "arguments changed"):
                 CANARY.add_disposable_source_home("no helper launch", home)
             with self.assertRaisesRegex(ValueError, "arguments changed"):

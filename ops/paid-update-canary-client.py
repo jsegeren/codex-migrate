@@ -109,7 +109,11 @@ def add_piped_test_token(source):
 
 
 def add_disposable_source_home(source, home):
-    """Keep an operator's real Codex home outside a local-only native test."""
+    """Isolate the test helper before replacement; require a clean OS account.
+
+    Sparkle relaunches the unmodified candidate after replacement, so its
+    helper uses the macOS account home rather than this temporary directory.
+    """
     approved_parents = {Path("/private/tmp").resolve(), Path(tempfile.gettempdir()).resolve()}
     try:
         resolved = home.resolve(strict=True)
@@ -123,11 +127,21 @@ def add_disposable_source_home(source, home):
             or resolved.stat().st_uid != os.geteuid()
             or resolved.stat().st_mode & 0o077):
         raise ValueError("test source home must be an owner-only disposable directory in the OS temp folder")
-    if source.count(HELPER_ARGUMENTS) != 1:
+    if source.count(HELPER_ARGUMENTS) != 1 or source.count(HELPER_START) != 1:
         raise ValueError("current helper launch arguments changed")
-    return source.replace(HELPER_ARGUMENTS, '        var arguments = ["launch", "--source-home", "'
-                          + value + '", "--state-dir", "' + value
-                          + '/.local/state/codex-migrate-browser", "--port", "0", "--no-open"]\n')
+    source = source.replace(HELPER_ARGUMENTS, '        var arguments = ["launch", "--source-home", "'
+                            + value + '", "--state-dir", "' + value
+                            + '/.local/state/codex-migrate-browser", "--port", "0", "--no-open"]\n')
+    return source.replace(HELPER_START, '''        // The installed, unmodified app relaunches in this account's real home.
+        // Refuse the test before Sparkle starts if that home has Codex data.
+        if FileManager.default.fileExists(atPath: FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".codex").path) {
+            showFailure("Run this update test in a separate macOS account with no Codex history.",
+                        title: "Separate test account required")
+            NSApplication.shared.terminate(nil)
+            return
+        }
+''' + HELPER_START)
 
 
 def prepare(output, port, identity, local_archive=False, current_app=None,
@@ -217,6 +231,9 @@ def prepare(output, port, identity, local_archive=False, current_app=None,
             signed_info["SUFeedURL"] != f"http://127.0.0.1:{port}/appcast"):
         raise ValueError("test client build/feed verification failed")
     print("Prepared disposable signed canary client:", app)
+    if test_source_home is not None:
+        print("Run only in a separate macOS account without existing Codex history: "
+              "the installed app relaunches into that account's real home.")
     print("Candidate:", selected["id"], "(current-code local archive)" if current_app else
           "(local archive)" if local_archive else
           "(sandbox-only; public release unchanged)")
@@ -290,7 +307,7 @@ def main():
     parser.add_argument("--current-app", type=Path,
                         help="with --local-archive, use exact signed build-19 app code in a disposable build-16 wrapper")
     parser.add_argument("--test-source-home", type=Path,
-                        help="local current-code test only: launch the helper with disposable Codex data")
+                        help="pre-update helper only; the installed app relaunches into the macOS account home")
     parser.add_argument("--fault", choices=("none", "archive-404", "corrupt-archive", "bad-signature"),
                         default="none", help="with local serve only, inject one updater failure")
     args = parser.parse_args()
