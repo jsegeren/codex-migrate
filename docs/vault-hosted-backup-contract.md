@@ -44,6 +44,11 @@ plausible alternative because private signed URLs permit direct transfers, but
 its first-time download transfer charges make large disaster restores and a
 flat $10 allowance materially riskier. See the
 [measured sizing and provider comparison](vault-hosted-economics-2026-09-26.md).
+R2's presigned S3 PUT alone does not satisfy immutable SHA-256 verification:
+the candidate transport uses a small authenticated Worker with R2's
+checksum-checked conditional PUT. Its $5/month paid-plan minimum matters for
+the first few customers. The adapter is still test-only; actual R2 behavior
+remains a sandbox release gate.
 R2's published September 2026
 pricing is $0.015/GB-month, $4.50/million Class A writes, $0.36/million Class B
 reads, and no R2 ingress or direct egress bandwidth charge. The account-wide
@@ -136,8 +141,8 @@ egress allowance. Do not claim that B2 restores are always free. See its
   owns both IDs; their syntax is not an authorization check. This is **not yet
   a publish endpoint**: the authenticated service must also bind account/Vault
   ownership, enforce the *aggregate* retained-storage quota, prove the real
-  provider adapter's checksum behavior,
-  and commit the last-good pointer transactionally. A per-receipt byte bound
+  provider adapter's checksum behavior, and commit the last-good pointer
+  transactionally. A per-receipt byte bound
   does not enforce that aggregate quota.
 - Preserve old snapshot references under a declared retention policy. Deleting
   an unreferenced chunk requires proof that no retained snapshot needs it.
@@ -158,6 +163,9 @@ egress allowance. Do not claim that B2 restores are always free. See its
    checksum verification against R2's actual API behavior, per-account quota,
    short-lived direct transfers, tampered/missing-object failure, and no
    secret-bearing telemetry. Do not trust an ETag as a universal SHA-256.
+   Replace the staging client's full remote read-back on every repeated backup
+   with the service's independently verified stored checksum; a daily backup
+   must not redownload an unchanged multi-gigabyte Vault merely to reuse it.
 3. **Prove the disaster scenario:** create a first and scheduled snapshot on
    one Mac, lose its local Vault/Keychain context in a clean account or second
    Mac, authenticate, import the separately saved recovery key, download the

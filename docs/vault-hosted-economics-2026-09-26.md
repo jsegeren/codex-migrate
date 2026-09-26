@@ -50,13 +50,15 @@ or an equivalent chunk-inventory comparison; it is not established by mtime.
 
 ## Operation pattern
 
-Each novel encrypted chunk is one PUT; a complete independent read-back or
-restore is approximately one GET per chunk. Immutable manifests, per-snapshot
-metadata, and references add a small number of operations. The older Mac's
-14,449 first-backup chunks imply roughly 14,449 writes and the same number of
-verification reads. Both Macs together imply about 36,356 of each. At
-published R2 Standard rates **before the account-wide free allowance**, those
-combined operations cost about $0.164 for writes and $0.013 for reads.
+Each novel encrypted chunk is one PUT. The proposed R2 Worker adapter uses
+HEAD before each upload and HEAD after a successful conditional PUT, rather
+than a full read-back: the older Mac's 14,449 chunks imply roughly 14,449
+writes and 28,898 metadata reads; both Macs together imply about 36,356
+writes and 72,712 metadata reads. At published R2 Standard rates **before the
+account-wide free allowance**, those combined operations cost about $0.164
+for writes and $0.026 for HEADs. A full restore adds about 36,356 GETs, or
+$0.013 in R2 read operations, with no direct egress fee. Immutable manifests,
+per-snapshot metadata, and references add a small number of operations.
 Repeating an unchanged backup should reuse existing chunks; a
 rewritten or compacted transcript can create new chunks and must be measured.
 Do not count shared free allowances as a per-customer subsidy.
@@ -77,7 +79,7 @@ At the measured combined first-backup range of **72.19–76.31 GB** (not yet
 direct full restore has no R2 byte-transfer charge. Vercel Blob storage is
 about **$1.66–$1.76/month**, with an approximately **$7.94–$8.39** first
 full-restore transfer charge if every object misses the cache. The R2
-initial PUT plus one complete verification GET pass is about **$0.18** in
+initial PUT plus two metadata HEAD passes is about **$0.19** in
 operations before its account-wide free allowance. These are measured-size
 pricing calculations, not observed provider invoices or a retention forecast.
 
@@ -89,9 +91,37 @@ restore should be budgeted as cache misses. Both providers bill operations;
 "Backup and download" still generate requests, though byte storage and
 Vercel restore transfer dominate at observed object counts.
 
+R2's S3 presigned PUT URL is reusable until expiry and does not by itself
+provide the SHA-256 and immutable-write proof this product requires. The
+leading R2 path is a small authenticated Cloudflare Worker using the R2
+binding's `put(..., { sha256, onlyIf })`, followed by a metadata check. This
+must be proved against a real R2 sandbox; an ETag or a mocked binding is not
+enough. The Worker can stream encrypted objects directly to R2 without
+relaying them through Vercel. Its inbound 100 MB limit on a Free Cloudflare
+account accommodates ordinary encrypted chunks, but an oversized manifest
+must fail safely or use a separately proven path.
+
+Workers Free allows 100,000 requests/day. One initial upload of this user's
+two Vaults entails about 36,356 object requests, and checking every object on
+each later daily run would be about 1.09 million requests/month for this one
+customer. A few similar customers can exceed the Free daily request ceiling;
+do not build the offer around it. Workers Paid has a **$5/month account
+minimum**, including 10 million monthly requests and 30 million CPU-ms, then
+$0.30/million requests and $0.02/million CPU-ms. This $5 is shared fixed
+overhead, not a per-customer charge. R2 read/write operations are separate.
+At one $10 subscriber using the full 100 GB allowance, the earlier 78% figure
+falls to about **28% contribution before support, database/API, retries, and
+taxes** if the whole $5 Worker minimum is assigned to that customer. At ten
+such subscribers, the same fixed overhead is about $0.50 each and the
+corresponding contribution is roughly 73% before those omitted costs. These
+figures are illustrative, not observed invoices or final plan margins.
+
 Sources: [R2 pricing](https://developers.cloudflare.com/r2/pricing/),
 [Vercel Blob pricing](https://vercel.com/docs/vercel-blob/usage-and-pricing/),
-[Vercel signed URLs](https://vercel.com/docs/vercel-blob/vercel-signed-urls).
+[Vercel signed URLs](https://vercel.com/docs/vercel-blob/vercel-signed-urls),
+[R2 Workers API](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/),
+[Workers pricing](https://developers.cloudflare.com/workers/platform/pricing/),
+[Workers limits](https://developers.cloudflare.com/workers/platform/limits/).
 
 ## Subscription contribution before support
 
@@ -111,7 +141,8 @@ customer's Vaults**, with warning and safe upload pause near the allowance;
 never silently charge overages or delete the last good snapshot. Candidate
 tiers for evaluation are $10/month up to 100 GB and $20/month up to 200 GB on
 R2. At their limits, R2 storage plus the illustrative Stripe fees leave
-approximately 78% and 80% of revenue respectively before other costs. The
+approximately 78% and 80% of revenue respectively **before Worker overhead
+and other costs**. The
 measured 72–76 GB first backup of this user's two separate Macs would fit the
 lower tier initially; retained version growth could later require the higher
 tier. This is a capacity choice, not metered or automatic overage billing.
