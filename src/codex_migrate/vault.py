@@ -16,11 +16,12 @@ from typing import Dict, Iterable, Iterator, List, Optional, Tuple
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.source_availability import check_info, require_local
-from codex_migrate.vault_identity import filename_id, title_index
+from codex_migrate.vault_identity import MAX_RECORD_BYTES, canonical_id, filename_id, title_index
 
 
 TRANSCRIPT_FOLDERS = ("sessions", "archived_sessions")
 TEXT_KEYS = frozenset(("content", "message", "summary", "text", "title"))
+MAX_LINEAGE_DEPTH = 32
 
 
 @dataclass(frozen=True)
@@ -104,6 +105,151 @@ def _transcripts(source_home: str) -> Iterator[Tuple[str, Path, str]]:
                     yield folder, path, relative
         except OSError as error:
             raise MigrationError("Codex conversation history could not be read safely.") from error
+
+
+def _lineage_segments(
+    source_home: str, path: Path,
+    transcripts: Optional[List[Tuple[str, Path, str]]] = None,
+) -> List[Tuple[Path, int]]:
+    """Resolve the physical, byte-bounded rollout prefixes visible in a fork.
+
+    A paginated fork's history_base names a rollout ID (not necessarily the
+    stable thread ID after a revert). Only discovered transcript files may be
+    followed; missing, ambiguous, cyclic, or torn references fail closed.
+    """
+    discovered = transcripts if transcripts is not None else list(_transcripts(source_home))
+    by_rollout: Dict[str, List[Path]] = {}
+    for _, candidate, relative in discovered:
+        rollout_id = filename_id(relative)
+        if rollout_id:
+            by_rollout.setdefault(rollout_id, []).append(candidate)
+
+    def resolve(candidate: Path, cutoff: Optional[int], expected_ordinal: Optional[int],
+                seen: set) -> List[Tuple[Path, int]]:
+        if candidate in seen or len(seen) >= MAX_LINEAGE_DEPTH:
+            raise MigrationError("A conversation has cyclic or unusually deep fork history.")
+        try:
+            descriptor = os.open(candidate, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            with os.fdopen(descriptor, "rb") as handle:
+                info = os.fstat(handle.fileno())
+                if not stat.S_ISREG(info.st_mode):
+                    raise MigrationError("A conversation lineage is not a regular file.")
+                length = info.st_size if cutoff is None else cutoff
+                if not isinstance(length, int) or length < 0 or length > info.st_size:
+                    raise MigrationError("A conversation fork points outside its parent history.")
+                if length:
+                    handle.seek(length - 1)
+                    if handle.read(1) != b"\n":
+                        raise MigrationError("A conversation fork cuts through a parent record.")
+                if expected_ordinal is not None:
+                    if length == 0:
+                        if expected_ordinal != 0:
+                            raise MigrationError("A conversation fork has a mismatched parent boundary.")
+                    else:
+                        # A byte boundary is insufficient after a parent rewrite: it
+                        # might still land on a different complete JSONL record.
+                        position = length - 2
+                        record_start = 0
+                        while position >= 0:
+                            block_start = max(0, position - 4095)
+                            handle.seek(block_start)
+                            block = handle.read(position - block_start + 1)
+                            previous_newline = block.rfind(b"\n")
+                            if previous_newline >= 0:
+                                record_start = block_start + previous_newline + 1
+                                break
+                            if length - block_start > MAX_RECORD_BYTES:
+                                raise MigrationError("A conversation parent record is too large.")
+                            position = block_start - 1
+                        if length - record_start > MAX_RECORD_BYTES:
+                            raise MigrationError("A conversation parent record is too large.")
+                        handle.seek(record_start)
+                        last_record = json.loads(handle.read(length - record_start))
+                        ordinal = (last_record.get("ordinal")
+                                   if isinstance(last_record, dict) else None)
+                        if (not isinstance(ordinal, int) or isinstance(ordinal, bool)
+                                or ordinal + 1 != expected_ordinal):
+                            raise MigrationError("A conversation fork has a mismatched parent boundary.")
+                handle.seek(0)
+                raw = handle.readline(MAX_RECORD_BYTES + 1)
+                if len(raw) > MAX_RECORD_BYTES:
+                    raise MigrationError("A conversation header is too large to inspect safely.")
+                header = json.loads(raw) if raw else {}
+        except MigrationError:
+            raise
+        except (UnicodeError, json.JSONDecodeError) as error:
+            raise MigrationError("A conversation transcript contains unreadable JSON.") from error
+        except OSError as error:
+            raise MigrationError("A conversation fork could not be inspected safely.") from error
+        payload = header.get("payload") if isinstance(header, dict) else None
+        base = payload.get("history_base") if (isinstance(header, dict)
+                                               and header.get("type") == "session_meta"
+                                               and isinstance(payload, dict)) else None
+        prefix: List[Tuple[Path, int]] = []
+        if base is not None:
+            if not isinstance(base, dict):
+                raise MigrationError("A conversation fork has an invalid parent reference.")
+            parent_id = canonical_id(base.get("thread_id"))
+            boundary = base.get("end_byte_offset")
+            ordinal = base.get("end_ordinal_exclusive")
+            if (not parent_id or not isinstance(boundary, int) or isinstance(boundary, bool)
+                    or boundary < 0 or not isinstance(ordinal, int)
+                    or isinstance(ordinal, bool) or ordinal < 0):
+                raise MigrationError("A conversation fork has an invalid parent reference.")
+            parents = by_rollout.get(parent_id, [])
+            if len(parents) != 1:
+                raise MigrationError("A conversation fork's parent is missing or ambiguous.")
+            prefix = resolve(parents[0], boundary, ordinal, seen | {candidate})
+        return prefix + [(candidate, length)]
+
+    return resolve(path, None, None, set())
+
+
+def _lineage_records(segments: List[Tuple[Path, int]], cursor: int = 0,
+                     stable: bool = False):
+    """Yield (record, virtual byte cursor, virtual line) across a fork lineage."""
+    origin = 0
+    line_number = 0
+    for path, length in segments:
+        if cursor >= origin + length:
+            origin += length
+            continue
+        start = max(0, cursor - origin)
+        try:
+            descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            with os.fdopen(descriptor, "rb") as handle:
+                info = os.fstat(handle.fileno())
+                if not stat.S_ISREG(info.st_mode) or info.st_size < length:
+                    raise MigrationError("A conversation lineage changed while it was read.")
+                if start:
+                    handle.seek(start - 1)
+                    if handle.read(1) != b"\n":
+                        raise MigrationError("A conversation cursor is not at a record boundary.")
+                handle.seek(start)
+                try:
+                    while handle.tell() < length:
+                        position = handle.tell()
+                        raw = handle.readline(min(MAX_RECORD_BYTES + 1, length - position + 1))
+                        if not raw or len(raw) > MAX_RECORD_BYTES or position + len(raw) > length:
+                            raise MigrationError("A conversation record is incomplete or too large.")
+                        try:
+                            record = json.loads(raw)
+                        except (UnicodeError, json.JSONDecodeError) as error:
+                            raise MigrationError("A conversation transcript contains unreadable JSON.") from error
+                        line_number += 1
+                        yield record, origin + position, line_number
+                finally:
+                    if stable:
+                        after = os.fstat(handle.fileno())
+                        if (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns,
+                                info.st_ctime_ns) != (after.st_dev, after.st_ino, after.st_size,
+                                                       after.st_mtime_ns, after.st_ctime_ns):
+                            raise MigrationError("A conversation lineage changed while it was read.")
+        except MigrationError:
+            raise
+        except OSError as error:
+            raise MigrationError("A conversation lineage could not be read safely.") from error
+        origin += length
 
 
 def inspect(source_home: str) -> VaultSummary:
@@ -208,8 +354,9 @@ def search(
         (item["collection"], item["path"]): item
         for item in (catalog or [])
     }
+    discovered = list(_transcripts(source_home))
     transcripts = []
-    for folder, path, relative in _transcripts(source_home):
+    for folder, path, relative in discovered:
         try:
             info = check_info(path.lstat())
         except OSError as error:
@@ -237,47 +384,28 @@ def search(
                                               len(query.strip())),
             )
         elif not titles_only:
-            try:
-                descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-                with os.fdopen(descriptor, "rb") as handle:
-                    info = os.fstat(handle.fileno())
-                    if not stat.S_ISREG(info.st_mode):
-                        raise MigrationError("A conversation transcript changed while it was being read.")
-                    line_number = 0
-                    while True:
-                        cursor = handle.tell()
-                        line = handle.readline()
-                        if not line:
-                            break
-                        line_number += 1
-                        try:
-                            record = json.loads(line)
-                        except (UnicodeError, json.JSONDecodeError) as error:
-                            raise MigrationError("A conversation transcript contains unreadable JSON; history search stopped.") from error
-                        seen = set()
-                        for text in _strings(record):
-                            if text in seen:
-                                continue
-                            seen.add(text)
-                            position = text.casefold().find(needle)
-                            if position < 0:
-                                continue
-                            match = VaultMatch(
-                                collection=collection,
-                                transcript=relative,
-                                line=line_number,
-                                timestamp=_timestamp(record),
-                                title=current_title,
-                                snippet=_snippet(text, position, len(query.strip())),
-                                cursor=cursor,
-                            )
-                            break
-                        if match is not None:
-                            break
-            except MigrationError:
-                raise
-            except (OSError, UnicodeError) as error:
-                raise MigrationError("Codex conversation history could not be read safely.") from error
+            for record, cursor, line_number in _lineage_records(
+                    _lineage_segments(source_home, path, discovered)):
+                seen = set()
+                for text in _strings(record):
+                    if text in seen:
+                        continue
+                    seen.add(text)
+                    position = text.casefold().find(needle)
+                    if position < 0:
+                        continue
+                    match = VaultMatch(
+                        collection=collection,
+                        transcript=relative,
+                        line=line_number,
+                        timestamp=_timestamp(record),
+                        title=current_title,
+                        snippet=_snippet(text, position, len(query.strip())),
+                        cursor=cursor,
+                    )
+                    break
+                if match is not None:
+                    break
         if match is not None:
             if matched_threads >= offset:
                 matches.append(match)
@@ -309,35 +437,21 @@ def read_thread(
     path = _find_transcript(source_home, collection, transcript)
     entries: List[ThreadEntry] = []
     total = 0
-    try:
-        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-        with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
-            info = os.fstat(handle.fileno())
-            if not stat.S_ISREG(info.st_mode):
-                raise MigrationError("A conversation transcript changed while it was being read.")
-            for line in handle:
-                try:
-                    record = json.loads(line)
-                except (UnicodeError, json.JSONDecodeError) as error:
-                    raise MigrationError("A conversation transcript contains unreadable JSON; it was not opened.") from error
-                seen = set()
-                for text in _strings(record):
-                    if text in seen:
-                        continue
-                    seen.add(text)
-                    encoded_size = len(text.encode("utf-8"))
-                    if total + encoded_size > max_text_bytes:
-                        raise MigrationError("This conversation is too large for the browser export. The original transcript was not changed.")
-                    total += encoded_size
-                    entries.append(ThreadEntry(
-                        timestamp=_timestamp(record),
-                        role=_first_named_string(record, "role"),
-                        text=text,
-                    ))
-    except MigrationError:
-        raise
-    except (OSError, UnicodeError) as error:
-        raise MigrationError("The conversation could not be read safely.") from error
+    for record, _, _ in _lineage_records(_lineage_segments(source_home, path)):
+        seen = set()
+        for text in _strings(record):
+            if text in seen:
+                continue
+            seen.add(text)
+            encoded_size = len(text.encode("utf-8"))
+            if total + encoded_size > max_text_bytes:
+                raise MigrationError("This conversation is too large for the browser export. The original transcript was not changed.")
+            total += encoded_size
+            entries.append(ThreadEntry(
+                timestamp=_timestamp(record),
+                role=_first_named_string(record, "role"),
+                text=text,
+            ))
     return VaultThread(collection, transcript, entries)
 
 
@@ -356,71 +470,52 @@ def read_thread_page(
     path = _find_transcript(source_home, collection, transcript)
     entries: List[ThreadEntry] = []
     total = 0
+    segments = _lineage_segments(source_home, path)
+    if cursor > sum(length for _, length in segments):
+        raise MigrationError("A saved conversation changed while opening it.")
+    next_cursor = None
+    records = _lineage_records(segments, cursor, stable=True)
     try:
-        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-        with os.fdopen(descriptor, "rb") as handle:
-            before = os.fstat(handle.fileno())
-            if not stat.S_ISREG(before.st_mode) or cursor > before.st_size:
-                raise MigrationError("A saved conversation changed while opening it.")
-            handle.seek(cursor)
-            while True:
-                start = handle.tell()
-                raw = handle.readline(32 * 1024 * 1024 + 1)
-                if not raw:
-                    next_cursor = None
-                    break
-                if len(raw) > 32 * 1024 * 1024:
-                    raise MigrationError("A conversation record is too large to preview. Export it instead.")
-                try:
-                    record = json.loads(raw)
-                except (UnicodeError, json.JSONDecodeError) as error:
-                    raise MigrationError("A conversation transcript contains unreadable JSON.") from error
-                if expected_query and start == cursor and not any(
-                        expected_query.casefold() in body.casefold()
-                        for body in _strings(record)):
-                    raise MigrationError("This conversation changed since the search. Search again.")
-                seen = set()
-                new_entries = []
-                new_bytes = 0
-                for body in _strings(record):
-                    if body in seen:
-                        continue
-                    seen.add(body)
-                    new_bytes += len(body.encode("utf-8"))
-                    new_entries.append(ThreadEntry(
-                        timestamp=_timestamp(record),
-                        role=_first_named_string(record, "role"), text=body,
-                    ))
-                if (expected_query and start == cursor
-                        and (len(new_entries) > max_entries
-                             or total + new_bytes > max_text_bytes)):
-                    matched = next(entry.text for entry in new_entries
-                                   if expected_query.casefold() in entry.text.casefold())
-                    position = matched.casefold().find(expected_query.casefold())
-                    excerpt = _snippet(matched, position, len(expected_query), width=1000)
-                    new_entries = [ThreadEntry(
-                        timestamp=_timestamp(record),
-                        role=_first_named_string(record, "role"),
-                        text=excerpt, excerpted=True,
-                    )]
-                    new_bytes = len(excerpt.encode("utf-8"))
-                if (len(entries) + len(new_entries) > max_entries
-                        or total + new_bytes > max_text_bytes):
-                    if not entries:
-                        raise MigrationError("This message is too large to preview. Export the saved conversation instead.")
-                    next_cursor = start
-                    break
-                entries.extend(new_entries)
-                total += new_bytes
-            after = os.fstat(handle.fileno())
-            if (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns,
-                    before.st_ctime_ns) != (after.st_dev, after.st_ino, after.st_size,
-                    after.st_mtime_ns, after.st_ctime_ns):
-                raise MigrationError("A saved conversation changed while opening it.")
-    except MigrationError:
-        raise
-    except (OSError, UnicodeError) as error:
-        raise MigrationError("A saved conversation could not be read safely.") from error
+        for record, start, _ in records:
+            if expected_query and start == cursor and not any(
+                    expected_query.casefold() in body.casefold()
+                    for body in _strings(record)):
+                raise MigrationError("This conversation changed since the search. Search again.")
+            seen = set()
+            new_entries = []
+            new_bytes = 0
+            for body in _strings(record):
+                if body in seen:
+                    continue
+                seen.add(body)
+                new_bytes += len(body.encode("utf-8"))
+                new_entries.append(ThreadEntry(
+                    timestamp=_timestamp(record),
+                    role=_first_named_string(record, "role"), text=body,
+                ))
+            if (expected_query and start == cursor
+                    and (len(new_entries) > max_entries
+                         or total + new_bytes > max_text_bytes)):
+                matched = next(entry.text for entry in new_entries
+                               if expected_query.casefold() in entry.text.casefold())
+                position = matched.casefold().find(expected_query.casefold())
+                excerpt = _snippet(matched, position, len(expected_query), width=1000)
+                new_entries = [ThreadEntry(
+                    timestamp=_timestamp(record),
+                    role=_first_named_string(record, "role"),
+                    text=excerpt, excerpted=True,
+                )]
+                new_bytes = len(excerpt.encode("utf-8"))
+            if (len(entries) + len(new_entries) > max_entries
+                    or total + new_bytes > max_text_bytes):
+                if not entries:
+                    raise MigrationError("This message is too large to preview. Export the saved conversation instead.")
+                next_cursor = start
+                break
+            entries.extend(new_entries)
+            total += new_bytes
+    finally:
+        records.close()
     return VaultThread(collection, transcript, entries), next_cursor
 
 
@@ -452,42 +547,18 @@ def markdown_chunks(source_home: str, collection: str, transcript: str):
     header = "# Codex conversation\n\n- Collection: %s\n- Transcript: `%s`\n\n" % (
         collection, transcript.replace("`", "\\`"))
     yield header.encode("utf-8")
-    try:
-        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-        with os.fdopen(descriptor, "rb") as handle:
-            before = os.fstat(handle.fileno())
-            if not stat.S_ISREG(before.st_mode):
-                raise MigrationError("A conversation transcript changed during export.")
-            index = 0
-            while True:
-                raw = handle.readline(32 * 1024 * 1024 + 1)
-                if not raw:
-                    break
-                if len(raw) > 32 * 1024 * 1024:
-                    raise MigrationError("A conversation record is too large for safe export.")
-                try:
-                    record = json.loads(raw)
-                except (UnicodeError, json.JSONDecodeError) as error:
-                    raise MigrationError("A conversation transcript contains unreadable JSON.") from error
-                seen = set()
-                for body in _strings(record):
-                    if body in seen:
-                        continue
-                    seen.add(body)
-                    index += 1
-                    role = _first_named_string(record, "role")
-                    heading = role.strip().title() if role and role.strip() else "Entry %d" % index
-                    timestamp = _timestamp(record)
-                    prefix = "## %s\n\n" % heading
-                    if timestamp:
-                        prefix += "_%s_\n\n" % timestamp
-                    yield (prefix + body + "\n\n").encode("utf-8")
-            after = os.fstat(handle.fileno())
-            if (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns,
-                    before.st_ctime_ns) != (after.st_dev, after.st_ino, after.st_size,
-                    after.st_mtime_ns, after.st_ctime_ns):
-                raise MigrationError("A conversation changed during export.")
-    except MigrationError:
-        raise
-    except (OSError, UnicodeError) as error:
-        raise MigrationError("A conversation could not be exported safely.") from error
+    index = 0
+    for record, _, _ in _lineage_records(_lineage_segments(source_home, path), stable=True):
+        seen = set()
+        for body in _strings(record):
+            if body in seen:
+                continue
+            seen.add(body)
+            index += 1
+            role = _first_named_string(record, "role")
+            heading = role.strip().title() if role and role.strip() else "Entry %d" % index
+            timestamp = _timestamp(record)
+            prefix = "## %s\n\n" % heading
+            if timestamp:
+                prefix += "_%s_\n\n" % timestamp
+            yield (prefix + body + "\n\n").encode("utf-8")

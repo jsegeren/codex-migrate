@@ -67,6 +67,13 @@ Prefer monthly or annual billing over literal weekly charges.
 The first implementation slice is the streaming `codex-migrate vault`
 inspector/search command. It creates no index or duplicate content.
 
+Paginated Codex forks may store earlier messages only in a referenced parent
+rollout. Vault search, preview, and Markdown export resolve that bounded parent
+lineage across active and archived transcripts. A missing or ambiguous parent,
+changed byte/ordinal fork boundary, or cycle is reported as needing attention
+rather than silently presenting a truncated child. Encrypted snapshots still
+preserve the exact physical JSONL files; they do not flatten or rewrite forks.
+
 ### 2. Versioned backup
 
 - Take a consistent SQLite snapshot using SQLite's backup mechanism; never copy

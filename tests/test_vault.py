@@ -6,6 +6,7 @@ import unittest
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault import inspect, markdown, markdown_chunks, read_thread, read_thread_page, search
+from codex_migrate.vault_identity import scan_transcript
 
 
 class VaultTests(unittest.TestCase):
@@ -222,6 +223,24 @@ class VaultTests(unittest.TestCase):
             with self.assertRaisesRegex(MigrationError, "too large"):
                 read_thread(str(root), "active", "large.jsonl", max_text_bytes=5)
 
+    def test_backup_identity_scan_accepts_ordinary_large_compaction_record(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            thread_id = "11111111-1111-4111-8111-111111111111"
+            relative = "rollout-" + thread_id + ".jsonl"
+            transcript = root / ".codex/sessions" / relative
+            transcript.parent.mkdir(parents=True)
+            transcript.write_text(
+                json.dumps({"type": "session_meta", "payload": {"id": thread_id}})
+                + "\n" + json.dumps({"type": "compacted", "payload": {
+                    "replacement_history": "x" * (33 * 1024 * 1024)}}) + "\n"
+                + json.dumps({"payload": {"text": "After large compaction"}}) + "\n",
+                encoding="utf-8")
+            signals = scan_transcript(transcript, relative, {})
+            self.assertEqual(signals.identity_state, "verified")
+            self.assertEqual(signals.records, 3)
+            self.assertEqual(len(search(str(root), "After large compaction")), 1)
+
     def test_saved_thread_markdown_can_stream_beyond_browser_preview_limit(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -254,6 +273,165 @@ class VaultTests(unittest.TestCase):
                 self.assertGreater(next_cursor, cursor)
                 cursor = next_cursor
             self.assertEqual(found, ["entry-%d" % index for index in range(5)])
+
+    def test_paginated_fork_finds_and_exports_only_inherited_prefix(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            active = root / ".codex/sessions"
+            archived = root / ".codex/archived_sessions"
+            active.mkdir(parents=True)
+            archived.mkdir(parents=True)
+            parent_id = "11111111-1111-4111-8111-111111111111"
+            child_id = "22222222-2222-4222-8222-222222222222"
+            parent = archived / ("rollout-" + parent_id + ".jsonl")
+            child = active / ("rollout-" + child_id + ".jsonl")
+            def meta(ident, ordinal, **extra):
+                return json.dumps({"type": "session_meta", "ordinal": ordinal, "payload": {
+                    "id": ident, **extra}}) + "\n"
+            def message(value, ordinal):
+                return json.dumps({"type": "response_item", "ordinal": ordinal, "payload": {
+                    "type": "message", "role": "user", "content": value}}) + "\n"
+            inherited = meta(parent_id, 0) + message("Inherited Clerk plan", 1)
+            parent.write_text(inherited + message("Parent-only later plan", 2), encoding="utf-8")
+            child.write_text(meta(child_id, 2, history_base={
+                "thread_id": parent_id,
+                "end_ordinal_exclusive": 2,
+                "end_byte_offset": len(inherited.encode("utf-8")),
+            }) + message("Child-local implementation", 3), encoding="utf-8")
+
+            matches = search(str(root), "Inherited Clerk")
+            self.assertEqual({(match.collection, match.transcript) for match in matches},
+                             {("active", child.name), ("archived", parent.name)})
+            self.assertEqual(len(search(str(root), "Parent-only later")), 1)
+            child_match = next(match for match in matches if match.collection == "active")
+            page, _ = read_thread_page(str(root), "active", child.name,
+                                       child_match.cursor, expected_query="Clerk")
+            self.assertEqual(page.entries[0].text, "Inherited Clerk plan")
+            thread = read_thread(str(root), "active", child.name)
+            self.assertEqual([entry.text for entry in thread.entries],
+                             ["Inherited Clerk plan", "Child-local implementation"])
+            exported = b"".join(markdown_chunks(str(root), "active", child.name)).decode()
+            self.assertIn("Inherited Clerk plan", exported)
+            self.assertIn("Child-local implementation", exported)
+            self.assertNotIn("Parent-only later plan", exported)
+
+    def test_paginated_fork_refuses_missing_or_torn_parent(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            active = root / ".codex/sessions"
+            active.mkdir(parents=True)
+            parent_id = "11111111-1111-4111-8111-111111111111"
+            child_id = "22222222-2222-4222-8222-222222222222"
+            child = active / ("rollout-" + child_id + ".jsonl")
+            child.write_text(json.dumps({"type": "session_meta", "payload": {
+                "id": child_id, "history_base": {"thread_id": parent_id,
+                    "end_ordinal_exclusive": 1, "end_byte_offset": 3}}}) + "\n")
+            with self.assertRaisesRegex(MigrationError, "parent is missing"):
+                read_thread(str(root), "active", child.name)
+            parent = active / ("rollout-" + parent_id + ".jsonl")
+            parent.write_text(json.dumps({"type": "session_meta", "payload": {
+                "id": parent_id}}) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(MigrationError, "cuts through"):
+                read_thread(str(root), "active", child.name)
+            child.write_text(json.dumps({"type": "session_meta", "payload": {
+                "id": child_id, "history_base": {"thread_id": parent_id,
+                    "end_ordinal_exclusive": 9,
+                    "end_byte_offset": parent.stat().st_size}}}) + "\n")
+            with self.assertRaisesRegex(MigrationError, "mismatched parent boundary"):
+                read_thread(str(root), "active", child.name)
+            archived = root / ".codex/archived_sessions"
+            archived.mkdir()
+            (archived / parent.name).write_bytes(parent.read_bytes())
+            with self.assertRaisesRegex(MigrationError, "ambiguous"):
+                read_thread(str(root), "active", child.name)
+
+    def test_nested_paginated_fork_uses_each_ancestor_cutoff(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            folder = root / ".codex/sessions"
+            folder.mkdir(parents=True)
+            ids = ["11111111-1111-4111-8111-111111111111",
+                   "22222222-2222-4222-8222-222222222222",
+                   "33333333-3333-4333-8333-333333333333"]
+            paths = [folder / ("rollout-" + ident + ".jsonl") for ident in ids]
+            def item(ordinal, kind, payload):
+                return json.dumps({"ordinal": ordinal, "type": kind,
+                                   "payload": payload}) + "\n"
+            parent_prefix = (item(0, "session_meta", {"id": ids[0]})
+                             + item(1, "response_item", {"text": "First plan"}))
+            paths[0].write_text(parent_prefix
+                                + item(2, "response_item", {"text": "Excluded parent update"}))
+            child_prefix = (item(2, "session_meta", {"id": ids[1], "history_base": {
+                "thread_id": ids[0], "end_ordinal_exclusive": 2,
+                "end_byte_offset": len(parent_prefix.encode())}})
+                            + item(3, "response_item", {"text": "Middle plan"}))
+            paths[1].write_text(child_prefix
+                                + item(4, "response_item", {"text": "Excluded child update"}))
+            paths[2].write_text(item(4, "session_meta", {"id": ids[2], "history_base": {
+                "thread_id": ids[1], "end_ordinal_exclusive": 4,
+                "end_byte_offset": len(child_prefix.encode())}})
+                                + item(5, "response_item", {"text": "Final plan"}))
+            thread = read_thread(str(root), "active", paths[2].name)
+            self.assertEqual([entry.text for entry in thread.entries],
+                             ["First plan", "Middle plan", "Final plan"])
+            self.assertEqual(len(search(str(root), "First plan")), 3)
+            self.assertEqual(len(search(str(root), "Excluded parent update")), 1)
+            cursor = 0
+            pages = []
+            while True:
+                page, next_cursor = read_thread_page(
+                    str(root), "active", paths[2].name, cursor, max_entries=1)
+                pages.extend(entry.text for entry in page.entries)
+                if next_cursor is None:
+                    break
+                self.assertGreater(next_cursor, cursor)
+                cursor = next_cursor
+            self.assertEqual(pages, ["First plan", "Middle plan", "Final plan"])
+
+    def test_fork_reference_uses_rollout_id_after_parent_revert(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            folder = root / ".codex/sessions"
+            folder.mkdir(parents=True)
+            stable_id = "11111111-1111-4111-8111-111111111111"
+            rollout_id = "44444444-4444-4444-8444-444444444444"
+            child_id = "22222222-2222-4222-8222-222222222222"
+            parent = folder / ("rollout-" + stable_id + "_" + rollout_id + ".jsonl")
+            parent.write_text(
+                json.dumps({"ordinal": 0, "type": "session_meta", "payload": {
+                    "id": stable_id}}) + "\n"
+                + json.dumps({"ordinal": 1, "type": "response_item", "payload": {
+                    "text": "Before the revert"}}) + "\n")
+            child = folder / ("rollout-" + child_id + ".jsonl")
+            child.write_text(json.dumps({"ordinal": 2, "type": "session_meta", "payload": {
+                "id": child_id, "history_base": {"thread_id": rollout_id,
+                    "end_ordinal_exclusive": 2,
+                    "end_byte_offset": parent.stat().st_size}}}) + "\n")
+            self.assertEqual([entry.text for entry in read_thread(
+                str(root), "active", child.name).entries], ["Before the revert"])
+
+    def test_cyclic_fork_reference_is_refused(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            folder = root / ".codex/sessions"
+            folder.mkdir(parents=True)
+            first_id = "11111111-1111-4111-8111-111111111111"
+            second_id = "22222222-2222-4222-8222-222222222222"
+            first = folder / ("rollout-" + first_id + ".jsonl")
+            second = folder / ("rollout-" + second_id + ".jsonl")
+            def record(ident, parent, boundary):
+                return json.dumps({"ordinal": 0, "type": "session_meta", "payload": {
+                    "id": ident, "history_base": {"thread_id": parent,
+                        "end_ordinal_exclusive": 1,
+                        "end_byte_offset": boundary}}}) + "\n"
+            # Stabilize the reciprocal byte offsets before testing the cycle.
+            first.write_text(record(first_id, second_id, 0))
+            second.write_text(record(second_id, first_id, 0))
+            for _ in range(4):
+                first.write_text(record(first_id, second_id, second.stat().st_size))
+                second.write_text(record(second_id, first_id, first.stat().st_size))
+            with self.assertRaisesRegex(MigrationError, "cyclic"):
+                read_thread(str(root), "active", first.name)
 
 
 if __name__ == "__main__":

@@ -21,7 +21,9 @@ from codex_migrate.errors import MigrationError
 
 ROLLOUT_ID = re.compile(r"(?:rollout-)?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$", re.I)
 MAX_INDEX_BYTES = 32 * 1024 * 1024
-MAX_RECORD_BYTES = 32 * 1024 * 1024
+# Compaction records can exceed 32 MiB in ordinary active histories. Keep a
+# finite cap, but do not reject verified customer history observed at 58 MiB.
+MAX_RECORD_BYTES = 128 * 1024 * 1024
 MAX_TITLES_PER_THREAD = 64
 
 
