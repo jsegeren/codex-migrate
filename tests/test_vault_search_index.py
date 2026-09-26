@@ -40,6 +40,13 @@ class SearchIndexTests(unittest.TestCase):
             self.assertFalse(_path(temporary).exists())
             self.assertEqual(len(search(temporary, "Clerk")), 1)
 
+    def test_unreadable_cache_folder_falls_back_to_source_search(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            write_thread(Path(temporary) / ".codex/sessions/one.jsonl", "Clerk history")
+            with patch("codex_migrate.vault_search_index._safe_parent",
+                       side_effect=PermissionError("cache folder unavailable")):
+                self.assertEqual(len(search(temporary, "Clerk")), 1)
+
     @unittest.skipUnless(supported(), "requires SQLite FTS5 contentless-delete")
     def test_clear_requires_apply_and_keeps_source(self):
         with tempfile.TemporaryDirectory() as temporary:

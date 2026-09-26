@@ -342,7 +342,7 @@ def candidates(source_home: str, query: str,
     try:
         _safe_parent(target.parent)
         available = _owned_regular(target)
-    except MigrationError:
+    except (MigrationError, OSError):
         return None
     if not available:
         return None
