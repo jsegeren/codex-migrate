@@ -92,10 +92,15 @@ egress allowance. Do not claim that B2 restores are always free. See its
   The client-side staging module reads every object back and checks its exact
   bytes, returning a receipt of object key, byte count, and SHA-256 digest;
   that receipt is a client assertion, not service proof. It does not write
-  `latest` or claim protection. The service must independently read and hash
-  every listed object, enforce account scope and required metadata/manifest/
-  reference presence, and only then atomically advance the remote `latest`
-  pointer. The service cannot decrypt the manifest or independently infer its
+  `latest` or claim protection. The service must independently establish each
+  object's exact size and integrity, enforce account scope and required
+  metadata/manifest/reference presence, and only then atomically advance the
+  remote `latest` pointer. Do that through provider-validated checksums or
+  storage-adjacent verification proven against the actual provider; do not
+  route whole backups through the website backend on every run, trust a bare
+  PUT response, or assume an ETag is SHA-256. A reusable presigned PUT must
+  also be constrained so it cannot replace an immutable object during its
+  lifetime. The service cannot decrypt the manifest or independently infer its
   chunk list; the native client must first authenticate that list, and the
   clean-account recovery test must prove the combined contract. Failed uploads
   leave the previous verified remote snapshot intact
