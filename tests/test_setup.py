@@ -16,6 +16,7 @@ from codex_migrate.vault_backup import BackupPlan, BackupResult
 from codex_migrate.vault_install import InstallResult, ThreadInstallResult
 from codex_migrate.vault_recovery import RestoreResult, SnapshotInfo
 from codex_migrate.vault_schedule import SchedulePlan
+from codex_migrate.vault_search_index import IndexCancelled
 
 
 class SetupTests(unittest.TestCase):
@@ -81,6 +82,8 @@ class SetupTests(unittest.TestCase):
         self.assertIn("Print / Save PDF", shell)
         self.assertIn("Share thread", shell)
         self.assertIn("Create encrypted backup", shell)
+        self.assertIn("Speed up search", shell)
+        self.assertIn("unencrypted text fragments", shell)
         self.assertIn("Save this recovery key", shell)
         self.assertIn("Automatic backup", shell)
         self.assertIn("Turn on daily backup", shell)
@@ -102,6 +105,7 @@ class SetupTests(unittest.TestCase):
                      "/api/vault/thread?collection=active&transcript=2026/09/thread.jsonl",
                      "/api/vault/export?collection=active&transcript=2026/09/thread.jsonl",
                      "/api/vault/backup-status", "/api/vault/schedule",
+                     "/api/vault/search-index-status",
                      "/api/vault/storage?path=/private/tmp/vault",
                      "/api/vault/restore-status",
                      "/api/vault/install-status",
@@ -115,6 +119,9 @@ class SetupTests(unittest.TestCase):
                      "/api/vault/restore", "/api/vault/install",
                      "/api/vault/install-recover", "/api/vault/browse",
                      "/api/vault/install-thread"):
+            self.assertEqual(self.request(path, {}, authorized=False)[0], 403)
+        for path in ("/api/vault/search-index", "/api/vault/search-index-stop",
+                     "/api/vault/search-index-remove"):
             self.assertEqual(self.request(path, {}, authorized=False)[0], 403)
         code, page = self.request(
             "/api/vault/thread?collection=active&transcript=2026%2F09%2Fthread.jsonl")
@@ -147,6 +154,57 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertEqual([entry["text"] for entry in page["entries"]], ["Set up Clerk now"])
         self.assertEqual(self.request(path.replace("match=clerk", "match=missing"))[0], 400)
+
+    def test_fast_search_requires_confirmation_and_can_be_deleted_without_source_changes(self):
+        transcript = self.home / ".codex/sessions/thread.jsonl"
+        transcript.parent.mkdir(parents=True)
+        transcript.write_text(json.dumps({"payload": {"message": {"content": "Clerk setup"}}})
+                              + "\n", encoding="utf-8")
+        self.assertFalse(self.request("/api/vault/search-index-status")[1]["present"])
+        self.assertEqual(self.request("/api/vault/search-index", {})[0], 400)
+        self.assertEqual(self.request("/api/vault/search-index", {"apply": False})[0], 400)
+        self.assertEqual(self.request("/api/vault/search-index-remove", {})[0], 400)
+        self.assertEqual(self.request("/api/vault/search-index", {"apply": True})[0], 202)
+        self.helper._search_index_thread.join(timeout=3)
+        status = self.request("/api/vault/search-index-status")[1]
+        self.assertEqual(status["status"], "ready")
+        self.assertTrue(status["present"])
+        self.assertEqual(self.request("/api/vault/search?q=clerk")[1]["results"][0]["transcript"],
+                         "thread.jsonl")
+        code, removed = self.request("/api/vault/search-index-remove", {"apply": True})
+        self.assertEqual(code, 200)
+        self.assertTrue(removed["removed"])
+        self.assertTrue(transcript.exists())
+        self.assertEqual(self.request("/api/vault/search?q=clerk")[1]["results"][0]["transcript"],
+                         "thread.jsonl")
+
+    def test_fast_search_can_stop_and_prevents_quit_while_writing_cache(self):
+        entered = threading.Event()
+
+        def until_stopped(_home, *, apply, progress, cancelled):
+            entered.set()
+            cancelled.wait(3)
+            raise IndexCancelled()
+
+        with patch("codex_migrate.setup.build_vault_search_index", side_effect=until_stopped):
+            self.assertEqual(self.request("/api/vault/search-index", {"apply": True})[0], 202)
+            self.assertTrue(entered.wait(1))
+            self.assertEqual(self.request("/api/shutdown", {})[0], 409)
+            self.assertEqual(self.request("/api/vault/search-index-remove", {"apply": True})[0], 400)
+            self.assertEqual(self.request("/api/vault/search-index-stop", {"apply": True})[0], 200)
+            self.helper._search_index_thread.join(timeout=3)
+        self.assertEqual(self.request("/api/vault/search-index-status")[1]["status"], "stopped")
+
+    def test_fast_search_unavailable_is_not_an_error_for_normal_search(self):
+        transcript = self.home / ".codex/sessions/thread.jsonl"
+        transcript.parent.mkdir(parents=True)
+        transcript.write_text(json.dumps({"message": {"content": "Clerk note"}}) + "\n")
+        with patch("codex_migrate.setup.vault_search_index_supported", return_value=False):
+            self.assertFalse(self.request("/api/vault/search-index-status")[1]["available"])
+            code, error = self.request("/api/vault/search-index", {"apply": True})
+            self.assertEqual(code, 400)
+            self.assertIn("unavailable", error["error"])
+        self.assertEqual(len(self.request("/api/vault/search?q=Clerk")[1]["results"]), 1)
 
     def test_vault_backup_can_be_opened_searched_and_selected_thread_installed(self):
         (self.home / ".codex").mkdir()

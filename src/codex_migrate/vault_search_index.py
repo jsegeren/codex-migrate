@@ -13,7 +13,7 @@ import os
 import sqlite3
 import stat
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional, Set, Tuple
+from typing import Callable, Dict, Iterator, List, Optional, Set, Tuple
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_identity import MAX_RECORD_BYTES
@@ -25,8 +25,41 @@ QUERY_CHARS = 500
 INDEX_FOLDER = ("Library", "Caches", "Codex Migrate")
 
 
+class IndexCancelled(Exception):
+    """The user stopped a refresh; committed files remain safe to search."""
+
+
+def supported() -> bool:
+    """Probe the actual Python SQLite build without writing customer data."""
+    if sqlite3.sqlite_version_info < (3, 43, 0):
+        return False
+    try:
+        connection = sqlite3.connect(":memory:")
+        try:
+            connection.execute("CREATE VIRTUAL TABLE probe USING fts5("
+                               "body, content='', contentless_delete=1, "
+                               "tokenize='trigram', detail='none')")
+        finally:
+            connection.close()
+        return True
+    except sqlite3.Error:
+        return False
+
+
 def _path(source_home: str) -> Path:
     return Path(source_home).joinpath(*INDEX_FOLDER, "search-index-v1.sqlite")
+
+
+def _safe_parent(parent: Path) -> None:
+    if (parent.is_symlink() or not parent.is_dir()
+            or parent.stat().st_uid != os.geteuid()
+            or parent.stat().st_mode & 0o077):
+        raise MigrationError("The local search index folder has unsafe permissions.")
+
+
+def _cache_files(target: Path) -> Tuple[Path, ...]:
+    return (target, Path(str(target) + "-journal"), Path(str(target) + "-wal"),
+            Path(str(target) + "-shm"))
 
 
 def _owned_regular(path: Path) -> bool:
@@ -109,7 +142,7 @@ def _text_blocks(value: str) -> List[str]:
 
 
 def _add_file(connection: sqlite3.Connection, collection: str,
-              relative: str, path: Path) -> int:
+              relative: str, path: Path, cancelled=None) -> int:
     # Import lazily: vault.py also consults this module when searching.
     from codex_migrate.vault import _strings
 
@@ -146,6 +179,8 @@ def _add_file(connection: sqlite3.Connection, collection: str,
             if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
                 raise MigrationError("A conversation changed before it could be indexed.")
             while True:
+                if cancelled is not None and cancelled.is_set():
+                    raise IndexCancelled()
                 raw = handle.readline(MAX_RECORD_BYTES + 1)
                 if not raw:
                     break
@@ -173,7 +208,9 @@ def _add_file(connection: sqlite3.Connection, collection: str,
     return blocks
 
 
-def build(source_home: str, apply: bool = False) -> Dict[str, object]:
+def build(source_home: str, apply: bool = False,
+          progress: Optional[Callable[[int, int], None]] = None,
+          cancelled=None) -> Dict[str, object]:
     """Refresh an explicitly approved cache. Source transcripts are read-only."""
     from codex_migrate.vault import _transcripts
 
@@ -184,42 +221,57 @@ def build(source_home: str, apply: bool = False) -> Dict[str, object]:
         result["index_bytes"] = _path(source_home).stat().st_size
     if not apply:
         return result
+    if not supported():
+        raise MigrationError("Fast search is unavailable in this Mac's SQLite. "
+                             "Regular conversation search still works.")
     if Path(source_home).stat().st_uid != os.geteuid():
         raise MigrationError("Fast search can only index the current account's home.")
     target = _path(source_home)
     parent = target.parent
     parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    if parent.is_symlink() or parent.stat().st_uid != os.geteuid() or parent.stat().st_mode & 0o077:
-        raise MigrationError("The local search index folder has unsafe permissions.")
+    _safe_parent(parent)
     with _cache_lock(parent):
         if not _owned_regular(target):
             descriptor = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW,
                                  0o600)
             os.close(descriptor)
-        return _refresh(target, discovered, result)
+        return _refresh(target, discovered, result, progress, cancelled)
 
 
 def _refresh(target: Path, discovered: List[Tuple[str, Path, str]],
-             result: Dict[str, object]) -> Dict[str, object]:
+             result: Dict[str, object],
+             progress: Optional[Callable[[int, int], None]], cancelled) -> Dict[str, object]:
     try:
         connection = sqlite3.connect(str(target), timeout=5)
         try:
             _schema(connection)
             indexed = blocks = 0
             wanted = set()
-            for collection, path, relative in discovered:
+            if progress is not None:
+                progress(0, len(discovered))
+            for completed, (collection, path, relative) in enumerate(discovered, 1):
+                if cancelled is not None and cancelled.is_set():
+                    raise IndexCancelled()
                 wanted.add((collection, relative))
                 stamp = _source_stamp(path)
                 prior = connection.execute(
                     "SELECT dev,ino,size,mtime_ns,ctime_ns FROM files "
                     "WHERE collection=? AND relative=?", (collection, relative)).fetchone()
                 if prior == stamp:
+                    if progress is not None:
+                        progress(completed, len(discovered))
                     continue
                 with connection:
-                    blocks += _add_file(connection, collection, relative, path)
+                    blocks += _add_file(connection, collection, relative, path, cancelled)
                 indexed += 1
+                if progress is not None:
+                    progress(completed, len(discovered))
+            if cancelled is not None and cancelled.is_set():
+                raise IndexCancelled()
             for collection, relative, file_id in connection.execute(
                     "SELECT collection,relative,id FROM files").fetchall():
+                if cancelled is not None and cancelled.is_set():
+                    raise IndexCancelled()
                 if (collection, relative) in wanted:
                     continue
                 with connection:
@@ -239,18 +291,20 @@ def _refresh(target: Path, discovered: List[Tuple[str, Path, str]],
 def remove(source_home: str, apply: bool = False) -> Dict[str, object]:
     """Remove only the exact, rebuildable search cache after explicit approval."""
     target = _path(source_home)
-    exists = _owned_regular(target)
+    files = _cache_files(target)
+    exists = any([_owned_regular(path) for path in files])
     result = {"applied": False, "present": exists, "index": str(target)}
     if not apply or not exists:
         return result
+    _safe_parent(target.parent)
     with _cache_lock(target.parent):
-        if not _owned_regular(target):
-            return result
+        present = [path for path in files if _owned_regular(path)]
         try:
-            target.unlink()
+            for path in present:
+                path.unlink()
         except OSError as error:
             raise MigrationError("The local search index could not be removed safely.") from error
-    result["applied"] = True
+    result["applied"] = bool(present)
     result["present"] = False
     return result
 
@@ -263,6 +317,7 @@ def candidates(source_home: str, query: str,
     if "\x00" in folded or len(folded) < 3 or len(folded) > QUERY_CHARS:
         return None
     try:
+        _safe_parent(target.parent)
         available = _owned_regular(target)
     except MigrationError:
         return None

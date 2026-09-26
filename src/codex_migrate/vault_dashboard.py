@@ -12,9 +12,11 @@ VAULT_HTML = r'''<!doctype html>
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 20% 0,#172038 0,transparent 36%),var(--bg);color:var(--text);font:500 16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--light)}header{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:28px}h1{font-size:clamp(34px,7vw,58px);letter-spacing:-.045em;line-height:1;margin:10px 0}.lede,.muted{color:var(--muted)}.lede{font-size:18px;max-width:680px;margin:0}.panel{background:color-mix(in srgb,var(--panel) 95%,transparent);border:1px solid var(--line);border-radius:18px;padding:22px;margin:18px 0}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.metric{border:1px solid var(--line);border-radius:13px;padding:14px}.metric span{display:block;color:var(--muted);font-size:14px}.metric strong{font-size:22px}form,.actions{display:flex;gap:10px;flex-wrap:wrap}input,select,textarea,button,a.button{font:inherit;border-radius:10px;border:1px solid #8996ad;padding:11px 14px}input,select,textarea{background:#080b10;color:var(--text);flex:1;min-width:220px}textarea{display:block;width:100%;resize:none}button,a.button{background:var(--purple);color:white;font-weight:750;cursor:pointer;text-decoration:none}button.secondary,a.secondary{background:transparent}button:disabled,select:disabled{opacity:.55;cursor:wait}.result{width:100%;text-align:left;background:#151d2a;margin:10px 0;padding:15px;line-height:1.45}.result small{display:block;color:var(--muted);margin-bottom:5px}.entry{border-top:1px solid var(--line);padding:20px 0}.entry:first-child{border-top:0}.entry h3{margin:0 0 4px;font-size:17px}.entry time{display:block;color:var(--muted);font-size:14px;margin-bottom:10px}.entry p{white-space:pre-wrap;overflow-wrap:anywhere;margin:0}#error,#backup-error,#schedule-error,#restore-error,#install-error{color:#ffc3c8}#status,#backup-status,#schedule-status,#restore-status,#install-status{color:var(--muted)}#recovery{border-left:4px solid var(--light);padding-left:16px;margin-top:18px}.subsection{border-top:1px solid var(--line);margin-top:22px;padding-top:18px}[hidden]{display:none!important}fieldset{margin:18px 0;padding:0;border:0}legend{margin-bottom:10px;font-weight:750}fieldset label{display:flex;gap:11px;padding:13px 14px;margin:8px 0;border:1px solid var(--line);border-radius:11px;cursor:pointer}fieldset input{flex:0 0 auto;min-width:0;width:19px;height:19px;margin:3px 0 0;accent-color:var(--purple)}fieldset label span,fieldset label small{display:block}fieldset label small{margin-top:3px;color:var(--muted);font-size:14px}.retention-note{font-size:14px;margin-top:10px}
 .result strong{display:block;margin-bottom:4px}#browse-error,#thread-restore-error{color:#ffc3c8}#browse-status,#thread-restore-status{color:var(--muted)}
+#index-error{color:#ffc3c8}#index-status{color:var(--muted)}
 .app{min-height:100vh;display:grid;grid-template-columns:238px 1fr}.sidebar{position:sticky;top:0;height:100vh;padding:28px 18px 24px;border-right:1px solid var(--line);background:#0c1018;display:flex;flex-direction:column}.brand{display:flex;gap:12px;align-items:center;padding:0 8px 26px}.brand-mark{width:36px;height:36px;display:grid;place-items:center;border-radius:11px;background:linear-gradient(145deg,#9475ff,#5735d6);font-size:14px;font-weight:850;box-shadow:0 10px 30px #6f4cff44}.brand strong,.brand small{display:block}.brand small{color:var(--muted);font-size:12px}.nav{display:grid;gap:8px}.nav a{display:flex;align-items:center;gap:12px;padding:12px 14px;color:#aeb8ca;border-radius:11px;text-decoration:none;font-weight:700}.nav a:hover,.nav a.active{color:white;background:#1d2434}.nav-icon{width:18px;text-align:center;color:#a991ff}.protection{margin-top:auto;border-top:1px solid var(--line);padding:18px 8px 0;font-size:13px;color:var(--muted)}.protection strong{color:var(--text)}.dot{display:inline-block;width:9px;height:9px;margin-right:8px;border-radius:50%;background:#45dfa0;box-shadow:0 0 0 5px #45dfa014}.content{min-width:0}.topline{font-size:14px;color:var(--muted);font-weight:750}.view-head h1{font-size:clamp(38px,5vw,58px)}.view-head{align-items:center;margin-bottom:26px}.panel h2{margin-top:0}.storage-assessment{border:1px solid var(--line);border-radius:13px;padding:14px 16px;margin:14px 0;background:#0c121d}.storage-assessment strong,.storage-assessment span{display:block}.storage-assessment span{color:var(--muted);font-size:14px;margin-top:3px}.storage-assessment.cloud_sync{border-color:#25654d;background:#0d251c}.storage-assessment.cloud_sync strong{color:#5ee5aa}.storage-assessment.local{border-color:#7a5824;background:#2c210f}.storage-assessment.local strong{color:#ffd58a}.storage-assessment.external_or_network{border-color:#4c5a74}.view-backup .summary,.view-recovery .summary,.view-backup #restore-panel,.view-backup #search-panel,.view-backup #results-panel,.view-backup #thread,.view-conversations #backup-panel,.view-conversations #restore-panel,.view-recovery #backup-panel,.view-recovery #search-panel,.view-recovery #results-panel,.view-recovery #thread{display:none!important}.view-conversations main{width:min(1120px,calc(100% - 48px))}.view-conversations #search-panel{margin-bottom:12px}.view-conversations #results-panel{width:36%;float:left;margin-right:14px}.view-conversations #thread{overflow:hidden;min-height:420px}.view-conversations #status,.view-conversations #error{clear:both}.view-recovery main{width:min(980px,calc(100% - 48px))}
 @media(max-width:820px){.app{display:block}.sidebar{position:static;width:auto;height:auto;padding:16px}.brand{padding-bottom:12px}.nav{display:flex;overflow-x:auto}.nav a{white-space:nowrap}.protection{display:none}.view-conversations #results-panel{float:none;width:auto;margin-right:0}.view-conversations #thread{min-height:0}}
 @media(max-width:620px){header{display:block}.summary{grid-template-columns:1fr}.panel{padding:16px}main,.view-conversations main,.view-recovery main{width:min(100% - 24px,960px);margin-top:22px}.nav a{padding:10px}.nav-icon{display:none}}
+@media(max-width:620px){.view-head a.button{display:inline-block;margin-top:18px}}
 @media print{body{background:white;color:black}header,.summary,#backup-panel,#restore-panel,#search-panel,#results-panel,.actions,#error,#status{display:none!important}main{width:auto;margin:0}.panel{border:0;padding:0;background:white}.entry{break-inside:avoid;border-color:#bbb}.entry time{color:#444}}
 </style>
 </head>
@@ -188,7 +190,18 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 <input id="query" required autocomplete="off">
 <button type="submit">Search</button>
 </form>
-<p class="muted">Remember an old name? Search this Mac's titles first. Full-text search reads local conversations and may take longer for large histories. All saved titles searches dated encrypted snapshots; open a version to search its full text.</p>
+<p class="muted">Search this Mac's text or titles. For older versions, search saved titles, then open a backup to search its full text.</p>
+<div class="subsection" id="index-controls">
+<h3>Speed up search</h3>
+<p class="muted">For large histories, build a local cache instead of scanning every conversation. It may use several GB and stores <strong>unencrypted text fragments</strong> visible to your Mac account. Search and backups work without it; you can delete it anytime.</p>
+<div class="actions">
+<button id="index-build" type="button" class="secondary">Make search faster</button>
+<button id="index-stop" type="button" class="secondary" hidden>Stop indexing</button>
+<button id="index-remove" type="button" class="secondary" hidden>Delete search cache</button>
+</div>
+<p id="index-status" role="status" aria-live="polite">Checking fast search…</p>
+<p id="index-error" role="alert"></p>
+</div>
 </section>
 <section class="panel" id="results-panel" hidden>
 <h2>Results</h2>
@@ -400,6 +413,44 @@ async function runSearch(append=false){
 }
 $("search").onsubmit=event=>{event.preventDefault();void runSearch()};
 $("more-results").onclick=()=>void runSearch(true);
+let indexTimer=null;
+function indexView(data){
+  const running=data.status==="running"||data.status==="stopping";
+  $("index-build").disabled=running||!data.available;
+  $("index-build").textContent=data.present?"Refresh search cache":"Make search faster";
+  $("index-stop").hidden=!running;
+  $("index-stop").disabled=data.status==="stopping";
+  $("index-remove").hidden=!data.present||running;
+  $("index-error").textContent=data.status==="failed"&&data.available?(data.error||"Fast search needs attention."):"";
+  if(!data.available)$("index-status").textContent="Fast search is unavailable on this Mac. Regular conversation search still works.";
+  else if(data.status==="running")$("index-status").textContent=data.total?
+    `Indexing ${data.completed||0} of ${data.total} conversations. Search remains available.`:
+    "Preparing local conversation index…";
+  else if(data.status==="stopping")$("index-status").textContent="Stopping safely after the current record…";
+  else if(data.status==="ready")$("index-status").textContent=`Fast search is ready · ${data.total} conversations · ${fmt(data.index_bytes)} on this Mac.`;
+  else if(data.status==="stopped")$("index-status").textContent="Indexing stopped. Search still works; refresh to continue.";
+  else if(data.status==="failed")$("index-status").textContent="Search still works without this cache.";
+  else $("index-status").textContent=data.present?
+    "A local search cache is present. Refresh it to include recent conversations faster.":
+    "Fast search is off. Search still reads your original conversations.";
+  if(running&&!indexTimer)indexTimer=setInterval(refreshIndex,1000);
+  if(!running&&indexTimer){clearInterval(indexTimer);indexTimer=null}
+}
+async function refreshIndex(){try{indexView(await api("/api/vault/search-index-status"))}catch(error){$("index-error").textContent=error.message}}
+$("index-build").onclick=async()=>{
+  if(!confirm("Build a local search cache? It stores unencrypted three-character text fragments, may use several GB, and is not a backup. You can delete it later."))return;
+  try{$("index-error").textContent="";indexView(await api("/api/vault/search-index",{apply:true}))}
+  catch(error){$("index-error").textContent=error.message;await refreshIndex()}
+};
+$("index-stop").onclick=async()=>{
+  try{indexView(await api("/api/vault/search-index-stop",{apply:true}))}
+  catch(error){$("index-error").textContent=error.message}
+};
+$("index-remove").onclick=async()=>{
+  if(!confirm("Delete only the local search cache? Your Codex conversations and Vault backups will remain unchanged."))return;
+  try{indexView(await api("/api/vault/search-index-remove",{apply:true}))}
+  catch(error){$("index-error").textContent=error.message}
+};
 async function markdownFile(){if(!selected)throw Error("Open a conversation first");const text=await api("/api/vault/export?"+params(selected));return new File([text],"codex-conversation.md",{type:"text/markdown"})}
 $("download").onclick=async()=>{try{
   if(!selected)throw Error("Open a conversation first");
@@ -464,6 +515,7 @@ refreshRestore();
 refreshInstall();
 refreshBrowse();
 refreshSelectedRecovery();
+refreshIndex();
 backupFrequencyView();
 </script>
 </body>

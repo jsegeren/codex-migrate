@@ -4,11 +4,13 @@ from pathlib import Path
 import random
 import sqlite3
 import tempfile
+import threading
 import unittest
+from unittest.mock import patch
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault import _transcripts, search
-from codex_migrate.vault_search_index import _path, build, candidates, remove
+from codex_migrate.vault_search_index import IndexCancelled, _path, build, candidates, remove
 
 
 def write_thread(path: Path, *texts: str) -> None:
@@ -27,15 +29,28 @@ class SearchIndexTests(unittest.TestCase):
             self.assertFalse(_path(temporary).exists())
             self.assertEqual(len(search(temporary, "launch")), 1)
 
+    def test_unsupported_sqlite_refuses_only_the_optional_index(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            write_thread(Path(temporary) / ".codex/sessions/one.jsonl", "Clerk history")
+            with patch("codex_migrate.vault_search_index.supported", return_value=False):
+                with self.assertRaisesRegex(MigrationError, "unavailable"):
+                    build(temporary, apply=True)
+            self.assertFalse(_path(temporary).exists())
+            self.assertEqual(len(search(temporary, "Clerk")), 1)
+
     def test_clear_requires_apply_and_keeps_source(self):
         with tempfile.TemporaryDirectory() as temporary:
             thread = Path(temporary) / ".codex/sessions/one.jsonl"
             write_thread(thread, "Clerk history")
             build(temporary, apply=True)
+            sidecar = Path(str(_path(temporary)) + "-journal")
+            sidecar.write_bytes(b"synthetic interrupted transaction")
+            sidecar.chmod(0o600)
             self.assertTrue(remove(temporary)["present"])
             self.assertTrue(_path(temporary).exists())
             self.assertTrue(remove(temporary, apply=True)["applied"])
             self.assertFalse(_path(temporary).exists())
+            self.assertFalse(sidecar.exists())
             self.assertEqual(len(search(temporary, "Clerk")), 1)
             self.assertTrue(thread.exists())
 
@@ -152,6 +167,24 @@ class SearchIndexTests(unittest.TestCase):
                 build(temporary, apply=True)
             with self.assertRaisesRegex(MigrationError, "unreadable JSON"):
                 search(temporary, "missing")
+
+    def test_stopping_after_one_file_keeps_search_complete(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            write_thread(home / ".codex/sessions/a.jsonl", "Clerk first")
+            write_thread(home / ".codex/sessions/b.jsonl", "Clerk second")
+            stop = threading.Event()
+
+            def progress(completed, total):
+                self.assertEqual(total, 2)
+                if completed == 1:
+                    stop.set()
+
+            with self.assertRaises(IndexCancelled):
+                build(temporary, apply=True, progress=progress, cancelled=stop)
+            self.assertEqual({item.transcript for item in search(temporary, "Clerk")},
+                             {"a.jsonl", "b.jsonl"})
+            self.assertEqual(build(temporary, apply=True)["indexed"], 1)
 
     def test_parent_match_remains_visible_in_a_paginated_child(self):
         with tempfile.TemporaryDirectory() as temporary:

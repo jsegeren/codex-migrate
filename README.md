@@ -95,9 +95,9 @@ still verifies candidate matches against the original conversations. New or
 changed transcripts that have not been refreshed are searched directly, so a
 stale cache cannot silently hide a matching thread. Short or unsupported
 queries use the normal full scan. Removing the cache does not change Codex or
-any Vault snapshot. The packaged app's fast-search setup and progress UI are
-still in development; this CLI feature is not a claim that the current paid
-build already has indexed search.
+any Vault snapshot. This development branch also adds an opt-in setup, progress,
+stop, and delete flow to the local Vault browser. The current signed paid build
+does not yet include indexed search; release acceptance is still required.
 
 Planning is read-only:
 
