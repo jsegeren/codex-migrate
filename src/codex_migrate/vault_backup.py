@@ -25,7 +25,8 @@ from codex_migrate.errors import MigrationError
 from codex_migrate.source_availability import check_info, require_local
 from codex_migrate.vault import _transcripts
 from codex_migrate.vault_identity import (
-    loss_warnings, mark_simultaneous_conflicts, scan_transcript, title_index,
+    TranscriptChanged, loss_warnings, mark_simultaneous_conflicts,
+    scan_transcript, title_index,
 )
 from codex_migrate.vault_local_lock import local_history_lock
 
@@ -35,6 +36,7 @@ SNAPSHOT_FORMAT_VERSION = 2
 DEFAULT_CHUNK_SIZE = 4 * 1024 * 1024
 METADATA_NAME = "vault.json"
 STORAGE_CODEC = "lzfse-v1"
+MAX_CHANGED_TRANSCRIPT_ATTEMPTS = 3
 
 
 @dataclass(frozen=True)
@@ -395,40 +397,49 @@ def _backup_unlocked(
         total_bytes = 0
         for folder, path, relative in files:
             require_local(path)
-            scanned = check_info(path.lstat())
-            signals = scan_transcript(path, relative, titles)
-            descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-            try:
-                before = os.fstat(descriptor)
-                if not stat.S_ISREG(before.st_mode):
-                    raise MigrationError("A conversation transcript changed before backup.")
-                with os.fdopen(descriptor, "rb", closefd=False) as handle:
-                    stored = _run_helper(
-                        helper,
-                        ["store-chunks", "--key-id", key_id,
-                         "--object-dir", str(objects), "--chunk-size", str(chunk_size)],
-                        input_file=handle,
-                    )
-                after = os.fstat(descriptor)
-            finally:
-                os.close(descriptor)
-            stable = (
-                scanned.st_dev == before.st_dev
-                and scanned.st_ino == before.st_ino
-                and scanned.st_size == before.st_size
-                and scanned.st_mtime_ns == before.st_mtime_ns
-                and scanned.st_ctime_ns == before.st_ctime_ns
-                and
-                before.st_dev == after.st_dev
-                and before.st_ino == after.st_ino
-                and before.st_size == after.st_size
-                and before.st_mtime_ns == after.st_mtime_ns
-                and before.st_ctime_ns == after.st_ctime_ns
-            )
-            if not stable:
-                raise MigrationError(
-                    "A conversation changed during backup. Run backup again; no snapshot was published."
+            for attempt in range(MAX_CHANGED_TRANSCRIPT_ATTEMPTS):
+                scanned = check_info(path.lstat())
+                try:
+                    signals = scan_transcript(path, relative, titles)
+                except TranscriptChanged:
+                    if attempt + 1 == MAX_CHANGED_TRANSCRIPT_ATTEMPTS:
+                        raise MigrationError(
+                            "A conversation changed during backup. Run backup again; no snapshot was published."
+                        ) from None
+                    continue
+                descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+                try:
+                    before = os.fstat(descriptor)
+                    if not stat.S_ISREG(before.st_mode):
+                        raise MigrationError("A conversation transcript changed before backup.")
+                    with os.fdopen(descriptor, "rb", closefd=False) as handle:
+                        stored = _run_helper(
+                            helper,
+                            ["store-chunks", "--key-id", key_id,
+                             "--object-dir", str(objects), "--chunk-size", str(chunk_size)],
+                            input_file=handle,
+                        )
+                    after = os.fstat(descriptor)
+                finally:
+                    os.close(descriptor)
+                stable = (
+                    scanned.st_dev == before.st_dev
+                    and scanned.st_ino == before.st_ino
+                    and scanned.st_size == before.st_size
+                    and scanned.st_mtime_ns == before.st_mtime_ns
+                    and scanned.st_ctime_ns == before.st_ctime_ns
+                    and before.st_dev == after.st_dev
+                    and before.st_ino == after.st_ino
+                    and before.st_size == after.st_size
+                    and before.st_mtime_ns == after.st_mtime_ns
+                    and before.st_ctime_ns == after.st_ctime_ns
                 )
+                if stable:
+                    break
+                if attempt + 1 == MAX_CHANGED_TRANSCRIPT_ATTEMPTS:
+                    raise MigrationError(
+                        "A conversation changed during backup. Run backup again; no snapshot was published."
+                    )
             stored_size = stored.get("size")
             digest = stored.get("sha256")
             chunks = stored.get("chunks")

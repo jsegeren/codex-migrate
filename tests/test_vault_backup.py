@@ -13,6 +13,7 @@ from unittest.mock import patch
 from codex_migrate.errors import MigrationError
 from codex_migrate import vault_backup
 from codex_migrate.vault_backup import backup, plan
+from codex_migrate.vault_identity import TranscriptChanged
 from codex_migrate.vault_recovery import (
     export_recovery_key, import_recovery_key, list_snapshots, restore_snapshot,
     vault_storage_usage, verify_snapshot,
@@ -318,6 +319,67 @@ class VaultBackupTests(unittest.TestCase):
             finally:
                 self.delete_key(destination)
 
+    def test_transcript_append_once_during_backup_retries_and_verifies(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            destination = root / "vault"
+            restored = root / "restored"
+            self.fixture(source)
+            transcript = source / ".codex/sessions/2026/09/17/active.jsonl"
+            try:
+                original_run_helper = vault_backup._run_helper
+                stores = 0
+
+                def append_after_first_store(helper, arguments, **kwargs):
+                    nonlocal stores
+                    result = original_run_helper(helper, arguments, **kwargs)
+                    input_file = kwargs.get("input_file")
+                    if (arguments[0] == "store-chunks" and input_file is not None
+                            and os.fstat(input_file.fileno()).st_ino == transcript.stat().st_ino):
+                        stores += 1
+                        if stores == 1:
+                            with transcript.open("a", encoding="utf-8") as handle:
+                                handle.write(json.dumps({"type": "response_item", "payload": "later"}) + "\n")
+                    return result
+
+                with patch.object(vault_backup, "_run_helper", side_effect=append_after_first_store):
+                    saved = backup(str(source), str(destination), crypto_helper=str(self.helper))
+                self.assertEqual(stores, 2)
+                self.assertEqual(verify_snapshot(str(destination), crypto_helper=str(self.helper))
+                                 .snapshot_id, saved.snapshot_id)
+                restore_snapshot(str(source), str(destination), str(restored),
+                                 crypto_helper=str(self.helper))
+                self.assertEqual((restored / "sessions/2026/09/17/active.jsonl").read_bytes(),
+                                 transcript.read_bytes())
+            finally:
+                self.delete_key(destination)
+
+    def test_transcript_change_during_identity_scan_retries(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            destination = root / "vault"
+            self.fixture(source)
+            try:
+                original_scan = vault_backup.scan_transcript
+                scans = 0
+
+                def changed_once(path, relative, titles):
+                    nonlocal scans
+                    scans += 1
+                    if scans == 1:
+                        raise TranscriptChanged("A conversation changed during identity inspection.")
+                    return original_scan(path, relative, titles)
+
+                with patch.object(vault_backup, "scan_transcript", side_effect=changed_once):
+                    saved = backup(str(source), str(destination), crypto_helper=str(self.helper))
+                self.assertEqual(scans, saved.transcript_files + 1)
+                self.assertEqual(verify_snapshot(str(destination), crypto_helper=str(self.helper))
+                                 .snapshot_id, saved.snapshot_id)
+            finally:
+                self.delete_key(destination)
+
     def test_transcript_rewrite_during_backup_keeps_previous_snapshot(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -328,27 +390,27 @@ class VaultBackupTests(unittest.TestCase):
             try:
                 first = backup(str(source), str(destination), crypto_helper=str(self.helper))
                 original_run_helper = vault_backup._run_helper
-                rewritten = False
+                rewrites = 0
 
                 def rewrite_after_chunk_store(helper, arguments, **kwargs):
-                    nonlocal rewritten
+                    nonlocal rewrites
                     result = original_run_helper(helper, arguments, **kwargs)
                     input_file = kwargs.get("input_file")
                     if (arguments[0] == "store-chunks" and input_file is not None
                             and os.fstat(input_file.fileno()).st_ino == transcript.stat().st_ino
-                            and not rewritten):
+                            and rewrites < vault_backup.MAX_CHANGED_TRANSCRIPT_ATTEMPTS):
+                        rewrites += 1
                         transcript.write_text(
                             transcript.read_text(encoding="utf-8")
-                            + json.dumps({"type": "response_item", "payload": "later"}) + "\n",
+                            + json.dumps({"type": "response_item", "payload": str(rewrites)}) + "\n",
                             encoding="utf-8",
                         )
-                        rewritten = True
                     return result
 
                 with patch.object(vault_backup, "_run_helper", side_effect=rewrite_after_chunk_store):
                     with self.assertRaisesRegex(MigrationError, "changed during backup"):
                         backup(str(source), str(destination), crypto_helper=str(self.helper))
-                self.assertTrue(rewritten)
+                self.assertEqual(rewrites, vault_backup.MAX_CHANGED_TRANSCRIPT_ATTEMPTS)
                 latest = json.loads((destination / "latest.json").read_text(encoding="utf-8"))
                 self.assertEqual(latest["snapshot_id"], first.snapshot_id)
                 self.assertEqual(len(list((destination / "refs").glob("*.json"))), 1)

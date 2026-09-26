@@ -27,6 +27,10 @@ MAX_RECORD_BYTES = 128 * 1024 * 1024
 MAX_TITLES_PER_THREAD = 64
 
 
+class TranscriptChanged(MigrationError):
+    """A transcript moved while it was being inspected; a fresh read may work."""
+
+
 def canonical_id(value: object) -> Optional[str]:
     if not isinstance(value, str):
         return None
@@ -161,6 +165,12 @@ def scan_transcript(path: Path, relative: str, titles: Dict[str, List[str]]) -> 
                 try:
                     record = json.loads(raw)
                 except (UnicodeError, json.JSONDecodeError) as error:
+                    changed = os.fstat(handle.fileno())
+                    if (before.st_dev, before.st_ino, before.st_size,
+                            before.st_mtime_ns, before.st_ctime_ns) != (
+                            changed.st_dev, changed.st_ino, changed.st_size,
+                            changed.st_mtime_ns, changed.st_ctime_ns):
+                        raise TranscriptChanged("A conversation changed during identity inspection.") from error
                     raise MigrationError("A conversation contains unreadable JSON; it was not backed up.") from error
                 if not isinstance(record, dict):
                     continue
@@ -184,7 +194,7 @@ def scan_transcript(path: Path, relative: str, titles: Dict[str, List[str]]) -> 
     if (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns,
             before.st_ctime_ns) != (after.st_dev, after.st_ino, after.st_size,
             after.st_mtime_ns, after.st_ctime_ns):
-        raise MigrationError("A conversation changed during identity inspection.")
+        raise TranscriptChanged("A conversation changed during identity inspection.")
     named = filename_id(relative)
     if len(embedded_ids) > 1:
         return ThreadSignals(None, "needs_review", [], records, assistant, user)
