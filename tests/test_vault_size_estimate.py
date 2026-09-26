@@ -61,6 +61,17 @@ class VaultSizeEstimateTests(unittest.TestCase):
             self.assertEqual(result["unreadable_or_oversized_records"], 2)
             self.assertEqual(result["unreadable_or_oversized_bytes"], 2 * len(bad))
 
+    def test_valid_final_record_without_newline_is_counted_as_readable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary) / "home"
+            body = b'{"payload":{"text":"valuable final record"}}'
+            self.fixture(home, body)
+            result = estimator()(str(home))
+            self.assertTrue(result["readable_text_estimate_complete"])
+            self.assertEqual(result["readable_record_source_bytes"], len(body) * 2)
+            self.assertEqual(result["unreadable_or_oversized_records"], 0)
+            self.assertGreater(result["readable_text_bytes"], 0)
+
     def test_oversized_record_is_counted_without_retaining_its_text(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary) / "home"
