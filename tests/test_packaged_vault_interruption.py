@@ -29,6 +29,9 @@ class PackagedVaultInterruptionTests(unittest.TestCase):
             self.skipTest("set CODEX_MIGRATE_TEST_ENGINE to a packaged engine")
         engine = Path(engine_name).resolve()
         helper = engine.parents[2] / "Helpers/CodexVaultCrypto.app/Contents/MacOS/CodexVaultCrypto"
+        if not helper.is_file():
+            # The public build 16 predates the bundled .app helper layout.
+            helper = engine.parents[1] / "CodexVaultCrypto"
         self.assertTrue(engine.is_file() and helper.is_file())
         env = {key: value for key, value in os.environ.items()
                if not key.startswith(("PYTHON", "DYLD_"))}
@@ -97,6 +100,17 @@ class PackagedVaultInterruptionTests(unittest.TestCase):
                     env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=120)
                 self.assertEqual(verified_retry.returncode, 0, "retried snapshot did not verify")
                 self.assertEqual(hashlib.sha256(transcript.read_bytes()).hexdigest(), source_digest)
+                restored = root / "restored"
+                recovery = subprocess.run(
+                    [str(engine), "vault", "--source-home", str(home), "restore",
+                     "--vault", str(vault), "--snapshot", "latest",
+                     "--output", str(restored), "--apply", "--json"],
+                    env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=120)
+                self.assertEqual(recovery.returncode, 0, "retried snapshot did not restore")
+                self.assertEqual(
+                    hashlib.sha256((restored / "sessions/fixture.jsonl").read_bytes()).hexdigest(),
+                    source_digest,
+                )
             finally:
                 if process is not None and process.poll() is None:
                     os.killpg(process.pid, signal.SIGKILL)

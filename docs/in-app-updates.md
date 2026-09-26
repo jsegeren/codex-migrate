@@ -326,6 +326,20 @@ appeared. It does not exercise purchase-link entry, paid automatic replacement,
 or real scheduled backup and off-device recovery. Those release gates remain
 open; build 17 remains testing-only and unaccepted.
 
+### Packaged Vault interruption and recovery — September 26, 2026
+
+The opt-in physical Vault test used the unmodified engine and signed Keychain
+helper extracted from the public build-16 ZIP, then the build-17 engine whose
+SHA-256 matches the exact DMG installed on the second Mac. The test harness now
+accepts both the legacy build-16 helper location and build 17's nested helper
+app. On each build, an initial synthetic backup verified; killing a second
+backup after encrypted output had begun left the previous published snapshot
+unchanged and verifiable. Retrying created a new verified snapshot, and staged
+recovery reproduced the synthetic transcript byte-for-byte. Source data was
+unchanged, test Keychain items were removed, and the extracted build-16 app
+was moved to Trash. This does not substitute for scheduled real-history backup,
+off-device key recovery, or a customer restore through the full browser app.
+
 ## Build 16 physical update receipt — September 23, 2026
 
 - The final Developer ID signed, Apple-notarized and stapled arm64 archive is
