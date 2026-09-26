@@ -19,8 +19,7 @@ const config = configuration(env, { [release.id]: release });
 test('build 17 candidates stay sandbox-only until release acceptance', () => {
   const catalog = require('../commerce/releases.json');
   for (const id of [
-    'beta-build17-arm64',
-    'codex-migrate-0.1.0-build17-quit-race-arm64',
+    'codex-migrate-build17-vault-crypto-arm64',
     'codex-migrate-0.1.0-build17-abort-guard-arm64',
   ]) {
     const candidate = catalog[id];
