@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 import stat
 import sys
+import time
 from typing import Dict, Union
 import zlib
 
@@ -68,7 +69,7 @@ def _record_text(raw: bytes) -> bytes:
     return b"".join(pieces)
 
 
-def estimate(source_home: str) -> Dict[str, Union[int, str, bool]]:
+def estimate(source_home: str, exclude_recent_seconds: int = 0) -> Dict[str, Union[int, str, bool]]:
     """Read the same transcript trees/chunk boundaries as Vault backup.
 
     The first-backup object byte count models an empty v2 Vault and excludes
@@ -89,12 +90,20 @@ def estimate(source_home: str) -> Dict[str, Union[int, str, bool]]:
         "readable_record_source_bytes": 0,
         "unreadable_or_oversized_records": 0,
         "unreadable_or_oversized_bytes": 0,
+        "skipped_recent_transcripts": 0,
+        "skipped_recent_bytes": 0,
     }
     text_compressor = zlib.compressobj(level=6, wbits=31)
     for _, path, _ in _transcripts(source_home):
         before = path.lstat()
         if not stat.S_ISREG(before.st_mode):
             raise ValueError("a transcript is not a regular file")
+        if exclude_recent_seconds and before.st_mtime_ns >= (
+            time.time_ns() - exclude_recent_seconds * 1_000_000_000
+        ):
+            totals["skipped_recent_transcripts"] += 1
+            totals["skipped_recent_bytes"] += before.st_size
+            continue
         descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         with os.fdopen(descriptor, "rb") as stream:
             opened = os.fstat(stream.fileno())
@@ -173,7 +182,9 @@ def estimate(source_home: str) -> Dict[str, Union[int, str, bool]]:
     totals["readable_text_gzip_bytes"] += len(text_compressor.flush())
     totals["readable_text_estimate_complete"] = (
         totals["unreadable_or_oversized_records"] == 0
+        and totals["skipped_recent_transcripts"] == 0
     )
+    totals["estimate_complete"] = totals["skipped_recent_transcripts"] == 0
     totals["scope"] = "active and archived JSONL transcripts only"
     totals["object_size_warning"] = (
         "Encrypted objects in an empty Vault; excludes manifests, refs, and file-system overhead."
@@ -188,9 +199,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-home", required=True,
                         help="explicit Mac home directory; never printed")
+    parser.add_argument("--exclude-recent-seconds", type=int, default=0,
+                        help="omit recently modified transcripts and report their aggregate bytes")
     args = parser.parse_args()
     try:
-        print(json.dumps(estimate(args.source_home), sort_keys=True))
+        if args.exclude_recent_seconds < 0:
+            raise ValueError("recent exclusion must be nonnegative")
+        print(json.dumps(estimate(args.source_home, args.exclude_recent_seconds), sort_keys=True))
     except Exception as error:
         # No transcript path, text, or hash may escape through an exception.
         print("Sizing stopped safely (%s); no aggregate was produced." %

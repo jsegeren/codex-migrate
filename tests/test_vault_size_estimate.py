@@ -86,6 +86,19 @@ class VaultSizeEstimateTests(unittest.TestCase):
             self.assertEqual(result["unreadable_or_oversized_bytes"], 2 * len(oversized))
             self.assertEqual(result["readable_record_source_bytes"], 2 * len(good))
 
+    def test_recent_active_transcript_is_reported_as_omitted(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary) / "home"
+            body = b'{"payload":{"text":"valuable"}}\n'
+            active, archived = self.fixture(home, body)
+            os.utime(archived, (1, 1))
+            result = estimator()(str(home), exclude_recent_seconds=600)
+            self.assertEqual(result["transcripts"], 1)
+            self.assertEqual(result["skipped_recent_transcripts"], 1)
+            self.assertEqual(result["skipped_recent_bytes"], active.stat().st_size)
+            self.assertFalse(result["estimate_complete"])
+            self.assertFalse(result["readable_text_estimate_complete"])
+
     def test_cli_prints_aggregates_but_no_content_or_paths(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary) / "home"
