@@ -34,6 +34,7 @@ FORMAT_VERSION = 1
 SNAPSHOT_FORMAT_VERSION = 2
 DEFAULT_CHUNK_SIZE = 4 * 1024 * 1024
 METADATA_NAME = "vault.json"
+STORAGE_CODEC = "lzfse-v1"
 
 
 @dataclass(frozen=True)
@@ -223,10 +224,13 @@ def _read_json(path: Path) -> Dict[str, object]:
 
 
 def _metadata(value: Dict[str, object]) -> str:
-    if set(value) != {"format", "version", "key_id", "created_at"}:
+    required = {"format", "version", "key_id", "created_at"}
+    if set(value) not in (required, required | {"storage_codec"}):
         raise MigrationError("Vault metadata has an unsupported shape.")
     if value.get("format") != "codex-vault" or value.get("version") != FORMAT_VERSION:
         raise MigrationError("Vault metadata has an unsupported format version.")
+    if "storage_codec" in value and value["storage_codec"] != STORAGE_CODEC:
+        raise MigrationError("Vault metadata has an unsupported storage codec.")
     key_id = value.get("key_id")
     try:
         canonical = str(uuid.UUID(str(key_id))).lower()
@@ -275,6 +279,7 @@ def _prepare_repository(root: Path, helper: Path) -> Tuple[str, Optional[str]]:
     metadata = {
         "format": "codex-vault",
         "version": FORMAT_VERSION,
+        "storage_codec": STORAGE_CODEC,
         "key_id": canonical,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -423,12 +428,14 @@ def _backup_unlocked(
                     or not isinstance(chunks, list)):
                 raise MigrationError("The backup helper returned invalid file verification data.")
             for chunk in chunks:
-                if (not isinstance(chunk, dict) or set(chunk) != {"id", "size"}
+                if (not isinstance(chunk, dict)
+                        or set(chunk) not in ({"id", "size"}, {"id", "size", "encoding"})
                         or not isinstance(chunk.get("id"), str)
                         or len(chunk["id"]) != 64
                         or any(character not in "0123456789abcdef" for character in chunk["id"])
                         or not isinstance(chunk.get("size"), int)
-                        or chunk["size"] < 0 or chunk["size"] > chunk_size):
+                        or chunk["size"] < 0 or chunk["size"] > chunk_size
+                        or ("encoding" in chunk and chunk["encoding"] != "lzfse")):
                     raise MigrationError("The backup helper returned invalid chunk metadata.")
             manifest_files.append({
                 "collection": "active" if folder == "sessions" else "archived",
@@ -476,6 +483,14 @@ def _backup_unlocked(
                 or verified.get("chunks") != total_chunks
                 or verified.get("bytes") != total_bytes):
             raise MigrationError("The completed Vault snapshot did not verify exactly.")
+        metadata_path = root / METADATA_NAME
+        metadata = _read_json(metadata_path)
+        _metadata(metadata)
+        if "storage_codec" not in metadata:
+            # Older helpers refuse the additional field, so no legacy build can
+            # publish over a snapshot containing compressed objects.
+            _atomic_json(metadata_path, {**metadata, "storage_codec": STORAGE_CODEC},
+                         replace=True)
         reference = {
             "format": "codex-vault-reference",
             "version": FORMAT_VERSION,

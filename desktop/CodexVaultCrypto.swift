@@ -1,4 +1,5 @@
 import CryptoKit
+import Compression
 import Darwin
 import Foundation
 import LocalAuthentication
@@ -12,6 +13,7 @@ private let snapshotFormatVersion = 2
 private struct Chunk: Codable {
     let id: String
     let size: Int
+    let encoding: String?
 }
 
 private struct StoredFile: Codable {
@@ -216,8 +218,58 @@ private func objectID(_ plaintext: Data, key: SymmetricKey) -> String {
     hex(HMAC<SHA256>.authenticationCode(for: plaintext, using: key))
 }
 
+private func compressedObjectID(_ plaintext: Data, key: SymmetricKey) -> String {
+    let compressedIdentifiers = HKDF<SHA256>.deriveKey(
+        inputKeyMaterial: key,
+        salt: Data("codex-vault-lzfse-v1".utf8),
+        info: Data("private-compressed-object-identifiers".utf8),
+        outputByteCount: 32
+    )
+    return objectID(plaintext, key: compressedIdentifiers)
+}
+
 private func chunkAAD(id: String, size: Int) -> Data {
     Data("codex-vault:chunk:v1:\(id):\(size)".utf8)
+}
+
+private func compressedChunkAAD(id: String, size: Int) -> Data {
+    Data("codex-vault:chunk:lzfse:v1:\(id):\(size)".utf8)
+}
+
+private func compressChunk(_ plaintext: Data) -> Data? {
+    guard plaintext.count >= 1024 else { return nil }
+    let capacity = plaintext.count
+    var encoded = Data(count: capacity)
+    let count = encoded.withUnsafeMutableBytes { destination in
+        plaintext.withUnsafeBytes { source in
+            compression_encode_buffer(
+                destination.bindMemory(to: UInt8.self).baseAddress!, capacity,
+                source.bindMemory(to: UInt8.self).baseAddress!, plaintext.count,
+                nil, COMPRESSION_LZFSE)
+        }
+    }
+    guard count > 0, count + 64 < plaintext.count else { return nil }
+    encoded.removeSubrange(count..<capacity)
+    return encoded
+}
+
+private func decompressChunk(_ encoded: Data, expectedSize: Int) throws -> Data {
+    guard !encoded.isEmpty, expectedSize > 0, expectedSize <= 64 * 1024 * 1024 else {
+        throw VaultError.message("an encrypted chunk has an invalid decoded size")
+    }
+    var decoded = Data(count: expectedSize)
+    let count = decoded.withUnsafeMutableBytes { destination in
+        encoded.withUnsafeBytes { source in
+            compression_decode_buffer(
+                destination.bindMemory(to: UInt8.self).baseAddress!, expectedSize,
+                source.bindMemory(to: UInt8.self).baseAddress!, encoded.count,
+                nil, COMPRESSION_LZFSE)
+        }
+    }
+    guard count == expectedSize else {
+        throw VaultError.message("an encrypted chunk could not be decompressed exactly")
+    }
+    return decoded
 }
 
 private func sealed(_ plaintext: Data, key: SymmetricKey, aad: Data) throws -> Data {
@@ -282,27 +334,68 @@ private func writeNew(_ data: Data, to destination: URL) throws {
     }
 }
 
+private func readChunk(_ chunk: Chunk, root: URL,
+                       encryption: SymmetricKey, identifiers: SymmetricKey) throws -> Data {
+    guard chunk.size >= 0, chunk.size <= 64 * 1024 * 1024 else {
+        throw VaultError.message("an encrypted chunk has an invalid plaintext size")
+    }
+    let url = try objectURL(root: root, id: chunk.id)
+    let ciphertext = try safeRegularFile(url, maxBytes: chunk.size + 64)
+    let plaintext: Data
+    let expectedID: String
+    switch chunk.encoding {
+    case nil:
+        plaintext = try opened(ciphertext, key: encryption,
+                               aad: chunkAAD(id: chunk.id, size: chunk.size))
+        expectedID = objectID(plaintext, key: identifiers)
+    case "lzfse":
+        let encoded = try opened(ciphertext, key: encryption,
+                                 aad: compressedChunkAAD(id: chunk.id, size: chunk.size))
+        plaintext = try decompressChunk(encoded, expectedSize: chunk.size)
+        expectedID = compressedObjectID(plaintext, key: identifiers)
+    default:
+        throw VaultError.message("an encrypted chunk uses an unsupported encoding")
+    }
+    guard plaintext.count == chunk.size, expectedID == chunk.id else {
+        throw VaultError.message("an encrypted chunk failed identity verification")
+    }
+    return plaintext
+}
+
 private func storeChunk(_ plaintext: Data, root: URL,
                         encryption: SymmetricKey, identifiers: SymmetricKey) throws -> Chunk {
-    let id = objectID(plaintext, key: identifiers)
-    let destination = try objectURL(root: root, id: id)
-    let aad = chunkAAD(id: id, size: plaintext.count)
+    let rawID = objectID(plaintext, key: identifiers)
+    let raw = Chunk(id: rawID, size: plaintext.count, encoding: nil)
+    let rawURL = try objectURL(root: root, id: rawID)
+    if FileManager.default.fileExists(atPath: rawURL.path) {
+        guard try readChunk(raw, root: root, encryption: encryption, identifiers: identifiers)
+                == plaintext else {
+            throw VaultError.message("an existing encrypted object failed content verification")
+        }
+        return raw
+    }
+    let compressed = compressChunk(plaintext)
+    let chunk = compressed == nil ? raw : Chunk(
+        id: compressedObjectID(plaintext, key: identifiers),
+        size: plaintext.count, encoding: "lzfse")
+    let destination = try objectURL(root: root, id: chunk.id)
     if FileManager.default.fileExists(atPath: destination.path) {
-        let existing = try safeRegularFile(destination, maxBytes: plaintext.count + 64)
-        let restored = try opened(existing, key: encryption, aad: aad)
-        guard restored == plaintext else {
+        guard try readChunk(chunk, root: root, encryption: encryption, identifiers: identifiers)
+                == plaintext else {
             throw VaultError.message("an existing encrypted object failed content verification")
         }
     } else {
-        let ciphertext = try sealed(plaintext, key: encryption, aad: aad)
-        try writeNew(ciphertext, to: destination)
-        let restored = try opened(safeRegularFile(destination, maxBytes: plaintext.count + 64),
-                                  key: encryption, aad: aad)
-        guard restored == plaintext else {
+        let aad = chunk.encoding == nil
+            ? chunkAAD(id: chunk.id, size: chunk.size)
+            : compressedChunkAAD(id: chunk.id, size: chunk.size)
+        try writeNew(try sealed(compressed ?? plaintext, key: encryption, aad: aad),
+                     to: destination)
+        guard try readChunk(chunk, root: root, encryption: encryption, identifiers: identifiers)
+                == plaintext else {
             throw VaultError.message("a newly written encrypted object failed verification")
         }
     }
-    return Chunk(id: id, size: plaintext.count)
+    return chunk
 }
 
 private func JSON<T: Encodable>(_ value: T) throws -> Data {
@@ -475,16 +568,11 @@ private func validatedSnapshot(_ arguments: [String]) throws ->
         var digest = SHA256()
         var fileBytes = 0
         for chunk in file.chunks {
-            guard chunk.size >= 0, chunk.size <= 64 * 1024 * 1024 else {
-                throw VaultError.message("an encrypted chunk has an invalid plaintext size")
+            if manifest.version == formatVersion && chunk.encoding != nil {
+                throw VaultError.message("a version 1 snapshot cannot contain encoded chunks")
             }
-            let url = try objectURL(root: root, id: chunk.id)
-            let plaintext = try opened(try safeRegularFile(url, maxBytes: chunk.size + 64), key: encryption,
-                                       aad: chunkAAD(id: chunk.id, size: chunk.size))
-            guard plaintext.count == chunk.size,
-                  objectID(plaintext, key: identifiers) == chunk.id else {
-                throw VaultError.message("an encrypted chunk failed identity verification")
-            }
+            let plaintext = try readChunk(chunk, root: root, encryption: encryption,
+                                          identifiers: identifiers)
             digest.update(data: plaintext)
             let (nextFileBytes, fileOverflow) = fileBytes.addingReportingOverflow(plaintext.count)
             let (nextChunks, chunkOverflow) = totalChunks.addingReportingOverflow(1)
@@ -569,16 +657,8 @@ private func restoreCommand(_ arguments: [String]) throws {
         var restoredBytes = 0
         do {
             for chunk in file.chunks {
-                let url = try objectURL(root: objectRoot, id: chunk.id)
-                let plaintext = try opened(
-                    try safeRegularFile(url, maxBytes: chunk.size + 64),
-                    key: encryption,
-                    aad: chunkAAD(id: chunk.id, size: chunk.size)
-                )
-                guard plaintext.count == chunk.size,
-                      objectID(plaintext, key: identifiers) == chunk.id else {
-                    throw VaultError.message("an encrypted chunk failed during restore")
-                }
+                let plaintext = try readChunk(chunk, root: objectRoot,
+                                              encryption: encryption, identifiers: identifiers)
                 try handle.write(contentsOf: plaintext)
                 digest.update(data: plaintext)
                 restoredBytes += plaintext.count

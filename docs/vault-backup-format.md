@@ -68,6 +68,14 @@ Codex Vault/
 }
 ```
 
+New repositories add `"storage_codec": "lzfse-v1"`. An existing repository
+without this field remains readable. Its metadata gains the field only after a
+compressed-capable snapshot passes complete verification and before that
+snapshot becomes latest. Older app builds reject the extra field rather than
+writing an incompatible snapshot. If backup fails before publication, the
+last verified reference stays unchanged. Updating this metadata does not
+rewrite or remove any older encrypted objects or snapshots.
+
 Every `refs/<snapshot-uuid>.json` is an immutable public reference containing
 the snapshot UUID, creation time, format/version and relative encrypted
 manifest path. `latest.json` is the only replaced file and is advanced only
@@ -90,6 +98,28 @@ helper reports success. A source file whose device, inode, size, modification
 time, or change time moves during reading aborts the snapshot before publish.
 Unreferenced encrypted objects from an interruption are harmless and may be
 garbage-collected by a later maintenance operation.
+
+## Lossless chunk compression
+
+New writers try Apple's LZFSE codec on each plaintext chunk before encryption.
+They use it only when it saves more than 64 bytes; otherwise they retain the
+raw v1 chunk. An unchanged raw v1 object is reused rather than rewritten.
+Compression is per chunk so appending a transcript does not force an entire
+file to be recompressed. The private object identifier of a compressed chunk
+is HMAC-SHA256 of the original plaintext under a distinct HKDF-derived key
+(salt `codex-vault-lzfse-v1`, info `private-compressed-object-identifiers`,
+derived from the v1 identifier key). This domain separation prevents a
+compressed object from colliding with its raw v1 counterpart. Its
+authenticated data is
+`codex-vault:chunk:lzfse:v1:<id>:<uncompressed-byte-count>`; the encrypted
+manifest's chunk record adds `"encoding": "lzfse"`. Raw records omit that field.
+
+Readers authenticate, decompress to the exact declared byte count, and verify
+the domain-separated identifier and whole-file SHA-256 before accepting or
+restoring a snapshot. Unknown encodings fail closed. Existing raw v1 snapshots
+remain readable. Compression changes storage size, not the transcript content,
+search scope, or restore semantics. The visible snapshot still reports source
+plaintext bytes; it is not a promise of a fixed compression ratio.
 
 ## Encrypted manifest
 
