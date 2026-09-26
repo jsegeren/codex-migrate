@@ -355,7 +355,14 @@ def search(
         raise ValueError("search offset must be between 0 and 100000")
     matches: List[VaultMatch] = []
     matched_threads = 0
-    indexed = title_index(source_home) if catalog is None else {}
+    indexed = {}
+    if catalog is None:
+        try:
+            indexed = title_index(source_home)
+        except MigrationError:
+            if titles_only:
+                raise
+            # A damaged optional title index must not hide intact transcript text.
     catalog_by_path = {
         (item["collection"], item["path"]): item
         for item in (catalog or [])
