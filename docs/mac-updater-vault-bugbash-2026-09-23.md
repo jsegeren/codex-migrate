@@ -1274,5 +1274,16 @@ bytes have SHA-256
 and Sparkle's new-key signature verified against those exact bytes. Its catalog
 entry remains `testingOnly: true`, `accepted: false`. No private Blob upload,
 buyer delivery, public appcast change, or paid upgrade has been claimed for
-this new image; the superseded installed acceptance-account app is not this
-build. Complete those exact-image and clean-account gates before promotion.
+this new image at the time of that receipt; the superseded installed
+acceptance-account app is not this build. Complete the exact-image and
+clean-account gates before promotion.
+
+Later on September 25, the exact rotation DMG was uploaded to the product's
+private Blob store under the `sandbox/` SHA-256 pathname. The operator upload
+read all 10,512,566 stored bytes back and independently verified the SHA-256
+`3697889980f5fcb0a3717752cb0c46068efe0d207b181f6266980f87ae218401`.
+The Vercel development-scoped Blob credential was held only in a temporary
+owner-only file for the upload and removed afterward. The catalog still marks
+this entry `testingOnly: true`, `accepted: false`; no buyer entitlement,
+browser download, clean-account install, updater replacement, or public
+appcast was proved by this storage test.
