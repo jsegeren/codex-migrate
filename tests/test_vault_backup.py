@@ -260,11 +260,20 @@ class VaultBackupTests(unittest.TestCase):
                 self.assertNotIn("backup.lock", store.objects)
                 self.assertEqual(staged.remote_bytes_checked,
                                  sum(len(value) for value in store.objects.values()))
+                self.assertEqual(
+                    {item.key: (item.bytes, item.sha256) for item in staged.objects},
+                    {key: (len(value), hashlib.sha256(value).hexdigest())
+                     for key, value in store.objects.items()},
+                )
+                self.assertEqual(staged.remote_bytes_checked,
+                                 sum(item.bytes for item in staged.objects))
+                self.assertEqual(len(staged.objects), staged.uploaded_files)
 
                 repeated = vault_remote_transfer.stage_encrypted_snapshot(
                     str(destination), store, crypto_helper=str(self.helper))
                 self.assertEqual(repeated.uploaded_files, 0)
                 self.assertEqual(repeated.reused_files, len(store.objects))
+                self.assertEqual(repeated.objects, staged.objects)
 
                 for remote_key, value in store.objects.items():
                     relative = ("vault.json" if remote_key.startswith("metadata/")

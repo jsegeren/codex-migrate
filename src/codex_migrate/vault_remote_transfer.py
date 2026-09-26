@@ -14,7 +14,7 @@ import hashlib
 import os
 from pathlib import Path
 import stat
-from typing import BinaryIO, Iterator, Optional, Protocol
+from typing import BinaryIO, Iterator, Optional, Protocol, Tuple
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_recovery import _vault_root
@@ -37,11 +37,21 @@ class ScopedObjectStore(Protocol):
 
 
 @dataclass(frozen=True)
+class StagedObject:
+    """Client-observed ciphertext object; the service must verify it itself."""
+
+    key: str
+    bytes: int
+    sha256: str
+
+
+@dataclass(frozen=True)
 class StageResult:
     snapshot_id: str
     uploaded_files: int
     reused_files: int
     remote_bytes_checked: int
+    objects: Tuple[StagedObject, ...]
 
 
 @contextmanager
@@ -125,6 +135,7 @@ def stage_encrypted_snapshot(
         vault, snapshot=snapshot, crypto_helper=crypto_helper)
     root = _vault_root(vault)
     uploaded = reused = checked_bytes = 0
+    staged_objects = []
     for item in inventory.files:
         with _open_vault_file(root, item) as source:
             local_digest = _digest(source, item.bytes)
@@ -141,6 +152,7 @@ def stage_encrypted_snapshot(
             if remote_digest != local_digest:
                 raise MigrationError("A remote Vault object is missing or differs from its local version.")
             checked_bytes += item.bytes
+            staged_objects.append(StagedObject(item.remote_key, item.bytes, remote_digest))
     current = encrypted_snapshot_inventory(
         vault, snapshot=snapshot, crypto_helper=crypto_helper)
     if current != inventory:
@@ -150,4 +162,5 @@ def stage_encrypted_snapshot(
         uploaded_files=uploaded,
         reused_files=reused,
         remote_bytes_checked=checked_bytes,
+        objects=tuple(staged_objects),
     )

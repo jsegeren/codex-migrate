@@ -90,9 +90,12 @@ egress allowance. Do not claim that B2 restores are always free. See its
   `metadata/<snapshot-id>.json`, never overwritten as a single mutable
   `vault.json`; chunks, manifests, and references keep their format paths.
   The client-side staging module reads every object back and checks its exact
-  bytes, but does not write `latest` or claim protection. Advance a remote
-  `latest` pointer only after server-side completeness and integrity have been
-  checked. Failed uploads leave the previous verified remote snapshot intact
+  bytes, returning a receipt of object key, byte count, and SHA-256 digest;
+  that receipt is a client assertion, not service proof. It does not write
+  `latest` or claim protection. The service must independently read and hash
+  every listed object, validate the complete snapshot object set and account
+  scope, and only then atomically advance the remote `latest` pointer. Failed
+  uploads leave the previous verified remote snapshot intact
   and visible as the last good backup. Do not label a backup "protected"
   because a local snapshot or PUT alone succeeded.
 - Preserve old snapshot references under a declared retention policy. Deleting
