@@ -494,3 +494,22 @@ and install-on-quit handoff plus first open of the installed build, **not**
 an unmodified buyer-client install, unattended install/relaunch while the app
 stays open, busy-operation retry, or clean buyer-account acceptance. The test
 copy was not installed in `/Applications`, and build 18 remains unaccepted.
+
+### Build 18 local updater failure-path probes — September 26, 2026
+
+The exact signed, notarized build-18 app code was placed in a disposable,
+locally re-signed build-16 wrapper with a loopback appcast. A synthetic-format
+test token was supplied through closed stdin; no purchase token, Production
+canary, buyer archive, or real Codex history was used. Each run made one
+background update request, then was stopped with a normal macOS Quit.
+
+Three separate loopback fixtures returned an intentionally corrupt archive,
+an archive with a wrong Sparkle EdDSA signature, and HTTP 404 for the archive.
+For each, the app fetched the appcast and attempted the archive request, the
+installed wrapper remained build 16, its packaged helper stayed healthy and
+idle, and normal Quit stopped both. No fixture replaced the app or left a
+stuck helper. The fixture server was stopped, the disposable wrapper was moved
+to Trash, and the original idle developer app was reopened. These are local
+modified-client safety probes, not proof of unmodified buyer-client failures,
+busy-operation deferral/retry, or release acceptance. Public build 16 was
+unchanged.
