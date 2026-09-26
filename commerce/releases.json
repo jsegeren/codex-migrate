@@ -1,4 +1,20 @@
 {
+  "codex-migrate-build19-vault-integrated-arm64": {
+    "id": "codex-migrate-build19-vault-integrated-arm64",
+    "kind": "signed-notarized",
+    "testingOnly": true,
+    "accepted": false,
+    "source": "ac0bfa37a3498a7cf0f6d820e7ea9c07dbabeb31",
+    "sha256": "5f5c30f960cbca0a75a72d882c4a391ce4a5ad35cdd5ec15c4abe87562f36e85",
+    "filename": "Codex-Migrate-0.1.0-build19-arm64.dmg",
+    "size": 11226440,
+    "pathname": "sandbox/5f5c30f960cbca0a75a72d882c4a391ce4a5ad35cdd5ec15c4abe87562f36e85/Codex-Migrate-0.1.0-build19-arm64.dmg",
+    "diskImageNotarization": {
+      "status": "Accepted",
+      "id": "8225c4d2-233b-40bd-960e-08f7dea6330a"
+    },
+    "sparkleSignature": "HBpeR7n7SOf2M+bzJTOIqJWIcynQb2COYbFPhvoVfKDAk4OUBta+uBr4glSIpQsUjxUXQ1KM+tcTds3XcovXBQ=="
+  },
   "codex-migrate-build18-vault-integrated-arm64": {
     "id": "codex-migrate-build18-vault-integrated-arm64",
     "kind": "signed-notarized",
