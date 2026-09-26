@@ -16,9 +16,16 @@ from codex_migrate.vault_backup import BackupPlan, BackupResult
 from codex_migrate.vault_install import InstallResult, ThreadInstallResult
 from codex_migrate.vault_recovery import RestoreResult, SnapshotInfo
 from codex_migrate.vault_schedule import SchedulePlan
+from codex_migrate.vault_dashboard import VAULT_HTML
 
 
 class SetupTests(unittest.TestCase):
+    def test_backup_preflight_shows_exact_history_size_without_claiming_compression(self):
+        self.assertIn('id="backup-footprint"', VAULT_HTML)
+        self.assertIn('fmt(data.transcript_bytes)', VAULT_HTML)
+        self.assertIn('The first backup preserves exact content without compression', VAULT_HTML)
+        self.assertIn('Later backups reuse unchanged chunks', VAULT_HTML)
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.home = Path(self.temporary.name).resolve()
