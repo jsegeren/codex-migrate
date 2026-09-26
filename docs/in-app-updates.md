@@ -66,7 +66,7 @@ while the public appcast and ordinary buyer downloads still return build 16.
 Never use the canary route as a shortcut for catalog promotion or a public
 claim that automatic updates are accepted.
 
-For the current `d421c46` integrated-Vault build-18 candidate, `python3
+For the current `ac0bfa3` integrated-Vault build-19 candidate, `python3
 ops/paid-update-canary-client.py prepare` verifies the archived live build-16
 ZIP and local candidate DMG against their catalog digests, then creates a
 **disposable, locally re-signed, unnotarized** build-16 app in `build/`. Only
@@ -253,10 +253,10 @@ install/relaunch and busy-operation full replacement gates remain open.
 
 ### Local-only automatic-idle check with current updater code
 
-The harness's `--current-app` option accepts only the exact signed build-17
-source receipt and `--local-archive`. It creates a disposable test wrapper
-that reports build 16 to Sparkle while compiling the exact build-17 native
-updater code and retaining the provisioned build-17 engine/helper. It replaces
+The September 25 `--current-app` run accepted only the exact signed build-17
+source receipt and `--local-archive`. It created a disposable test wrapper
+that reported build 16 to Sparkle while compiling the exact build-17 native
+updater code and retaining the provisioned build-17 engine/helper. It replaced
 only that test wrapper's Sparkle feed and public key, adds a one-shot background
 check and synthetic stdin entitlement, and locally re-signs the wrapper. It
 does not alter the notarized DMG, public appcast, buyer app, or Production.
@@ -559,3 +559,32 @@ physical **modified-client, local-feed** idle/retry proof, not an unmodified
 paid buyer-client installation, a native 409-during-restore retry, a clean
 buyer-account test, or approval to promote build 18. The separate packaged
 restore-contention receipt above covers the real helper's 409 boundary.
+
+### Build 19 signed image and local automatic update — September 26, 2026
+
+Clean source `ac0bfa37a3498a7cf0f6d820e7ea9c07dbabeb31` produced a
+Developer ID signed, Apple-notarized build-19 app and separately signed,
+notarized rotation DMG. The final DMG is 11,226,440 bytes with SHA-256
+`5f5c30f960cbca0a75a72d882c4a391ce4a5ad35cdd5ec15c4abe87562f36e85`;
+its Sparkle EdDSA signature verified against the exact bytes. The mounted app
+passed strict code-signature and Notarized Developer ID Gatekeeper checks on
+both Founder Macs. The second-Mac check was read-only: it did not launch the
+app or touch Codex data, and the temporary DMG was detached and removed.
+
+The exact build-19 DMG was then served only from a `127.0.0.1` test appcast.
+A disposable, locally re-signed wrapper used the build-19 native updater code
+but reported build 16 to Sparkle, with a synthetic-format token supplied on
+closed stdin and a separate disposable source home. Sparkle fetched the
+appcast and archive, installed the notarized image **without a manual Quit**,
+and relaunched exactly one build-19 app and helper. The installed app's source
+receipt and version matched the frozen source; strict signing and Gatekeeper
+passed. A normal Quit stopped the app and helper. The local feed stopped, the
+test app and source folder were moved to Trash, and the original developer app
+was reopened. The other macOS account's installed app was not replaced.
+
+This passes a local exact-image automatic-idle mechanism check, **not** the
+unmodified paid-buyer path, clean-account first launch, build-19 native busy
+retry, failure-path matrix, or a real-history off-device backup. The new
+catalog entry is testing-only and unaccepted; it has not been uploaded or
+deployed. Public build 16 and buyer delivery remain unchanged. Do not claim
+automatic updates to customers or promote build 19 from this receipt alone.
