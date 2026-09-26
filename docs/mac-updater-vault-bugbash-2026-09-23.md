@@ -1283,7 +1283,9 @@ private Blob store under the `sandbox/` SHA-256 pathname. The operator upload
 read all 10,512,566 stored bytes back and independently verified the SHA-256
 `3697889980f5fcb0a3717752cb0c46068efe0d207b181f6266980f87ae218401`.
 The Vercel development-scoped Blob credential was held only in a temporary
-owner-only file for the upload and removed afterward. The catalog still marks
-this entry `testingOnly: true`, `accepted: false`; no buyer entitlement,
-browser download, clean-account install, updater replacement, or public
-appcast was proved by this storage test.
+owner-only file for the upload and removed afterward. The exact stored image
+also passed the operator-only Chrome download check: trusted click, attachment
+filename, 10,512,566-byte length, and SHA-256. The catalog still marks this
+entry `testingOnly: true`, `accepted: false`; neither check proves buyer
+entitlement, clean-account install, updater replacement, or a public appcast.
+The temporary Blob credential was removed after each check.
