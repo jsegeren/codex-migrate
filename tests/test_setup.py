@@ -23,8 +23,8 @@ class SetupTests(unittest.TestCase):
     def test_backup_preflight_shows_exact_history_size_without_claiming_compression(self):
         self.assertIn('id="backup-footprint"', VAULT_HTML)
         self.assertIn('fmt(data.transcript_bytes)', VAULT_HTML)
-        self.assertIn('The first backup preserves exact content without compression', VAULT_HTML)
-        self.assertIn('Later backups reuse unchanged chunks', VAULT_HTML)
+        self.assertIn('Current Vault does not compress', VAULT_HTML)
+        self.assertIn('the first backup needs roughly this much free space', VAULT_HTML)
 
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
