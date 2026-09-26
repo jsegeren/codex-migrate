@@ -151,6 +151,84 @@ class VaultBackupTests(unittest.TestCase):
             finally:
                 self.delete_key(destination)
 
+    def test_compressed_transcript_is_lossless_incremental_and_authenticated(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            destination = root / "vault"
+            restored = root / "restored"
+            self.fixture(source)
+            transcript = source / ".codex/sessions/2026/09/17/active.jsonl"
+            content = "".join(f"{index:08x}" + "A" * 65528 for index in range(16))
+            transcript.write_text(json.dumps({"payload": {"message": {"content": content}}}) + "\n")
+            try:
+                first = backup(str(source), str(destination), crypto_helper=str(self.helper),
+                               chunk_size=64 * 1024)
+                objects = sorted((destination / "objects").rglob("*.cvchunk"))
+                self.assertLess(sum(path.stat().st_size for path in objects),
+                                transcript.stat().st_size // 2)
+                self.assertEqual(json.loads((destination / "vault.json").read_text())
+                                 ["storage_codec"], "lzfse-v1")
+                second = backup(str(source), str(destination), crypto_helper=str(self.helper),
+                                chunk_size=64 * 1024)
+                self.assertNotEqual(first.snapshot_id, second.snapshot_id)
+                self.assertEqual(objects, sorted((destination / "objects").rglob("*.cvchunk")))
+                restore_snapshot(str(source), str(destination), str(restored),
+                                 snapshot=first.snapshot_id, crypto_helper=str(self.helper))
+                self.assertEqual((restored / "sessions/2026/09/17/active.jsonl").read_bytes(),
+                                 transcript.read_bytes())
+                compressed = min(objects, key=lambda path: path.stat().st_size)
+                damaged = bytearray(compressed.read_bytes())
+                damaged[len(damaged) // 2] ^= 1
+                compressed.write_bytes(damaged)
+                with self.assertRaises(MigrationError):
+                    verify_snapshot(str(destination), snapshot=first.snapshot_id,
+                                    crypto_helper=str(self.helper))
+            finally:
+                self.delete_key(destination)
+
+    def test_legacy_vault_upgrades_only_after_new_snapshot_verifies(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            destination = root / "vault"
+            restored = root / "restored"
+            self.fixture(source)
+            try:
+                first = backup(str(source), str(destination), crypto_helper=str(self.helper))
+                metadata_path = destination / "vault.json"
+                legacy = json.loads(metadata_path.read_text())
+                legacy.pop("storage_codec")
+                metadata_path.write_text(json.dumps(legacy))
+                self.assertEqual(verify_snapshot(str(destination), snapshot=first.snapshot_id,
+                                                 crypto_helper=str(self.helper)).snapshot_id,
+                                 first.snapshot_id)
+                legacy_chunk = next((destination / "objects").rglob("*.cvchunk"))
+                original_ciphertext = legacy_chunk.read_bytes()
+                damaged = bytearray(original_ciphertext)
+                damaged[len(damaged) // 2] ^= 1
+                legacy_chunk.write_bytes(damaged)
+                with self.assertRaises(MigrationError):
+                    backup(str(source), str(destination), crypto_helper=str(self.helper))
+                self.assertNotIn("storage_codec", json.loads(metadata_path.read_text()))
+                self.assertEqual(json.loads((destination / "latest.json").read_text())
+                                 ["snapshot_id"], first.snapshot_id)
+                legacy_chunk.write_bytes(original_ciphertext)
+                transcript = source / ".codex/sessions/2026/09/17/active.jsonl"
+                transcript.write_text(json.dumps({"payload": {"text": "B" * 200_000}}) + "\n")
+                second = backup(str(source), str(destination), crypto_helper=str(self.helper))
+                self.assertEqual(json.loads(metadata_path.read_text())["storage_codec"],
+                                 "lzfse-v1")
+                self.assertEqual(verify_snapshot(str(destination), snapshot=first.snapshot_id,
+                                                 crypto_helper=str(self.helper)).snapshot_id,
+                                 first.snapshot_id)
+                restore_snapshot(str(source), str(destination), str(restored),
+                                 snapshot=second.snapshot_id, crypto_helper=str(self.helper))
+                self.assertEqual((restored / "sessions/2026/09/17/active.jsonl").read_bytes(),
+                                 transcript.read_bytes())
+            finally:
+                self.delete_key(destination)
+
     def test_snapshot_can_be_verified_rekeyed_and_restored_to_staging(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
