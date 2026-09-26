@@ -268,6 +268,16 @@ class VaultBackupTests(unittest.TestCase):
                 self.assertEqual(staged.remote_bytes_checked,
                                  sum(item.bytes for item in staged.objects))
                 self.assertEqual(len(staged.objects), staged.uploaded_files)
+                claim = staged.receipt()
+                self.assertEqual(set(claim), {
+                    "version", "snapshot_id", "remote_bytes_checked", "objects"})
+                self.assertEqual(claim["version"], 1)
+                self.assertEqual(claim["snapshot_id"], first.snapshot_id)
+                self.assertEqual(claim["objects"], [
+                    {"key": item.key, "bytes": item.bytes, "sha256": item.sha256}
+                    for item in staged.objects])
+                self.assertNotIn("PRIVATE-ACTIVE-CONTENT", json.dumps(claim))
+                self.assertNotIn("NEVER-COPY-AUTH", json.dumps(claim))
 
                 repeated = vault_remote_transfer.stage_encrypted_snapshot(
                     str(destination), store, crypto_helper=str(self.helper))

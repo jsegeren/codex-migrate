@@ -106,6 +106,15 @@ egress allowance. Do not claim that B2 restores are always free. See its
   leave the previous verified remote snapshot intact
   and visible as the last good backup. Do not label a backup "protected"
   because a local snapshot or PUT alone succeeded.
+- The staging client now emits a version-1, content-free receipt with the
+  snapshot ID and each remote object's key, byte count, and SHA-256. The
+  provider-neutral service validator rejects malformed paths, missing required
+  objects, duplicate chunks, bad sizes/digests, and a failed independent
+  object check. This is **not yet a publish endpoint**: the authenticated
+  service must also bind account/Vault identity, enforce the *aggregate*
+  retained-storage quota, prove the real provider adapter's checksum behavior,
+  and commit the last-good pointer transactionally. A per-receipt byte bound
+  does not enforce that aggregate quota.
 - Preserve old snapshot references under a declared retention policy. Deleting
   an unreferenced chunk requires proof that no retained snapshot needs it.
   Cancellation, payment failure, account deletion, export grace, and final

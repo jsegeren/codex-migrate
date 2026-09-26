@@ -53,6 +53,22 @@ class StageResult:
     remote_bytes_checked: int
     objects: Tuple[StagedObject, ...]
 
+    def receipt(self) -> dict:
+        """Content-free upload claim for an independently verifying service.
+
+        This claim is not proof of protection and must never authorize publish
+        without account-scoped service checks of the stored objects.
+        """
+        return {
+            "version": 1,
+            "snapshot_id": self.snapshot_id,
+            "remote_bytes_checked": self.remote_bytes_checked,
+            "objects": [
+                {"key": item.key, "bytes": item.bytes, "sha256": item.sha256}
+                for item in self.objects
+            ],
+        }
+
 
 @contextmanager
 def _open_vault_file(root: Path, item: VaultTransferFile) -> Iterator[BinaryIO]:
