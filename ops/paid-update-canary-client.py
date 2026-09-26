@@ -12,6 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
 import plistlib
+import re
 import shutil
 import subprocess
 import tempfile
@@ -30,6 +31,7 @@ CANDIDATE_DMG = ROOT / "build/desktop-rotation-fib1p7yb/Codex-Migrate-0.1.0-buil
 HEADER_HOOK = 'request.setValue("Bearer \\(token)", forHTTPHeaderField: "Authorization")'
 TOKEN_LOOKUP = '    static func savedToken() -> String? {\n'
 HELPER_START = '        _ = updaterController\n        startHelper()\n'
+HELPER_ARGUMENTS = '        var arguments = ["launch", "--port", "0", "--no-open"]\n'
 CANARY_TOKEN_LOOKUP = '''    // Disposable test client only: consume a private token from a closed stdin pipe.
     // Nothing is written to Keychain, argv, the environment, the helper, or disk.
     private static let pipedCanaryToken: String? = {
@@ -105,10 +107,25 @@ def add_piped_test_token(source):
     return source.replace(TOKEN_LOOKUP, CANARY_TOKEN_LOOKUP)
 
 
-def prepare(output, port, identity, local_archive=False, current_app=None):
+def add_disposable_source_home(source, home):
+    """Keep an operator's real Codex home outside a local-only native test."""
+    value = str(home)
+    if not re.fullmatch(r"/[A-Za-z0-9_./-]+", value) or not home.is_dir():
+        raise ValueError("test source home must be an existing simple absolute path")
+    if source.count(HELPER_ARGUMENTS) != 1:
+        raise ValueError("current helper launch arguments changed")
+    return source.replace(HELPER_ARGUMENTS, '        var arguments = ["launch", "--source-home", "'
+                          + value + '", "--state-dir", "' + value
+                          + '/.local/state/codex-migrate-browser", "--port", "0", "--no-open"]\n')
+
+
+def prepare(output, port, identity, local_archive=False, current_app=None,
+            test_source_home=None):
     selected = canary()
     if current_app is not None and not local_archive:
         raise ValueError("current-source synthetic client requires local-only archive mode")
+    if test_source_home is not None and (current_app is None or not local_archive):
+        raise ValueError("disposable source home requires current-source local-only mode")
     if output.exists() or output.is_symlink() or output.parent.resolve() != (ROOT / "build").resolve():
         raise ValueError("output must be a new direct child of build/")
     if current_app is None and hashlib.sha256(ARCHIVE.read_bytes()).hexdigest() != OLD_SHA256:
@@ -169,6 +186,8 @@ def prepare(output, port, identity, local_archive=False, current_app=None):
                 if not local_archive:
                     source = add_canary_header(source)
                 source = add_background_check(source)
+                if test_source_home is not None:
+                    source = add_disposable_source_home(source, test_source_home)
             elif filename == "UpdateEntitlement.swift":
                 source = add_piped_test_token(source)
             path = Path(scratch) / filename
@@ -259,11 +278,14 @@ def main():
                         help="serve exact local DMG without any Production canary or paid credential")
     parser.add_argument("--current-app", type=Path,
                         help="with --local-archive, use exact signed build-18 app code in a disposable build-16 wrapper")
+    parser.add_argument("--test-source-home", type=Path,
+                        help="local current-code test only: launch the helper with disposable Codex data")
     parser.add_argument("--fault", choices=("none", "archive-404", "corrupt-archive", "bad-signature"),
                         default="none", help="with local serve only, inject one updater failure")
     args = parser.parse_args()
     if args.command == "prepare":
-        prepare(args.output, args.port, args.identity, args.local_archive, args.current_app)
+        prepare(args.output, args.port, args.identity, args.local_archive,
+                args.current_app, args.test_source_home)
     else:
         serve(args.port, args.local_archive, args.fault)
 

@@ -528,3 +528,34 @@ build-17 test marker. The fixture key was removed, temporary files were
 cleaned, and the read-only DMG was detached. This proves the packaged helper's
 restore boundary, not the native app's 60-second retry or Sparkle's eventual
 automatic installation while the app remains open.
+
+### Build 18 local native automatic idle/retry — September 26, 2026
+
+A disposable, locally re-signed build-16 wrapper used the exact build-18
+Swift app code and packaged helper, the public build-16 Sparkle key, a
+synthetic-format token from closed stdin, and a loopback feed serving the
+exact signed/notarized build-18 DMG. A test-only helper argument confined
+Codex data, state, and fast-search cache to a 128 MiB synthetic source home.
+No Production canary, purchase credential, real transcript, or real Vault was
+used.
+
+In the idle run, Sparkle fetched the appcast and archive, replaced the wrapper
+in place with build 18 **without a manual Quit**, and relaunched the build-18
+app and packaged helper. In the busy run, the packaged helper started a real
+fast-search indexing job against only that synthetic source and was then
+temporarily suspended. Sparkle again downloaded build 18, but the wrapper
+remained running as build 16 while the helper could not respond to the idle
+probe. The helper was resumed; indexing completed, `/api/update-idle` returned
+200 with `idle: true`, and the app's scheduled retry installed and relaunched
+build 18 without a manual Quit. The installed app passed strict code-signature
+verification and notarized Developer ID Gatekeeper assessment; its helper
+started with `--resume-after-update-build 18`.
+
+Both test apps and helpers were quit normally, the loopback feed was stopped,
+the synthetic source was removed, the two disposable app folders were moved
+to Trash, and the original idle developer app was reopened. The preexisting
+Sparkle automatic-check/download preferences remained enabled. This is a
+physical **modified-client, local-feed** idle/retry proof, not an unmodified
+paid buyer-client installation, a native 409-during-restore retry, a clean
+buyer-account test, or approval to promote build 18. The separate packaged
+restore-contention receipt above covers the real helper's 409 boundary.

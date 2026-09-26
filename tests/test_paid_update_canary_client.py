@@ -45,6 +45,11 @@ class PaidUpdateCanaryClientTests(unittest.TestCase):
             CANARY.prepare(CANARY.ROOT / "build/current-code-should-not-exist",
                            8898, "unused", current_app=Path("/nonexistent"))
 
+    def test_disposable_source_home_is_local_current_code_only(self):
+        with self.assertRaisesRegex(ValueError, "current-source local-only"):
+            CANARY.prepare(CANARY.ROOT / "build/source-home-should-not-exist",
+                           8898, "unused", test_source_home=Path("/tmp"))
+
     def test_bad_signature_feed_cannot_reuse_valid_signature(self):
         selected = CANARY.canary()
         root = ElementTree.fromstring(CANARY.appcast_xml(
@@ -86,6 +91,22 @@ class PaidUpdateCanaryClientTests(unittest.TestCase):
         modified = CANARY.add_background_check(CANARY.add_canary_header(source))
         self.assertEqual(modified.count("X-Codex-Migrate-Canary"), 1)
         self.assertEqual(modified.count("checkForUpdatesInBackground()"), 1)
+
+    def test_disposable_source_home_replaces_only_exact_helper_launch(self):
+        with tempfile.TemporaryDirectory(prefix="paid-canary-source-home-") as directory:
+            home = Path(directory)
+            source = "before\n" + CANARY.HELPER_ARGUMENTS + "after\n"
+            modified = CANARY.add_disposable_source_home(source, home)
+            self.assertNotIn(CANARY.HELPER_ARGUMENTS, modified)
+            self.assertIn('"--source-home", "' + str(home) + '"', modified)
+            self.assertIn('"--state-dir", "' + str(home)
+                          + '/.local/state/codex-migrate-browser"', modified)
+            with self.assertRaisesRegex(ValueError, "arguments changed"):
+                CANARY.add_disposable_source_home("no helper launch", home)
+            with self.assertRaisesRegex(ValueError, "arguments changed"):
+                CANARY.add_disposable_source_home(source + source, home)
+            with self.assertRaisesRegex(ValueError, "simple absolute path"):
+                CANARY.add_disposable_source_home(source, home / "not-there")
 
     def test_only_exact_old_entitlement_lookup_can_read_piped_test_token(self):
         source = "before\n" + CANARY.TOKEN_LOOKUP + "        return nil\n    }\n"
