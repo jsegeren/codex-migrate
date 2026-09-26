@@ -16,12 +16,13 @@ const env = { COMMERCE_MODE: 'sandbox', COMMERCE_STRIPE_KEY: 'rk_test_fixture', 
   COMMERCE_STRIPE_ACCOUNT: 'acct_fixture', COMMERCE_PRODUCT: 'prod_fixture', COMMERCE_PRICE: 'price_fixture',
   COMMERCE_WEBHOOK_SECRET: 'whsec_fixture', COMMERCE_RELEASE: release.id, COMMERCE_BLOB_STORE_ID: 'fixturestore' };
 const config = configuration(env, { [release.id]: release });
-test('unaccepted update candidates stay sandbox-only until release acceptance', () => {
+test('unaccepted paid-update canaries cannot become the live release', () => {
   const catalog = require('../commerce/releases.json');
   for (const id of [
-    'codex-migrate-build18-vault-integrated-arm64',
     'codex-migrate-build17-vault-crypto-arm64',
     'codex-migrate-0.1.0-build17-abort-guard-arm64',
+    'codex-migrate-build18-vault-integrated-arm64',
+    'codex-migrate-build19-vault-integrated-arm64',
   ]) {
     const candidate = catalog[id];
     assert.equal(candidate.testingOnly, true);
