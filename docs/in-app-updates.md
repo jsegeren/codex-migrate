@@ -585,9 +585,16 @@ was reopened. The other macOS account's installed app was not replaced.
 This passes a local exact-image automatic-idle mechanism check, **not** the
 unmodified paid-buyer path, clean-account first launch, build-19 native busy
 retry, paid failure-path matrix, or a real-history off-device backup. The new
-catalog entry is testing-only and unaccepted; it has not been uploaded or
-deployed. Public build 16 and buyer delivery remain unchanged. Do not claim
+catalog entry is testing-only and unaccepted; it has not been deployed.
+Public build 16 and buyer delivery remain unchanged. Do not claim
 automatic updates to customers or promote build 19 from this receipt alone.
+
+The exact DMG was uploaded to the product's private Blob store under its
+`sandbox/` digest pathname using the existing Development-scoped Vercel
+connection. The operator uploader independently read back all 11,226,440
+bytes and verified the SHA-256 above. No credential was written into Git or
+the release receipt. This proves artifact storage, not paid entitlement,
+buyer download, or Production catalog availability.
 
 Three further disposable build-19-code wrappers exercised separate loopback
 failure fixtures: wrong Sparkle EdDSA signature, archive HTTP 404, and a
