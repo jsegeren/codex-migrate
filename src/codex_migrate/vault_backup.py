@@ -62,6 +62,7 @@ class BackupResult:
     recovery_key: Optional[str]
     needs_attention: bool = False
     at_risk_threads: int = 0
+    title_index_unavailable: bool = False
     applied: bool = True
 
     def as_dict(self) -> Dict[str, object]:
@@ -371,7 +372,14 @@ def _backup_unlocked(
         raise MigrationError("The Vault destination is not a folder.")
     helper = _helper_path(crypto_helper)
     files = _source_files(source_home)
-    titles = title_index(source_home)
+    try:
+        titles = title_index(source_home)
+        title_index_unavailable = False
+    except MigrationError:
+        # The optional Codex title index must not prevent a verified backup of
+        # intact transcripts. Search by transcript text remains available.
+        titles = {}
+        title_index_unavailable = True
     expected_bytes = sum(check_info(path.lstat()).st_size for _, path, _ in files)
     if progress is not None:
         progress(0, len(files), 0, expected_bytes)
@@ -531,4 +539,5 @@ def _backup_unlocked(
             recovery_key=recovery_key,
             needs_attention=bool(at_risk),
             at_risk_threads=len(at_risk),
+            title_index_unavailable=title_index_unavailable,
         )

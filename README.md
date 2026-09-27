@@ -75,6 +75,9 @@ local conversation history: read-only inspection, streaming search, a local
 browser, Markdown/PDF/share exports, and versioned client-side encrypted
 backup. Vault backs up only active and archived transcript trees. It does not
 copy `auth.json`, `installation_id`, SSH keys, logs, caches, or runtime locks.
+If Codex's optional title index is damaged, Vault still encrypts and verifies
+intact transcripts. It warns that saved title search may be incomplete; text
+search and the verified backup remain available.
 
 For large local histories, the source CLI has an optional fast-search cache:
 

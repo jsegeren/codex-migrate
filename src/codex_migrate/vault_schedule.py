@@ -337,18 +337,26 @@ def _last_run(path: Path) -> Dict[str, object]:
         valid = set(value) == {"status", "started_at"} \
             and isinstance(value.get("started_at"), str)
     elif status == "completed":
-        valid = set(value) == {
+        valid = set(value) in ({
             "status", "completed_at", "snapshot_id",
             "transcript_files", "transcript_bytes",
-        } and isinstance(value.get("completed_at"), str) \
+        }, {
+            "status", "completed_at", "snapshot_id",
+            "transcript_files", "transcript_bytes", "title_index_unavailable",
+        }) and isinstance(value.get("title_index_unavailable", False), bool) \
+            and isinstance(value.get("completed_at"), str) \
             and isinstance(value.get("snapshot_id"), str) \
             and all(isinstance(value.get(key), int) and value[key] >= 0
                     for key in ("transcript_files", "transcript_bytes"))
     elif status == "needs_attention":
-        valid = set(value) == {
+        valid = set(value) in ({
             "status", "completed_at", "snapshot_id", "transcript_files",
             "transcript_bytes", "at_risk_threads",
-        } and isinstance(value.get("completed_at"), str) \
+        }, {
+            "status", "completed_at", "snapshot_id", "transcript_files",
+            "transcript_bytes", "at_risk_threads", "title_index_unavailable",
+        }) and isinstance(value.get("title_index_unavailable", False), bool) \
+            and isinstance(value.get("completed_at"), str) \
             and isinstance(value.get("snapshot_id"), str) \
             and all(isinstance(value.get(key), int) and value[key] >= 0
                     for key in ("transcript_files", "transcript_bytes", "at_risk_threads"))
@@ -602,6 +610,7 @@ def run_scheduled_backup(config_path: str) -> int:
                 "transcript_files": result.transcript_files,
                 "transcript_bytes": result.transcript_bytes,
                 **({"at_risk_threads": result.at_risk_threads} if result.needs_attention else {}),
+                **({"title_index_unavailable": True} if result.title_index_unavailable else {}),
             }, replace=True)
             return 0
     except Exception:

@@ -336,6 +336,18 @@ class VaultScheduleTests(unittest.TestCase):
             self.assertTrue(result["healthy"])
             self.assertEqual(result["interval_hours"], 24)
             self.assertEqual(result["last_run"]["status"], "completed")
+            receipt = json.loads(status_path.read_text(encoding="utf-8"))
+            receipt["title_index_unavailable"] = True
+            status_path.write_text(json.dumps(receipt), encoding="utf-8")
+            with patch("codex_migrate.vault_schedule._loaded", return_value=True):
+                result = schedule_status(str(home))
+            self.assertTrue(result["healthy"])
+            self.assertTrue(result["last_run"]["title_index_unavailable"])
+            receipt["title_index_unavailable"] = "yes"
+            status_path.write_text(json.dumps(receipt), encoding="utf-8")
+            with patch("codex_migrate.vault_schedule._loaded", return_value=True):
+                result = schedule_status(str(home))
+            self.assertEqual(result["last_run"], {"status": "unknown"})
 
     def test_status_does_not_call_an_overdue_backup_healthy(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -468,6 +480,7 @@ class VaultScheduleTests(unittest.TestCase):
                 destination=str(vault), snapshot_id="safe-snapshot",
                 transcript_files=3, transcript_bytes=400, chunks=2,
                 key_id="private-key-id", recovery_key=None,
+                title_index_unavailable=True,
             )
             with patch("codex_migrate.vault_schedule.backup",
                        return_value=completed) as backup:
@@ -479,6 +492,7 @@ class VaultScheduleTests(unittest.TestCase):
                 encoding="utf-8"))
             self.assertEqual(last_run["status"], "completed")
             self.assertEqual(last_run["snapshot_id"], "safe-snapshot")
+            self.assertTrue(last_run["title_index_unavailable"])
             self.assertNotIn("key_id", last_run)
             self.assertNotIn("recovery_key", last_run)
 

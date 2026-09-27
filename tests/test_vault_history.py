@@ -111,6 +111,38 @@ class EncryptedHistoryTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.build.cleanup()
 
+    def test_unreadable_optional_title_index_does_not_block_transcript_backup(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            codex = source / ".codex"
+            path = codex / "sessions" / ("rollout-" + THREAD_ID + ".jsonl")
+            path.parent.mkdir(parents=True)
+            original = (record("session_meta", {"id": THREAD_ID})
+                        + record("response_item", {"role": "user", "content": "find this work"}))
+            path.write_text(original)
+            (codex / "session_index.jsonl").write_text("{broken\n")
+            vault = root / "vault"
+            try:
+                result = backup(str(source), str(vault), crypto_helper=str(self.helper))
+                self.assertFalse(result.needs_attention)
+                self.assertTrue(result.title_index_unavailable)
+                self.assertEqual(result.at_risk_threads, 0)
+                self.assertEqual(result.transcript_files, 1)
+                verify_snapshot(str(vault), snapshot=result.snapshot_id,
+                                crypto_helper=str(self.helper))
+                catalog = snapshot_catalog(str(vault), crypto_helper=str(self.helper))
+                self.assertEqual(catalog[0]["thread_id"], THREAD_ID)
+                self.assertEqual(catalog[0]["titles"], [])
+                self.assertEqual(path.read_text(), original)
+                self.assertEqual(len(search(str(source), "find this work")), 1)
+            finally:
+                if (vault / "vault.json").exists():
+                    key_id = json.loads((vault / "vault.json").read_text())["key_id"]
+                    subprocess.run([str(self.helper), "delete-key", "--key-id", key_id],
+                                   check=True, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE)
+
     def test_duplicate_live_thread_id_needs_review(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
