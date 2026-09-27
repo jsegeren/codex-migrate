@@ -152,7 +152,7 @@ BEGIN
        v_bytes <= 1048576 THEN
       v_metadata := true;
     ELSIF v_relative_key = 'manifests/' || p_snapshot_id || '.cvmanifest' AND
-          v_bytes <= 134218752 THEN
+          v_bytes <= 100000000 THEN
       v_manifest := true;
     ELSIF v_relative_key = 'refs/' || p_snapshot_id || '.json' AND
           v_bytes <= 1048576 THEN
