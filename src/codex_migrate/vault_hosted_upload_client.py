@@ -79,13 +79,14 @@ class HostedUploadClient:
             raise MigrationError("The hosted upload service response is invalid.")
         return result
 
-    def reserve(self, planned_bytes: int, *, apply: bool = False) -> str:
+    def reserve(self, *, apply: bool = False) -> str:
         if apply is not True:
             raise MigrationError("Hosted upload changes require explicit confirmation.")
-        if type(planned_bytes) is not int or not 0 < planned_bytes <= 1_000_000_000_000:
-            raise MigrationError("The hosted upload size is invalid.")
+        # New PUT grants grow the reservation by exact distinct ciphertext
+        # bytes. Reserving the full snapshot would falsely exhaust capacity
+        # for a mostly-unchanged incremental backup.
         result = self._post({"action": "reserve", "vaultId": self._vault_id,
-                             "bytes": planned_bytes})
+                             "bytes": 1})
         return self._reservation(result)
 
     def renew(self, reservation_id: str, *, apply: bool = False) -> str:

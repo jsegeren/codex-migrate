@@ -17,7 +17,7 @@ test('only a fresh owned scope and durable reservation can sign one exact PUT', 
   const token = await issuePutCapability({ scope: authorized, reservationId,
     item, secret, query: async (sql, values) => {
       queries++;
-      assert.match(sql, /reserve_object_grant_current/);
+      assert.match(sql, /reserve_object_grant_elastic_current/);
       assert.deepEqual(values, [accountId, vaultId, reservationId,
         key, 20, item.sha256, 100_000_000]);
       return { rows: [{ allowed: true }] };

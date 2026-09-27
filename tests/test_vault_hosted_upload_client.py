@@ -53,7 +53,7 @@ class _Handler(BaseHTTPRequestHandler):
             return self._json(403, {"error": "access_denied"})
         action = request["action"]
         if action == "reserve":
-            if request["bytes"] != len(FIRST) + len(SECOND):
+            if request["bytes"] != 1:
                 return self._json(403, {"error": "access_denied"})
             return self._json(200, {"reservationId": RESERVATION,
                                     "expiresAt": EXPIRY})
@@ -173,7 +173,7 @@ class HostedUploadClientTests(unittest.TestCase):
             (root / "refs").mkdir()
             (root / "vault.json").write_bytes(FIRST)
             (root / "refs" / (SNAPSHOT + ".json")).write_bytes(SECOND)
-            reservation = self.client.reserve(len(FIRST) + len(SECOND), apply=True)
+            reservation = self.client.reserve(apply=True)
             store = self.client.object_store(reservation, self.server.expected,
                                              apply=True)
             self.server.fail_next_put = False
@@ -235,7 +235,7 @@ class HostedUploadClientTests(unittest.TestCase):
 
     def test_mutation_requires_apply_and_server_origin_is_pinned(self):
         with self.assertRaises(MigrationError):
-            self.client.reserve(10)
+            self.client.reserve()
         with self.assertRaises(MigrationError):
             self.client.renew(RESERVATION)
         with self.assertRaises(MigrationError):

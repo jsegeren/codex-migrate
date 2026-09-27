@@ -47,7 +47,7 @@ function fixture() {
         assert.equal(values[3], `accounts/${accountId}/vaults/${vaultId}/${item.key}`);
         return { rows: [{ decision }] };
       }
-      if (sql.includes('reserve_object_grant_current')) {
+      if (sql.includes('reserve_object_grant_elastic_current')) {
         decision = 'head';
         return { rows: [{ allowed: true }] };
       }

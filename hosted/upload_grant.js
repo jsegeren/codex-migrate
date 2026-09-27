@@ -6,7 +6,7 @@ const { consumeAuthorizedScope } = require('./access');
 const { validItem, signObjectCapability } = require('./object_capability');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-const GRANT_SQL = `SELECT hosted.reserve_object_grant_current(
+const GRANT_SQL = `SELECT hosted.reserve_object_grant_elastic_current(
   $1::uuid, $2::uuid, $3::uuid, $4::text, $5::bigint, $6::text, $7::bigint
 ) AS allowed`;
 
