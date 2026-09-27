@@ -505,7 +505,7 @@ read-only salvage preview:
 
 Use the path relative to `.codex/sessions` (`active`) or
 `.codex/archived_sessions` (`archived`). The preview skips malformed records,
-tries removing NUL bytes from an in-memory copy of bounded records, and reports
+tries removing NUL bytes from an in-memory copy of records up to 16 MiB, and reports
 omissions. It does not alter the original, reconstruct fork ancestry, restore
 the thread into Codex, or promise a complete transcript. Normal search remains
 strict. The desktop history browser has a separate opt-in "Inspect a damaged

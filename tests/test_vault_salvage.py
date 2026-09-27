@@ -50,7 +50,7 @@ class VaultSalvageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
             path = self.fixture(home)
-            path.write_bytes(b"\xff\n" + b"x" * (vault_salvage.MAX_RECORD_BYTES + 8) +
+            path.write_bytes(b"\xff\n" + b"x" * (vault_salvage.MAX_SALVAGE_RECORD_BYTES + 8) +
                              b"\n" + b"[]\n" + record("Survives"))
             result = vault_salvage.preview_damaged_thread(
                 str(home), "active", "damaged.jsonl")

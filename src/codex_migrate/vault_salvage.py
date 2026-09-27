@@ -21,6 +21,7 @@ from codex_migrate.vault import (
 from codex_migrate.vault_identity import MAX_RECORD_BYTES, filename_id, title_index
 
 MAX_SCAN_BYTES = 256 * 1024 * 1024
+MAX_SALVAGE_RECORD_BYTES = min(MAX_RECORD_BYTES, 16 * 1024 * 1024)
 
 
 @dataclass(frozen=True)
@@ -135,10 +136,10 @@ def preview_damaged_thread(source_home: str, collection: str, transcript: str,
                 if handle.tell() >= MAX_SCAN_BYTES:
                     scan_truncated = handle.tell() < before.st_size
                     break
-                raw = handle.readline(MAX_RECORD_BYTES + 1)
+                raw = handle.readline(MAX_SALVAGE_RECORD_BYTES + 1)
                 if not raw:
                     break
-                if len(raw) > MAX_RECORD_BYTES:
+                if len(raw) > MAX_SALVAGE_RECORD_BYTES:
                     skipped += 1
                     if not raw.endswith(b"\n") and not _drain_record(handle):
                         scan_truncated = True
