@@ -51,6 +51,12 @@ export async function handleObjectRequest(request, bucket, secret) {
   try { item = await verifyObjectCapability(match[1], request.method, key, secret); }
   catch { return answer(403); }
   if (request.method === 'HEAD') {
+    // A retrying client must distinguish an absent object from an immutable
+    // object with conflicting bytes. Never allow a conflict to become a PUT.
+    let prior;
+    try { prior = await bucket.head(item.key); }
+    catch { return answer(409); }
+    if (!prior) return answer(404);
     return answer(await verifiedHead(bucket, item) ? 200 : 409);
   }
   if (request.method === 'GET') {

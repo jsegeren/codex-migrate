@@ -76,11 +76,14 @@ test('worker uploads once, verifies metadata, and streams a matching read', asyn
   const put = await signObjectCapability('PUT', item, secret);
   const head = await signObjectCapability('HEAD', item, secret);
   const get = await signObjectCapability('GET', item, secret);
-  assert.equal((await handleObjectRequest(request('HEAD', key, head), bucket, secret)).status, 409);
+  assert.equal((await handleObjectRequest(request('HEAD', key, head), bucket, secret)).status, 404);
   assert.equal((await handleObjectRequest(request('PUT', key, put, bytes), bucket, secret)).status, 201);
   assert.equal((await handleObjectRequest(request('PUT', key, put, bytes), bucket, secret)).status, 200);
   assert.equal(bucket.puts, 1);
   assert.equal((await handleObjectRequest(request('HEAD', key, head), bucket, secret)).status, 200);
+  bucket.objects.set(key, Buffer.from('different ciphertext'));
+  assert.equal((await handleObjectRequest(request('HEAD', key, head), bucket, secret)).status, 409);
+  bucket.objects.set(key, bytes);
   const response = await handleObjectRequest(request('GET', key, get), bucket, secret);
   assert.equal(response.status, 200);
   assert.deepEqual(Buffer.from(await response.arrayBuffer()), bytes);

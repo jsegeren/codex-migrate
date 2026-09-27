@@ -81,6 +81,15 @@ route. The eventual service must check device identity, purchase, subscription,
 Vault ownership, quota reservation, and published-snapshot membership before
 signing the appropriate capability. This code is not evidence of a usable or
 safe hosted backup yet.
+The native Python side now has a test-only `CapabilityHttpStore` that can
+transfer frozen encrypted objects to that Worker with exact per-object grants.
+It pins one HTTPS origin, refuses redirects and mismatched or out-of-scope
+objects, streams recovery reads, and distinguishes a missing object from a
+checksum conflict during staging. Loopback HTTP is permitted only when
+explicitly enabled for a synthetic test. There is still **no authenticated
+grant issuer**, customer endpoint, hosted schedule, publication path wired to
+the app, or clean-account hosted recovery proof. A passing transport test must
+not change the release status above.
 R2's published September 2026
 pricing is $0.015/GB-month, $4.50/million Class A writes, $0.36/million Class B
 reads, and no R2 ingress or direct egress bandwidth charge. The account-wide
