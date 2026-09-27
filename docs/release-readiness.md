@@ -38,6 +38,15 @@ appcast, or exercised for clean-account Vault recovery. It does not prove
 hosted backup or two-Mac sync. Keep build 16 public and both integration and
 hosted PRs on hold until their stated acceptance gates pass.
 
+A separate [cross-runner portability run](https://github.com/jsegeren/codex-migrate/actions/runs/36300816262)
+on source `ce23883d029d972aaec5fc2696ecbbd6d47064ad` passed its synthetic
+Vault export and import jobs: the producer verified an encrypted snapshot,
+removed its test Keychain key, and the independent macOS runner refused to
+read the snapshot until it imported the recovery key, then restored the exact
+synthetic transcript. Both Python 3.9 and 3.12 jobs also passed. This tests the
+source recovery-key path across independent CI machines; it is not a clean
+customer-account or packaged-build-20 recovery test.
+
 ## September 23 build 16 in-app update beta release
 
 The current paid artifact is `beta-build16-arm64`, from clean source
