@@ -138,6 +138,11 @@ absence record, then clears the claims in that same transaction. No cleanup
 schedule, production credential, real-R2 deletion proof,
 retention policy, or customer-facing abandon flow exists. These functions
 must remain dark until those gates and operational review pass.
+The September 27 synthetic Wrangler local-R2 probe passed all nine upload,
+integrity, read, exact-delete, and already-absent retry flags. Its separate
+Node test is in CI. A remote-binding attempt stopped before touching R2
+because this session had no Cloudflare API token; local simulation is not a
+real-R2 cleanup receipt.
 The draft HEAD grant requires a fresh upload entitlement and active
 reservation, then checks that the exact key, size, and checksum either belong
 to a published snapshot of that Vault or have a PUT grant recorded under this

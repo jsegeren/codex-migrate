@@ -2,7 +2,8 @@
 // deliberately refuses a non-loopback host if this fixture is ever deployed.
 import store from '../../hosted/r2_verified_store.js';
 
-const { putImmutableChecked, verifiedHead, readVerifiedBody } = store;
+const { putImmutableChecked, verifiedHead, readVerifiedBody,
+  deleteExactOrAbsent } = store;
 const ACCOUNT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const VAULT = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
@@ -30,7 +31,8 @@ async function prove(bucket) {
   altered[0] ^= 1;
   const wrongItem = itemFor(await digest(altered), bytes.byteLength);
   const result = { uploaded: false, checked: false, reused: false,
-    wrongDigestRejected: false, restored: false, removed: false };
+    wrongDigestRejected: false, restored: false, mismatchDeleteBlocked: false,
+    deletedExact: false, repeatDeleteNoop: false, removed: false };
   try {
     result.uploaded = await putImmutableChecked(bucket, item, bytes) === 'uploaded';
     result.checked = await verifiedHead(bucket, item);
@@ -46,6 +48,14 @@ async function prove(bucket) {
     const readBytes = new Uint8Array(await new Response(body).arrayBuffer());
     result.restored = readBytes.byteLength === bytes.byteLength &&
       await digest(readBytes) === hash;
+    try {
+      // The same scoped key with the wrong digest must never be deleted.
+      await deleteExactOrAbsent(bucket, { ...item, sha256: wrongItem.sha256 });
+    } catch {
+      result.mismatchDeleteBlocked = await verifiedHead(bucket, item);
+    }
+    result.deletedExact = await deleteExactOrAbsent(bucket, item) === 'deleted';
+    result.repeatDeleteNoop = await deleteExactOrAbsent(bucket, item) === 'absent';
   } finally {
     // Only this run's random synthetic object is touched. Never scan or clear
     // the bucket, and never use real transcript data in this fixture.

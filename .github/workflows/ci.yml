@@ -143,6 +143,7 @@ jobs:
         run: |
           npm ci --ignore-scripts
           npm test
+          node --test tests/r2-live/worker.test.mjs
 
   vault-portability-export:
     if: github.event_name == 'push' && contains(github.event.head_commit.message, '[vault-portability]')

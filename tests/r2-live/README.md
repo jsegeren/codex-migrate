@@ -11,10 +11,11 @@ npx --yes wrangler@4.141.0 dev --config tests/r2-live/wrangler.jsonc --local --i
 curl --fail --silent --show-error --request POST http://127.0.0.1:8789/probe
 ```
 
-All six JSON flags must be `true`. The probe requires `PROBE_ENABLED:1` passed
+All nine JSON flags must be `true`. The probe requires `PROBE_ENABLED:1` passed
 only to the local dev command; the config does not enable it. The probe writes two randomly named,
 synthetic keys, checks SHA-256 validation and immutable reuse, reads the bytes
-back, and deletes only those exact keys. A successful probe leaves the bucket
+back, proves that a wrong-digest DELETE is blocked, deletes the exact object,
+and verifies an already-absent retry. A successful probe leaves the bucket
 empty. The `/probe` route accepts only a loopback hostname and must never be
 deployed or exposed through a tunnel.
 
