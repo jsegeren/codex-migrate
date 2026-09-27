@@ -1296,3 +1296,25 @@ image was mounted read-only, and its app passed strict `codesign` verification,
 Gatekeeper (`Notarized Developer ID`), and stapled-ticket validation. The image
 was detached and the temporary DMG and directory removed. No app was opened,
 Codex data accessed, or first-launch/backup acceptance claimed on that Mac.
+
+## September 26 build-20 local-package search observation
+
+The exact clean source `dffddfaa249648e3bbba33f2257483277a76d656`
+produced a local-test-only, ad-hoc-signed build-20 app. Its ZIP passed archive
+integrity and strict deep code-signature checks, but the outer signature is
+`adhoc` with no Team ID: it is **not** a distributable or notarized release.
+The bundled engine passed a disposable search fixture with a missing optional
+thread-store table and two real POSIX permission-denial fixtures without
+changing protected files.
+
+A read-only search of this Mac's actual local transcript history tested the
+packaged engine at large scale without publishing query text or results. The
+optional fast-search cache was absent (0 indexed of 2,053 transcripts). A
+common single-word query reached the 500-result cap in about seven seconds;
+a more selective two-word query returned 34 matches in about 103 seconds.
+The latter is a meaningful usability gap for unindexed histories of this size,
+not evidence that search is instant or that every possible result was checked
+through the capped common-word query. The scan did not create a Vault backup,
+search cache, schedule, or any change to Codex source data. Opt-in indexed
+search remains the intended acceleration path, with its unencrypted-cache
+privacy disclosure and release acceptance still required.
