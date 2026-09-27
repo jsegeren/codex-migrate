@@ -79,6 +79,16 @@ class PackagedVaultCompressionTests(unittest.TestCase):
                     "content": "Clerk follow-up"
                 }}}) + "\n")
             self.assertEqual(len(search_for("Clerk follow-up")), 1)
+            archived = source / ".codex/archived_sessions/fixture.jsonl"
+            archived.parent.mkdir(parents=True)
+            transcript.replace(archived)
+            self.assertEqual(search_for("Clerk follow-up")[0]["collection"], "archived")
+            refreshed = json.loads(run_packaged([
+                str(engine), "vault", "--source-home", str(source),
+                "search-index", "--apply", "--json",
+            ]))
+            self.assertTrue(refreshed["applied"])
+            self.assertEqual(search_for("Clerk follow-up")[0]["collection"], "archived")
             removed = json.loads(run_packaged([
                 str(engine), "vault", "--source-home", str(source),
                 "search-index-remove", "--apply", "--json",

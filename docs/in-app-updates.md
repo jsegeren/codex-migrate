@@ -658,7 +658,8 @@ verification and Notarized Developer ID Gatekeeper assessment. Its bundled
 engine, not the source interpreter, passed an isolated synthetic-home test:
 ordinary search found a conversation, the opt-in index was created with
 owner-only permissions, indexed search returned the same result, an appended
-message was found before refreshing the index, and removing the index left
-ordinary search working. No real Codex history or Keychain item was used.
+message was found before refreshing the index, moving that conversation from
+active to archived kept it searchable before and after refresh, and removing
+the index left ordinary search working. No real Codex history or Keychain item was used.
 This proves the packaged SQLite/index path for a small fixture, not search
 latency on a large history, a paid buyer update, or clean-account recovery.
