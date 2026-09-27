@@ -115,6 +115,13 @@ and reserved quota untouched. A cleanup worker still must distinguish objects
 in published snapshots or other in-flight grants, prove safe provider deletion
 for exclusive orphans, and only then release quota. Quarantine alone is not
 orphan cleanup and is not enabled as a customer feature.
+After quarantine, the draft database can claim an individual orphan key only
+when it is not published and no other reservation has a still-live storage
+capability. The claim survives a worker crash and blocks new PUT grants and
+publication for that exact key under the account lock. This closes the race
+that would otherwise let a cleanup job delete a newly reused object. No
+deletion, proof of absence, claim release, or quota reclamation is implemented
+yet; a claimed key must remain blocked until those steps are built and tested.
 The draft HEAD grant requires a fresh upload entitlement and active
 reservation, then checks that the exact key, size, and checksum either belong
 to a published snapshot of that Vault or have a PUT grant recorded under this
