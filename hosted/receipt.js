@@ -7,7 +7,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{1
 const HEX = /^[0-9a-f]{64}$/;
 const MAX_CHUNKS = 1_000_000;
 const MAX_CHUNK_BYTES = 64 * 1024 * 1024 + 1024;
-const MAX_MANIFEST_BYTES = 128 * 1024 * 1024 + 1024;
+// The selected Worker upload route refuses request bodies above 100 MB.
+// Never certify a receipt for a manifest that this service cannot upload.
+const MAX_MANIFEST_BYTES = 100 * 1000 * 1000;
 const MAX_METADATA_BYTES = 1024 * 1024;
 
 class HostedReceiptError extends Error {

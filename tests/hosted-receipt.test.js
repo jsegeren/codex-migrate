@@ -75,6 +75,18 @@ test('no provider verifier means no protection proof', async () => {
     /hosted_receipt_invalid/);
 });
 
+test('receipt cannot certify a manifest larger than the Worker upload limit', () => {
+  const { receipt } = fixture();
+  receipt.objects[2].bytes = 100_000_001;
+  receipt.remote_bytes_checked = receipt.objects.reduce((sum, item) => sum + item.bytes, 0);
+  assert.throws(() => validateReceipt(receipt, receipt.remote_bytes_checked),
+    /hosted_receipt_invalid/);
+  receipt.objects[2].bytes = 100_000_000;
+  receipt.remote_bytes_checked--;
+  assert.equal(validateReceipt(receipt, receipt.remote_bytes_checked).totalBytes,
+    receipt.remote_bytes_checked);
+});
+
 test('service scope is required and cannot read another account or Vault', async () => {
   const { receipt, verify } = fixture();
   for (const invalid of [undefined, {}, { ...scope, vaultId: '../other' },
