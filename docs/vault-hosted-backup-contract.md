@@ -118,6 +118,13 @@ enumerates that published snapshot in
 server-held object checksums/sizes, and the total expected count and bytes.
 The recovery client must reconcile the complete inventory before declaring a
 download successful; a page alone is not proof of a recoverable snapshot.
+A sandbox-only recovery HTTP route now exercises these read boundaries: it
+requires a device bearer, rejects cross-origin browser calls, verifies the
+current sandbox database identity, and is closed unless explicitly enabled.
+It can return the last-good pointer, an inventory page, or one published-object
+GET grant. It cannot open against the live database and is **not enabled or
+customer-accessible**. Enrollment and client wiring are still absent, so this
+route is not a disaster-recovery proof.
 Do not send a whole staged receipt as one Vercel Function request. A synthetic
 JSON receipt matching the measured newer Mac's 21,907 chunks is about 4.03 MB,
 close to [Vercel's 4.5 MB request and response limit](https://vercel.com/docs/functions/limitations/);
