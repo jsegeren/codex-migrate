@@ -857,7 +857,17 @@ private func storeChunksWithKnownCommand(_ arguments: [String]) throws {
         }
         let selected: Chunk
         let reusedRemotely: Bool
-        if FileManager.default.fileExists(atPath: try objectURL(root: root, id: raw.id).path) {
+        // Published ciphertext must win over scratch ciphertext for the same
+        // keyed ID. AES-GCM nonces differ across attempts; a local retry copy
+        // may be valid plaintext yet conflict with the immutable R2 object.
+        if let compressed = compressed, known.contains(compressed.id) {
+            selected = compressed
+            reusedRemotely = true
+        } else if known.contains(raw.id) {
+            selected = raw
+            reusedRemotely = true
+        } else if FileManager.default.fileExists(
+                    atPath: try objectURL(root: root, id: raw.id).path) {
             guard try readChunk(raw, root: root, encryption: encryption,
                                 identifiers: identifiers) == data else {
                 throw VaultError.message("an existing encrypted object failed content verification")
@@ -873,12 +883,6 @@ private func storeChunksWithKnownCommand(_ arguments: [String]) throws {
             }
             selected = compressed
             reusedRemotely = false
-        } else if known.contains(raw.id) {
-            selected = raw
-            reusedRemotely = true
-        } else if let compressed = compressed, known.contains(compressed.id) {
-            selected = compressed
-            reusedRemotely = true
         } else {
             selected = try storeChunk(data, root: root, encryption: encryption,
                                       identifiers: identifiers)

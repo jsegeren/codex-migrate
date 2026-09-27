@@ -543,6 +543,42 @@ class VaultBackupTests(unittest.TestCase):
             finally:
                 self.delete_key(vault)
 
+    def test_published_ciphertext_wins_over_valid_but_different_scratch_copy(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            vault = root / "vault"
+            self.fixture(source)
+            try:
+                backup(str(source), str(vault), crypto_helper=str(self.helper))
+                key_id = json.loads((vault / "vault.json").read_text())["key_id"]
+                content = b"A" * 65536
+                objects = root / "scratch"
+                objects.mkdir(mode=0o700)
+                locally_written = subprocess.run([
+                    str(self.helper), "store-chunks", "--key-id", key_id,
+                    "--chunk-size", "65536", "--object-dir", str(objects),
+                ], input=content, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    check=True)
+                selected_id = json.loads(locally_written.stdout)["chunks"][0]["id"]
+                lookup = root / "known.json"
+                lookup.write_text(json.dumps({"version": 1, "ids": [selected_id]}))
+                lookup.chmod(0o600)
+                result = subprocess.run([
+                    str(self.helper), "store-chunks-with-known", "--key-id", key_id,
+                    "--chunk-size", "65536", "--object-dir", str(objects),
+                    "--known-ids-file", str(lookup),
+                    "--expected-sha256", hashlib.sha256(content).hexdigest(),
+                    "--expected-size", str(len(content)),
+                ], input=content, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    check=True)
+                written = json.loads(result.stdout)
+                self.assertEqual(written["remote_ids"], [selected_id])
+                self.assertEqual(written["local_ids"], [])
+                self.assertEqual(len(list(objects.rglob("*.cvchunk"))), 1)
+            finally:
+                self.delete_key(vault)
+
     def test_remote_staging_failure_never_replaces_or_publishes(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
