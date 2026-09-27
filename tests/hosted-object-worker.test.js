@@ -14,13 +14,13 @@ const item = Object.freeze({ key, bytes: bytes.length, sha256: hash(bytes) });
 const secret = randomBytes(32);
 
 class FakeBucket {
-  constructor() { this.objects = new Map(); this.puts = 0; }
+  constructor() { this.objects = new Map(); this.puts = 0; this.heads = 0; }
   metadata(path) {
     const data = this.objects.get(path);
     return data && { key: path, size: data.length, version: 'v1',
       checksums: { sha256: Uint8Array.from(Buffer.from(hash(data), 'hex')).buffer } };
   }
-  async head(path) { return this.metadata(path) || null; }
+  async head(path) { this.heads++; return this.metadata(path) || null; }
   async get(path) {
     const data = this.objects.get(path);
     return data && { ...this.metadata(path), body: new ReadableStream({
@@ -81,6 +81,8 @@ test('worker uploads once, verifies metadata, and streams a matching read', asyn
   assert.equal((await handleObjectRequest(request('PUT', key, put, bytes), bucket, secret)).status, 200);
   assert.equal(bucket.puts, 1);
   assert.equal((await handleObjectRequest(request('HEAD', key, head), bucket, secret)).status, 200);
+  // One client HEAD must cost only one R2 metadata operation.
+  assert.equal(bucket.heads, 5);
   bucket.objects.set(key, Buffer.from('different ciphertext'));
   assert.equal((await handleObjectRequest(request('HEAD', key, head), bucket, secret)).status, 409);
   bucket.objects.set(key, bytes);

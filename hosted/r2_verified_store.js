@@ -39,11 +39,17 @@ function matches(object, item) {
 }
 
 async function verifiedHead(bucket, item) {
-  if (!validItem(item) || typeof bucket?.head !== 'function') return false;
+  return (await checkedHeadState(bucket, item)) === 'verified';
+}
+
+async function checkedHeadState(bucket, item) {
+  if (!validItem(item) || typeof bucket?.head !== 'function') return 'conflict';
   try {
-    return matches(await bucket.head(item.key), item);
+    const object = await bucket.head(item.key);
+    if (!object) return 'absent';
+    return matches(object, item) ? 'verified' : 'conflict';
   } catch {
-    return false;
+    return 'conflict';
   }
 }
 
@@ -109,5 +115,5 @@ async function putImmutableChecked(bucket, item, body) {
   }
 }
 
-module.exports = { R2VerificationError, verifiedHead, verifiedBatch,
+module.exports = { R2VerificationError, checkedHeadState, verifiedHead, verifiedBatch,
   putImmutableChecked, readVerifiedBody };

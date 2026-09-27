@@ -5,7 +5,7 @@ import capability from './object_capability.js';
 import store from './r2_verified_store.js';
 
 const { decodeSecret, verifyObjectCapability } = capability;
-const { putImmutableChecked, verifiedHead, readVerifiedBody } = store;
+const { putImmutableChecked, checkedHeadState, readVerifiedBody } = store;
 const PREFIX = '/v1/object/';
 const BASE_HEADERS = Object.freeze({ 'Cache-Control': 'private, no-store',
   'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff' });
@@ -53,11 +53,8 @@ export async function handleObjectRequest(request, bucket, secret) {
   if (request.method === 'HEAD') {
     // A retrying client must distinguish an absent object from an immutable
     // object with conflicting bytes. Never allow a conflict to become a PUT.
-    let prior;
-    try { prior = await bucket.head(item.key); }
-    catch { return answer(409); }
-    if (!prior) return answer(404);
-    return answer(await verifiedHead(bucket, item) ? 200 : 409);
+    const state = await checkedHeadState(bucket, item);
+    return answer(state === 'verified' ? 200 : state === 'absent' ? 404 : 409);
   }
   if (request.method === 'GET') {
     try {
