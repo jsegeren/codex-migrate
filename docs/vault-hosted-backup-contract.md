@@ -119,9 +119,25 @@ After quarantine, the draft database can claim an individual orphan key only
 when it is not published and no other reservation has a still-live storage
 capability. The claim survives a worker crash and blocks new PUT grants and
 publication for that exact key under the account lock. This closes the race
-that would otherwise let a cleanup job delete a newly reused object. No
-deletion, proof of absence, claim release, or quota reclamation is implemented
-yet; a claimed key must remain blocked until those steps are built and tested.
+that would otherwise let a cleanup job delete a newly reused object.
+The draft database now also has a guarded completion path: a trusted worker
+may record exact provider absence for a claimed key, and a reservation may
+release its bytes only when every granted key is published or has an exact
+absence record at least two minutes old. The claim is removed only in that
+same quota-release transaction. These SQL checks do **not** establish R2
+absence themselves. An undeployed, operator-only cleanup path now gets a
+database-issued, 30-second DELETE capability for one claimed key. The R2
+Worker checks the stored size and SHA-256 before deletion and checks HEAD for
+absence afterward; only its 204 response lets the operator record absence.
+The signer uses the database issue time, so a delayed response cannot mint a
+fresh DELETE capability after the claim-release hold. Synthetic tests cover
+provider conflicts and a retry after the response to a successful delete is
+lost. A separate operator call can ask the database to reclaim reserved bytes;
+it succeeds only after every granted key has a published object or an old
+absence record, then clears the claims in that same transaction. No cleanup
+schedule, production credential, real-R2 deletion proof,
+retention policy, or customer-facing abandon flow exists. These functions
+must remain dark until those gates and operational review pass.
 The draft HEAD grant requires a fresh upload entitlement and active
 reservation, then checks that the exact key, size, and checksum either belong
 to a published snapshot of that Vault or have a PUT grant recorded under this

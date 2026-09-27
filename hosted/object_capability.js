@@ -56,7 +56,7 @@ async function signingKey(secret) {
 }
 
 async function signObjectCapability(method, item, secret, now = Date.now(), ageMs = MAX_AGE_MS) {
-  if (!['PUT', 'GET', 'HEAD'].includes(method) || !validItem(item) ||
+  if (!['PUT', 'GET', 'HEAD', 'DELETE'].includes(method) || !validItem(item) ||
       !Number.isSafeInteger(now) || !Number.isSafeInteger(ageMs) ||
       ageMs < 1 || ageMs > MAX_AGE_MS) throw new ObjectCapabilityError();
   const payload = new TextEncoder().encode(JSON.stringify({ v: 1, m: method,
@@ -67,7 +67,7 @@ async function signObjectCapability(method, item, secret, now = Date.now(), ageM
 
 async function verifyObjectCapability(token, method, pathKey, secret, now = Date.now()) {
   if (typeof token !== 'string' || token.length > 2048 ||
-      !Number.isSafeInteger(now) || !['PUT', 'GET', 'HEAD'].includes(method) ||
+      !Number.isSafeInteger(now) || !['PUT', 'GET', 'HEAD', 'DELETE'].includes(method) ||
       typeof pathKey !== 'string' || !KEY.test(pathKey)) throw new ObjectCapabilityError();
   const parts = token.split('.');
   if (parts.length !== 2) throw new ObjectCapabilityError();

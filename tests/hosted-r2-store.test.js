@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
 const { putImmutableChecked, verifiedHead, verifiedBatch,
-  readVerifiedBody } = require('../hosted/r2_verified_store');
+  readVerifiedBody, deleteExactOrAbsent } = require('../hosted/r2_verified_store');
 const { verifyStagedReceipt } = require('../hosted/receipt');
 
 const account = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -15,7 +15,8 @@ const itemForKey = (objectKey, value) => ({ key: objectKey, bytes: value.length,
 const itemFor = value => itemForKey(key, value);
 
 class FakeR2 {
-  constructor() { this.objects = new Map(); this.race = null; this.putCalls = 0; }
+  constructor() { this.objects = new Map(); this.race = null; this.putCalls = 0;
+    this.deleteCalls = 0; }
   metadata(key) {
     const record = this.objects.get(key);
     return record && { key, size: record.bytes.length, version: record.version,
@@ -46,7 +47,40 @@ class FakeR2 {
     this.objects.set(key, { bytes, checksum: options.sha256, version: 'new-version' });
     return this.metadata(key);
   }
+  async delete(key) { this.deleteCalls++; this.objects.delete(key); }
 }
+
+test('cleanup deletes only exact ciphertext and confirms provider absence', async () => {
+  const bucket = new FakeR2();
+  const bytes = Buffer.from('synthetic orphan ciphertext');
+  const item = itemFor(bytes);
+  assert.equal(await deleteExactOrAbsent(bucket, item), 'absent');
+  assert.equal(bucket.deleteCalls, 0);
+  await putImmutableChecked(bucket, item, bytes);
+  await assert.rejects(deleteExactOrAbsent(bucket,
+    { ...item, sha256: '0'.repeat(64) }), /hosted_object_unverified/);
+  assert.equal(bucket.deleteCalls, 0);
+  assert.equal(await deleteExactOrAbsent(bucket, item), 'deleted');
+  assert.equal(bucket.deleteCalls, 1);
+  assert.equal(await bucket.head(key), null);
+  assert.equal(await deleteExactOrAbsent(bucket, item), 'absent');
+  assert.equal(bucket.deleteCalls, 1);
+});
+
+test('cleanup refuses a failed DELETE or an object still present afterward', async () => {
+  const bucket = new FakeR2();
+  const bytes = Buffer.from('synthetic orphan ciphertext');
+  const item = itemFor(bytes);
+  await putImmutableChecked(bucket, item, bytes);
+  bucket.delete = async () => { throw new Error('private provider detail'); };
+  await assert.rejects(deleteExactOrAbsent(bucket, item), error =>
+    error.message === 'hosted_object_unverified');
+  assert.ok(await bucket.head(key));
+  bucket.delete = async () => {};
+  await assert.rejects(deleteExactOrAbsent(bucket, item),
+    /hosted_object_unverified/);
+  assert.ok(await bucket.head(key));
+});
 
 test('R2 checksum-checked conditional write is reusable and independently readable', async () => {
   const bucket = new FakeR2();

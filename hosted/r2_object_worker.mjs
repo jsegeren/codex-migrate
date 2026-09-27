@@ -7,7 +7,7 @@ import store from './r2_verified_store.js';
 const { decodeSecret, verifyObjectCapability, verifyBatchVerification,
   MAX_BATCH_BODY_BYTES } = capability;
 const { putImmutableChecked, checkedHeadState, readVerifiedBody,
-  verifiedBatch } = store;
+  verifiedBatch, deleteExactOrAbsent } = store;
 const PREFIX = '/v1/object/';
 const BATCH_PATH = '/v1/verify-batch';
 const BASE_HEADERS = Object.freeze({ 'Cache-Control': 'private, no-store',
@@ -87,7 +87,7 @@ export async function handleBatchVerification(request, bucket, secret) {
 
 export async function handleObjectRequest(request, bucket, secret) {
   const url = new URL(request.url);
-  if (!['PUT', 'GET', 'HEAD'].includes(request.method) ||
+  if (!['PUT', 'GET', 'HEAD', 'DELETE'].includes(request.method) ||
       !url.pathname.startsWith(PREFIX) || url.search || url.hash) return answer(404);
   const key = url.pathname.slice(PREFIX.length);
   const authorization = request.headers.get('Authorization') || '';
@@ -108,6 +108,14 @@ export async function handleObjectRequest(request, bucket, secret) {
       return new Response(body, { status: 200, headers: { ...BASE_HEADERS,
         'Content-Type': 'application/octet-stream',
         'Content-Length': String(item.bytes) } });
+    } catch { return answer(409); }
+  }
+  if (request.method === 'DELETE') {
+    if (request.body || ![null, '0'].includes(
+        request.headers.get('Content-Length'))) return answer(400);
+    try {
+      await deleteExactOrAbsent(bucket, item);
+      return answer(204);
     } catch { return answer(409); }
   }
   if (request.headers.get('Content-Length') !== String(item.bytes) || !request.body) {

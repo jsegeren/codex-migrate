@@ -87,6 +87,21 @@ async function readVerifiedBody(bucket, item) {
   }
 }
 
+async function deleteExactOrAbsent(bucket, item) {
+  if (!validItem(item) || typeof bucket?.head !== 'function' ||
+      typeof bucket?.delete !== 'function') throw new R2VerificationError();
+  try {
+    const prior = await bucket.head(item.key);
+    if (!prior) return 'absent';
+    if (!matches(prior, item)) throw new R2VerificationError();
+    await bucket.delete(item.key);
+    // A DELETE acknowledgement is not an absence proof. Refuse to mark the
+    // cleanup ledger until the provider reports the exact key missing.
+    if (await bucket.head(item.key)) throw new R2VerificationError();
+    return 'deleted';
+  } catch { throw new R2VerificationError(); }
+}
+
 async function putImmutableChecked(bucket, item, body) {
   if (!validItem(item) || !body || typeof bucket?.head !== 'function' ||
       typeof bucket?.put !== 'function') throw new R2VerificationError();
@@ -116,4 +131,4 @@ async function putImmutableChecked(bucket, item, body) {
 }
 
 module.exports = { R2VerificationError, checkedHeadState, verifiedHead, verifiedBatch,
-  putImmutableChecked, readVerifiedBody };
+  putImmutableChecked, readVerifiedBody, deleteExactOrAbsent };

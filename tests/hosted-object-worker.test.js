@@ -15,7 +15,8 @@ const item = Object.freeze({ key, bytes: bytes.length, sha256: hash(bytes) });
 const secret = randomBytes(32);
 
 class FakeBucket {
-  constructor() { this.objects = new Map(); this.puts = 0; this.heads = 0; }
+  constructor() { this.objects = new Map(); this.puts = 0; this.heads = 0;
+    this.deletes = 0; }
   metadata(path) {
     const data = this.objects.get(path);
     return data && { key: path, size: data.length, version: 'v1',
@@ -37,7 +38,30 @@ class FakeBucket {
     this.objects.set(path, data);
     return this.metadata(path);
   }
+  async delete(path) { this.deletes++; this.objects.delete(path); }
 }
+
+test('cleanup DELETE capability is method-bound and requires provider absence', async () => {
+  const { handleObjectRequest } = await worker();
+  const bucket = new FakeBucket();
+  bucket.objects.set(key, bytes);
+  const token = await signObjectCapability('DELETE', item, secret);
+  const put = await signObjectCapability('PUT', item, secret);
+  assert.equal((await handleObjectRequest(request('DELETE', key, put),
+    bucket, secret)).status, 403);
+  assert.equal((await handleObjectRequest(request('GET', key, token),
+    bucket, secret)).status, 403);
+  assert.equal((await handleObjectRequest(request('DELETE', key, token,
+    Buffer.from('body')), bucket, secret)).status, 400);
+  assert.equal(bucket.deletes, 0);
+  assert.equal((await handleObjectRequest(request('DELETE', key, token),
+    bucket, secret)).status, 204);
+  assert.equal(bucket.deletes, 1);
+  assert.equal(bucket.objects.has(key), false);
+  assert.equal((await handleObjectRequest(request('DELETE', key, token),
+    bucket, secret)).status, 204);
+  assert.equal(bucket.deletes, 1);
+});
 
 async function worker() { return import('../hosted/r2_object_worker.mjs'); }
 function request(method, objectKey, token, body) {
