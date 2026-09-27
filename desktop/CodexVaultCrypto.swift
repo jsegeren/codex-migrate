@@ -23,6 +23,19 @@ private struct StoredFile: Codable {
     let chunks: [Chunk]
 }
 
+private struct PlannedChunk: Codable {
+    let raw_id: String
+    let compressed_id: String?
+    let size: Int
+    let compressed_bytes: Int?
+}
+
+private struct PlannedFile: Codable {
+    let sha256: String
+    let size: Int
+    let chunks: [PlannedChunk]
+}
+
 private struct ManifestFile: Codable {
     let collection: String
     let path: String
@@ -735,11 +748,7 @@ private func deleteKeyCommand(_ arguments: [String]) throws {
 private func storeChunksCommand(_ arguments: [String]) throws {
     let keyID = try canonicalKeyID(argument("--key-id", in: arguments))
     let root = URL(fileURLWithPath: try argument("--object-dir", in: arguments), isDirectory: true)
-    let chunkSizeText = try argument("--chunk-size", in: arguments)
-    guard let chunkSize = Int(chunkSizeText), chunkSize >= 64 * 1024,
-          chunkSize <= 64 * 1024 * 1024 else {
-        throw VaultError.message("the chunk size is outside the supported range")
-    }
+    let chunkSize = try chunkSizeArgument(arguments)
     let master = try loadKey(keyID)
     let encryption = encryptionKey(master)
     let identifiers = identifierKey(master)
@@ -755,6 +764,42 @@ private func storeChunksCommand(_ arguments: [String]) throws {
                                      identifiers: identifiers))
     }
     try printJSON(StoredFile(sha256: hex(digest.finalize()), size: total, chunks: chunks))
+}
+
+private func chunkSizeArgument(_ arguments: [String]) throws -> Int {
+    let text = try argument("--chunk-size", in: arguments)
+    guard let size = Int(text), size >= 64 * 1024,
+          size <= 64 * 1024 * 1024 else {
+        throw VaultError.message("the chunk size is outside the supported range")
+    }
+    return size
+}
+
+private func planChunksCommand(_ arguments: [String]) throws {
+    // Read-only first pass for a future remote-aware writer. Stable keyed IDs
+    // let it check for exact published ciphertext before it encrypts anything.
+    // A raw object from an older snapshot may exist even when compression is
+    // now preferred, so report both candidates rather than guessing one.
+    let keyID = try canonicalKeyID(argument("--key-id", in: arguments))
+    let chunkSize = try chunkSizeArgument(arguments)
+    let identifiers = identifierKey(try loadKey(keyID))
+    var digest = SHA256()
+    var chunks: [PlannedChunk] = []
+    var total = 0
+    while true {
+        let data = try FileHandle.standardInput.read(upToCount: chunkSize) ?? Data()
+        if data.isEmpty { break }
+        digest.update(data: data)
+        total += data.count
+        let compressed = compressChunk(data)
+        chunks.append(PlannedChunk(
+            raw_id: objectID(data, key: identifiers),
+            compressed_id: compressed == nil ? nil :
+                compressedObjectID(data, key: identifiers),
+            size: data.count, compressed_bytes: compressed?.count))
+    }
+    try printJSON(PlannedFile(sha256: hex(digest.finalize()),
+                              size: total, chunks: chunks))
 }
 
 private func sealManifestCommand(_ arguments: [String]) throws {
@@ -1006,6 +1051,7 @@ private func run() throws {
     case "hosted-device-list": try listHostedDevicesCommand()
     case "hosted-device-delete": try deleteHostedDeviceCommand(arguments)
     case "store-chunks": try storeChunksCommand(arguments)
+    case "plan-chunks": try planChunksCommand(arguments)
     case "seal-manifest": try sealManifestCommand(arguments)
     case "verify": try verifyCommand(arguments)
     case "encrypted-inventory": try encryptedInventoryCommand(arguments)

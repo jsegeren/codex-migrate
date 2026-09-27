@@ -376,6 +376,49 @@ class VaultBackupTests(unittest.TestCase):
             finally:
                 self.delete_key(first_vault)
 
+    def test_native_remote_planner_matches_stored_chunk_candidates_without_writes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            vault = root / "vault"
+            self.fixture(source)
+            try:
+                backup(str(source), str(vault), crypto_helper=str(self.helper))
+                key_id = json.loads((vault / "vault.json").read_text())["key_id"]
+                sample = root / "sample"
+                content = b"A" * 65536 + b"B" * 65536
+                sample.write_bytes(content)
+                objects = root / "planned-objects"
+                with sample.open("rb") as stream:
+                    planned = subprocess.run([
+                        str(self.helper), "plan-chunks", "--key-id", key_id,
+                        "--chunk-size", "65536",
+                    ], stdin=stream, stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE, check=True)
+                self.assertFalse(objects.exists())
+                self.assertNotIn(content[:64], planned.stdout)
+                plan = json.loads(planned.stdout)
+                self.assertEqual(plan["sha256"], hashlib.sha256(content).hexdigest())
+                self.assertEqual(plan["size"], len(content))
+                self.assertEqual(len(plan["chunks"]), 2)
+                self.assertTrue(all(item["compressed_id"] is not None
+                                    for item in plan["chunks"]))
+                objects.mkdir(mode=0o700)
+                with sample.open("rb") as stream:
+                    stored = subprocess.run([
+                        str(self.helper), "store-chunks", "--key-id", key_id,
+                        "--object-dir", str(objects), "--chunk-size", "65536",
+                    ], stdin=stream, stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE, check=True)
+                actual = json.loads(stored.stdout)
+                self.assertEqual(actual["sha256"], plan["sha256"])
+                for candidate, chunk in zip(plan["chunks"], actual["chunks"]):
+                    self.assertEqual(candidate["size"], chunk["size"])
+                    self.assertIn(chunk["id"],
+                                  (candidate["raw_id"], candidate["compressed_id"]))
+            finally:
+                self.delete_key(vault)
+
     def test_remote_staging_failure_never_replaces_or_publishes(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

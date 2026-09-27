@@ -328,6 +328,15 @@ egress allowance. Do not claim that B2 restores are always free. See its
   prove a remotely complete snapshot and clean-account restore before it can
   discard its temporary ciphertext. An ambiguous upload cannot authorize
   local deletion.
+  The native helper now has a read-only `plan-chunks` first pass: for each
+  plaintext chunk it returns only the keyed raw and (when useful) compressed
+  candidate IDs, byte counts, and a whole-file digest. A synthetic parity test
+  confirms that a normal stored chunk selects one of those candidates and that
+  planning writes no objects. This is a building block, **not** remote-aware
+  backup: no service lookup, ciphertext reuse proof, remote publication, or
+  local-space reduction is implemented by that command alone. The eventual
+  writer must recheck the source file after this first pass and fail closed on
+  changes between planning and encryption.
 - Keep each local Vault in its own random, account-scoped remote namespace.
   Two Macs may each back up to separate Vaults under one subscription; this is
   not synchronization or a silent merge. Object names and snapshot times are
