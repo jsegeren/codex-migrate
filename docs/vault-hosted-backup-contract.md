@@ -44,6 +44,11 @@ plausible alternative because private signed URLs permit direct transfers, but
 its first-time download transfer charges make large disaster restores and a
 flat $10 allowance materially riskier. See the
 [measured sizing and provider comparison](vault-hosted-economics-2026-09-26.md).
+Cloudflare's setup requires a separate Cloudflare account and R2 subscription
+checkout, even for included free monthly usage; hosting the website on Vercel
+does not itself activate R2. The Founder must complete any account terms and
+payment details before a real-provider sandbox proof. See the
+[R2 setup prerequisite](https://developers.cloudflare.com/r2/get-started/).
 R2's presigned S3 PUT alone does not satisfy immutable SHA-256 verification:
 the candidate transport uses a small authenticated Worker with R2's
 checksum-checked conditional PUT. Its $5/month paid-plan minimum matters for
