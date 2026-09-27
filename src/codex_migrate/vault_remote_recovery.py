@@ -115,16 +115,22 @@ def _private_directory(descriptor: int, name: str) -> int:
         os.mkdir(name, mode=0o700, dir_fd=descriptor)
     except FileExistsError:
         pass
+    child = -1
     try:
         child = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
                         dir_fd=descriptor)
         info = os.fstat(child)
         if info.st_uid != os.geteuid() or info.st_mode & 0o077:
-            os.close(child)
             raise MigrationError("The hosted recovery folder is not private.")
         return child
     except OSError as error:
+        if child >= 0:
+            os.close(child)
         raise MigrationError("The hosted recovery folder is unsafe.") from error
+    except MigrationError:
+        if child >= 0:
+            os.close(child)
+        raise
 
 
 def _digest(stream: BinaryIO, expected: int) -> str:
@@ -217,19 +223,22 @@ def _fetch_item(root: int, item: _Object, store: ScopedReadStore) -> bool:
         stream = store.open_read(item.key)
         if stream is None:
             raise MigrationError("A hosted recovery object is missing.")
+        created_temporary = False
         try:
             with stream:
                 descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
                                      os.O_NOFOLLOW, 0o600, dir_fd=directory)
+                created_temporary = True
                 _copy_to_file(stream, descriptor, item)
             os.link(temporary, name, src_dir_fd=directory,
                     dst_dir_fd=directory, follow_symlinks=False)
             os.fsync(directory)
         finally:
-            try:
-                os.unlink(temporary, dir_fd=directory)
-            except FileNotFoundError:
-                pass
+            if created_temporary:
+                try:
+                    os.unlink(temporary, dir_fd=directory)
+                except FileNotFoundError:
+                    pass
         return True
     finally:
         os.close(directory)
@@ -286,7 +295,10 @@ def _prepare_root(source_home: str, output: str, marker: bytes) -> Tuple[Path, i
                         or handle.read(len(marker) + 1) != marker):
                     raise MigrationError("This folder belongs to another recovery.")
         return root, descriptor
-    except (OSError, MigrationError):
+    except OSError as error:
+        os.close(descriptor)
+        raise MigrationError("The hosted recovery destination is unsafe.") from error
+    except MigrationError:
         os.close(descriptor)
         raise
 
