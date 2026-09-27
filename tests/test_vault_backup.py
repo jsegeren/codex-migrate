@@ -199,6 +199,11 @@ class VaultBackupTests(unittest.TestCase):
                 self.assertEqual(len([path for path in paths if path.startswith("objects/")]), 2)
                 self.assertEqual(inventory.transfer_bytes, sum(
                     (destination / path).stat().st_size for path in paths))
+                self.assertEqual(
+                    {item.relative_path: item.sha256 for item in inventory.files},
+                    {path: hashlib.sha256((destination / path).read_bytes()).hexdigest()
+                     for path in paths},
+                )
                 self.assertFalse(any("auth" in path or "installation" in path for path in paths))
                 self.assertNotIn("latest.json", paths)  # publish only after remote verification
                 historical = vault_remote_inventory.encrypted_snapshot_inventory(
@@ -217,6 +222,17 @@ class VaultBackupTests(unittest.TestCase):
                 result = backup(str(source), str(destination), crypto_helper=str(self.helper))
                 with patch.object(vault_remote_inventory, "_run_helper", return_value={
                     "snapshot_id": result.snapshot_id, "chunk_ids": [4],
+                }):
+                    with self.assertRaisesRegex(MigrationError, "inventory is invalid"):
+                        vault_remote_inventory.encrypted_snapshot_inventory(
+                            str(destination), crypto_helper=str(self.helper))
+                verified = vault_remote_inventory.encrypted_snapshot_inventory(
+                    str(destination), crypto_helper=str(self.helper))
+                identifiers = sorted(Path(item.relative_path).stem for item in verified.files
+                                     if item.relative_path.startswith("objects/"))
+                with patch.object(vault_remote_inventory, "_run_helper", return_value={
+                    "snapshot_id": result.snapshot_id, "chunk_ids": identifiers,
+                    "chunk_sha256": {},
                 }):
                     with self.assertRaisesRegex(MigrationError, "inventory is invalid"):
                         vault_remote_inventory.encrypted_snapshot_inventory(
@@ -398,6 +414,82 @@ class VaultBackupTests(unittest.TestCase):
                 self.assertNotIn("latest.json", store.objects)
                 self.assertFalse(any(b"NEVER-COPY-AUTH" in value
                                      for value in store.objects.values()))
+            finally:
+                self.delete_key(destination)
+
+    def test_remote_staging_refuses_same_size_chunk_changed_after_verification(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, destination = root / "source", root / "vault"
+            self.fixture(source)
+            store = MemoryObjectStore()
+            try:
+                backup(str(source), str(destination), crypto_helper=str(self.helper))
+                inventory = vault_remote_inventory.encrypted_snapshot_inventory(
+                    str(destination), crypto_helper=str(self.helper))
+                chunk = next((destination / "objects").rglob("*.cvchunk"))
+                original = chunk.read_bytes()
+                changed = b"SECRET-NOT-ENCRYPTED" + original[len(b"SECRET-NOT-ENCRYPTED"):]
+                self.assertEqual(len(changed), len(original))
+                chunk.write_bytes(changed)
+                with patch.object(vault_remote_transfer, "encrypted_snapshot_inventory",
+                                  return_value=inventory):
+                    with self.assertRaisesRegex(MigrationError, "changed after"):
+                        vault_remote_transfer.stage_encrypted_snapshot(
+                            str(destination), store, crypto_helper=str(self.helper))
+                self.assertFalse(any(b"SECRET-NOT-ENCRYPTED" in value
+                                     for value in store.objects.values()))
+            finally:
+                self.delete_key(destination)
+
+    def test_remote_staging_refuses_same_size_manifest_changed_after_verification(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, destination = root / "source", root / "vault"
+            self.fixture(source)
+            store = MemoryObjectStore()
+            try:
+                backup(str(source), str(destination), crypto_helper=str(self.helper))
+                inventory = vault_remote_inventory.encrypted_snapshot_inventory(
+                    str(destination), crypto_helper=str(self.helper))
+                manifest = next((destination / "manifests").glob("*.cvmanifest"))
+                original = manifest.read_bytes()
+                marker = b"SECRET-NOT-ENCRYPTED"
+                manifest.write_bytes(marker + original[len(marker):])
+                with patch.object(vault_remote_transfer, "encrypted_snapshot_inventory",
+                                  return_value=inventory):
+                    with self.assertRaisesRegex(MigrationError, "changed after"):
+                        vault_remote_transfer.stage_encrypted_snapshot(
+                            str(destination), store, crypto_helper=str(self.helper))
+                self.assertFalse(any(marker in value for value in store.objects.values()))
+                self.assertFalse(any(key.startswith("manifests/") for key in store.objects))
+            finally:
+                self.delete_key(destination)
+
+    def test_remote_staging_uploads_only_frozen_verified_ciphertext(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, destination = root / "source", root / "vault"
+            self.fixture(source)
+            try:
+                backup(str(source), str(destination), crypto_helper=str(self.helper))
+                chunk = next((destination / "objects").rglob("*.cvchunk"))
+                chunk_key = chunk.relative_to(destination).as_posix()
+                original = chunk.read_bytes()
+                marker = b"SECRET-NOT-ENCRYPTED"
+
+                class MutatingStore(MemoryObjectStore):
+                    def put_if_absent(self, key, stream, length):
+                        if key == chunk_key:
+                            chunk.write_bytes(marker + original[len(marker):])
+                        super().put_if_absent(key, stream, length)
+
+                store = MutatingStore()
+                with self.assertRaises(MigrationError):
+                    vault_remote_transfer.stage_encrypted_snapshot(
+                        str(destination), store, crypto_helper=str(self.helper))
+                self.assertEqual(store.objects[chunk_key], original)
+                self.assertFalse(any(marker in value for value in store.objects.values()))
             finally:
                 self.delete_key(destination)
 

@@ -136,8 +136,13 @@ egress allowance. Do not claim that B2 restores are always free. See its
   `metadata/<snapshot-id>.json`, never overwritten as a single mutable
   `vault.json`; chunks, manifests, and references keep their format paths.
   The client-side staging module checks every local object's exact bytes and
-  returns a receipt of object key, byte count, and SHA-256 digest. It can
-  compare those claims to authenticated provider-checked metadata without
+  pins a bounded encrypted object in memory before handing it to the upload
+  store, so a same-size file change cannot cause different bytes to be sent
+  after snapshot verification. The native helper reports ciphertext digests
+  while authenticating the manifest and each chunk; staging compares them
+  again before upload.
+  The client returns a receipt of object key, byte count, and SHA-256 digest.
+  It can compare those claims to authenticated provider-checked metadata without
   downloading unchanged ciphertext; stores lacking that capability retain the
   full read-back path. Either receipt is a client assertion, not service proof.
   The draft metadata path needs a real R2 and service-identity test before use.

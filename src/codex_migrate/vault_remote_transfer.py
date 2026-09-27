@@ -11,6 +11,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from dataclasses import dataclass
 import hashlib
+import io
 import os
 from pathlib import Path
 import stat
@@ -172,13 +173,24 @@ def stage_encrypted_snapshot(
     staged_objects = []
     for item in inventory.files:
         with _open_vault_file(root, item) as source:
-            local_digest = _digest(source, item.bytes)
+            # Each object is bounded to 100 MB by inventory. Freeze its exact
+            # authenticated ciphertext before giving a stream to the store:
+            # an in-place file change during a network upload must never send
+            # different (potentially plaintext) bytes as an orphan object.
+            ciphertext = source.read(item.bytes + 1)
+            if len(ciphertext) != item.bytes:
+                raise MigrationError("A Vault file changed during remote staging.")
+            local_digest = hashlib.sha256(ciphertext).hexdigest()
+            if local_digest != item.sha256:
+                raise MigrationError(
+                    "A Vault file changed after its encrypted snapshot was verified."
+                )
             remote_state = _remote_state(store, item)
             if remote_state is None:
-                source.seek(0)
-                store.put_if_absent(item.remote_key, source, item.bytes)
-                if source.tell() != item.bytes:
-                    raise MigrationError("The object store did not consume the Vault file exactly.")
+                with io.BytesIO(ciphertext) as frozen:
+                    store.put_if_absent(item.remote_key, frozen, item.bytes)
+                    if frozen.tell() != item.bytes:
+                        raise MigrationError("The object store did not consume the Vault file exactly.")
                 uploaded += 1
                 remote_state = _remote_state(store, item)
             else:

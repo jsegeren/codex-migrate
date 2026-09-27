@@ -8,6 +8,7 @@ the local filesystem against a concurrent change.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import os
 from pathlib import Path
 import stat
@@ -30,6 +31,7 @@ class VaultTransferFile:
     relative_path: str
     remote_key: str
     bytes: int
+    sha256: str
 
 
 @dataclass(frozen=True)
@@ -42,22 +44,36 @@ class RemoteInventory:
 
 def _regular_file(
     root: Path, relative: str, maximum: int, *, remote_key: Optional[str] = None,
+    verified_sha256: Optional[str] = None,
 ) -> VaultTransferFile:
     path = root / relative
     _require_unlinked_path(path)
-    descriptor = -1
     try:
         descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-        info = os.fstat(descriptor)
     except OSError as error:
         raise MigrationError("A required Vault file is unavailable.") from error
-    finally:
-        if descriptor >= 0:
-            os.close(descriptor)
-    if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
-            or info.st_size <= 0 or info.st_size > maximum):
-        raise MigrationError("A required Vault file is unsafe or unsupported.")
-    return VaultTransferFile(relative, remote_key or relative, info.st_size)
+    with os.fdopen(descriptor, "rb") as stream:
+        before = os.fstat(stream.fileno())
+        if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
+                or before.st_uid != os.geteuid() or before.st_mode & 0o077
+                or before.st_size <= 0 or before.st_size > maximum):
+            raise MigrationError("A required Vault file is unsafe or unsupported.")
+        if verified_sha256 is None:
+            digest = hashlib.sha256()
+            while block := stream.read(1024 * 1024):
+                digest.update(block)
+            verified_sha256 = digest.hexdigest()
+            after = os.fstat(stream.fileno())
+            if (before.st_dev, before.st_ino, before.st_size,
+                    before.st_mtime_ns, before.st_ctime_ns) != (
+                    after.st_dev, after.st_ino, after.st_size,
+                    after.st_mtime_ns, after.st_ctime_ns):
+                raise MigrationError("A required Vault file changed during inventory.")
+    if (len(verified_sha256) != 64 or
+            any(character not in "0123456789abcdef" for character in verified_sha256)):
+        raise MigrationError("The authenticated Vault object digest is invalid.")
+    return VaultTransferFile(relative, remote_key or relative, before.st_size,
+                             verified_sha256)
 
 
 def encrypted_snapshot_inventory(
@@ -88,13 +104,21 @@ def encrypted_snapshot_inventory(
         "--object-dir", str(objects), "--manifest", str(manifest),
     ])
     identifiers = response.get("chunk_ids")
-    if (set(response) != {"snapshot_id", "chunk_ids"}
+    digests = response.get("chunk_sha256")
+    manifest_digest = response.get("manifest_sha256")
+    if (set(response) != {"snapshot_id", "chunk_ids", "chunk_sha256", "manifest_sha256"}
             or response.get("snapshot_id") != snapshot_id
             or not isinstance(identifiers, list) or len(identifiers) > MAX_CHUNKS
             or any(not isinstance(value, str) or len(value) != 64
                    or any(character not in "0123456789abcdef" for character in value)
                    for value in identifiers)
-            or identifiers != sorted(set(identifiers))):
+            or identifiers != sorted(set(identifiers))
+            or not isinstance(digests, dict) or set(digests) != set(identifiers)
+            or any(not isinstance(value, str) or len(value) != 64
+                   or any(character not in "0123456789abcdef" for character in value)
+                   for value in digests.values())
+            or not isinstance(manifest_digest, str) or len(manifest_digest) != 64
+            or any(character not in "0123456789abcdef" for character in manifest_digest)):
         raise MigrationError("The authenticated Vault inventory is invalid.")
 
     files = [_regular_file(
@@ -104,11 +128,11 @@ def encrypted_snapshot_inventory(
     for identifier in identifiers:
         files.append(_regular_file(
             root, "objects/" + identifier[:2] + "/" + identifier[2:] + ".cvchunk",
-            MAX_ENCRYPTED_CHUNK_BYTES,
+            MAX_ENCRYPTED_CHUNK_BYTES, verified_sha256=digests[identifier],
         ))
     files.append(_regular_file(
         root, "manifests/" + snapshot_id + ".cvmanifest",
-        MAX_ENCRYPTED_MANIFEST_BYTES,
+        MAX_ENCRYPTED_MANIFEST_BYTES, verified_sha256=manifest_digest,
     ))
     files.append(_regular_file(
         root, "refs/" + snapshot_id + ".json", 1024 * 1024,

@@ -76,6 +76,8 @@ private struct Verification: Codable {
 private struct EncryptedInventory: Codable {
     let snapshot_id: String
     let chunk_ids: [String]
+    let chunk_sha256: [String: String]
+    let manifest_sha256: String
 }
 
 private struct RestoreResult: Codable {
@@ -467,7 +469,8 @@ private func writeNew(_ data: Data, to destination: URL) throws {
 }
 
 private func readChunk(_ chunk: Chunk, root: URL,
-                       encryption: SymmetricKey, identifiers: SymmetricKey) throws -> Data {
+                       encryption: SymmetricKey, identifiers: SymmetricKey,
+                       onCiphertext: ((String, Data) throws -> Void)? = nil) throws -> Data {
     guard chunk.size >= 0, chunk.size <= 64 * 1024 * 1024 else {
         throw VaultError.message("an encrypted chunk has an invalid plaintext size")
     }
@@ -491,6 +494,7 @@ private func readChunk(_ chunk: Chunk, root: URL,
     guard plaintext.count == chunk.size, expectedID == chunk.id else {
         throw VaultError.message("an encrypted chunk failed identity verification")
     }
+    try onCiphertext?(chunk.id, ciphertext)
     return plaintext
 }
 
@@ -662,7 +666,7 @@ private func sealManifestCommand(_ arguments: [String]) throws {
 }
 
 private func openedManifest(_ arguments: [String]) throws ->
-    (Manifest, SymmetricKey, SymmetricKey) {
+    (Manifest, SymmetricKey, SymmetricKey, String) {
     let keyID = try canonicalKeyID(argument("--key-id", in: arguments))
     let manifestURL = URL(fileURLWithPath: try argument("--manifest", in: arguments))
     let snapshotID = try argument("--snapshot-id", in: arguments).lowercased()
@@ -673,25 +677,26 @@ private func openedManifest(_ arguments: [String]) throws ->
     let encryption = encryptionKey(master)
     let identifiers = identifierKey(master)
     let aad = Data("codex-vault:manifest:v1:\(snapshotID)".utf8)
-    let manifestData = try opened(safeRegularFile(manifestURL, maxBytes: 128 * 1024 * 1024 + 64),
-                                  key: encryption, aad: aad)
+    let ciphertext = try safeRegularFile(manifestURL, maxBytes: 128 * 1024 * 1024 + 64)
+    let manifestData = try opened(ciphertext, key: encryption, aad: aad)
     let manifest = try JSONDecoder().decode(Manifest.self, from: manifestData)
     guard manifest.format == "codex-vault-snapshot",
           (manifest.version == formatVersion || manifest.version == snapshotFormatVersion),
           manifest.snapshot_id.lowercased() == snapshotID else {
         throw VaultError.message("the decrypted manifest has an unsupported identity or format")
     }
-    return (manifest, encryption, identifiers)
+    return (manifest, encryption, identifiers, hex(SHA256.hash(data: ciphertext)))
 }
 
 private func validatedSnapshot(_ arguments: [String]) throws ->
-    (Manifest, SymmetricKey, SymmetricKey, Verification) {
-    let (manifest, encryption, identifiers) = try openedManifest(arguments)
+    (Manifest, SymmetricKey, SymmetricKey, Verification, [String: String], String) {
+    let (manifest, encryption, identifiers, manifestSHA256) = try openedManifest(arguments)
     let root = URL(fileURLWithPath: try argument("--object-dir", in: arguments), isDirectory: true)
     let snapshotID = manifest.snapshot_id
     var totalBytes = 0
     var totalChunks = 0
     var seenPaths = Set<String>()
+    var chunkSHA256 = [String: String]()
     for file in manifest.files {
         guard file.collection == "active" || file.collection == "archived",
               !file.path.isEmpty, !file.path.hasPrefix("/"), !file.path.contains("\\"),
@@ -731,7 +736,13 @@ private func validatedSnapshot(_ arguments: [String]) throws ->
                 throw VaultError.message("a version 1 snapshot cannot contain encoded chunks")
             }
             let plaintext = try readChunk(chunk, root: root, encryption: encryption,
-                                          identifiers: identifiers)
+                                          identifiers: identifiers, onCiphertext: { id, ciphertext in
+                let digest = hex(SHA256.hash(data: ciphertext))
+                if let earlier = chunkSHA256[id], earlier != digest {
+                    throw VaultError.message("an encrypted chunk changed during verification")
+                }
+                chunkSHA256[id] = digest
+            })
             digest.update(data: plaintext)
             let (nextFileBytes, fileOverflow) = fileBytes.addingReportingOverflow(plaintext.count)
             let (nextChunks, chunkOverflow) = totalChunks.addingReportingOverflow(1)
@@ -752,25 +763,27 @@ private func validatedSnapshot(_ arguments: [String]) throws ->
     }
     let verification = Verification(snapshot_id: snapshotID, files: manifest.files.count,
                                     chunks: totalChunks, bytes: totalBytes)
-    return (manifest, encryption, identifiers, verification)
+    return (manifest, encryption, identifiers, verification, chunkSHA256, manifestSHA256)
 }
 
 private func verifyCommand(_ arguments: [String]) throws {
-    let (_, _, _, verification) = try validatedSnapshot(arguments)
+    let (_, _, _, verification, _, _) = try validatedSnapshot(arguments)
     try printJSON(verification)
 }
 
 private func encryptedInventoryCommand(_ arguments: [String]) throws {
     // Return only opaque identifiers after full authenticated verification.
     // Paths, titles, message text and key material never enter this output.
-    let (manifest, _, _, verification) = try validatedSnapshot(arguments)
+    let (manifest, _, _, verification, chunkSHA256, manifestSHA256) = try validatedSnapshot(arguments)
     let identifiers = Set(manifest.files.flatMap { file in file.chunks.map { $0.id } })
     try printJSON(EncryptedInventory(snapshot_id: verification.snapshot_id,
-                                     chunk_ids: identifiers.sorted()))
+                                     chunk_ids: identifiers.sorted(),
+                                     chunk_sha256: chunkSHA256,
+                                     manifest_sha256: manifestSHA256))
 }
 
 private func catalogCommand(_ arguments: [String]) throws {
-    let (manifest, _, _) = try openedManifest(arguments)
+    let (manifest, _, _, _) = try openedManifest(arguments)
     let files = manifest.files.map { file in
         CatalogFile(collection: file.collection, path: file.path, size: file.size,
                     sha256: file.sha256, thread_id: file.thread_id,
@@ -800,7 +813,7 @@ private func prepareEmptyRestoreRoot(_ path: String) throws -> URL {
 }
 
 private func restoreCommand(_ arguments: [String]) throws {
-    let (manifest, encryption, identifiers, verification) = try validatedSnapshot(arguments)
+    let (manifest, encryption, identifiers, verification, _, _) = try validatedSnapshot(arguments)
     let output = try prepareEmptyRestoreRoot(argument("--output", in: arguments))
     let manager = FileManager.default
     let objectRoot = URL(fileURLWithPath: try argument("--object-dir", in: arguments),
