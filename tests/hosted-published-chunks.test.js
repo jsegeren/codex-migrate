@@ -13,9 +13,7 @@ const digest = 'd'.repeat(64);
 test('lookup returns only exact published objects of the scoped Vault', async () => {
   const objects = await lookupPublishedChunks({ scope: await freshScope(),
     ids: [raw, compressed, missing], query: async (sql, values) => {
-      assert.match(sql, /hosted\.snapshot_objects/);
-      assert.match(sql, /so\.account_id = o\.account_id/);
-      assert.match(sql, /so\.vault_id = o\.vault_id/);
+      assert.match(sql, /hosted\.published_chunk_candidates/);
       assert.deepEqual(values, [accountId, vaultId, [raw, compressed, missing]]);
       return { rows: [{ id: raw, bytes: '101', sha256: digest },
         { id: compressed, bytes: '51', sha256: digest }] };

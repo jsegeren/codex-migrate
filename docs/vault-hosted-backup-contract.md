@@ -351,10 +351,14 @@ egress allowance. Do not claim that B2 restores are always free. See its
   an already published snapshot of the same purchased, subscribed account and
   Vault; staged and foreign objects are excluded. It grants no read or write
   capability and its database result is not proof that R2 still holds the
-  object. Client orchestration, provider re-verification, bounded new-chunk
-  staging across the whole snapshot, publication, and restore of that mixed
-  inventory remain open. The existing local `store-chunks` behavior remains
-  unchanged.
+  object. An internal client can now run the two-pass plan, bounded published-
+  object lookups, and remote-aware native writer for **one stable file**. The
+  source identity, length, and digest are rechecked, and a changed transcript
+  fails without a snapshot claim. The lookup has a scoped database index so
+  it does not scan all prior daily snapshots for each candidate. Whole-
+  snapshot assembly, provider re-verification, bounded new-chunk staging,
+  publication, and restore of the mixed inventory remain open. The existing
+  local `store-chunks` behavior remains unchanged.
 - Keep each local Vault in its own random, account-scoped remote namespace.
   Two Macs may each back up to separate Vaults under one subscription; this is
   not synchronization or a silent merge. Object names and snapshot times are

@@ -26,6 +26,7 @@ from codex_migrate.vault_remote_transfer import (
 _UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z")
 _TOKEN = re.compile(r"hv1_[A-Za-z0-9_-]{43}\Z")
 _GRANT = re.compile(r"[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\Z")
+_HEX = re.compile(r"[0-9a-f]{64}\Z")
 _MAX_RESPONSE = 2048
 
 
@@ -56,17 +57,20 @@ class HostedUploadClient:
 
     def _post(self, claim: dict, *, receipt_page: bool = False,
               publication: bool = False, verification: bool = False,
-              checkpointed_publication: bool = False) -> dict:
+              checkpointed_publication: bool = False,
+              published_lookup: bool = False) -> dict:
         if sum((receipt_page, publication, verification,
-                checkpointed_publication)) > 1:
+                checkpointed_publication, published_lookup)) > 1:
             raise MigrationError("The hosted upload request is invalid.")
         body = json.dumps(claim, separators=(",", ":")).encode("utf-8")
-        if len(body) > (256 * 1024 if receipt_page else 700):
+        request_limit = 256 * 1024 if receipt_page else 18_000 if published_lookup else 700
+        if len(body) > request_limit:
             raise MigrationError("The hosted upload request is too large.")
         path = ("/api/hosted-receipt-page" if receipt_page else
                 "/api/hosted-publish" if publication else
                 "/api/hosted-verify-step" if verification else
                 "/api/hosted-publish-checkpointed" if checkpointed_publication
+                else "/api/hosted-published-chunks" if published_lookup
                 else "/api/hosted-upload")
         request = Request(self._service_origin + path, data=body,
                           headers={"Authorization": "Bearer " + self._device_token,
@@ -79,8 +83,9 @@ class HostedUploadClient:
                         response.headers.get("Content-Type", "").split(";")[0] !=
                         "application/json"):
                     raise MigrationError("The hosted upload service response is invalid.")
-                data = response.read(_MAX_RESPONSE + 1)
-                if len(data) > _MAX_RESPONSE:
+                response_limit = 50_000 if published_lookup else _MAX_RESPONSE
+                data = response.read(response_limit + 1)
+                if len(data) > response_limit:
                     raise MigrationError("The hosted upload service response is too large.")
         except (HTTPError, URLError, OSError, ValueError):
             # Never include the bearer, object path, response body or URL.
@@ -92,6 +97,36 @@ class HostedUploadClient:
         if not isinstance(result, dict):
             raise MigrationError("The hosted upload service response is invalid.")
         return result
+
+    def published_chunks(self, ids: list[str]) -> dict[str, Tuple[int, str]]:
+        """Read published-only ciphertext facts, not provider-presence proof.
+
+        A later exact HEAD and the service's independent publication verifier
+        must still check R2 before this can count as a protected snapshot.
+        """
+        if (not isinstance(ids, list) or not 1 <= len(ids) <= 256 or
+                any(not isinstance(item, str) or not _HEX.fullmatch(item)
+                    for item in ids) or len(set(ids)) != len(ids)):
+            raise MigrationError("The hosted chunk lookup is invalid.")
+        result = self._post({"vaultId": self._vault_id, "ids": ids},
+                            published_lookup=True)
+        rows = result.get("objects")
+        if set(result) != {"objects"} or not isinstance(rows, list) or len(rows) > len(ids):
+            raise MigrationError("The hosted chunk lookup response is invalid.")
+        candidates = set(ids)
+        observed: dict[str, Tuple[int, str]] = {}
+        prior = ""
+        for row in rows:
+            if (not isinstance(row, dict) or set(row) != {"id", "bytes", "sha256"} or
+                    not isinstance(row["id"], str) or row["id"] not in candidates or
+                    row["id"] <= prior or type(row["bytes"]) is not int or
+                    not 1 <= row["bytes"] <= 100_000_000 or
+                    not isinstance(row["sha256"], str) or
+                    not _HEX.fullmatch(row["sha256"])):
+                raise MigrationError("The hosted chunk lookup response is invalid.")
+            prior = row["id"]
+            observed[row["id"]] = (row["bytes"], row["sha256"])
+        return observed
 
     def reserve(self, *, apply: bool = False) -> str:
         if apply is not True:

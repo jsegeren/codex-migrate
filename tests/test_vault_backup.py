@@ -22,6 +22,7 @@ from codex_migrate.vault_recovery import (
 from codex_migrate import vault_remote_inventory
 from codex_migrate import vault_remote_recovery
 from codex_migrate import vault_remote_transfer
+from codex_migrate.vault_remote_writer import prepare_remote_aware_file
 
 
 class MemoryObjectStore:
@@ -479,6 +480,66 @@ class VaultBackupTests(unittest.TestCase):
                                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 self.assertNotEqual(exposed.returncode, 0)
                 self.assertEqual(exposed.stdout, b"")
+            finally:
+                self.delete_key(vault)
+
+    def test_remote_writer_plans_published_lookup_and_refuses_source_change(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            vault = root / "vault"
+            self.fixture(source)
+            try:
+                backup(str(source), str(vault), crypto_helper=str(self.helper))
+                key_id = json.loads((vault / "vault.json").read_text())["key_id"]
+                transcript = root / "synthetic.jsonl"
+                transcript.write_bytes(b"A" * 65536 + b"B" * 65536 + b"C" * 65536)
+                planned = subprocess.run([
+                    str(self.helper), "plan-chunks", "--key-id", key_id,
+                    "--chunk-size", "65536",
+                ], input=transcript.read_bytes(), stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE, check=True)
+                candidates = json.loads(planned.stdout)["chunks"]
+                known = {candidates[0]["raw_id"]: (65564, "d" * 64),
+                         candidates[1]["compressed_id"]: (123, "e" * 64)}
+
+                class Lookup:
+                    def __init__(self):
+                        self.queries = []
+
+                    def published_chunks(self, ids):
+                        self.queries.append(ids)
+                        return {item: known[item] for item in ids if item in known}
+
+                scratch = root / "scratch"
+                scratch.mkdir(mode=0o700)
+                lookup = Lookup()
+                with self.assertRaisesRegex(MigrationError, "explicit confirmation"):
+                    prepare_remote_aware_file(
+                        transcript, scratch, key_id, lookup,
+                        crypto_helper=str(self.helper), chunk_size=65536)
+                result = prepare_remote_aware_file(
+                    transcript, scratch, key_id, lookup,
+                    crypto_helper=str(self.helper), chunk_size=65536, apply=True)
+                self.assertEqual(set(result.remote_objects), set(known))
+                self.assertEqual(result.remote_objects, known)
+                self.assertEqual(len(result.local_ids), 1)
+                self.assertEqual(len(list(scratch.rglob("*.cvchunk"))), 1)
+                self.assertEqual(len(lookup.queries), 1)
+                self.assertEqual(len(lookup.queries[0]), 6)
+
+                class ChangingLookup:
+                    def published_chunks(self, ids):
+                        transcript.write_bytes(b"Z" * (3 * 65536))
+                        return {}
+
+                changed_scratch = root / "changed-scratch"
+                changed_scratch.mkdir(mode=0o700)
+                with self.assertRaisesRegex(MigrationError, "changed during hosted planning"):
+                    prepare_remote_aware_file(
+                        transcript, changed_scratch, key_id, ChangingLookup(),
+                        crypto_helper=str(self.helper), chunk_size=65536, apply=True)
+                self.assertEqual(list(changed_scratch.rglob("*.cvchunk")), [])
             finally:
                 self.delete_key(vault)
 

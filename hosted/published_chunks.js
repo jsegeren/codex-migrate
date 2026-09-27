@@ -4,22 +4,8 @@
 const { consumeAuthorizedScope } = require('./access');
 
 const HEX = /^[0-9a-f]{64}$/;
-const LOOKUP_SQL = `WITH candidates AS (
-    SELECT DISTINCT unnest($3::text[]) AS id
-  )
-  SELECT c.id, o.bytes, o.sha256
-  FROM candidates AS c
-  JOIN hosted.objects AS o
-    ON o.account_id = $1::uuid AND o.vault_id = $2::uuid
-      AND o.object_key = 'accounts/' || $1::text || '/vaults/' ||
-        $2::text || '/objects/' || left(c.id, 2) || '/' ||
-        substr(c.id, 3) || '.cvchunk'
-  WHERE EXISTS (
-    SELECT 1 FROM hosted.snapshot_objects AS so
-    WHERE so.account_id = o.account_id AND so.vault_id = o.vault_id
-      AND so.object_key = o.object_key
-  )
-  ORDER BY c.id`;
+const LOOKUP_SQL = `SELECT id, bytes, sha256 FROM
+  hosted.published_chunk_candidates($1::uuid, $2::uuid, $3::text[])`;
 
 class PublishedChunkLookupError extends Error {
   constructor() { super('hosted_chunk_lookup_denied'); }

@@ -48,14 +48,22 @@ class _Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path not in ("/api/hosted-upload", "/api/hosted-receipt-page",
                              "/api/hosted-publish", "/api/hosted-verify-step",
-                             "/api/hosted-publish-checkpointed") or self.headers.get(
+                             "/api/hosted-publish-checkpointed",
+                             "/api/hosted-published-chunks") or self.headers.get(
                 "Authorization") != "Bearer " + TOKEN:
             return self._json(403, {"error": "access_denied"})
         size = int(self.headers.get("Content-Length", "0"))
         request = json.loads(self.rfile.read(size))
-        self.server.actions.append(request["action"])
+        self.server.actions.append(request.get("action", "lookup"))
         if request["vaultId"] != VAULT:
             return self._json(403, {"error": "access_denied"})
+        if self.path == "/api/hosted-published-chunks":
+            if sorted(request) != ["ids", "vaultId"]:
+                return self._json(403, {"error": "access_denied"})
+            return self._json(200, {"objects": [
+                {"id": item, "bytes": facts[0], "sha256": facts[1]}
+                for item, facts in sorted(self.server.published.items())
+                if item in request["ids"]]})
         action = request["action"]
         if self.path == "/api/hosted-verify-step":
             if (action != "verify_next" or request["reservationId"] != RESERVATION or
@@ -194,6 +202,7 @@ class HostedUploadClientTests(unittest.TestCase):
         self.server.verified_ready = False
         self.server.drop_next_put_response = False
         self.server.pages = []
+        self.server.published = {}
         self.server.expected = {
             FIRST_KEY: (len(FIRST), hashlib.sha256(FIRST).hexdigest()),
             SECOND_KEY: (len(SECOND), hashlib.sha256(SECOND).hexdigest()),
@@ -230,6 +239,26 @@ class HostedUploadClientTests(unittest.TestCase):
             with patch.object(self.client, "_post", return_value=bad):
                 with self.assertRaisesRegex(MigrationError, "status response is invalid"):
                     self.client.reservation_status(RESERVATION)
+
+    def test_published_chunk_lookup_is_bounded_and_validates_exact_response(self):
+        first, second = "a" * 64, "b" * 64
+        facts = (75, hashlib.sha256(b"encrypted sample").hexdigest())
+        self.server.published[first] = facts
+        self.assertEqual(self.client.published_chunks([first, second]),
+                         {first: facts})
+        self.assertEqual(self.server.actions[-1], "lookup")
+        for ids in ([], [first, first], [first.upper()], ["bad"],
+                    [first] * 257):
+            with self.assertRaisesRegex(MigrationError, "lookup is invalid"):
+                self.client.published_chunks(ids)
+        with patch.object(self.client, "_post", return_value={"objects": [
+                {"id": second, "bytes": 1, "sha256": facts[1]}]}):
+            with self.assertRaisesRegex(MigrationError, "response is invalid"):
+                self.client.published_chunks([first])
+        with patch.object(self.client, "_post", return_value={"objects": [
+                {"id": first, "bytes": True, "sha256": facts[1]}]}):
+            with self.assertRaisesRegex(MigrationError, "response is invalid"):
+                self.client.published_chunks([first])
 
     def _stage(self, directory, store):
         root = Path(directory).resolve()
