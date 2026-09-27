@@ -25,7 +25,7 @@ async function issuePutCapability({ scope, reservationId, item, secret, query })
     if (result?.rows?.length !== 1 || result.rows[0].allowed !== true) {
       throw new HostedUploadGrantError();
     }
-    return await signObjectCapability('PUT', item, secret);
+    return await signObjectCapability('PUT', item, secret, Date.now(), 30_000);
   } catch {
     // Do not expose tenant IDs, the reservation, Stripe state, SQL, or the
     // storage signing key through the API error boundary.

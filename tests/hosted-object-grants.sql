@@ -57,6 +57,12 @@ BEGIN
       v_reservation, v_key, 10, repeat('a', 64), 20) THEN
     RAISE EXCEPTION 'downgraded account granted upload';
   END IF;
+  UPDATE hosted.upload_reservations SET expires_at = now() + interval '30 seconds'
+    WHERE reservation_id = v_reservation;
+  IF hosted.reserve_object_grant_current(v_account, v_vault,
+      v_reservation, v_key, 10, repeat('a', 64), 100) THEN
+    RAISE EXCEPTION 'near-expiry reservation granted upload';
+  END IF;
   UPDATE hosted.upload_reservations SET
       created_at = now() - interval '2 hours',
       expires_at = now() - interval '1 hour'

@@ -50,6 +50,8 @@ test('only a fresh owned scope and durable reservation can sign one exact PUT', 
     } });
   assert.equal(queries, 1);
   assert.deepEqual(await verifyObjectCapability(token, 'PUT', key, secret), item);
+  await assert.rejects(verifyObjectCapability(token, 'PUT', key, secret,
+    Date.now() + 30_000), /hosted_object_access_denied/);
   assert.equal(isAuthorizedScope(authorized), false);
   await assert.rejects(issuePutCapability({ scope: authorized, reservationId,
     item, secret, query: async () => { queries++; } }), /hosted_upload_grant_denied/);

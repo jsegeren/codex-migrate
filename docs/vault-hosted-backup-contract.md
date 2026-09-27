@@ -93,7 +93,9 @@ not change the release status above.
 The draft database now records each distinct PUT grant against one active
 reservation and refuses conflicting retries or aggregate granted bytes beyond
 that reservation. A server-only coordinator consumes a fresh, purchase- and
-subscription-checked scope before it signs one exact PUT. This is a tested
+subscription-checked scope before it signs one exact 30-second PUT; the SQL
+gate stops issuing grants when under one minute remains on the reservation.
+Future orphan cleanup must wait beyond the last token's expiry. This is a tested
 building block, not an activated grant API: HEAD reuse grants, published-only
 GET grants, cleanup after failed/expired reservations, and customer identity
 enrollment still need the same fail-closed review before deployment.

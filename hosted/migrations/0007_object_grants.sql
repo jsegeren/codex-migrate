@@ -60,7 +60,10 @@ BEGIN
     WHERE reservation_id = p_reservation_id AND account_id = p_account_id
       AND vault_id = p_vault_id FOR UPDATE;
   IF NOT FOUND OR v_reservation.state <> 'active' OR
-      v_reservation.expires_at <= clock_timestamp() THEN RETURN false; END IF;
+      -- Leave headroom for the 30-second signed storage token and clock skew.
+      -- Cleanup must still wait for all previously issued tokens to expire.
+      v_reservation.expires_at <= clock_timestamp() + interval '1 minute'
+      THEN RETURN false; END IF;
 
   SELECT * INTO v_prior FROM hosted.upload_object_grants
     WHERE reservation_id = p_reservation_id AND object_key = p_key;
