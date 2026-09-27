@@ -75,21 +75,20 @@ PUT/reuse/HEAD/GET round trip against Wrangler's **local R2 simulation** pass.
 The real Worker path uses Cloudflare's
 [FixedLengthStream](https://developers.cloudflare.com/workers/runtime-apis/streams/transformstream/)
 so R2 accepts the bounded stream without buffering the object in Worker
-memory. It has no
-deployment configuration, live signing key, grant-issuing service, or customer
-route. The eventual service must check device identity, purchase, subscription,
-Vault ownership, quota reservation, and published-snapshot membership before
-signing the appropriate capability. This code is not evidence of a usable or
-safe hosted backup yet.
+memory. It has no deployment configuration, live signing key, or customer
+route. The sandbox-only grant issuer checks device identity, purchase,
+subscription, Vault ownership, and quota before upload grants; read grants
+additionally require membership in a published snapshot. This code is not
+evidence of a usable or safe hosted backup yet.
 The native Python side now has a test-only `CapabilityHttpStore` that can
 transfer frozen encrypted objects to that Worker with exact per-object grants.
 It pins one HTTPS origin, refuses redirects and mismatched or out-of-scope
 objects, streams recovery reads, and distinguishes a missing object from a
 checksum conflict during staging. Loopback HTTP is permitted only when
-explicitly enabled for a synthetic test. There is still **no authenticated
-grant issuer**, customer endpoint, hosted schedule, publication path wired to
-the app, or clean-account hosted recovery proof. A passing transport test must
-not change the release status above.
+explicitly enabled for a synthetic test. A dark authenticated grant issuer and
+native sandbox client now exist, but there is no live customer endpoint, hosted
+schedule, publication path wired to the app, or clean-account hosted recovery
+proof. A passing transport test must not change the release status above.
 The draft database now records each distinct PUT grant against one active
 reservation and refuses conflicting retries or aggregate granted bytes beyond
 that reservation. A server-only coordinator consumes a fresh, purchase- and
@@ -100,9 +99,10 @@ minutes and extend a still-active reservation for another 55 minutes only
 after a fresh device, purchase, and subscription check. The database locks the
 account before the reservation, refuses a renewal after downgrade below
 retained plus reserved bytes, and never revives expired or cleanup-pending
-work. This removes the uninterrupted one-hour upload ceiling for large initial
-backups, but does **not** yet provide an installed-client renewal loop or
-resume after a lease expires. Those remain release blockers.
+work. A native sandbox client renews a still-active lease before the next
+object in a slow transfer and fails closed if the lease expired. It is not
+wired to the installed buyer flow; resume after expiry remains a release
+blocker.
 Future orphan cleanup must wait beyond the last token's expiry. This is a tested
 building block, not an activated grant API: cleanup after failed/expired
 reservations and customer identity
@@ -114,19 +114,25 @@ same reservation. The latter permits read-after-write verification and retry
 of a staged object without exposing another staged upload. It grants only a
 30-second HEAD probe, not a read or overwrite. A missing or unrecorded object
 must use the reserved PUT path; a HEAD response alone never becomes publication
-proof. The installed client still needs an explicit pre-PUT decision for new
-objects; treating an authorization failure as "absent" would be unsafe. A
+proof. Treating an authorization failure as "absent" would be unsafe. A
 server-only decision now returns either a short-lived exact HEAD capability or
 `put_required` for an active, owned reservation. Invalid authority returns a
 denial, never `put_required`; the latter is not an upload capability and must
-be followed by a separate quota-recorded PUT grant. This decision is not yet
-wired to an installed client. A dark `/api/hosted-upload` route now joins
+be followed by a separate quota-recorded PUT grant. A native sandbox client
+consumes this decision, pins the service and Worker origins, reconciles a lost
+PUT response by exact HEAD, and requires explicit mutation confirmation. It
+is not wired to the buyer UI. A dark `/api/hosted-upload` route joins
 reservation, renewal, decision, and exact PUT grant actions. It is available
 only when separately enabled in the pinned sandbox; each action rechecks the
 device, current Mac-app purchase, and current Stripe Subscription. An empty
 subscription-enrollment table binds a future hosted checkout to the purchased
 account and its environment. There is no hosted subscription checkout,
-enrollment write, customer upload, or live route yet.
+enrollment write, customer upload, or live route yet. A later SQL migration
+lets an active one-byte reservation grow only when a distinct PUT grant is
+needed, under the fresh subscription allowance and account lock. Previously
+published chunks can be checked and reused without reserving their bytes
+again. This fixes the incremental-capacity dead end near an allowance, but
+does not authorize a hosted release.
 The draft published-only GET issuer now requires an unrevoked device session
 bound to that Vault, consumes a one-use read scope, and signs only an exact
 object listed in a published snapshot, using the database-owned size and
@@ -174,8 +180,10 @@ count/bytes/scope, verifies every object with provider-backed batches, and
 publishes through a database function that requires exact equality with the
 staged rows under the reservation lock. An isolated PostgreSQL fixture passed
 21,910 synthetic objects, close to the measured newer-Mac inventory. This
-still does not close the hosted release gate: no authenticated HTTP route,
-real-scale R2 run, or clean-account recovery has passed.
+still does not close the hosted release gate: a dark authenticated sandbox
+route now admits bounded, idempotent claim pages, but there is no asynchronous
+provider-verification/publication job, real-scale R2 run, or clean-account
+recovery proof. A page ACK must never appear as a protected backup.
 The draft Worker also has an HMAC-bound batch verification route: a service
 signs the exact JSON body for at most 512 scoped objects, and the Worker
 performs provider-checked R2 metadata reads before returning success. The
