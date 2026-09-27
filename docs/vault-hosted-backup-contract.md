@@ -132,6 +132,16 @@ egress allowance. Do not claim that B2 restores are always free. See its
   enrollment, token issuance/rotation and recovery, authenticated HTTP
   handlers, and payment/refund binding are **not implemented**. These draft
   primitives do not make the service customer-accessible or safe to launch.
+- A versioned draft purchase-enrollment table now binds each hosted account to
+  one recorded $49 Mac-app purchase, and prevents a purchase from claiming two
+  hosted accounts. It uses the purchase session and environment, never email
+  equality, to define that relationship. The commerce row is historical
+  evidence only: before inserting an enrollment, the future service must
+  revalidate the current Stripe payment/refund/dispute state and prove control
+  of the purchase email with a short-lived, one-use challenge. Neither this
+  schema nor an emailed download link issues a device session or starts the
+  hosted trial. The identity challenge, rate limits, and atomic claim flow
+  remain unimplemented, so the hosted option remains unavailable.
 - A provider-neutral subscription upload gate is implemented for a future
   service to call with a freshly retrieved Stripe Subscription, its
   server-held enrollment record, and a server-held catalog of approved price
