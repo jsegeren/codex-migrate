@@ -1,7 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createHash, randomBytes } = require('node:crypto');
-const { decodeSecret, signObjectCapability, verifyObjectCapability } =
+const { decodeSecret, signObjectCapability, verifyObjectCapability,
+  signBatchVerification, verifyBatchVerification } =
   require('../hosted/object_capability');
 
 const account = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -126,4 +127,37 @@ test('worker refuses altered, oversized, foreign, and unauthenticated requests',
   assert.equal(bucket.objects.size, 0);
   const defaultWorker = (await worker()).default;
   assert.equal((await defaultWorker.fetch(request('GET', key, put), {})).status, 404);
+});
+
+test('one signed batch verifies exact scoped objects without a public probe', async () => {
+  const { handleBatchVerification } = await worker();
+  const bucket = new FakeBucket();
+  bucket.objects.set(key, bytes);
+  const keyFor = id => key.replace(`objects/${objectId.slice(0, 2)}/${objectId.slice(2)}`,
+    `objects/${id.slice(0, 2)}/${id.slice(2)}`);
+  const secondKey = keyFor('d'.repeat(64));
+  const second = { key: secondKey, bytes: bytes.length, sha256: hash(bytes) };
+  bucket.objects.set(secondKey, bytes);
+  const signed = await signBatchVerification([item, second], secret);
+  const make = (body, token = signed.token) => new Request(
+    'https://backup.example.test/v1/verify-batch', { method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json',
+        'Content-Length': String(Buffer.byteLength(body)) }, body });
+  assert.deepEqual(await verifyBatchVerification(signed.token, signed.body, secret),
+    [item, second]);
+  assert.equal((await handleBatchVerification(make(signed.body), bucket, secret)).status, 204);
+  assert.equal(bucket.heads, 2);
+  bucket.objects.delete(secondKey);
+  assert.equal((await handleBatchVerification(make(signed.body), bucket, secret)).status, 409);
+  assert.equal((await handleBatchVerification(make(signed.body.replace(item.sha256,
+    'f'.repeat(64))), bucket, secret)).status, 403);
+  assert.equal((await handleBatchVerification(make(signed.body, 'forged.token'),
+    bucket, secret)).status, 403);
+  await assert.rejects(signBatchVerification([item, item], secret),
+    /hosted_object_access_denied/);
+  await assert.rejects(signBatchVerification(Array.from({ length: 513 }, (_, i) => ({
+    ...item, key: keyFor(i.toString(16).padStart(64, '0')),
+  })), secret), /hosted_object_access_denied/);
+  await assert.rejects(verifyBatchVerification(signed.token, signed.body,
+    secret, Date.now() + 30_000), /hosted_object_access_denied/);
 });

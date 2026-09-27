@@ -119,6 +119,14 @@ staged rows under the reservation lock. An isolated PostgreSQL fixture passed
 21,910 synthetic objects, close to the measured newer-Mac inventory. This
 still does not close the hosted release gate: no authenticated HTTP route,
 real-scale R2 run, or clean-account recovery has passed.
+The draft Worker also has an HMAC-bound batch verification route: a service
+signs the exact JSON body for at most 512 scoped objects, and the Worker
+performs provider-checked R2 metadata reads before returning success. The
+request body is capped at 256 KiB; a mismatched, expired, forged, or altered
+batch cannot become publication proof. A local test exercises the server
+caller against the actual Worker handler. **This is not deployed.** The
+512-object R2 subrequest pattern requires the applicable Workers Paid limits
+and a realistic remote-scale performance/cost proof before customer use.
 R2's published September 2026
 pricing is $0.015/GB-month, $4.50/million Class A writes, $0.36/million Class B
 reads, and no R2 ingress or direct egress bandwidth charge. The account-wide

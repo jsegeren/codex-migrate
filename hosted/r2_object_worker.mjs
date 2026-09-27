@@ -4,9 +4,12 @@
 import capability from './object_capability.js';
 import store from './r2_verified_store.js';
 
-const { decodeSecret, verifyObjectCapability } = capability;
-const { putImmutableChecked, checkedHeadState, readVerifiedBody } = store;
+const { decodeSecret, verifyObjectCapability, verifyBatchVerification,
+  MAX_BATCH_BODY_BYTES } = capability;
+const { putImmutableChecked, checkedHeadState, readVerifiedBody,
+  verifiedBatch } = store;
 const PREFIX = '/v1/object/';
+const BATCH_PATH = '/v1/verify-batch';
 const BASE_HEADERS = Object.freeze({ 'Cache-Control': 'private, no-store',
   'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff' });
 
@@ -37,6 +40,49 @@ function boundedBody(stream, expectedBytes) {
     },
     flush() { if (count !== expectedBytes) throw Error('invalid_body'); },
   })), completion: null, stop: () => {} };
+}
+
+async function boundedJson(stream, limit) {
+  if (!stream || typeof stream.getReader !== 'function') throw Error('invalid_body');
+  const reader = stream.getReader();
+  const blocks = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!(value instanceof Uint8Array) || total + value.byteLength > limit) {
+        throw Error('invalid_body');
+      }
+      blocks.push(value);
+      total += value.byteLength;
+    }
+    if (total === 0) throw Error('invalid_body');
+    const bytes = new Uint8Array(total);
+    let offset = 0;
+    for (const block of blocks) { bytes.set(block, offset); offset += block.byteLength; }
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } finally { void reader.cancel().catch(() => {}); }
+}
+
+export async function handleBatchVerification(request, bucket, secret) {
+  const url = new URL(request.url);
+  if (request.method !== 'POST' || url.pathname !== BATCH_PATH ||
+      url.search || url.hash) return answer(404);
+  const length = Number(request.headers.get('Content-Length'));
+  if (!Number.isSafeInteger(length) || length < 1 ||
+      length > MAX_BATCH_BODY_BYTES ||
+      request.headers.get('Content-Type') !== 'application/json') return answer(400);
+  const match = /^Bearer ([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/.exec(
+    request.headers.get('Authorization') || '');
+  if (!match) return answer(403);
+  let items;
+  try {
+    const body = await boundedJson(request.body, MAX_BATCH_BODY_BYTES);
+    if (new TextEncoder().encode(body).byteLength !== length) return answer(400);
+    items = await verifyBatchVerification(match[1], body, secret);
+  } catch { return answer(403); }
+  return answer(await verifiedBatch(bucket, items) ? 204 : 409);
 }
 
 export async function handleObjectRequest(request, bucket, secret) {
@@ -85,6 +131,9 @@ export default {
     let secret;
     try { secret = decodeSecret(env.CAPABILITY_SIGNING_KEY); }
     catch { return answer(404); }
+    if (new URL(request.url).pathname === BATCH_PATH) {
+      return handleBatchVerification(request, env.HOSTED_BUCKET, secret);
+    }
     return handleObjectRequest(request, env.HOSTED_BUCKET, secret);
   },
 };
