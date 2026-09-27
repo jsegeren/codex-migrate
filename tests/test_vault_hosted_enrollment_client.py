@@ -32,13 +32,16 @@ class _Handler(BaseHTTPRequestHandler):
             return
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         self.server.calls.append((body, self.headers.get("Authorization")))
-        if body["action"] == "claim" and self.server.lose_claim_reply:
+        if body["action"] in ("claim", "claim_recovery") and self.server.lose_claim_reply:
             # The server has acted, but the client cannot know if it did.
             self.close_connection = True
             return
-        if body["action"] == "begin":
+        if body["action"] in ("begin", "begin_recovery"):
             result = {"status": "sent"}
-        elif body["action"] == "claim":
+        elif body["action"] == "list_recovery_vaults":
+            result = {"vaults": [{"vaultId": VAULT,
+                                  "lastGoodAt": "2026-09-27T12:00:00.000Z"}]}
+        elif body["action"] in ("claim", "claim_recovery"):
             result = {"accountId": ACCOUNT, "vaultId": VAULT,
                       "deviceId": body["deviceId"]}
         else:
@@ -141,6 +144,43 @@ class HostedEnrollmentClientTests(unittest.TestCase):
             ["hosted-device-read", "--device-id", DEVICE],
             ["hosted-device-read", "--device-id", DEVICE]])
 
+    def test_lost_mac_pairs_new_device_to_existing_vault(self):
+        with patch("codex_migrate.vault_hosted_enrollment_client._helper_path",
+                   return_value=Path("/synthetic/helper")), \
+                patch("codex_migrate.vault_hosted_enrollment_client._run_helper",
+                      side_effect=self.fake_helper):
+            client = self.client()
+            self.assertIsNone(client.begin_recovery(PURCHASE, apply=True))
+            vaults = client.list_recovery_vaults(PURCHASE, CODE)
+            self.assertEqual(vaults, [{"vaultId": VAULT,
+                                      "lastGoodAt": "2026-09-27T12:00:00.000Z"}])
+            device_id = client.create_device(apply=True)
+            self.assertEqual(client.claim_recovery(PURCHASE, CODE, VAULT,
+                                                   device_id, apply=True),
+                             {"accountId": ACCOUNT, "vaultId": VAULT,
+                              "deviceId": DEVICE})
+            self.assertEqual(client.resolve(device_id)["vaultId"], VAULT)
+        self.assertEqual([call[0]["action"] for call in self.server.calls],
+                         ["begin_recovery", "list_recovery_vaults",
+                          "claim_recovery", "resolve"])
+        self.assertEqual(self.server.calls[2][0]["deviceTokenHash"], TOKEN_HASH)
+        self.assertNotIn(TOKEN, json.dumps(self.server.calls[2][0]))
+        self.assertIsNone(self.server.calls[2][1])
+
+    def test_recovery_claim_refuses_vault_substitution_and_lost_reply_is_resolvable(self):
+        self.server.lose_claim_reply = True
+        with patch("codex_migrate.vault_hosted_enrollment_client._helper_path",
+                   return_value=Path("/synthetic/helper")), \
+                patch("codex_migrate.vault_hosted_enrollment_client._run_helper",
+                      side_effect=self.fake_helper):
+            client = self.client()
+            with self.assertRaisesRegex(MigrationError, "could not be confirmed"):
+                client.claim_recovery(PURCHASE, CODE, VAULT, DEVICE, apply=True)
+            self.server.lose_claim_reply = False
+            self.assertEqual(client.resolve(DEVICE)["vaultId"], VAULT)
+            with self.assertRaisesRegex(MigrationError, "changed the selected Vault"):
+                client.claim_recovery(PURCHASE, CODE, ACCOUNT, DEVICE, apply=True)
+
     def test_bad_inputs_refuse_network_or_keychain_work(self):
         with self.assertRaises(MigrationError):
             HostedEnrollmentClient("http://example.com")
@@ -151,6 +191,8 @@ class HostedEnrollmentClientTests(unittest.TestCase):
             lambda: client.begin(PURCHASE),
             lambda: client.create_device(),
             lambda: client.claim(PURCHASE, CODE, DEVICE),
+            lambda: client.begin_recovery(PURCHASE),
+            lambda: client.claim_recovery(PURCHASE, CODE, VAULT, DEVICE),
         ]:
             with self.assertRaisesRegex(MigrationError, "explicit confirmation"):
                 operation()

@@ -29,6 +29,7 @@ _TOKEN = re.compile(r"hv1_[A-Za-z0-9_-]{43}\Z")
 _HASH = re.compile(r"[0-9a-f]{64}\Z")
 _MAX_REQUEST = 700
 _MAX_RESPONSE = 2048
+_MAX_VAULT_LIST_RESPONSE = 12 * 1024
 
 
 def _require_apply(apply: bool) -> None:
@@ -61,7 +62,8 @@ class HostedEnrollmentClient:
         self._allow_loopback_http = allow_loopback_http
         self._opener = build_opener(_NoRedirect())
 
-    def _post(self, claim: dict, token: str = "") -> dict:
+    def _post(self, claim: dict, token: str = "", *,
+              max_response: int = _MAX_RESPONSE) -> dict:
         body = json.dumps(claim, separators=(",", ":")).encode("utf-8")
         if len(body) > _MAX_REQUEST or (token and not _TOKEN.fullmatch(token)):
             raise MigrationError("The hosted enrollment request is invalid.")
@@ -78,8 +80,8 @@ class HostedEnrollmentClient:
                         response.headers.get("Content-Type", "").split(";")[0] !=
                         "application/json"):
                     raise MigrationError("The hosted enrollment response is invalid.")
-                data = response.read(_MAX_RESPONSE + 1)
-                if len(data) > _MAX_RESPONSE:
+                data = response.read(max_response + 1)
+                if len(data) > max_response:
                     raise MigrationError("The hosted enrollment response is too large.")
         except (HTTPError, URLError, OSError, ValueError):
             # The exception must not disclose the purchase link, emailed code,
@@ -120,6 +122,16 @@ class HostedEnrollmentClient:
                 or not isinstance(code, str) or not _CODE.fullmatch(code)
                 or not isinstance(device_id, str) or not re.fullmatch(_UUID, device_id)):
             raise MigrationError("The hosted enrollment claim is invalid.")
+        device_hash = self._device_hash(device_id, crypto_helper)
+        # Never delete this Keychain item on a timeout. The server may already
+        # have claimed it; resolve(device_id) is the safe ambiguous retry.
+        result = self._post({"action": "claim", "purchaseToken": purchase_token,
+                             "code": code, "deviceId": device_id,
+                             "deviceTokenHash": device_hash})
+        return _identity(result, device_id)
+
+    @staticmethod
+    def _device_hash(device_id: str, crypto_helper: Optional[str]) -> str:
         listed = _run_helper(_helper_path(crypto_helper), ["hosted-device-list"])
         devices = listed.get("devices")
         if not isinstance(devices, list):
@@ -130,12 +142,63 @@ class HostedEnrollmentClient:
                 not isinstance(selected[0]["token_hash"], str) or
                 not _HASH.fullmatch(selected[0]["token_hash"])):
             raise MigrationError("The hosted device credential is unavailable.")
-        # Never delete this Keychain item on a timeout. The server may already
-        # have claimed it; resolve(device_id) is the safe ambiguous retry.
-        result = self._post({"action": "claim", "purchaseToken": purchase_token,
-                             "code": code, "deviceId": device_id,
-                             "deviceTokenHash": selected[0]["token_hash"]})
-        return _identity(result, device_id)
+        return selected[0]["token_hash"]
+
+    def begin_recovery(self, purchase_token: str, *, apply: bool = False) -> None:
+        """Email a fresh code for pairing to an already enrolled Vault."""
+        _require_apply(apply)
+        if not isinstance(purchase_token, str) or not _PURCHASE.fullmatch(purchase_token):
+            raise MigrationError("The purchase link is invalid for hosted recovery.")
+        if self._post({"action": "begin_recovery",
+                       "purchaseToken": purchase_token}) != {"status": "sent"}:
+            raise MigrationError("The hosted recovery response is invalid.")
+
+    def list_recovery_vaults(self, purchase_token: str, code: str) -> list:
+        """List opaque Vault IDs only after the buyer proves their email."""
+        if (not isinstance(purchase_token, str) or not _PURCHASE.fullmatch(purchase_token)
+                or not isinstance(code, str) or not _CODE.fullmatch(code)):
+            raise MigrationError("The hosted recovery challenge is invalid.")
+        result = self._post({"action": "list_recovery_vaults",
+                             "purchaseToken": purchase_token, "code": code},
+                            max_response=_MAX_VAULT_LIST_RESPONSE)
+        vaults = result.get("vaults")
+        if (set(result) != {"vaults"} or not isinstance(vaults, list) or
+                not 1 <= len(vaults) <= 64):
+            raise MigrationError("The hosted recovery Vault list is invalid.")
+        seen = set()
+        for item in vaults:
+            if (not isinstance(item, dict) or
+                    set(item) != {"vaultId", "lastGoodAt"} or
+                    not isinstance(item["vaultId"], str) or
+                    not re.fullmatch(_UUID, item["vaultId"]) or
+                    item["vaultId"] in seen or
+                    (item["lastGoodAt"] is not None and
+                     (not isinstance(item["lastGoodAt"], str) or
+                      not re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z",
+                                       item["lastGoodAt"])))):
+                raise MigrationError("The hosted recovery Vault list is invalid.")
+            seen.add(item["vaultId"])
+        return vaults
+
+    def claim_recovery(self, purchase_token: str, code: str, vault_id: str,
+                       device_id: str, *, crypto_helper: Optional[str] = None,
+                       apply: bool = False) -> dict:
+        """Pair a fresh Keychain device to one owned Vault; never create data."""
+        _require_apply(apply)
+        if (not isinstance(purchase_token, str) or not _PURCHASE.fullmatch(purchase_token)
+                or not isinstance(code, str) or not _CODE.fullmatch(code)
+                or not isinstance(vault_id, str) or not re.fullmatch(_UUID, vault_id)
+                or not isinstance(device_id, str) or not re.fullmatch(_UUID, device_id)):
+            raise MigrationError("The hosted recovery claim is invalid.")
+        device_hash = self._device_hash(device_id, crypto_helper)
+        result = self._post({"action": "claim_recovery",
+                             "purchaseToken": purchase_token, "code": code,
+                             "vaultId": vault_id, "deviceId": device_id,
+                             "deviceTokenHash": device_hash})
+        identity = _identity(result, device_id)
+        if identity["vaultId"] != vault_id:
+            raise MigrationError("The hosted recovery claim changed the selected Vault.")
+        return identity
 
     def _credential(self, device_id: str, crypto_helper: Optional[str]) -> str:
         """Read and validate the bearer only inside the native client process."""

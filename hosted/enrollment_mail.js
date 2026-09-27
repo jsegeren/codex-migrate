@@ -1,9 +1,10 @@
 // The message is transactional proof of the paid buyer's email, not marketing.
 // Sandbox can send only to the configured operator sink.
-async function enrollmentMail({ to, code, live }, env = process.env,
+async function enrollmentMail({ to, code, live, purpose = 'setup' }, env = process.env,
   request = fetch) {
   const from = env.LAUNCH_FROM_EMAIL;
-  if (typeof live !== 'boolean' || typeof code !== 'string' ||
+  if (typeof live !== 'boolean' || !['setup', 'recovery'].includes(purpose) ||
+      typeof code !== 'string' ||
       !/^hve1_[A-Za-z0-9_-]{43}$/.test(code) ||
       typeof to !== 'string' || to.length > 254 ||
       !/^[^\s<>@\r\n]+@[^\s<>@\r\n]+\.[^\s<>@\r\n]+$/.test(to) ||
@@ -20,14 +21,20 @@ async function enrollmentMail({ to, code, live }, env = process.env,
         from: { email: from, name: 'Codex Migrate' },
         reply_to: { email: 'joshua@segeren.com', name: 'Joshua Segeren' },
         personalizations: [{ to: [{ email: to }],
-          subject: live ? 'Confirm your Codex Vault backup setup' :
-            'TEST ONLY — Codex Vault backup setup' }],
+          subject: live ? (purpose === 'recovery' ?
+            'Recover access to your Codex Vault backup' :
+            'Confirm your Codex Vault backup setup') :
+            'TEST ONLY — Codex Vault device verification' }],
         content: [{ type: 'text/plain', value: [
-          live ? 'Use this one-time code to confirm hosted Codex Vault setup:' :
+          live ? (purpose === 'recovery' ?
+            'Use this one-time code to pair a new Mac to an existing encrypted Codex Vault:' :
+            'Use this one-time code to confirm hosted Codex Vault setup:') :
             'Sandbox test only. No hosted backup is active.',
           code,
           'The code expires in 10 minutes. Enter it only in the Codex Migrate setup you opened. We will not ask you to send it by email.',
-          'This confirms your email only. Hosting does not begin until you separately choose a plan and see its terms.',
+          purpose === 'recovery' ?
+            'This code cannot decrypt a backup. You will still need the recovery key you saved separately to read its contents.' :
+            'This confirms your email only. Hosting does not begin until you separately choose a plan and see its terms.',
           'If you did not request this, ignore the message. For help, reply to joshua@segeren.com.',
         ].join('\n\n') }],
         tracking_settings: { click_tracking: { enable: false, enable_text: false },

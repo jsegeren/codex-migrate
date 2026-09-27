@@ -23,6 +23,21 @@ test('transactional proof mail is one recipient with no tracking or storage clai
   assert.equal(sent.tracking_settings.open_tracking.enable, false);
 });
 
+test('recovery mail distinguishes device pairing from decrypting a backup', async () => {
+  let sent;
+  const result = await enrollmentMail({ to: 'buyer@example.test', code,
+    live: true, purpose: 'recovery' }, env, async (_url, options) => {
+    sent = JSON.parse(options.body);
+    return { status: 202 };
+  });
+  assert.equal(result, 'accepted');
+  assert.equal(sent.personalizations[0].subject,
+    'Recover access to your Codex Vault backup');
+  assert.match(sent.content[0].value, /new Mac/);
+  assert.match(sent.content[0].value, /recovery key/);
+  assert.doesNotMatch(sent.content[0].value, /Hosting does not begin/);
+});
+
 test('sandbox is sink-only and invalid input fails before any mail request', async () => {
   let calls = 0;
   const request = async () => { calls++; return { status: 202 }; };
@@ -30,6 +45,7 @@ test('sandbox is sink-only and invalid input fails before any mail request', asy
     { to: 'buyer@example.test', code, live: false },
     { to: 'operator@example.test', code: 'short', live: false },
     { to: 'operator@example.test', code, live: undefined },
+    { to: 'operator@example.test', code, live: false, purpose: 'anything' },
   ]) {
     assert.equal(await enrollmentMail(input, env, request), 'rejected');
   }

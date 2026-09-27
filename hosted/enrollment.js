@@ -27,6 +27,17 @@ const RESOLVE_SQL = `SELECT sessions.account_id, sessions.vault_id,
   WHERE sessions.token_hash = $1 AND sessions.device_id = $2
     AND sessions.revoked_at IS NULL
     AND sessions.expires_at > clock_timestamp()`;
+const RECOVERY_ISSUE_SQL = `SELECT hosted.issue_recovery_challenge(
+  $1::text, $2::text, $3::text
+) AS issued`;
+const RECOVERY_DELIVERY_SQL = `SELECT hosted.record_recovery_challenge_delivery(
+  $1::text, $2::text
+) AS recorded`;
+const RECOVERY_LIST_SQL = `SELECT vault_id, published_at
+  FROM hosted.list_recovery_vaults($1::text, $2::text, $3::text)`;
+const RECOVERY_CLAIM_SQL = `SELECT hosted.claim_recovery_vault_device(
+  $1::text, $2::text, $3::text, $4::uuid, $5::uuid, $6::text
+) AS account_id`;
 
 class HostedEnrollmentError extends Error {
   constructor() { super('hosted_enrollment_unavailable'); }
@@ -55,6 +66,19 @@ function purchaseEvidence(value) {
 
 async function beginEnrollment({ purchaseToken, verifyPurchase, query,
   sendChallenge }) {
+  return beginChallenge({ purchaseToken, verifyPurchase, query, sendChallenge,
+    issueSql: ISSUE_SQL, deliverySql: DELIVERY_SQL, purpose: 'setup' });
+}
+
+async function beginRecovery({ purchaseToken, verifyPurchase, query,
+  sendChallenge }) {
+  return beginChallenge({ purchaseToken, verifyPurchase, query, sendChallenge,
+    issueSql: RECOVERY_ISSUE_SQL, deliverySql: RECOVERY_DELIVERY_SQL,
+    purpose: 'recovery' });
+}
+
+async function beginChallenge({ purchaseToken, verifyPurchase, query,
+  sendChallenge, issueSql, deliverySql, purpose }) {
   if (typeof verifyPurchase !== 'function' || typeof query !== 'function' ||
       typeof sendChallenge !== 'function') throw new HostedEnrollmentError();
   try {
@@ -63,18 +87,18 @@ async function beginEnrollment({ purchaseToken, verifyPurchase, query,
     const purchase = await verifyPurchase(purchaseToken);
     if (!purchaseEvidence(purchase)) throw new HostedEnrollmentError();
     const challenge = mintChallenge();
-    const issued = await query(ISSUE_SQL,
+    const issued = await query(issueSql,
       [purchase.sessionId, purchase.mode, challenge.hash]);
     if (issued?.rows?.[0]?.issued !== true) throw new HostedEnrollmentError();
 
     let delivery;
     try {
       delivery = await sendChallenge({ to: purchase.email, code: challenge.token,
-        live: purchase.mode === 'live' });
+        live: purchase.mode === 'live', purpose });
     } catch { delivery = 'uncertain'; }
     const state = delivery === 'accepted' ? 'sent' :
       delivery === 'rejected' ? 'rejected' : 'uncertain';
-    const recorded = await query(DELIVERY_SQL, [challenge.hash, state]);
+    const recorded = await query(deliverySql, [challenge.hash, state]);
     if (recorded?.rows?.[0]?.recorded !== true || state !== 'sent') {
       throw new HostedEnrollmentError();
     }
@@ -83,6 +107,58 @@ async function beginEnrollment({ purchaseToken, verifyPurchase, query,
     // Do not expose purchase, email, Stripe, mail, or database details.
     throw new HostedEnrollmentError();
   }
+}
+
+async function listRecoveryVaults({ purchaseToken, code, verifyPurchase, query }) {
+  if (typeof verifyPurchase !== 'function' || typeof query !== 'function') {
+    throw new HostedEnrollmentError();
+  }
+  try {
+    const hash = challengeHash(code);
+    const purchase = await verifyPurchase(purchaseToken);
+    if (!purchaseEvidence(purchase)) throw new HostedEnrollmentError();
+    const result = await query(RECOVERY_LIST_SQL,
+      [hash, purchase.sessionId, purchase.mode]);
+    if (!Array.isArray(result?.rows) || !result.rows.length ||
+        result.rows.length > 64) throw new HostedEnrollmentError();
+    const seen = new Set();
+    const vaults = result.rows.map(row => {
+      if (!UUID.test(row?.vault_id) || seen.has(row.vault_id)) {
+        throw new HostedEnrollmentError();
+      }
+      seen.add(row.vault_id);
+      const date = row.published_at == null ? null : new Date(row.published_at);
+      if (date && !Number.isFinite(date.getTime())) {
+        throw new HostedEnrollmentError();
+      }
+      return Object.freeze({ vaultId: row.vault_id,
+        lastGoodAt: date ? date.toISOString() : null });
+    });
+    return Object.freeze({ vaults });
+  } catch { throw new HostedEnrollmentError(); }
+}
+
+async function claimRecoveryVault({ purchaseToken, code, vaultId, deviceId,
+  deviceTokenHash, verifyPurchase, query }) {
+  if (typeof verifyPurchase !== 'function' || typeof query !== 'function') {
+    throw new HostedEnrollmentError();
+  }
+  try {
+    if (!UUID.test(vaultId) || !UUID.test(deviceId) ||
+        !DIGEST.test(deviceTokenHash)) throw new HostedEnrollmentError();
+    const hash = challengeHash(code);
+    const purchase = await verifyPurchase(purchaseToken);
+    if (!purchaseEvidence(purchase)) throw new HostedEnrollmentError();
+    const result = await query(RECOVERY_CLAIM_SQL, [hash, purchase.sessionId,
+      purchase.mode, vaultId, deviceId, deviceTokenHash]);
+    const accountId = result?.rows?.[0]?.account_id;
+    if (result?.rows?.length !== 1 || !UUID.test(accountId)) {
+      throw new HostedEnrollmentError();
+    }
+    // The caller generated the Keychain-held bearer before this request.
+    // A lost response is reconciled by resolveFirstDevice with that bearer.
+    return Object.freeze({ accountId, vaultId, deviceId });
+  } catch { throw new HostedEnrollmentError(); }
 }
 
 async function claimEnrollment({ purchaseToken, code, deviceId,
@@ -133,4 +209,4 @@ async function resolveFirstDevice({ deviceToken, deviceId, query,
 }
 
 module.exports = { HostedEnrollmentError, beginEnrollment, claimEnrollment,
-  resolveFirstDevice };
+  resolveFirstDevice, beginRecovery, listRecoveryVaults, claimRecoveryVault };

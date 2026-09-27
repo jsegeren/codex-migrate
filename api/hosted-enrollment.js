@@ -7,7 +7,8 @@ const { sandboxDatabaseUrl,
   sandboxDatabaseRuntime } = require('../hosted/recovery_runtime');
 const { enrollmentMail } = require('../hosted/enrollment_mail');
 const { beginEnrollment, claimEnrollment,
-  resolveFirstDevice } = require('../hosted/enrollment');
+  resolveFirstDevice, beginRecovery, listRecoveryVaults,
+  claimRecoveryVault } = require('../hosted/enrollment');
 
 const BEARER = /^Bearer (hv1_[A-Za-z0-9_-]{43})$/;
 const MAX_BODY = 700;
@@ -24,17 +25,26 @@ function requestBody(req) {
   }
   const data = req.body;
   const keys = Object.keys(data).sort().join(',');
-  const expected = data.action === 'begin' ? 'action,purchaseToken' :
+  const expected = ['begin', 'begin_recovery'].includes(data.action) ?
+    'action,purchaseToken' :
     data.action === 'claim' ?
       'action,code,deviceId,deviceTokenHash,purchaseToken' :
+    data.action === 'list_recovery_vaults' ?
+      'action,code,purchaseToken' :
+    data.action === 'claim_recovery' ?
+      'action,code,deviceId,deviceTokenHash,purchaseToken,vaultId' :
     data.action === 'resolve' ? 'action,deviceId' : null;
   if (keys !== expected ||
       (data.action !== 'resolve' &&
         (typeof data.purchaseToken !== 'string' ||
          data.purchaseToken.length > 330)) ||
-      (data.action === 'claim' &&
+      (['claim', 'claim_recovery'].includes(data.action) &&
         (typeof data.code !== 'string' || typeof data.deviceId !== 'string' ||
          typeof data.deviceTokenHash !== 'string')) ||
+      (data.action === 'list_recovery_vaults' &&
+        typeof data.code !== 'string') ||
+      (data.action === 'claim_recovery' &&
+        typeof data.vaultId !== 'string') ||
       (data.action === 'resolve' && typeof data.deviceId !== 'string')) {
     throw Error('invalid_request');
   }
@@ -84,10 +94,30 @@ function makeHandler(load = enrollmentRuntime, env = process.env) {
           verifyPurchase: verifyPurchaseToken, query, sendChallenge,
         }));
       }
+      if (data.action === 'begin_recovery') {
+        return reply(res, 200, await beginRecovery({
+          purchaseToken: data.purchaseToken,
+          verifyPurchase: verifyPurchaseToken, query, sendChallenge,
+        }));
+      }
       if (data.action === 'claim') {
         return reply(res, 200, await claimEnrollment({
           purchaseToken: data.purchaseToken, code: data.code,
           deviceId: data.deviceId, deviceTokenHash: data.deviceTokenHash,
+          verifyPurchase: verifyPurchaseToken, query,
+        }));
+      }
+      if (data.action === 'list_recovery_vaults') {
+        return reply(res, 200, await listRecoveryVaults({
+          purchaseToken: data.purchaseToken, code: data.code,
+          verifyPurchase: verifyPurchaseToken, query,
+        }));
+      }
+      if (data.action === 'claim_recovery') {
+        return reply(res, 200, await claimRecoveryVault({
+          purchaseToken: data.purchaseToken, code: data.code,
+          vaultId: data.vaultId, deviceId: data.deviceId,
+          deviceTokenHash: data.deviceTokenHash,
           verifyPurchase: verifyPurchaseToken, query,
         }));
       }

@@ -325,6 +325,18 @@ egress allowance. Do not claim that B2 restores are always free. See its
   account/Vault identity, without returning the bearer to browser code. This
   is source-level loopback evidence, not an
   installed-app or live-server enrollment acceptance.
+- The dark sandbox now has a lost-Mac/second-device pairing path for an
+  *already enrolled* purchase. It freshly rechecks the original purchase,
+  emails a one-use 10-minute code to the purchase email, then lists only
+  opaque owned Vault IDs and last-good timestamps. After the native helper
+  creates a new ThisDeviceOnly bearer, the code can pair its digest to one
+  selected existing Vault, without creating a Vault, changing quota, starting
+  a trial, revoking the old device, or exposing ciphertext. Another Vault
+  requires another code. A lost claim response can be resolved with the same
+  saved bearer. This does not replace the separately held encryption recovery
+  key. The route is still sandbox-only and closed to buyers; native buyer UI,
+  live email abuse protection, session renewal, revocation, and a real
+  clean-account remote restore remain mandatory before release.
 - A provider-neutral subscription upload gate is implemented for a future
   service to call with a freshly retrieved Stripe Subscription, its
   server-held enrollment record, and a server-held catalog of approved price
