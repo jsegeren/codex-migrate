@@ -1,7 +1,8 @@
 // Storage-adjacent primitive for an authenticated R2 Worker. This is not an
 // HTTP endpoint: the caller must bind account/Vault ownership, entitlement,
 // and aggregate quota before accepting an object or publishing a snapshot.
-const { MAX_WORKER_OBJECT_BYTES, VERIFICATION_BATCH_SIZE } = require('./transport_limits');
+const { MAX_WORKER_OBJECT_BYTES, VERIFICATION_BATCH_SIZE,
+  VERIFICATION_CONCURRENCY } = require('./transport_limits');
 
 const HEX = /^[0-9a-f]{64}$/;
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
@@ -48,9 +49,15 @@ async function verifiedHead(bucket, item) {
 
 async function verifiedBatch(bucket, items) {
   if (!Array.isArray(items) || items.length < 1 ||
-      items.length > VERIFICATION_BATCH_SIZE) return false;
-  for (const item of items) {
-    if (!await verifiedHead(bucket, item)) return false;
+      items.length > VERIFICATION_BATCH_SIZE || !items.every(validItem)) return false;
+  // A large snapshot has thousands of chunks. Bound parallel HEAD requests
+  // so verification does not serialize every network round trip or create
+  // an unbounded burst within one Worker invocation.
+  for (let start = 0; start < items.length; start += VERIFICATION_CONCURRENCY) {
+    const wave = items.slice(start, start + VERIFICATION_CONCURRENCY);
+    if (!(await Promise.all(wave.map(item => verifiedHead(bucket, item)))).every(Boolean)) {
+      return false;
+    }
   }
   return true;
 }

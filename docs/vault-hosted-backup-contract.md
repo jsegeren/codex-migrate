@@ -186,9 +186,11 @@ egress allowance. Do not claim that B2 restores are always free. See its
   objects and passes it to the database transaction only after every batch
   succeeds. The default Vault chunk is 4 MiB, so a large snapshot can exceed
   the per-invocation R2 subrequest budget; one giant Worker verification call
-  is not a valid implementation. The eventual authenticated service must bind
-  each batch to the account and Vault, then prove realistic multi-batch latency
-  and retry behavior against R2. Cloudflare currently allows 1,000 internal
+  is not a valid implementation. The draft R2 adapter checks each 512-object
+  batch in waves of 16 concurrent HEAD requests; a unit test bounds that
+  concurrency and stops after a failed wave. The eventual authenticated
+  service must bind each batch to the account and Vault, then prove realistic
+  multi-batch latency and retry behavior against R2. Cloudflare currently allows 1,000 internal
   service subrequests per Free Worker invocation and defaults to 10,000 on
   Paid; see [Workers limits](https://developers.cloudflare.com/workers/platform/limits/).
   The database transaction enforces aggregate

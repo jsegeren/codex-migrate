@@ -175,6 +175,35 @@ test('R2 batch verification enforces a bounded per-invocation object count', asy
   assert.equal(await verifiedBatch(bucket, Array(513).fill(item)), false);
 });
 
+test('R2 batch verification bounds concurrent reads and stops after a failed wave', async () => {
+  const bytes = Buffer.from('encrypted object');
+  const item = itemFor(bytes);
+  let inFlight = 0;
+  let peak = 0;
+  let calls = 0;
+  const bucket = { head: async objectKey => {
+    calls++;
+    inFlight++;
+    peak = Math.max(peak, inFlight);
+    await Promise.resolve();
+    inFlight--;
+    return { key: objectKey, size: item.bytes,
+      checksums: { sha256: Uint8Array.from(Buffer.from(item.sha256, 'hex')).buffer } };
+  } };
+  assert.equal(await verifiedBatch(bucket, Array(33).fill(item)), true);
+  assert.equal(calls, 33);
+  assert.equal(peak, 16);
+
+  calls = 0;
+  bucket.head = async objectKey => {
+    calls++;
+    return calls === 1 ? null : { key: objectKey, size: item.bytes,
+      checksums: { sha256: Uint8Array.from(Buffer.from(item.sha256, 'hex')).buffer } };
+  };
+  assert.equal(await verifiedBatch(bucket, Array(33).fill(item)), false);
+  assert.equal(calls, 16);
+});
+
 test('restore streams only a matching encrypted object', async () => {
   const bucket = new FakeR2();
   const bytes = Buffer.from('encrypted restore chunk');
