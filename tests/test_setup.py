@@ -812,6 +812,8 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(self.request(candidates, authorized=False)[0], 403)
         self.assertEqual(self.request(preview, authorized=False)[0], 403)
         self.assertEqual(self.request(export, authorized=False)[0], 403)
+        self.assertEqual(self.request("/api/vault/search?q=Nowhere")[0], 400)
+        self.assertIn('$("salvage-controls").open=true', VAULT_HTML)
         self.assertEqual(self.request(candidates)[1]["results"][0]["transcript"],
                          "damaged.jsonl")
         code, result = self.request(preview)

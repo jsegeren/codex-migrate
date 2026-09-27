@@ -335,7 +335,9 @@ async function openThread(item){
     if(item.source==="backup"||item.source==="local"){
       selected=item;$("entries").replaceChildren();$("load-more").hidden=true;
       $("print").hidden=true;$("share").hidden=true;$("read-from-start").hidden=true;$("restore-thread").hidden=item.source!=="backup";
-      $("thread-meta").textContent="This conversation cannot be previewed here. Try its Markdown export or another saved version.";
+      $("thread-meta").textContent=item.source==="local"?
+        "This conversation could not be read normally. Try a saved version, or inspect its physical file in the damaged-conversation panel above. Markdown export may fail too.":
+        "This saved conversation could not be read normally. Try another verified backup version.";
       $("thread").hidden=false;
     }
     fail(error)
@@ -435,7 +437,15 @@ async function runSearch(append=false){
       source==="history"?"No matching saved title found. Choose one dated backup to search its full text.":
       source==="local_titles"?"No matching local title found. Try searching conversation text.":
       "No matching conversation text found.";
-  }catch(error){if(request===searchRequest)fail(error)}finally{if(slowNotice!==null)clearTimeout(slowNotice);if(request===searchRequest)$("more-results").disabled=false}
+  }catch(error){
+    if(request===searchRequest){
+      fail(error);
+      if(source==="local"){
+        $("salvage-controls").open=true;
+        $("salvage-status").textContent="If one file is damaged, find it by title or date here. Other read errors still need review.";
+      }
+    }
+  }finally{if(slowNotice!==null)clearTimeout(slowNotice);if(request===searchRequest)$("more-results").disabled=false}
 }
 $("search").onsubmit=event=>{event.preventDefault();void runSearch()};
 $("more-results").onclick=()=>void runSearch(true);
