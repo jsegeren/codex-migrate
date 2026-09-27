@@ -15,10 +15,11 @@ from pathlib import Path
 import re
 import stat
 import tempfile
-from typing import Mapping, Protocol, Tuple
+from typing import Mapping, Optional, Protocol, Tuple
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_backup import _canonical_macos_path, _helper_path, _run_helper
+from codex_migrate.vault_hosted_chunk_journal import HostedChunkJournal
 from codex_migrate.vault_remote_inventory import (
     MAX_ENCRYPTED_CHUNK_BYTES, _regular_file,
 )
@@ -190,18 +191,22 @@ def prepare_remote_aware_file(source: Path, objects: Path, key_id: str,
 
 def stage_prepared_file(prepared: PreparedRemoteFile, scratch: Path,
                         client: ScopedUploadClient, reservation_id: str, *,
+                        journal: Optional[HostedChunkJournal] = None,
                         apply: bool = False) -> Tuple[StagedObject, ...]:
     """Check old remote ciphertext and upload new encrypted chunks for one file.
 
     `scratch` is the same private object directory supplied to
-    `prepare_remote_aware_file`. This leaves scratch files in place. Deletion
-    requires a durable per-object
-    journal and a complete remote publication flow, neither supplied here.
+    `prepare_remote_aware_file`. With a journal, each new chunk is recorded
+    only after exact remote verification. This still leaves scratch in place:
+    the complete remote-aware retry and publication flow is not proven yet.
     """
     if apply is not True:
         raise MigrationError("Hosted upload changes require explicit confirmation.")
     if not isinstance(prepared, PreparedRemoteFile):
         raise MigrationError("The hosted prepared file is invalid.")
+    if journal is not None and (not isinstance(journal, HostedChunkJournal) or
+                                journal.reservation_id != reservation_id):
+        raise MigrationError("The hosted chunk journal does not match this reservation.")
     local = set(prepared.local_ids)
     remote = set(prepared.remote_objects)
     if (local & remote or
@@ -226,5 +231,7 @@ def stage_prepared_file(prepared: PreparedRemoteFile, scratch: Path,
         store = client.object_store(reservation_id,
                                     {key: (item.bytes, item.sha256)}, apply=True)
         staged, _ = stage_encrypted_object(root, item, store)
+        if journal is not None:
+            journal.record(identifier, staged.bytes, staged.sha256)
         objects.append(staged)
     return tuple(sorted(objects, key=lambda item: item.key))
