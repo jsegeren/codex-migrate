@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { authorizeReadScope } = require('../hosted/access');
-const { listPublishedObjects } = require('../hosted/read_inventory');
+const { getLastGoodSnapshot, listPublishedObjects } = require('../hosted/read_inventory');
 const { mintSessionSecret } = require('./hosted-device-fixture');
 
 const accountId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -21,6 +21,24 @@ function row(index, count = 300) {
     object_key: `${prefix}objects/${digest.slice(0, 2)}/${digest.slice(2)}.cvchunk`,
     bytes: '10', sha256: digest };
 }
+
+test('last-good discovery comes only from the owned Vault pointer', async () => {
+  const latest = await getLastGoodSnapshot({ scope: await scope(),
+    query: async (sql, values) => {
+      assert.match(sql, /v\.last_good_snapshot_id/);
+      assert.deepEqual(values, [accountId, vaultId]);
+      return { rows: [{ last_good_snapshot_id: snapshotId,
+        verified_object_count: 300, staged_bytes: '3000' }] };
+    } });
+  assert.deepEqual(latest, { snapshotId, totalObjects: 300, totalBytes: 3000 });
+  await assert.rejects(getLastGoodSnapshot({ scope: { accountId, vaultId },
+    query: async () => ({ rows: [] }) }), /hosted_inventory_denied/);
+  await assert.rejects(getLastGoodSnapshot({ scope: await scope(),
+    query: async () => ({ rows: [] }) }), /hosted_inventory_denied/);
+  assert.equal(await getLastGoodSnapshot({ scope: await scope(),
+    query: async () => ({ rows: [{ last_good_snapshot_id: null,
+      verified_object_count: null, staged_bytes: null }] }) }), null);
+});
 
 test('published inventory pages stay bounded, ordered, and scope-owned', async () => {
   const first = await listPublishedObjects({ scope: await scope(), snapshotId,

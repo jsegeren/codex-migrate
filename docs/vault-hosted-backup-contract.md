@@ -112,7 +112,8 @@ not by itself revoke access to already retained ciphertext, so the customer
 can recover/export it during the eventual published retention window; that
 window and cancellation policy still require Founder approval. There is no
 customer read endpoint, installed-client flow, or clean-Mac restore proof.
-The draft recovery inventory can enumerate one published snapshot in
+The draft recovery discovery reads the owned Vault's last-good pointer, then
+enumerates that published snapshot in
 256-object pages under the same read authorization, with scoped key cursors,
 server-held object checksums/sizes, and the total expected count and bytes.
 The recovery client must reconcile the complete inventory before declaring a

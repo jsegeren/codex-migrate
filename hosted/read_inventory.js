@@ -6,6 +6,13 @@ const { validItem } = require('./object_capability');
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const HEX = /^[0-9a-f]{64}$/;
 const PAGE_SIZE = 256;
+const LATEST_SQL = `SELECT v.last_good_snapshot_id, s.verified_object_count,
+    r.staged_bytes
+  FROM hosted.vaults AS v
+  LEFT JOIN hosted.snapshots AS s ON s.account_id = v.account_id
+    AND s.vault_id = v.vault_id AND s.snapshot_id = v.last_good_snapshot_id
+  LEFT JOIN hosted.upload_reservations AS r ON r.reservation_id = s.reservation_id
+  WHERE v.account_id = $1::uuid AND v.vault_id = $2::uuid`;
 const PAGE_SQL = `SELECT s.verified_object_count, r.staged_bytes,
     so.object_key, o.bytes, o.sha256
   FROM hosted.snapshots AS s
@@ -30,6 +37,27 @@ function validCursor(afterKey, prefix) {
   // Use the same key grammar as the object Worker. Bytes and digest here are
   // placeholders only for grammar validation, never signed or returned.
   return validItem({ key: afterKey, bytes: 1, sha256: '0'.repeat(64) });
+}
+
+async function getLastGoodSnapshot({ scope, query }) {
+  if (!consumeAuthorizedReadScope(scope) || typeof query !== 'function') {
+    throw new HostedInventoryError();
+  }
+  try {
+    const result = await query(LATEST_SQL, [scope.accountId, scope.vaultId]);
+    const row = result?.rows?.[0];
+    if (result?.rows?.length !== 1) throw new HostedInventoryError();
+    if (row.last_good_snapshot_id === null) return null;
+    const count = Number(row?.verified_object_count);
+    const bytes = Number(row?.staged_bytes);
+    if (!UUID.test(row.last_good_snapshot_id) ||
+        !Number.isSafeInteger(count) || count < 3 || count > 1_000_000 ||
+        !Number.isSafeInteger(bytes) || bytes < count) {
+      throw new HostedInventoryError();
+    }
+    return Object.freeze({ snapshotId: row.last_good_snapshot_id,
+      totalObjects: count, totalBytes: bytes });
+  } catch { throw new HostedInventoryError(); }
 }
 
 async function listPublishedObjects({ scope, snapshotId, afterKey = null, query }) {
@@ -73,4 +101,5 @@ async function listPublishedObjects({ scope, snapshotId, afterKey = null, query 
   } catch { throw new HostedInventoryError(); }
 }
 
-module.exports = { HostedInventoryError, listPublishedObjects };
+module.exports = { HostedInventoryError, getLastGoodSnapshot,
+  listPublishedObjects };
