@@ -95,6 +95,14 @@ reservation and refuses conflicting retries or aggregate granted bytes beyond
 that reservation. A server-only coordinator consumes a fresh, purchase- and
 subscription-checked scope before it signs one exact 30-second PUT; the SQL
 gate stops issuing grants when under one minute remains on the reservation.
+The draft reservation coordinator can reserve new physical bytes for 55
+minutes and extend a still-active reservation for another 55 minutes only
+after a fresh device, purchase, and subscription check. The database locks the
+account before the reservation, refuses a renewal after downgrade below
+retained plus reserved bytes, and never revives expired or cleanup-pending
+work. This removes the uninterrupted one-hour upload ceiling for large initial
+backups, but does **not** yet provide an installed-client renewal loop or
+resume after a lease expires. Those remain release blockers.
 Future orphan cleanup must wait beyond the last token's expiry. This is a tested
 building block, not an activated grant API: cleanup after failed/expired
 reservations and customer identity
