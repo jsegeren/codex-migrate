@@ -118,8 +118,8 @@ def preview_damaged_thread(source_home: str, collection: str, transcript: str,
     read. This is a preview, not a complete transcript export or Codex resume.
     """
     if (type(max_entries) is not int or type(max_text_bytes) is not int or
-            not 1 <= max_entries <= 100 or
-            not 1 <= max_text_bytes <= 1024 * 1024):
+            not 1 <= max_entries <= 20000 or
+            not 1 <= max_text_bytes <= 25 * 1024 * 1024):
         raise ValueError("invalid salvage preview budget")
     path = _find_transcript(source_home, collection, transcript)
     entries: List[ThreadEntry] = []
@@ -190,3 +190,30 @@ def preview_damaged_thread(source_home: str, collection: str, transcript: str,
         raise MigrationError("The conversation could not be read safely for salvage.") from error
     return SalvagePreview(collection, transcript, entries, parsed, repaired,
                           skipped, truncated, scan_truncated)
+
+
+def incomplete_markdown(result: SalvagePreview) -> str:
+    """Export only the recovered preview, with conspicuous provenance limits."""
+    lines = [
+        "# INCOMPLETE Codex transcript salvage",
+        "",
+        "Read-only extraction from one physical JSONL file. This is not the original",
+        "transcript, a complete backup, or a file to install into Codex.",
+        "Malformed records were skipped; missing bytes cannot be recovered here.",
+        "Fork ancestry is not included. The original file was not changed.",
+        "",
+        "Collection: %s" % result.collection,
+        "Transcript: %s" % json.dumps(result.transcript, ensure_ascii=False),
+        "Readable records: %d" % result.parsed_records,
+        "NUL-recovered records: %d" % result.nul_repaired_records,
+        "Skipped records: %d" % result.skipped_records,
+        "Preview limit reached: %s" % ("yes" if result.preview_truncated else "no"),
+        "Scan limit reached: %s" % ("yes" if result.scan_truncated else "no"),
+        "",
+    ]
+    for index, entry in enumerate(result.entries, 1):
+        lines.extend(["---", "", "## Entry %d" % index,
+                      "Role: %s" % (entry.role or "unknown"),
+                      "Time: %s" % (entry.timestamp or "unknown"),
+                      "", entry.text, ""])
+    return "\n".join(lines)

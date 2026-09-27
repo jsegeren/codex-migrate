@@ -39,6 +39,8 @@ class VaultSalvageTests(unittest.TestCase):
             self.assertEqual((result.parsed_records, result.nul_repaired_records,
                               result.skipped_records, result.preview_truncated),
                              (3, 1, 1, False))
+            self.assertIn("not the original", vault_salvage.incomplete_markdown(result))
+            self.assertIn("Skipped records: 1", vault_salvage.incomplete_markdown(result))
             self.assertTrue(result.physical_file_only)
             self.assertEqual(result.as_dict()["skipped_records"], 1)
             self.assertEqual(path.read_bytes(), original)

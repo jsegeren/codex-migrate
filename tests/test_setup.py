@@ -808,8 +808,10 @@ class SetupTests(unittest.TestCase):
         path.write_bytes(original)
         candidates = "/api/vault/salvage-candidates?q=damaged"
         preview = "/api/vault/salvage-preview?collection=active&transcript=damaged.jsonl"
+        export = "/api/vault/salvage-export?collection=active&transcript=damaged.jsonl"
         self.assertEqual(self.request(candidates, authorized=False)[0], 403)
         self.assertEqual(self.request(preview, authorized=False)[0], 403)
+        self.assertEqual(self.request(export, authorized=False)[0], 403)
         self.assertEqual(self.request(candidates)[1]["results"][0]["transcript"],
                          "damaged.jsonl")
         code, result = self.request(preview)
@@ -817,6 +819,11 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(result["entries"][0]["text"], "Surviving text")
         self.assertEqual(result["skipped_records"], 1)
         self.assertTrue(result["physical_file_only"])
+        code, markdown = self.request(export)
+        self.assertEqual(code, 200)
+        self.assertIn("# INCOMPLETE Codex transcript salvage", markdown)
+        self.assertIn("Skipped records: 1", markdown)
+        self.assertIn("Surviving text", markdown)
         self.assertEqual(path.read_bytes(), original)
         self.assertEqual(self.request(
             "/api/vault/salvage-preview?collection=active&transcript=../auth.json")[0], 400)

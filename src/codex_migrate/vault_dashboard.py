@@ -209,6 +209,7 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 <section id="salvage-preview" hidden aria-label="Incomplete salvage preview">
 <h3>Incomplete read-only preview</h3>
 <p id="salvage-meta" role="status"></p>
+<button id="salvage-download" type="button" class="secondary">Download incomplete Markdown</button>
 <div id="salvage-entries"></div>
 </section>
 </details>
@@ -439,9 +440,10 @@ async function runSearch(append=false){
 $("search").onsubmit=event=>{event.preventDefault();void runSearch()};
 $("more-results").onclick=()=>void runSearch(true);
 let salvageOffset=0;
+let salvageSelected=null;
 async function findSalvageFiles(append=false){
   const q=$("salvage-query").value.trim();
-  if(!append){salvageOffset=0;$("salvage-results").replaceChildren();$("salvage-preview").hidden=true}
+  if(!append){salvageOffset=0;salvageSelected=null;$("salvage-results").replaceChildren();$("salvage-preview").hidden=true}
   $("salvage-error").textContent="";$("salvage-status").textContent="Finding conversation files…";
   $("salvage-more").disabled=true;
   try{
@@ -475,12 +477,24 @@ async function previewSalvageFile(item){
       const p=document.createElement("p");p.textContent=entry.text;article.append(p);return article;
     }));
     $("salvage-meta").textContent=`${item.transcript} · ${data.parsed_records} readable records, ${data.nul_repaired_records} recovered around NUL bytes, ${data.skipped_records} skipped. Physical file only; fork ancestry is not included.${data.preview_truncated||data.scan_truncated?" Preview limited; additional content may be omitted.":""}`;
+    salvageSelected=item;
     $("salvage-preview").hidden=false;$("salvage-status").textContent="";
     $("salvage-preview").scrollIntoView({behavior:"smooth"});
   }catch(error){$("salvage-error").textContent=error.message;$("salvage-status").textContent=""}
 }
 $("salvage-search").onsubmit=event=>{event.preventDefault();void findSalvageFiles()};
 $("salvage-more").onclick=()=>void findSalvageFiles(true);
+$("salvage-download").onclick=async()=>{
+  if(!salvageSelected)return;
+  $("salvage-error").textContent="";$("salvage-download").disabled=true;
+  try{
+    const markdown=await api("/api/vault/salvage-export?"+new URLSearchParams({collection:salvageSelected.collection,transcript:salvageSelected.transcript}));
+    const url=URL.createObjectURL(new Blob([markdown],{type:"text/markdown"}));
+    const link=document.createElement("a");link.href=url;link.download="codex-salvage-incomplete.md";link.click();
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }catch(error){$("salvage-error").textContent=error.message}
+  finally{$("salvage-download").disabled=false}
+};
 let indexTimer=null;
 function indexView(data){
   const running=data.status==="running"||data.status==="stopping";

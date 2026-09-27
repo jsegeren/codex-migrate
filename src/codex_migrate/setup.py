@@ -28,7 +28,11 @@ from codex_migrate.pairing import Pairing
 from codex_migrate.vault import inspect as inspect_vault
 from codex_migrate.vault import markdown as vault_markdown
 from codex_migrate.vault import _find_transcript, markdown_chunks, read_thread, read_thread_page, search as search_vault
-from codex_migrate.vault_salvage import find_transcripts as find_salvage_transcripts, preview_damaged_thread
+from codex_migrate.vault_salvage import (
+    find_transcripts as find_salvage_transcripts,
+    incomplete_markdown as salvage_markdown,
+    preview_damaged_thread,
+)
 from codex_migrate.vault_backup import backup as backup_vault
 from codex_migrate.vault_backup import plan as plan_vault_backup
 from codex_migrate.vault_dashboard import VAULT_HTML
@@ -1354,15 +1358,32 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                             self._json(200, find_salvage_transcripts(
                                 setup.source_home, phrase, offset=int(raw_offset)))
                             return
-                        if (parsed.path == "/api/vault/salvage-preview"
+                        if (parsed.path in ("/api/vault/salvage-preview",
+                                            "/api/vault/salvage-export")
                                 and set(query) == {"collection", "transcript"}
                                 and all(len(value) == 1 for value in query.values())):
                             collection = query["collection"][0]
                             transcript = query["transcript"][0]
                             if len(collection) > 16 or len(transcript) > 4096:
                                 raise ValueError("invalid salvage transcript")
-                            self._json(200, preview_damaged_thread(
-                                setup.source_home, collection, transcript).as_dict())
+                            if parsed.path == "/api/vault/salvage-preview":
+                                self._json(200, preview_damaged_thread(
+                                    setup.source_home, collection, transcript).as_dict())
+                            else:
+                                result = preview_damaged_thread(
+                                    setup.source_home, collection, transcript,
+                                    max_entries=20000, max_text_bytes=25 * 1024 * 1024)
+                                encoded = salvage_markdown(result).encode("utf-8")
+                                self.send_response(200)
+                                self.send_header("Content-Type", "text/markdown; charset=utf-8")
+                                self.send_header("Content-Disposition",
+                                                 'attachment; filename="codex-salvage-incomplete.md"')
+                                self.send_header("Cache-Control", "no-store")
+                                self.send_header("X-Content-Type-Options", "nosniff")
+                                self.send_header("Referrer-Policy", "no-referrer")
+                                self.send_header("Content-Length", str(len(encoded)))
+                                self.end_headers()
+                                self.wfile.write(encoded)
                             return
                         if (parsed.path in ("/api/vault/thread", "/api/vault/export")
                                 and set(query) <= {"collection", "transcript", "source", "cursor", "match"}):
