@@ -86,5 +86,6 @@ async function verifyObjectCapability(token, method, pathKey, secret, now = Date
   return Object.freeze({ key: claim.k, bytes: claim.b, sha256: claim.h });
 }
 
-module.exports = { ObjectCapabilityError, decodeSecret, signObjectCapability,
+module.exports = { ObjectCapabilityError, decodeSecret, validItem,
+  signObjectCapability,
   verifyObjectCapability };

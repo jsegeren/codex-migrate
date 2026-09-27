@@ -90,6 +90,13 @@ explicitly enabled for a synthetic test. There is still **no authenticated
 grant issuer**, customer endpoint, hosted schedule, publication path wired to
 the app, or clean-account hosted recovery proof. A passing transport test must
 not change the release status above.
+The draft database now records each distinct PUT grant against one active
+reservation and refuses conflicting retries or aggregate granted bytes beyond
+that reservation. A server-only coordinator consumes a fresh, purchase- and
+subscription-checked scope before it signs one exact PUT. This is a tested
+building block, not an activated grant API: HEAD reuse grants, published-only
+GET grants, cleanup after failed/expired reservations, and customer identity
+enrollment still need the same fail-closed review before deployment.
 R2's published September 2026
 pricing is $0.015/GB-month, $4.50/million Class A writes, $0.36/million Class B
 reads, and no R2 ingress or direct egress bandwidth charge. The account-wide
