@@ -5,7 +5,7 @@ const { verifyStagedReceiptBatched } = require('./receipt');
 const { consumeAuthorizedScope } = require('./access');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-const PUBLISH_SQL = `SELECT hosted.publish_verified_snapshot_current(
+const PUBLISH_SQL = `SELECT hosted.publish_verified_staged_current(
   $1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::jsonb, $6::bigint
 ) AS published`;
 

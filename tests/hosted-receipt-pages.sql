@@ -20,6 +20,7 @@ DECLARE
   v_extra text;
   v_first jsonb;
   v_second jsonb;
+  v_verified jsonb;
   v_count integer;
   v_bytes bigint;
   v_id uuid;
@@ -94,6 +95,31 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN v_rejected := true;
   END;
   IF NOT v_rejected THEN RAISE EXCEPTION 'oversized page accepted'; END IF;
+
+  v_verified := v_first || v_second;
+  v_rejected := false;
+  BEGIN
+    PERFORM hosted.publish_verified_staged_current(v_account, v_vault,
+      v_reservation, v_snapshot,
+      jsonb_build_array(v_first->0, jsonb_build_object('key', v_extra,
+        'bytes', 20, 'sha256', repeat('e', 64)), v_second->0, v_second->1), 100);
+  EXCEPTION WHEN OTHERS THEN v_rejected := true;
+  END;
+  IF NOT v_rejected THEN RAISE EXCEPTION 'unstaged verified object published'; END IF;
+  PERFORM hosted.publish_verified_staged_current(v_account, v_vault,
+    v_reservation, v_snapshot, v_verified, 100);
+  -- Same complete set is idempotent even after reservation publication.
+  PERFORM hosted.publish_verified_staged_current(v_account, v_vault,
+    v_reservation, v_snapshot, v_verified, 100);
+  IF (SELECT last_good_snapshot_id FROM hosted.vaults
+      WHERE account_id = v_account AND vault_id = v_vault) <> v_snapshot OR
+     (SELECT retained_bytes FROM hosted.accounts
+      WHERE account_id = v_account) <> 40 OR
+     (SELECT count(*) FROM hosted.snapshot_objects
+      WHERE account_id = v_account AND vault_id = v_vault AND
+        snapshot_id = v_snapshot) <> 4 THEN
+    RAISE EXCEPTION 'complete verified pages did not publish exactly once';
+  END IF;
 END;
 $$;
 ROLLBACK;

@@ -111,9 +111,14 @@ protection; only the last-good published pointer is.
 The draft now admits at most 512 exact object claims per page under a fresh
 authorized scope and stores them transactionally by reservation/key; identical
 retries do not add rows or bytes, and a conflicting page rolls back in full.
-The native staging result can emit those pages. Complete-set assembly and
-publication from the stored rows remain to be implemented and tested, so this
-does not close the hosted release gate.
+The native staging result can emit those pages. The server-side coordinator
+reassembles the stored set without a whole-receipt web request, checks its
+count/bytes/scope, verifies every object with provider-backed batches, and
+publishes through a database function that requires exact equality with the
+staged rows under the reservation lock. An isolated PostgreSQL fixture passed
+21,910 synthetic objects, close to the measured newer-Mac inventory. This
+still does not close the hosted release gate: no authenticated HTTP route,
+real-scale R2 run, or clean-account recovery has passed.
 R2's published September 2026
 pricing is $0.015/GB-month, $4.50/million Class A writes, $0.36/million Class B
 reads, and no R2 ingress or direct egress bandwidth charge. The account-wide
