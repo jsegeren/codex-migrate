@@ -91,10 +91,14 @@ class HostedBackupRun:
             value = json.loads(raw)
         except (UnicodeError, ValueError):
             raise MigrationError("The hosted backup journal is invalid.") from None
-        if (not isinstance(value, dict) or set(value) != {
-                "format", "version", "accountId", "vaultId", "snapshotId",
-                "reservationId"} or value["format"] != _FORMAT
-                or type(value["version"]) is not int or value["version"] != 1
+        common = {"format", "version", "accountId", "vaultId", "snapshotId",
+                  "reservationId"}
+        if (not isinstance(value, dict) or
+                (set(value) != common or value.get("version") != 1) and
+                (set(value) != common | {"state"} or value.get("version") != 2 or
+                 value.get("state") != "cleanup_pending") or
+                value["format"] != _FORMAT
+                or type(value["version"]) is not int
                 or value["accountId"] != self._client._account_id
                 or value["vaultId"] != self._client._vault_id
                 or any(not isinstance(value[key], str) or not _UUID.fullmatch(value[key])
@@ -115,7 +119,14 @@ class HostedBackupRun:
         return None if state is None else {
             "snapshotId": state["snapshotId"],
             "reservationId": state["reservationId"],
+            **({"state": "cleanup_pending"} if state["version"] == 2 else {}),
         }
+
+    def cleanup_status(self) -> Optional[str]:
+        """Read the server's state; a local quarantine is not quota release."""
+        state = self.pending()
+        return (None if state is None else
+                self._client.reservation_status(state["reservationId"]))
 
     def back_up_snapshot(self, vault: str, *, snapshot: str = "latest",
                          crypto_helper: Optional[str] = None,
@@ -124,6 +135,16 @@ class HostedBackupRun:
             raise MigrationError("Hosted backup changes require explicit confirmation.")
         with self._locked():
             state = self._pending()
+            if state is not None and state["version"] == 2:
+                if self._client.reservation_status(state["reservationId"]) != "released":
+                    raise MigrationError(
+                        "The abandoned hosted upload is awaiting verified cleanup.")
+                try:
+                    self._journal.unlink()
+                    _fsync_directory(self._directory)
+                except OSError as error:
+                    raise MigrationError("The released hosted upload journal remains.") from error
+                state = None
             # A newer local snapshot may become "latest" while an interrupted
             # upload is waiting. Finish the pinned snapshot before starting a
             # different one; never abandon its reservation implicitly.
@@ -168,10 +189,17 @@ class HostedBackupRun:
             state = self._pending()
             if state is None:
                 return False
-            self._client.abandon(state["reservationId"], apply=True)
+            if state["version"] == 2:
+                return True
             try:
-                self._journal.unlink()
-                _fsync_directory(self._directory)
-            except OSError as error:
-                raise MigrationError("The hosted upload was quarantined but its journal remains.") from error
+                self._client.abandon(state["reservationId"], apply=True)
+            except MigrationError:
+                # The ACK may be lost after the service committed quarantine,
+                # and cleanup may already have completed before this retry.
+                if self._client.reservation_status(state["reservationId"]) not in (
+                        "cleanup_pending", "released"):
+                    raise
+            state["version"] = 2
+            state["state"] = "cleanup_pending"
+            _atomic_json(self._journal, state, replace=True)
             return True

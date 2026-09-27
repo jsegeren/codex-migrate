@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createUploadReservation, renewUploadReservation,
-  abandonUploadReservation } =
+  abandonUploadReservation, readUploadReservationStatus } =
   require('../hosted/reservation');
 const { authorizeReadScope } = require('../hosted/access');
 const { mintSessionSecret } = require('./hosted-device-fixture');
@@ -83,5 +83,31 @@ test('abandon consumes owned read scope and never releases quota in its response
   assert.deepEqual(result, { cleanupPending: true });
   await assert.rejects(abandonUploadReservation({ scope, reservationId,
     query: async () => ({ rows: [{ allowed: true }] }) }),
+  /hosted_reservation_denied/);
+});
+
+test('status reads only an owned reservation and cannot replay its read scope', async () => {
+  const session = mintSessionSecret();
+  const scope = await authorizeReadScope({ sessionToken: session.token, vaultId,
+    query: async () => ({ rows: [{ account_id: accountId, vault_id: vaultId }] }) });
+  const reservationId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  const result = await readUploadReservationStatus({ scope, reservationId,
+    query: async (sql, values) => {
+      assert.match(sql, /FROM hosted\.upload_reservations/);
+      assert.deepEqual(values, [accountId, vaultId, reservationId]);
+      return { rows: [{ state: 'cleanup_pending' }] };
+    } });
+  assert.deepEqual(result, { state: 'cleanup_pending' });
+  await assert.rejects(readUploadReservationStatus({ scope, reservationId,
+    query: async () => ({ rows: [{ state: 'released' }] }) }),
+  /hosted_reservation_denied/);
+  const fresh = await authorizeReadScope({ sessionToken: session.token, vaultId,
+    query: async () => ({ rows: [{ account_id: accountId, vault_id: vaultId }] }) });
+  await assert.rejects(readUploadReservationStatus({ scope: fresh, reservationId,
+    query: async () => ({ rows: [] }) }), /hosted_reservation_denied/);
+  const unknown = await authorizeReadScope({ sessionToken: session.token, vaultId,
+    query: async () => ({ rows: [{ account_id: accountId, vault_id: vaultId }] }) });
+  await assert.rejects(readUploadReservationStatus({ scope: unknown, reservationId,
+    query: async () => ({ rows: [{ state: 'unknown' }] }) }),
   /hosted_reservation_denied/);
 });

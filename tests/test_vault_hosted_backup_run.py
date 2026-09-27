@@ -137,7 +137,9 @@ class HostedBackupRunTests(unittest.TestCase):
             with self.assertRaises(MigrationError):
                 self.run.back_up_snapshot(str(self.root), apply=True)
         with patch.object(self.client, "abandon",
-                          side_effect=[MigrationError("response lost"), None]) as abandon:
+                          side_effect=[MigrationError("response lost"), None]) as abandon, \
+             patch.object(self.client, "reservation_status",
+                          side_effect=["active", "cleanup_pending", "released", "released"]):
             with self.assertRaisesRegex(MigrationError, "explicit confirmation"):
                 self.run.abandon_pending()
             abandon.assert_not_called()
@@ -146,10 +148,55 @@ class HostedBackupRunTests(unittest.TestCase):
             self.assertEqual(self.run.pending(), {
                 "snapshotId": SNAPSHOT, "reservationId": RESERVATION})
             self.assertTrue(self.run.abandon_pending(apply=True))
-            self.assertIsNone(self.run.pending())
-            self.assertFalse(self.run.abandon_pending(apply=True))
+            self.assertEqual(self.run.pending(), {
+                "snapshotId": SNAPSHOT, "reservationId": RESERVATION,
+                "state": "cleanup_pending"})
+            self.assertEqual(self.run.cleanup_status(), "cleanup_pending")
+            self.assertEqual(HostedBackupRun(self.client, str(self.home)).cleanup_status(),
+                             "released")
+            self.assertTrue(self.run.abandon_pending(apply=True))
             self.assertEqual(abandon.call_count, 2)
             abandon.assert_any_call(RESERVATION, apply=True)
+
+    def test_abandoned_upload_blocks_new_backup_until_release_is_verified(self):
+        with patch("codex_migrate.vault_hosted_backup_run.encrypted_snapshot_inventory",
+                   return_value=self.inventory), patch.object(
+                   self.client, "reserve", return_value=RESERVATION) as reserve, patch.object(
+                   self.client, "back_up_snapshot",
+                   side_effect=MigrationError("interrupted")):
+            with self.assertRaisesRegex(MigrationError, "interrupted"):
+                self.run.back_up_snapshot(str(self.root), apply=True)
+        with patch.object(self.client, "abandon"), patch.object(
+                self.client, "reservation_status",
+                side_effect=["cleanup_pending", "released"]) as status, patch(
+                "codex_migrate.vault_hosted_backup_run.encrypted_snapshot_inventory",
+                return_value=self.inventory), patch.object(
+                self.client, "reserve", return_value=RESERVATION) as reserve, patch.object(
+                self.client, "back_up_snapshot",
+                return_value={"snapshotId": SNAPSHOT, "verifiedObjectCount": 3}):
+            self.run.abandon_pending(apply=True)
+            with self.assertRaisesRegex(MigrationError, "awaiting verified cleanup"):
+                self.run.back_up_snapshot(str(self.root), apply=True)
+            reserve.assert_not_called()
+            self.assertIsNotNone(self.run.pending())
+            self.run.back_up_snapshot(str(self.root), apply=True)
+            reserve.assert_called_once_with(apply=True)
+            self.assertIsNone(self.run.pending())
+            self.assertEqual(status.call_count, 2)
+
+    def test_lost_abandon_ack_reconciles_already_released_reservation(self):
+        with patch("codex_migrate.vault_hosted_backup_run.encrypted_snapshot_inventory",
+                   return_value=self.inventory), patch.object(
+                   self.client, "reserve", return_value=RESERVATION), patch.object(
+                   self.client, "back_up_snapshot",
+                   side_effect=MigrationError("interrupted")):
+            with self.assertRaisesRegex(MigrationError, "interrupted"):
+                self.run.back_up_snapshot(str(self.root), apply=True)
+        with patch.object(self.client, "abandon",
+                          side_effect=MigrationError("response lost")), patch.object(
+                          self.client, "reservation_status", return_value="released"):
+            self.assertTrue(self.run.abandon_pending(apply=True))
+            self.assertEqual(self.run.pending()["state"], "cleanup_pending")
 
 
 if __name__ == "__main__":

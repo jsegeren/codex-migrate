@@ -5,7 +5,7 @@ const { reply } = require('../commerce/http');
 const { uploadRuntime } = require('../hosted/upload_runtime');
 const { authorizeUploadScope, authorizeReadScope, HostedAccessError } = require('../hosted/access');
 const { createUploadReservation, renewUploadReservation,
-  abandonUploadReservation } =
+  abandonUploadReservation, readUploadReservationStatus } =
   require('../hosted/reservation');
 const { decideUploadObject } = require('../hosted/upload_decision');
 const { issuePutCapability } = require('../hosted/upload_grant');
@@ -30,7 +30,8 @@ function requestBody(req) {
   const data = req.body;
   const keys = Object.keys(data).sort().join(',');
   const expected = data.action === 'reserve' ? 'action,bytes,vaultId' :
-    ['renew', 'abandon'].includes(data.action) ? 'action,reservationId,vaultId' :
+    ['renew', 'abandon', 'status'].includes(data.action) ?
+      'action,reservationId,vaultId' :
     ['decide', 'put'].includes(data.action) ?
       'action,item,reservationId,vaultId' : null;
   if (keys !== expected || !UUID.test(data.vaultId)) {
@@ -73,11 +74,12 @@ function makeHandler(load = uploadRuntime, env = process.env) {
       const { query, getEntitlement, verifyPurchase, live, priceCatalog,
         workerOrigin, secret } = await load(env);
       if (live !== false) throw Error('hosted_upload_unavailable');
-      if (data.action === 'abandon') {
+      if (data.action === 'abandon' || data.action === 'status') {
         const scope = await authorizeReadScope({ sessionToken: token,
           vaultId: data.vaultId, query });
-        return reply(res, 200, await abandonUploadReservation({ scope,
-          reservationId: data.reservationId, query }));
+        return reply(res, 200, await (data.action === 'abandon' ?
+          abandonUploadReservation : readUploadReservationStatus)({ scope,
+            reservationId: data.reservationId, query }));
       }
       const scope = await authorizeUploadScope({ sessionToken: token,
         vaultId: data.vaultId, query, getEntitlement, verifyPurchase,

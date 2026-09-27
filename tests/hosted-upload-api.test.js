@@ -23,8 +23,10 @@ function fixture() {
     allowanceBytes: 100_000_000 }]]);
   let loads = 0;
   let writes = 0;
+  let reads = 0;
   let decision = 'put';
   let entitlement = 'active';
+  let reservationState = 'cleanup_pending';
   const handler = makeHandler(async received => {
     assert.equal(received, env);
     loads++;
@@ -37,6 +39,11 @@ function fixture() {
       if (sql.includes('FROM hosted.device_sessions\n')) {
         assert.deepEqual(values, [session.tokenHash, vaultId]);
         return { rows: [{ account_id: accountId, vault_id: vaultId }] };
+      }
+      if (sql.includes('FROM hosted.upload_reservations')) {
+        assert.deepEqual(values, [accountId, vaultId, reservationId]);
+        reads++;
+        return { rows: [{ state: reservationState }] };
       }
       writes++;
       if (sql.includes('abandon_upload_reservation')) {
@@ -79,7 +86,9 @@ function fixture() {
     authorization: `Bearer ${session.token}`, 'content-type': 'application/json',
   }, body: { action: 'reserve', vaultId, bytes: 20 } };
   return { env, req, loads: () => loads, writes: () => writes,
+    reads: () => reads,
     setEntitlement: value => { entitlement = value; },
+    setReservationState: value => { reservationState = value; },
     send: async () => { const res = response(); await handler(req, res); return res; } };
 }
 
@@ -144,6 +153,12 @@ test('owned device can quarantine pending upload even after subscription lapses'
   const result = await f.send();
   assert.equal(result.statusCode, 200);
   assert.deepEqual(result.body, { cleanupPending: true });
+  assert.equal(f.writes(), 1);
+  f.req.body = { action: 'status', vaultId, reservationId };
+  assert.deepEqual((await f.send()).body, { state: 'cleanup_pending' });
+  f.setReservationState('released');
+  assert.deepEqual((await f.send()).body, { state: 'released' });
+  assert.equal(f.reads(), 2);
   assert.equal(f.writes(), 1);
   f.req.body.vaultId = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
   assert.equal((await f.send()).statusCode, 403);

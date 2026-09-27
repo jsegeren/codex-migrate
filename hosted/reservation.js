@@ -15,6 +15,10 @@ const RENEW_SQL = `SELECT hosted.renew_upload_reservation_current(
 const ABANDON_SQL = `SELECT hosted.abandon_upload_reservation(
   $1::uuid, $2::uuid, $3::uuid
 ) AS allowed`;
+const STATUS_SQL = `SELECT state FROM hosted.upload_reservations
+  WHERE account_id = $1::uuid AND vault_id = $2::uuid
+    AND reservation_id = $3::uuid`;
+const STATES = new Set(['active', 'cleanup_pending', 'released', 'published']);
 
 class HostedReservationError extends Error {
   constructor() { super('hosted_reservation_denied'); }
@@ -66,5 +70,23 @@ async function abandonUploadReservation({ scope, reservationId, query }) {
   } catch { throw new HostedReservationError(); }
 }
 
+async function readUploadReservationStatus({ scope, reservationId, query }) {
+  // Only the owning device may inspect this exact account/Vault reservation.
+  // Reading remains available after a subscription lapses so customers can
+  // distinguish quarantine from proven cleanup and released quota.
+  if (!consumeAuthorizedReadScope(scope) || !UUID.test(reservationId) ||
+      typeof query !== 'function') throw new HostedReservationError();
+  try {
+    const result = await query(STATUS_SQL, [scope.accountId, scope.vaultId,
+      reservationId]);
+    const state = result?.rows?.[0]?.state;
+    if (result?.rows?.length !== 1 || !STATES.has(state)) {
+      throw new HostedReservationError();
+    }
+    return Object.freeze({ state });
+  } catch { throw new HostedReservationError(); }
+}
+
 module.exports = { HostedReservationError, createUploadReservation,
-  renewUploadReservation, abandonUploadReservation };
+  renewUploadReservation, abandonUploadReservation,
+  readUploadReservationStatus };

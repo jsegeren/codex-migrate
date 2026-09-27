@@ -262,10 +262,15 @@ An explicit sandbox-only abandon operation now lets the same device quarantine
 its owned pending reservation, including after a subscription lapses. It
 refuses later grants and publication, retains reserved quota, and waits for
 the existing operator's replay-window and provider-absence checks before
-release. The local journal is removed only after the quarantine response;
-an ambiguous response retains it for idempotent retry. This is **not** a
-buyer-facing cancellation/status flow: the installed app does not show
-cleanup progress or know when quota is freed, and no cleanup worker is deployed.
+release. The owner-only journal now retains a `cleanup_pending` tombstone after
+quarantine. A read-only, device-owned status query distinguishes active,
+quarantined, released, and published reservations even after a subscription
+lapses; a lost abandon response can be reconciled against that status. The
+next upload refuses to proceed while cleanup is pending and removes the local
+tombstone only after the service reports `released`. This is **not** yet a
+buyer-facing cancellation/status flow: the installed app does not display this
+state, and no cleanup worker is deployed. A local tombstone does not itself
+prove object deletion or free quota.
 The draft Worker also has an HMAC-bound batch verification route: a service
 signs the exact JSON body for at most 512 scoped objects, and the Worker
 performs provider-checked R2 metadata reads before returning success. The

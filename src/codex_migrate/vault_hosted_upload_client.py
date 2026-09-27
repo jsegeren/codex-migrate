@@ -121,6 +121,16 @@ class HostedUploadClient:
         if set(result) != {"cleanupPending"} or result["cleanupPending"] is not True:
             raise MigrationError("The hosted upload abandon response is invalid.")
 
+    def reservation_status(self, reservation_id: str) -> str:
+        """Read authoritative cleanup state without requiring a subscription."""
+        self._require_reservation(reservation_id)
+        result = self._post({"action": "status", "vaultId": self._vault_id,
+                             "reservationId": reservation_id})
+        if (set(result) != {"state"} or result["state"] not in
+                ("active", "cleanup_pending", "released", "published")):
+            raise MigrationError("The hosted upload status response is invalid.")
+        return result["state"]
+
     @staticmethod
     def _require_reservation(reservation_id: str) -> None:
         if not isinstance(reservation_id, str) or not _UUID.fullmatch(reservation_id):

@@ -221,6 +221,16 @@ class HostedUploadClientTests(unittest.TestCase):
             with self.assertRaisesRegex(MigrationError, "response is invalid"):
                 self.client.abandon(RESERVATION, apply=True)
 
+    def test_reservation_status_accepts_only_a_known_server_state(self):
+        with patch.object(self.client, "_post", return_value={"state": "released"}) as post:
+            self.assertEqual(self.client.reservation_status(RESERVATION), "released")
+            post.assert_called_once_with({"action": "status", "vaultId": VAULT,
+                                          "reservationId": RESERVATION})
+        for bad in ({"state": "unknown"}, {"state": "released", "quotaFree": True}):
+            with patch.object(self.client, "_post", return_value=bad):
+                with self.assertRaisesRegex(MigrationError, "status response is invalid"):
+                    self.client.reservation_status(RESERVATION)
+
     def _stage(self, directory, store):
         root = Path(directory).resolve()
         inventory = RemoteInventory(SNAPSHOT, (
