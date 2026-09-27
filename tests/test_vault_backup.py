@@ -13,6 +13,7 @@ from unittest.mock import patch
 
 from codex_migrate.errors import MigrationError
 from codex_migrate import vault_backup
+from codex_migrate.vault_hosted_chunk_journal import HostedChunkJournal
 from codex_migrate.vault_backup import backup, plan
 from codex_migrate.vault_identity import TranscriptChanged
 from codex_migrate.vault_recovery import (
@@ -613,7 +614,7 @@ class VaultBackupTests(unittest.TestCase):
                         return {item: published[item] for item in ids if item in published}
 
                     def object_store(self, reservation_id, expected, *, apply=False):
-                        self_assert = reservation_id == "reservation" and apply is True
+                        self_assert = reservation_id == reservation and apply is True
                         if not self_assert or len(expected) != 1:
                             raise AssertionError("unscoped test upload")
                         return store
@@ -622,27 +623,65 @@ class VaultBackupTests(unittest.TestCase):
                 transcript.write_bytes(b"A" * 65536 + b"B" * 65536 + b"C" * 65536)
                 scratch = root / "scratch"
                 scratch.mkdir(mode=0o700)
+                reservation = "44444444-4444-4444-8444-444444444444"
+                journal_dir = root / "journal"
+                journal_dir.mkdir(mode=0o700)
                 client = Client()
                 prepared = prepare_remote_aware_file(
                     transcript, scratch, key_id, client,
                     crypto_helper=str(self.helper), chunk_size=65536, apply=True)
                 self.assertEqual(set(prepared.remote_objects), set(published))
                 self.assertEqual(len(prepared.local_ids), 1)
-                staged = stage_prepared_file(prepared, scratch, client,
-                                             "reservation", apply=True)
-                self.assertEqual(len(staged), 3)
-                self.assertEqual(store.writes, 1)
-                self.assertEqual({item.key for item in staged}, set(store.objects))
-                staged_again = stage_prepared_file(prepared, scratch, client,
-                                                   "reservation", apply=True)
-                self.assertEqual(staged_again, staged)
-                self.assertEqual(store.writes, 1)
-                broken = next(iter(published))
-                key = "objects/" + broken[:2] + "/" + broken[2:] + ".cvchunk"
-                store.objects[key] = store.objects[key][:-1] + b"X"
-                with self.assertRaisesRegex(MigrationError, "missing remotely"):
-                    stage_prepared_file(prepared, scratch, client,
-                                        "reservation", apply=True)
+                with HostedChunkJournal(
+                    journal_dir,
+                    account_id="11111111-1111-4111-8111-111111111111",
+                    vault_id="22222222-2222-4222-8222-222222222222",
+                    reservation_id=reservation,
+                    snapshot_id="33333333-3333-4333-8333-333333333333",
+                    key_id=key_id,
+                ) as journal:
+                    staged = stage_prepared_file(prepared, scratch, client,
+                                                 reservation, journal=journal,
+                                                 apply=True)
+                    self.assertEqual(len(staged), 3)
+                    self.assertEqual(store.writes, 1)
+                    self.assertEqual({item.key for item in staged}, set(store.objects))
+                    self.assertEqual(set(journal.records), set(prepared.local_ids))
+                    staged_again = stage_prepared_file(prepared, scratch, client,
+                                                       reservation, journal=journal,
+                                                       apply=True)
+                    self.assertEqual(staged_again, staged)
+                    self.assertEqual(store.writes, 1)
+                    broken = next(iter(published))
+                    key = "objects/" + broken[:2] + "/" + broken[2:] + ".cvchunk"
+                    original = store.objects[key]
+                    store.objects[key] = original[:-1] + b"X"
+                    with self.assertRaisesRegex(MigrationError, "missing remotely"):
+                        stage_prepared_file(prepared, scratch, client,
+                                            reservation, journal=journal, apply=True)
+                    store.objects[key] = original
+                    # A crash-safe retry may reuse a staged chunk without
+                    # retaining its local scratch ciphertext.
+                    new_id = prepared.local_ids[0]
+                    (scratch / new_id[:2] / (new_id[2:] + ".cvchunk")).unlink()
+                    retry = prepare_remote_aware_file(
+                        transcript, scratch, key_id, client,
+                        crypto_helper=str(self.helper), chunk_size=65536,
+                        journal=journal, reservation_id=reservation, apply=True)
+                    self.assertEqual(retry.local_ids, ())
+                    self.assertEqual(set(retry.remote_objects),
+                                     {row["id"] for row in retry.chunks})
+                    self.assertEqual(stage_prepared_file(
+                        retry, scratch, client, reservation, journal=journal,
+                        apply=True), staged)
+                    self.assertEqual(store.writes, 1)
+                    staged_key = "objects/" + new_id[:2] + "/" + new_id[2:] + ".cvchunk"
+                    store.objects.pop(staged_key)
+                    with self.assertRaisesRegex(MigrationError, "missing or changed remotely"):
+                        prepare_remote_aware_file(
+                            transcript, scratch, key_id, client,
+                            crypto_helper=str(self.helper), chunk_size=65536,
+                            journal=journal, reservation_id=reservation, apply=True)
             finally:
                 self.delete_key(vault)
 

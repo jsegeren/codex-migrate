@@ -54,6 +54,15 @@ class HostedChunkJournal:
     def reservation_id(self) -> str:
         return self._header["reservationId"]
 
+    @property
+    def key_id(self) -> str:
+        return self._header["keyId"]
+
+    def verified_records(self) -> Dict[str, Tuple[int, str]]:
+        if self._descriptor is None or self._lock_descriptor is None:
+            raise MigrationError("The hosted chunk journal is not locked.")
+        return dict(self.records)
+
     def __enter__(self) -> "HostedChunkJournal":
         _require_unlinked_path(self.directory)
         info = self.directory.lstat()
