@@ -201,6 +201,7 @@ jobs:
           path: |
             ${{ runner.temp }}/hosted-portability/encrypted-objects/
             ${{ runner.temp }}/hosted-portability/staged-receipt.json
+            ${{ runner.temp }}/hosted-portability/newer-receipt.json
             ${{ runner.temp }}/hosted-portability/recovery-key.txt
           retention-days: 1
           if-no-files-found: error

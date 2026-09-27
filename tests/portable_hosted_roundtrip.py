@@ -1,7 +1,9 @@
 """Synthetic staged-object recovery on two independent macOS CI runners.
 
 The artifact has ciphertext, a content-free claim, and a disposable recovery
-key. It does not contact R2 or claim that a hosted service published a backup.
+key. It exercises interrupted staging and a corrupt newer object without
+losing the prior snapshot. It does not contact R2 or claim that a hosted
+service published a backup.
 Never print the key, helper output, or ciphertext.
 """
 
@@ -25,6 +27,7 @@ _UUID = r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
 _KEY = re.compile(
     rf"(?:metadata/{_UUID}\.json|manifests/{_UUID}\.cvmanifest|"
     rf"refs/{_UUID}\.json|objects/[0-9a-f]{{2}}/[0-9a-f]{{62}}\.cvchunk)\Z")
+NEW_TRANSCRIPT = TRANSCRIPT + b'{"type":"response_item","payload":{"content":"later synthetic work"}}\n'
 
 
 class SyntheticObjectStore:
@@ -55,6 +58,20 @@ class SyntheticObjectStore:
             os.fsync(output.fileno())
 
 
+class InterruptOnceStore(SyntheticObjectStore):
+    """Drop a second new PUT so the retry must reuse the first new object."""
+
+    def __init__(self, root: Path):
+        super().__init__(root)
+        self.uploaded = 0
+
+    def put_if_absent(self, key: str, source, length: int) -> None:
+        if self.uploaded == 1:
+            raise InterruptedError("Synthetic staging interruption")
+        super().put_if_absent(key, source, length)
+        self.uploaded += 1
+
+
 def produce(bundle: Path, helper: Path) -> None:
     if bundle.exists():
         raise AssertionError("Synthetic artifact must start absent")
@@ -70,12 +87,33 @@ def produce(bundle: Path, helper: Path) -> None:
     try:
         saved = backup(str(source), str(local_vault), crypto_helper=str(helper))
         key_id = saved.key_id
-        staged = stage_encrypted_snapshot(str(local_vault), store,
-                                          crypto_helper=str(helper))
-        if staged.snapshot_id != saved.snapshot_id or staged.uploaded_files < 3:
+        first = stage_encrypted_snapshot(str(local_vault), store,
+                                         crypto_helper=str(helper))
+        if first.snapshot_id != saved.snapshot_id or first.uploaded_files < 3:
             raise AssertionError("Synthetic encrypted staging was incomplete")
         (bundle / "staged-receipt.json").write_text(
-            json.dumps(staged.receipt(), sort_keys=True), encoding="utf-8")
+            json.dumps(first.receipt(), sort_keys=True), encoding="utf-8")
+
+        transcript.write_bytes(NEW_TRANSCRIPT)
+        newer = backup(str(source), str(local_vault), crypto_helper=str(helper))
+        if newer.snapshot_id == saved.snapshot_id or newer.key_id != saved.key_id:
+            raise AssertionError("Synthetic scheduled snapshot was not distinct")
+        interrupted = InterruptOnceStore(store.root)
+        try:
+            stage_encrypted_snapshot(str(local_vault), interrupted,
+                                     crypto_helper=str(helper))
+        except InterruptedError:
+            if interrupted.uploaded != 1:
+                raise AssertionError("Synthetic staging did not interrupt after a PUT")
+        else:
+            raise AssertionError("Synthetic staging was not interrupted")
+        second = stage_encrypted_snapshot(str(local_vault), store,
+                                          crypto_helper=str(helper))
+        if (second.snapshot_id != newer.snapshot_id or second.uploaded_files < 1
+                or second.reused_files < 2):
+            raise AssertionError("Synthetic interrupted staging did not resume")
+        (bundle / "newer-receipt.json").write_text(
+            json.dumps(second.receipt(), sort_keys=True), encoding="utf-8")
         key_file = os.open(bundle / "recovery-key.txt",
                            os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(key_file, "w", encoding="utf-8") as output:
@@ -83,7 +121,7 @@ def produce(bundle: Path, helper: Path) -> None:
         if any(b"NEVER-COPY-AUTH" in path.read_bytes()
                for path in store.root.rglob("*") if path.is_file()):
             raise AssertionError("Synthetic authentication material entered ciphertext artifact")
-        print("Synthetic encrypted objects staged; local Vault excluded from artifact")
+        print("Two synthetic snapshots staged after interruption; local Vault excluded")
     finally:
         if key_id:
             delete_test_key(helper, key_id)
@@ -92,6 +130,7 @@ def produce(bundle: Path, helper: Path) -> None:
 def consume(bundle: Path, helper: Path) -> None:
     store = SyntheticObjectStore(bundle / "encrypted-objects")
     receipt = json.loads((bundle / "staged-receipt.json").read_text(encoding="utf-8"))
+    newer_receipt = json.loads((bundle / "newer-receipt.json").read_text(encoding="utf-8"))
     recovery_key = (bundle / "recovery-key.txt").read_text(encoding="utf-8").strip()
     if not recovery_key.startswith("CV1-"):
         raise AssertionError("Synthetic recovery key is invalid")
@@ -123,7 +162,40 @@ def consume(bundle: Path, helper: Path) -> None:
                 (restored / RELATIVE).read_bytes() != TRANSCRIPT or
                 (restored / "auth.json").exists()):
             raise AssertionError("Independent-Mac hosted-style recovery failed")
-        print("Synthetic remote objects decrypted and restored in consumer environment")
+
+        newer_manifest = store._path("manifests/" + newer_receipt["snapshot_id"] + ".cvmanifest")
+        original = newer_manifest.read_bytes()
+        if not original:
+            raise AssertionError("Newer synthetic manifest is empty")
+        damaged = bytes([original[0] ^ 1]) + original[1:]
+        newer_manifest.write_bytes(damaged)
+        newer_vault = bundle.parent / "hosted-portability-synthetic-newer-vault"
+        try:
+            try:
+                download_encrypted_snapshot(
+                    str(empty_home), str(newer_vault), store, newer_receipt,
+                    max_bytes=1024 * 1024, crypto_helper=str(helper))
+            except MigrationError:
+                if (newer_vault / "latest.json").exists():
+                    raise AssertionError("Corrupt newer object was marked protected")
+            else:
+                raise AssertionError("Corrupt newer object was accepted")
+            if verify_snapshot(str(recovered), crypto_helper=str(helper)).snapshot_id != receipt["snapshot_id"]:
+                raise AssertionError("Prior good snapshot changed after corrupt newer object")
+        finally:
+            newer_manifest.write_bytes(original)
+
+        newer_result = download_encrypted_snapshot(
+            str(empty_home), str(newer_vault), store, newer_receipt,
+            max_bytes=1024 * 1024, crypto_helper=str(helper))
+        newer_restored = bundle.parent / "hosted-portability-synthetic-newer-restored"
+        restore_snapshot(str(empty_home), str(newer_vault), str(newer_restored),
+                         crypto_helper=str(helper))
+        if (newer_result.snapshot_id != newer_receipt["snapshot_id"] or
+                (newer_restored / RELATIVE).read_bytes() != NEW_TRANSCRIPT or
+                (restored / RELATIVE).read_bytes() != TRANSCRIPT):
+            raise AssertionError("Independent-Mac retry or prior snapshot changed")
+        print("Prior and newer synthetic snapshots recovered independently after corruption")
     finally:
         if key_id:
             delete_test_key(helper, key_id)
