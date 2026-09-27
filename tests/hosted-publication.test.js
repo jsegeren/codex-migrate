@@ -65,3 +65,11 @@ test('missing reservation or database confirmation is not publication', async ()
     query: async () => ({ rows: [{ published: false }] }),
   }), /hosted_publication_failed/);
 });
+
+test('database errors do not expose private publication details', async () => {
+  await assert.rejects(publishStagedReceipt({ receipt: receipt(),
+    maxReceiptBytes: 1000, scope, reservationId,
+    verifyObject: async () => true,
+    query: async () => { throw new Error('private database endpoint and account'); },
+  }), error => error.message === 'hosted_publication_failed');
+});

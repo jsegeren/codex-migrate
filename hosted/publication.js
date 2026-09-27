@@ -20,8 +20,15 @@ async function publishStagedReceipt({ receipt, maxReceiptBytes, scope,
   // This copies and freezes the client claim before any asynchronous provider
   // check. The database receives only the exact scoped objects verified here.
   const proof = await verifyStagedReceipt(receipt, maxReceiptBytes, scope, verifyObject);
-  const result = await query(PUBLISH_SQL, [scope.accountId, scope.vaultId,
-    reservationId, proof.snapshotId, JSON.stringify(proof.verifiedObjects)]);
+  let result;
+  try {
+    result = await query(PUBLISH_SQL, [scope.accountId, scope.vaultId,
+      reservationId, proof.snapshotId, JSON.stringify(proof.verifiedObjects)]);
+  } catch {
+    // Database errors can contain connection details or tenant metadata.
+    // The HTTP layer must never receive those through this coordinator.
+    throw new HostedPublicationError();
+  }
   if (result?.rows?.[0]?.published !== true) throw new HostedPublicationError();
   return Object.freeze({ snapshotId: proof.snapshotId,
     verifiedObjectCount: proof.objectCount });
