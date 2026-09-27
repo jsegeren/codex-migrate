@@ -10,7 +10,7 @@ from unittest.mock import patch
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_http_store import CapabilityHttpStore
 from codex_migrate.vault_remote_inventory import RemoteInventory, VaultTransferFile
-from codex_migrate.vault_remote_transfer import stage_encrypted_snapshot
+from codex_migrate.vault_remote_transfer import StageResult, StagedObject, stage_encrypted_snapshot
 
 
 ACCOUNT = "11111111-1111-4111-8111-111111111111"
@@ -152,6 +152,15 @@ class CapabilityHttpStoreTests(unittest.TestCase):
                 CapabilityHttpStore(origin, ACCOUNT, VAULT,
                                     {RELATIVE_KEY: (len(BODY), DIGEST)},
                                     lambda *args: "synthetic.valid")
+
+    def test_stage_result_pages_never_exceed_server_limit(self):
+        objects = tuple(StagedObject(RELATIVE_KEY, len(BODY), DIGEST)
+                        for _ in range(1025))
+        result = StageResult(SNAPSHOT, 1025, 0, 1025 * len(BODY), objects)
+        pages = list(result.object_pages())
+        self.assertEqual([len(page) for page in pages], [512, 512, 1])
+        self.assertEqual(pages[0][0],
+                         {"key": RELATIVE_KEY, "bytes": len(BODY), "sha256": DIGEST})
 
 
 if __name__ == "__main__":

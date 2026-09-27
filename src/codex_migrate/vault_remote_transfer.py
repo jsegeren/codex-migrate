@@ -59,6 +59,17 @@ class StageResult:
     remote_bytes_checked: int
     objects: Tuple[StagedObject, ...]
 
+    def object_pages(self) -> Iterator[Tuple[dict, ...]]:
+        """Yield bounded claims for the hosted API, never one giant body.
+
+        A page acknowledgement is not protection. The service must assemble
+        every page, independently verify R2, and publish last-good.
+        """
+        for start in range(0, len(self.objects), 512):
+            yield tuple({"key": item.key, "bytes": item.bytes,
+                         "sha256": item.sha256}
+                        for item in self.objects[start:start + 512])
+
     def receipt(self) -> dict:
         """Content-free upload claim for an independently verifying service.
 

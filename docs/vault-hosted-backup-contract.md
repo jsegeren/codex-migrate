@@ -99,6 +99,21 @@ Future orphan cleanup must wait beyond the last token's expiry. This is a tested
 building block, not an activated grant API: HEAD reuse grants, published-only
 GET grants, cleanup after failed/expired reservations, and customer identity
 enrollment still need the same fail-closed review before deployment.
+Do not send a whole staged receipt as one Vercel Function request. A synthetic
+JSON receipt matching the measured newer Mac's 21,907 chunks is about 4.03 MB,
+close to [Vercel's 4.5 MB request and response limit](https://vercel.com/docs/functions/limitations/);
+the two-Mac combined count would be about 6.69 MB if ever treated as one
+snapshot. Growing histories will exceed the limit. The authenticated API must
+accept bounded, idempotent receipt pages tied to one reservation and snapshot,
+then load the complete stored set server-side, validate and provider-verify it,
+and publish it in one database transaction. A page acknowledgement is not
+protection; only the last-good published pointer is.
+The draft now admits at most 512 exact object claims per page under a fresh
+authorized scope and stores them transactionally by reservation/key; identical
+retries do not add rows or bytes, and a conflicting page rolls back in full.
+The native staging result can emit those pages. Complete-set assembly and
+publication from the stored rows remain to be implemented and tested, so this
+does not close the hosted release gate.
 R2's published September 2026
 pricing is $0.015/GB-month, $4.50/million Class A writes, $0.36/million Class B
 reads, and no R2 ingress or direct egress bandwidth charge. The account-wide
