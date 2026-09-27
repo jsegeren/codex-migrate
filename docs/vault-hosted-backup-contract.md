@@ -135,9 +135,13 @@ egress allowance. Do not claim that B2 restores are always free. See its
   reference. Remote metadata is stored per snapshot under
   `metadata/<snapshot-id>.json`, never overwritten as a single mutable
   `vault.json`; chunks, manifests, and references keep their format paths.
-  The client-side staging module reads every object back and checks its exact
-  bytes, returning a receipt of object key, byte count, and SHA-256 digest;
-  that receipt is a client assertion, not service proof. It does not write
+  The client-side staging module checks every local object's exact bytes and
+  returns a receipt of object key, byte count, and SHA-256 digest. It can
+  compare those claims to authenticated provider-checked metadata without
+  downloading unchanged ciphertext; stores lacking that capability retain the
+  full read-back path. Either receipt is a client assertion, not service proof.
+  The draft metadata path needs a real R2 and service-identity test before use.
+  Staging does not write
   `latest` or claim protection. The service must independently establish each
   object's exact size and integrity, enforce account scope and required
   metadata/manifest/reference presence, and only then atomically advance the
@@ -201,9 +205,10 @@ egress allowance. Do not claim that B2 restores are always free. See its
    checksum verification against R2's actual API behavior, per-account quota,
    short-lived direct transfers, tampered/missing-object failure, and no
    secret-bearing telemetry. Do not trust an ETag as a universal SHA-256.
-   Replace the staging client's full remote read-back on every repeated backup
-   with the service's independently verified stored checksum; a daily backup
-   must not redownload an unchanged multi-gigabyte Vault merely to reuse it.
+   Prove the draft staging client's metadata-checked path through an authenticated
+   service. A daily backup must not redownload an unchanged multi-gigabyte Vault
+   merely to reuse it; the service still independently verifies every object
+   before publishing protection.
 3. **Prove the disaster scenario:** create a first and scheduled snapshot on
    one Mac, lose its local Vault/Keychain context in a clean account or second
    Mac, authenticate, import the separately saved recovery key, download the

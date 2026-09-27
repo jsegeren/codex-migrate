@@ -35,6 +35,11 @@ class ScopedObjectStore(Protocol):
     def put_if_absent(self, key: str, source: BinaryIO, length: int) -> None:
         """Atomically store exactly length bytes without replacing an object."""
 
+    # Optional: an authenticated service may provide checked_metadata(key),
+    # returning (stored bytes, provider-validated SHA-256) or None. When absent,
+    # staging falls back to reading the full remote object. Neither result
+    # replaces the service's independent check before publication.
+
 
 @dataclass(frozen=True)
 class StagedObject:
@@ -126,12 +131,25 @@ def _digest(stream: BinaryIO, expected_size: int) -> str:
     return hasher.hexdigest()
 
 
-def _remote_digest(store: ScopedObjectStore, item: VaultTransferFile) -> Optional[str]:
+def _remote_state(store: ScopedObjectStore, item: VaultTransferFile) -> Optional[Tuple[int, str]]:
+    checked_metadata = getattr(store, "checked_metadata", None)
+    if checked_metadata is not None:
+        if not callable(checked_metadata):
+            raise MigrationError("The object store returned invalid verification metadata.")
+        observed = checked_metadata(item.remote_key)
+        if observed is None:
+            return None
+        if (not isinstance(observed, tuple) or len(observed) != 2
+                or not isinstance(observed[0], int) or isinstance(observed[0], bool)
+                or not isinstance(observed[1], str) or len(observed[1]) != 64
+                or any(character not in "0123456789abcdef" for character in observed[1])):
+            raise MigrationError("The object store returned invalid verification metadata.")
+        return observed
     stream = store.open_read(item.remote_key)
     if stream is None:
         return None
     with stream:
-        return _digest(stream, item.bytes)
+        return item.bytes, _digest(stream, item.bytes)
 
 
 def stage_encrypted_snapshot(
@@ -155,20 +173,20 @@ def stage_encrypted_snapshot(
     for item in inventory.files:
         with _open_vault_file(root, item) as source:
             local_digest = _digest(source, item.bytes)
-            remote_digest = _remote_digest(store, item)
-            if remote_digest is None:
+            remote_state = _remote_state(store, item)
+            if remote_state is None:
                 source.seek(0)
                 store.put_if_absent(item.remote_key, source, item.bytes)
                 if source.tell() != item.bytes:
                     raise MigrationError("The object store did not consume the Vault file exactly.")
                 uploaded += 1
-                remote_digest = _remote_digest(store, item)
+                remote_state = _remote_state(store, item)
             else:
                 reused += 1
-            if remote_digest != local_digest:
+            if remote_state != (item.bytes, local_digest):
                 raise MigrationError("A remote Vault object is missing or differs from its local version.")
             checked_bytes += item.bytes
-            staged_objects.append(StagedObject(item.remote_key, item.bytes, remote_digest))
+            staged_objects.append(StagedObject(item.remote_key, item.bytes, local_digest))
     current = encrypted_snapshot_inventory(
         vault, snapshot=snapshot, crypto_helper=crypto_helper)
     if current != inventory:

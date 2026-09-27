@@ -45,6 +45,15 @@ class MemoryObjectStore:
         self.objects[key] = value
 
 
+class MetadataObjectStore(MemoryObjectStore):
+    def open_read(self, key):
+        raise AssertionError("metadata staging must not download ciphertext")
+
+    def checked_metadata(self, key):
+        value = self.objects.get(key)
+        return None if value is None else (len(value), hashlib.sha256(value).hexdigest())
+
+
 @unittest.skipUnless(platform.system() == "Darwin", "CryptoKit backup helper requires macOS")
 class VaultBackupTests(unittest.TestCase):
     @classmethod
@@ -335,6 +344,35 @@ class VaultBackupTests(unittest.TestCase):
                     vault_remote_transfer.stage_encrypted_snapshot(
                         str(destination), store, crypto_helper=str(self.helper))
                 self.assertNotIn("latest.json", store.objects)
+            finally:
+                self.delete_key(destination)
+
+    def test_remote_staging_reuses_provider_checked_metadata_without_download(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, destination = root / "source", root / "vault"
+            self.fixture(source)
+            store = MetadataObjectStore()
+            try:
+                backup(str(source), str(destination), crypto_helper=str(self.helper))
+                first = vault_remote_transfer.stage_encrypted_snapshot(
+                    str(destination), store, crypto_helper=str(self.helper))
+                self.assertEqual(first.uploaded_files, len(store.objects))
+                repeated = vault_remote_transfer.stage_encrypted_snapshot(
+                    str(destination), store, crypto_helper=str(self.helper))
+                self.assertEqual(repeated.uploaded_files, 0)
+                self.assertEqual(repeated.reused_files, len(store.objects))
+                self.assertEqual(repeated.objects, first.objects)
+                key = next(path for path in store.objects if path.startswith("objects/"))
+                value = store.objects[key]
+                store.objects[key] = value[:-1] + bytes([value[-1] ^ 1])
+                with self.assertRaisesRegex(MigrationError, "differs"):
+                    vault_remote_transfer.stage_encrypted_snapshot(
+                        str(destination), store, crypto_helper=str(self.helper))
+                store.checked_metadata = lambda _: ("wrong", "0" * 64)
+                with self.assertRaisesRegex(MigrationError, "invalid verification metadata"):
+                    vault_remote_transfer.stage_encrypted_snapshot(
+                        str(destination), store, crypto_helper=str(self.helper))
             finally:
                 self.delete_key(destination)
 
