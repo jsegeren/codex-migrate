@@ -97,9 +97,11 @@ Vercel restore transfer dominate at observed object counts.
 R2's S3 presigned PUT URL is reusable until expiry and does not by itself
 provide the SHA-256 and immutable-write proof this product requires. The
 leading R2 path is a small authenticated Cloudflare Worker using the R2
-binding's `put(..., { sha256, onlyIf })`, followed by a metadata check. This
-must be proved against a real R2 sandbox; an ETag or a mocked binding is not
-enough. The Worker can stream encrypted objects directly to R2 without
+binding's `put(..., { sha256, onlyIf })`, followed by a metadata check. A
+64 KiB synthetic-object probe passed those primitives against real R2 on
+September 27, 2026, and left its private sandbox bucket empty. That is not a
+customer-authenticated service, a realistic-scale proof, or a clean-Mac
+recovery test. The Worker can stream encrypted objects directly to R2 without
 relaying them through Vercel. Its inbound 100 MB limit on a Free Cloudflare
 account accommodates ordinary encrypted chunks, but an oversized manifest
 must fail safely or use a separately proven path.
@@ -187,8 +189,9 @@ costs.
 
 - Measure 24-hour and seven-day *unique encrypted object growth* with retained
   versions. Existing mtime observations cannot do this.
-- Prove an actual provider's immutable PUT, exact-byte integrity verification,
-  quota enforcement, signed direct restore, and clean-Mac recovery. Neither an
-  ETag nor a client receipt alone proves the server has the intended bytes.
+- Extend the synthetic real-R2 immutable PUT and checksum proof to an
+  authenticated, quota-enforced customer flow with signed direct restore and
+  clean-Mac recovery. Neither an ETag nor a client receipt alone proves the
+  server has the intended bytes.
 - Set an explicit retention policy and capacity behavior, and record provider
   spend and per-account retained bytes before offering a paid tier.
