@@ -53,7 +53,9 @@ passed all six checks against both Wrangler's **local simulation** and a
 immutable reuse, wrong-digest rejection, read-back, and removal. The R2
 dashboard showed zero objects and zero bytes afterward. No customer data has
 been uploaded; no hosted service or production bucket is live. The sandbox
-probe is inert unless explicitly enabled for local development. This small
+probe is inert unless explicitly enabled for local development. The temporary
+Workers-edit API token used for the proof was deleted immediately afterward;
+the account token list showed no remaining user API tokens. This small
 proof does not establish authenticated customer uploads, realistic object-count
 performance, quota enforcement, retention, or clean-Mac restore. See the
 [R2 setup documentation](https://developers.cloudflare.com/r2/get-started/).
