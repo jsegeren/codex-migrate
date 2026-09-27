@@ -31,11 +31,12 @@ function fixture() {
           return { rows: [{ account_id: accountId, vault_id: vaultId,
             purchase_session_id: 'cs_test_fixture', purchase_mode: 'sandbox' }] };
         }
-        assert.match(sql, /append_receipt_page_current/);
+        assert.match(sql, /append_receipt_page_declared_current/);
         assert.deepEqual(values.slice(0, 4), [accountId, vaultId,
           reservationId, snapshotId]);
         assert.deepEqual(JSON.parse(values[4]), [{ ...object,
           key: `accounts/${accountId}/vaults/${vaultId}/${object.key}` }]);
+        assert.deepEqual(values.slice(5), [3, 60, 100_000_000]);
         pageWrites++;
         return { rows: [{ accepted: true }] };
       },
@@ -56,7 +57,8 @@ function fixture() {
   }, env);
   const req = { method: 'POST', headers: { authorization: `Bearer ${session.token}`,
     'content-type': 'application/json' }, body: { action: 'page', vaultId,
-      reservationId, snapshotId, objects: [object] } };
+      reservationId, snapshotId, expectedCount: 3, expectedBytes: 60,
+      objects: [object] } };
   return { env, req, loads: () => loads, pageWrites: () => pageWrites,
     lapse: () => { status = 'past_due'; },
     send: async () => { const res = response(); await handler(req, res); return res; } };
@@ -70,6 +72,9 @@ test('closed, oversized, malformed and unauthenticated pages touch no runtime', 
   f.req.body.extra = true;
   assert.equal((await f.send()).statusCode, 400);
   delete f.req.body.extra;
+  delete f.req.body.expectedCount;
+  assert.equal((await f.send()).statusCode, 400);
+  f.req.body.expectedCount = 3;
   f.req.headers['content-length'] = String(256 * 1024 + 1);
   assert.equal((await f.send()).statusCode, 400);
   delete f.req.headers['content-length'];

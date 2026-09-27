@@ -404,7 +404,8 @@ egress allowance. Do not claim that B2 restores are always free. See its
   batch in waves of 16 concurrent HEAD requests; a unit test bounds that
   concurrency and stops after a failed wave. The sandbox-only authenticated
   publication route now rechecks the purchase and subscription, assembles
-  admitted receipt pages inside the service, verifies the exact account/Vault-
+  admitted receipt pages inside the service, refuses an inventory shorter than
+  the immutable count/byte declaration on its first page, verifies the exact account/Vault-
   scoped objects against R2, and advances last-good only through the matching
   database transaction. The client cannot supply verification proof. This
   route is dark by default and does not make hosted protection available to

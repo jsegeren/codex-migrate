@@ -19,7 +19,8 @@ function rows(chunkCount = 1) {
   const total = 30 + 40 * chunkCount;
   return items.reverse().map(value => ({ ...value,
     staged_snapshot_id: snapshotId, staged_count: items.length,
-    staged_bytes: String(total) }));
+    staged_bytes: String(total), declared_count: items.length,
+    declared_bytes: String(total) }));
 }
 
 test('stored pages are assembled, provider-verified, then published', async () => {
@@ -38,7 +39,7 @@ test('stored pages are assembled, provider-verified, then published', async () =
         assert.deepEqual(values, [accountId, vaultId, reservationId, snapshotId]);
         return { rows: rows() };
       }
-      assert.match(sql, /publish_verified_staged_current/);
+      assert.match(sql, /publish_declared_verified_staged_current/);
       publicationCalls++;
       const objects = JSON.parse(values[4]);
       assert.equal(objects.length, 4);
@@ -58,6 +59,7 @@ test('missing, changed, or cross-account staged rows never reach publication', a
     rows().slice(1),
     rows().map((value, i) => i === 0 ? { ...value,
       staged_count: 9 } : value),
+    rows().map(value => ({ ...value, declared_count: value.staged_count + 1 })),
     rows().map((value, i) => i === 0 ? { ...value,
       object_key: value.object_key.replace(accountId,
         'dddddddd-dddd-4ddd-8ddd-dddddddddddd') } : value),

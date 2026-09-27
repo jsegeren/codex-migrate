@@ -21,6 +21,7 @@ function fixture() {
     allowanceBytes: 100_000_000 }]]);
   const object = (key, bytes, hash) => ({ staged_snapshot_id: snapshotId,
     staged_count: 3, staged_bytes: '30', object_key: prefix + key,
+    declared_count: 3, declared_bytes: '30',
     object_bytes: String(bytes), sha256: hash.repeat(64) });
   const stagedRows = [object(`refs/${snapshotId}.json`, 10, 'c'),
     object(`metadata/${snapshotId}.json`, 10, 'a'),
@@ -44,7 +45,7 @@ function fixture() {
           assert.deepEqual(values, [accountId, vaultId, reservationId, snapshotId]);
           return { rows: stagedRows };
         }
-        assert.match(sql, /publish_verified_staged_current/);
+        assert.match(sql, /publish_declared_verified_staged_current/);
         assert.equal(verifies, publications + 1);
         assert.deepEqual(values.slice(0, 4), [accountId, vaultId,
           reservationId, snapshotId]);

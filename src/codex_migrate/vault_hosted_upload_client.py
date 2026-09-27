@@ -17,7 +17,7 @@ from urllib.request import Request, build_opener
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_hosted_recovery_client import _origin
 from codex_migrate.vault_http_store import CapabilityHttpStore, _NoRedirect
-from codex_migrate.vault_remote_transfer import StageResult
+from codex_migrate.vault_remote_transfer import StageResult, StagedObject
 
 
 _UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z")
@@ -164,13 +164,23 @@ class HostedUploadClient:
                 not isinstance(staged.snapshot_id, str) or
                 not _UUID.fullmatch(staged.snapshot_id) or
                 not isinstance(staged.objects, tuple) or
-                not 3 <= len(staged.objects) <= 1_000_000):
+                not 3 <= len(staged.objects) <= 1_000_000 or
+                any(not isinstance(item, StagedObject) or
+                    not isinstance(item.bytes, int) or
+                    isinstance(item.bytes, bool) or item.bytes < 1
+                    for item in staged.objects) or
+                not isinstance(staged.remote_bytes_checked, int) or
+                isinstance(staged.remote_bytes_checked, bool) or
+                staged.remote_bytes_checked < len(staged.objects) or
+                staged.remote_bytes_checked != sum(item.bytes for item in staged.objects)):
             raise MigrationError("The staged hosted inventory is invalid.")
         acknowledged = 0
         for page in staged.object_pages():
             result = self._post({"action": "page", "vaultId": self._vault_id,
                                  "reservationId": reservation_id,
                                  "snapshotId": staged.snapshot_id,
+                                 "expectedCount": len(staged.objects),
+                                 "expectedBytes": staged.remote_bytes_checked,
                                  "objects": page}, receipt_page=True)
             if (set(result) != {"acceptedObjects"} or
                     type(result["acceptedObjects"]) is not int or

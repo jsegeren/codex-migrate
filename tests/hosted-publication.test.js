@@ -65,7 +65,7 @@ test('publishes only the provider-verified frozen object list', async () => {
     } });
   assert.deepEqual(checked, keys.map(key => prefix + key));
   assert.equal(calls.length, 1);
-  assert.match(calls[0][0], /publish_verified_staged_current/);
+  assert.match(calls[0][0], /publish_declared_verified_staged_current/);
   assert.deepEqual(calls[0][1].slice(0, 4), [scope.accountId, scope.vaultId,
     reservationId, snapshotId]);
   assert.deepEqual(JSON.parse(calls[0][1][4]), objects.map(item =>

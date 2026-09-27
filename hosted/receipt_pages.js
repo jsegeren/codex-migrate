@@ -7,8 +7,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{1
 const HEX = /^[0-9a-f]{64}$/;
 const CHUNK = /^objects\/[0-9a-f]{2}\/[0-9a-f]{62}\.cvchunk$/;
 const PAGE_LIMIT = 512;
-const PAGE_SQL = `SELECT hosted.append_receipt_page_current(
-  $1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::jsonb, $6::bigint
+const PAGE_SQL = `SELECT hosted.append_receipt_page_declared_current(
+  $1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::jsonb,
+  $6::integer, $7::bigint, $8::bigint
 ) AS accepted`;
 
 class HostedReceiptPageError extends Error {
@@ -46,15 +47,26 @@ function checkedPage(objects, snapshotId, scope) {
   return Object.freeze(scoped);
 }
 
-async function appendStagedPage({ scope, reservationId, snapshotId, objects, query }) {
+async function appendStagedPage({ scope, reservationId, snapshotId, objects,
+  expectedCount, expectedBytes, query }) {
   if (!consumeAuthorizedScope(scope) || !UUID.test(reservationId) ||
-      !UUID.test(snapshotId) || typeof query !== 'function') {
+      !UUID.test(snapshotId) || typeof query !== 'function' ||
+      !Number.isSafeInteger(expectedCount) || expectedCount < 3 ||
+      expectedCount > 1_000_000 ||
+      !Number.isSafeInteger(expectedBytes) ||
+      expectedBytes < expectedCount ||
+      expectedBytes > scope.allowanceBytes) {
     throw new HostedReceiptPageError();
   }
   const scoped = checkedPage(objects, snapshotId, scope);
+  const pageBytes = scoped.reduce((sum, item) => sum + item.bytes, 0);
+  if (scoped.length > expectedCount || pageBytes > expectedBytes) {
+    throw new HostedReceiptPageError();
+  }
   try {
     const result = await query(PAGE_SQL, [scope.accountId, scope.vaultId,
-      reservationId, snapshotId, JSON.stringify(scoped), scope.allowanceBytes]);
+      reservationId, snapshotId, JSON.stringify(scoped), expectedCount,
+      expectedBytes, scope.allowanceBytes]);
     if (result?.rows?.length !== 1 || result.rows[0].accepted !== true) {
       throw new HostedReceiptPageError();
     }

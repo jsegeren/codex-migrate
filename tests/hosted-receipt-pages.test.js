@@ -17,12 +17,13 @@ test('one bounded page becomes an account-scoped immutable claim', async () => {
   let calls = 0;
   const result = await appendStagedPage({ scope: await freshScope(),
     reservationId, snapshotId, objects: [metadata, chunk(1)],
+    expectedCount: 4, expectedBytes: 100,
     query: async (sql, values) => {
       calls++;
-      assert.match(sql, /append_receipt_page_current/);
+      assert.match(sql, /append_receipt_page_declared_current/);
       assert.deepEqual(values.slice(0, 4), [accountId, vaultId,
         reservationId, snapshotId]);
-      assert.equal(values[5], 100_000_000);
+      assert.deepEqual(values.slice(5), [4, 100, 100_000_000]);
       assert.deepEqual(JSON.parse(values[4]), [metadata, chunk(1)].map(item => ({
         ...item, key: `accounts/${accountId}/vaults/${vaultId}/${item.key}`,
       })));
@@ -39,7 +40,15 @@ test('malformed, oversized, or cross-snapshot pages fail before SQL', async () =
     [{ ...metadata, key: `metadata/22222222-2222-4222-8222-222222222222.json` }],
     [{ ...chunk(1), key: '../escape' }], Array.from({ length: 513 }, (_, i) => chunk(i))]) {
     await assert.rejects(appendStagedPage({ scope: await freshScope(),
-      reservationId, snapshotId, objects, query }), /hosted_receipt_page_denied/);
+      reservationId, snapshotId, objects, expectedCount: 4,
+      expectedBytes: 100, query }), /hosted_receipt_page_denied/);
+  }
+  for (const declaration of [{ expectedCount: 2, expectedBytes: 100 },
+    { expectedCount: 4, expectedBytes: 19 },
+    { expectedCount: 4, expectedBytes: 100_000_001 }]) {
+    await assert.rejects(appendStagedPage({ scope: await freshScope(),
+      reservationId, snapshotId, objects: [metadata], query, ...declaration }),
+    /hosted_receipt_page_denied/);
   }
   assert.equal(calls, 0);
 });
@@ -47,14 +56,16 @@ test('malformed, oversized, or cross-snapshot pages fail before SQL', async () =
 test('plain client scope, rejected quota, and database faults cannot acknowledge a page', async () => {
   await assert.rejects(appendStagedPage({ scope: { accountId, vaultId,
     allowanceBytes: 100_000_000 }, reservationId, snapshotId,
-    objects: [metadata], query: async () => { throw Error('must not call'); } }),
+    objects: [metadata], expectedCount: 3, expectedBytes: 60,
+    query: async () => { throw Error('must not call'); } }),
   /hosted_receipt_page_denied/);
   for (const query of [
     async () => ({ rows: [{ accepted: false }] }),
     async () => { throw Error('private tenant detail'); },
   ]) {
     await assert.rejects(appendStagedPage({ scope: await freshScope(),
-      reservationId, snapshotId, objects: [metadata], query }), error =>
+      reservationId, snapshotId, objects: [metadata],
+      expectedCount: 3, expectedBytes: 60, query }), error =>
       error.message === 'hosted_receipt_page_denied');
   }
 });

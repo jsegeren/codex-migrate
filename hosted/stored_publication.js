@@ -8,6 +8,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{1
 const HEX = /^[0-9a-f]{64}$/;
 const MAX_OBJECTS = 1_000_000;
 const LOAD_SQL = `SELECT r.staged_snapshot_id, r.staged_count, r.staged_bytes,
+    r.declared_count, r.declared_bytes,
     so.object_key, so.object_bytes, so.sha256
   FROM hosted.upload_reservations AS r
   JOIN hosted.staged_receipt_objects AS so
@@ -31,12 +32,18 @@ function receiptFromRows(rows, scope, snapshotId) {
   const bytes = Number(first.staged_bytes);
   if (!Number.isSafeInteger(count) || count !== rows.length ||
       !Number.isSafeInteger(bytes) || bytes <= 0 ||
-      bytes > scope.allowanceBytes) throw new HostedStoredPublicationError();
+      bytes > scope.allowanceBytes ||
+      Number(first.declared_count) !== count ||
+      Number(first.declared_bytes) !== bytes) {
+    throw new HostedStoredPublicationError();
+  }
   let observedBytes = 0;
   const objects = rows.map(row => {
     const size = Number(row.object_bytes);
     if (row.staged_snapshot_id !== snapshotId ||
         Number(row.staged_count) !== count || Number(row.staged_bytes) !== bytes ||
+        Number(row.declared_count) !== count ||
+        Number(row.declared_bytes) !== bytes ||
         typeof row.object_key !== 'string' ||
         !row.object_key.startsWith(prefix) ||
         !Number.isSafeInteger(size) || size <= 0 || size > 100_000_000 ||

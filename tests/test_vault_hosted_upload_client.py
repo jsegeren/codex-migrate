@@ -66,7 +66,9 @@ class _Handler(BaseHTTPRequestHandler):
                                     "verifiedObjectCount": 3})
         if self.path == "/api/hosted-receipt-page":
             if (action != "page" or request["reservationId"] != RESERVATION or
-                    request["snapshotId"] != SNAPSHOT):
+                    request["snapshotId"] != SNAPSHOT or
+                    request["expectedCount"] != 3 or
+                    request["expectedBytes"] != len(FIRST) + len(SECOND) + 5):
                 return self._json(403, {"error": "access_denied"})
             if self.server.fail_next_page:
                 self.server.fail_next_page = False

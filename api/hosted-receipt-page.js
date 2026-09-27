@@ -18,7 +18,7 @@ function requestBody(req) {
       !req.body || typeof req.body !== 'object' || Array.isArray(req.body) ||
       Buffer.byteLength(JSON.stringify(req.body)) > MAX_BODY ||
       Object.keys(req.body).sort().join(',') !==
-        'action,objects,reservationId,snapshotId,vaultId' ||
+        'action,expectedBytes,expectedCount,objects,reservationId,snapshotId,vaultId' ||
       req.body.action !== 'page' || !UUID.test(req.body.vaultId) ||
       !UUID.test(req.body.reservationId) || !UUID.test(req.body.snapshotId)) {
     throw Error('invalid_request');
@@ -50,7 +50,8 @@ function makeHandler(load = uploadRuntime, env = process.env) {
         live, priceCatalog });
       const result = await appendStagedPage({ scope,
         reservationId: data.reservationId, snapshotId: data.snapshotId,
-        objects: data.objects, query });
+        objects: data.objects, expectedCount: data.expectedCount,
+        expectedBytes: data.expectedBytes, query });
       return reply(res, 200, result);
     } catch (error) {
       return reply(res, error instanceof HostedAccessError ? 403 : 503,
