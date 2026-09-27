@@ -64,12 +64,24 @@ class InterruptOnceStore(SyntheticObjectStore):
     def __init__(self, root: Path):
         super().__init__(root)
         self.uploaded = 0
+        self.uploaded_key = None
 
     def put_if_absent(self, key: str, source, length: int) -> None:
         if self.uploaded == 1:
             raise InterruptedError("Synthetic staging interruption")
         super().put_if_absent(key, source, length)
         self.uploaded += 1
+        self.uploaded_key = key
+
+
+class RecordingObjectStore(SyntheticObjectStore):
+    def __init__(self, root: Path):
+        super().__init__(root)
+        self.uploaded_keys = set()
+
+    def put_if_absent(self, key: str, source, length: int) -> None:
+        super().put_if_absent(key, source, length)
+        self.uploaded_keys.add(key)
 
 
 def produce(bundle: Path, helper: Path) -> None:
@@ -107,11 +119,18 @@ def produce(bundle: Path, helper: Path) -> None:
                 raise AssertionError("Synthetic staging did not interrupt after a PUT")
         else:
             raise AssertionError("Synthetic staging was not interrupted")
-        second = stage_encrypted_snapshot(str(local_vault), store,
+        retry_store = RecordingObjectStore(store.root)
+        second = stage_encrypted_snapshot(str(local_vault), retry_store,
                                           crypto_helper=str(helper))
         if (second.snapshot_id != newer.snapshot_id or second.uploaded_files < 1
-                or second.reused_files < 2):
-            raise AssertionError("Synthetic interrupted staging did not resume")
+                or interrupted.uploaded_key is None
+                or interrupted.uploaded_key not in {item.key for item in second.objects}
+                or interrupted.uploaded_key in retry_store.uploaded_keys):
+            raise AssertionError(
+                "Synthetic interrupted staging did not resume: "
+                f"matching_snapshot={second.snapshot_id == newer.snapshot_id} "
+                f"uploaded={second.uploaded_files} reused={second.reused_files}"
+            )
         (bundle / "newer-receipt.json").write_text(
             json.dumps(second.receipt(), sort_keys=True), encoding="utf-8")
         key_file = os.open(bundle / "recovery-key.txt",
