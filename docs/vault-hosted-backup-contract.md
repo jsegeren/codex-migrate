@@ -109,6 +109,15 @@ egress allowance. Do not claim that B2 restores are always free. See its
   not create customer identity, checkout, enrollment, a signed webhook, a
   purchase-refund check, or an upload capability. Those are still mandatory
   before any service is exposed.
+- The service-side capacity planner now counts only newly retained encrypted
+  objects, so reused chunks do not consume a second allowance. Given a
+  complete inventory and the account-wide retained-byte total across both
+  Macs, it rejects digest conflicts and additions above the allowance. It is
+  not a quota transaction: the service must lock the account's usage record,
+  load the complete inventory, and atomically commit new objects, retained
+  bytes, and the last-good reference. Upload grants also need bounded
+  reservations so failed or abandoned publishes cannot accumulate unlimited
+  unreferenced objects. None of this is a live customer entitlement yet.
 - An upload first sends immutable encrypted objects and manifest, then a
   reference. Remote metadata is stored per snapshot under
   `metadata/<snapshot-id>.json`, never overwritten as a single mutable
