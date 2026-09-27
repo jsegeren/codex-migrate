@@ -59,6 +59,9 @@ the account token list showed no remaining user API tokens. This small
 proof does not establish authenticated customer uploads, realistic object-count
 performance, quota enforcement, retention, or clean-Mac restore. See the
 [R2 setup documentation](https://developers.cloudflare.com/r2/get-started/).
+An account billing alert now emails the Founder at $10 of Cloudflare spend;
+it is an early warning, **not** a hard spending cap. No customer workload is
+enabled, and the R2 dashboard showed $0.00 billable usage after the proof.
 R2's presigned S3 PUT alone does not satisfy immutable SHA-256 verification:
 the candidate transport uses a small authenticated Worker with R2's
 checksum-checked conditional PUT. Its $5/month paid-plan minimum matters for
