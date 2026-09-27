@@ -3,6 +3,7 @@
 // on a freshly verified, unrefunded Stripe purchase. No HTTP route uses this
 // module yet, and an enrolled account starts with zero upload allowance.
 const { createHash, randomBytes, randomUUID } = require('node:crypto');
+const { mintSessionSecret } = require('./access');
 
 const CHALLENGE = /^hve1_[A-Za-z0-9_-]{43}$/;
 const SESSION = /^cs_(?:test|live)_[A-Za-z0-9]+$/;
@@ -12,8 +13,8 @@ const ISSUE_SQL = `SELECT hosted.issue_enrollment_challenge(
 const DELIVERY_SQL = `SELECT hosted.record_enrollment_challenge_delivery(
   $1::text, $2::text
 ) AS recorded`;
-const CLAIM_SQL = `SELECT hosted.claim_purchase_enrollment(
-  $1::text, $2::text, $3::text, $4::uuid
+const CLAIM_SQL = `SELECT hosted.claim_and_pair_first_device(
+  $1::text, $2::text, $3::text, $4::uuid, $5::uuid, $6::uuid, $7::text
 ) AS account_id`;
 
 class HostedEnrollmentError extends Error {
@@ -82,14 +83,20 @@ async function claimEnrollment({ purchaseToken, code, verifyPurchase, query }) {
     const purchase = await verifyPurchase(purchaseToken);
     if (!purchaseEvidence(purchase)) throw new HostedEnrollmentError();
     const proposedAccount = randomUUID();
+    const vaultId = randomUUID();
+    const deviceId = randomUUID();
+    const device = mintSessionSecret();
     const claimed = await query(CLAIM_SQL, [hash, purchase.sessionId,
-      purchase.mode, proposedAccount]);
+      purchase.mode, proposedAccount, vaultId, deviceId, device.tokenHash]);
     if (claimed?.rows?.[0]?.account_id !== proposedAccount) {
       throw new HostedEnrollmentError();
     }
-    // This is only a server-side account identifier. It is not an authenticated
-    // browser session, device token, trial, or upload capability.
-    return Object.freeze({ accountId: proposedAccount });
+    // Return the secret once, only to the native helper that supplied both
+    // purchase proof and the emailed code. The helper must save it in Keychain;
+    // a browser route must never echo, log, or persist the plaintext token.
+    // This is not a trial or an upload capability: allowance remains zero.
+    return Object.freeze({ accountId: proposedAccount, vaultId, deviceId,
+      deviceToken: device.token });
   } catch { throw new HostedEnrollmentError(); }
 }
 

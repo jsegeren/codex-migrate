@@ -25,10 +25,13 @@ test('enrollment emails a fresh code and cannot issue an upload capability', asy
       assert.equal(values[1], 'sent');
       return { rows: [{ recorded: true }] };
     }
-    if (statement.includes('claim_purchase_enrollment')) {
+    if (statement.includes('claim_and_pair_first_device')) {
       assert.equal(values[0], savedHash);
       assert.equal(values[1], purchase.sessionId);
       assert.equal(values[2], purchase.mode);
+      assert.match(values[4], /^[0-9a-f-]{36}$/);
+      assert.match(values[5], /^[0-9a-f-]{36}$/);
+      assert.match(values[6], /^[0-9a-f]{64}$/);
       return { rows: [{ account_id: values[3] }] };
     }
     throw Error('unexpected query');
@@ -50,8 +53,11 @@ test('enrollment emails a fresh code and cannot issue an upload capability', asy
   const claim = await claimEnrollment({ purchaseToken, code: emailed.code,
     verifyPurchase, query });
   assert.match(claim.accountId, /^[0-9a-f-]{36}$/);
+  assert.match(claim.vaultId, /^[0-9a-f-]{36}$/);
+  assert.match(claim.deviceId, /^[0-9a-f-]{36}$/);
+  assert.match(claim.deviceToken, /^hv1_[A-Za-z0-9_-]{43}$/);
   assert.equal(Object.isFrozen(claim), true);
-  assert.equal('deviceToken' in claim, false);
+  assert.equal(savedHash.includes(claim.deviceToken), false);
 });
 
 test('rate limits, mail uncertainty, and payment failures cannot claim an account', async () => {

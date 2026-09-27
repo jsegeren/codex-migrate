@@ -144,12 +144,15 @@ egress allowance. Do not claim that B2 restores are always free. See its
   recorded purchase enrollment. A further draft flow now rechecks the paid
   purchase, sends a separate one-use code to that purchase's email, limits
   issuance to one code per ten minutes and five per day, and atomically claims
-  one zero-allowance account only after accepted delivery and code entry.
+  one zero-allowance account, first Vault, and hashed first-device session only
+  after accepted delivery and code entry. The device secret is returned once
+  to the future native helper and must be saved in Keychain; it is never an
+  emailed or stored plaintext server credential.
   Uncertain mail delivery never activates a code. This is server-only code and
   disposable database proof: there is no buyer-facing enrollment route,
-  edge/IP abuse limit, authenticated browser or device pairing, hosted trial,
-  subscription checkout, or production migration. The hosted option remains
-  unavailable.
+  edge/IP abuse limit, native Keychain binding and lost-response recovery,
+  second-device pairing, hosted trial, subscription checkout, or production
+  migration. The hosted option remains unavailable.
 - A provider-neutral subscription upload gate is implemented for a future
   service to call with a freshly retrieved Stripe Subscription, its
   server-held enrollment record, and a server-held catalog of approved price
