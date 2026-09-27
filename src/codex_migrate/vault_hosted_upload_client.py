@@ -1,0 +1,191 @@
+"""Sandbox-only hosted upload adapter for already encrypted Vault objects.
+
+The first-party service decides whether an object may be checked or needs an
+immutable PUT. It alone issues the short-lived Worker grants. Staging through
+this adapter never publishes a snapshot or calls it a protected backup.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from typing import Mapping, Tuple
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, build_opener
+
+from codex_migrate.errors import MigrationError
+from codex_migrate.vault_hosted_recovery_client import _origin
+from codex_migrate.vault_http_store import CapabilityHttpStore, _NoRedirect
+
+
+_UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z")
+_TOKEN = re.compile(r"hv1_[A-Za-z0-9_-]{43}\Z")
+_GRANT = re.compile(r"[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\Z")
+_MAX_RESPONSE = 2048
+
+
+class HostedUploadClient:
+    """Pinned origins and a Keychain-sourced device bearer, never a bucket key.
+
+    Callers must explicitly opt into mutations. This is intentionally not
+    exposed in the customer UI while hosted billing and recovery are dark.
+    """
+
+    def __init__(self, service_origin: str, worker_origin: str,
+                 device_token: str, account_id: str, vault_id: str, *,
+                 timeout: float = 30.0, allow_loopback_http: bool = False):
+        self._service_origin = _origin(service_origin, allow_loopback_http)
+        self._worker_origin = _origin(worker_origin, allow_loopback_http)
+        if (not isinstance(device_token, str) or not _TOKEN.fullmatch(device_token)
+                or not isinstance(account_id, str) or not _UUID.fullmatch(account_id)
+                or not isinstance(vault_id, str) or not _UUID.fullmatch(vault_id)
+                or isinstance(timeout, bool) or not isinstance(timeout, (int, float))
+                or not 0 < timeout <= 120):
+            raise MigrationError("The hosted upload authorization is invalid.")
+        self._device_token = device_token
+        self._account_id = account_id
+        self._vault_id = vault_id
+        self._timeout = timeout
+        self._allow_loopback_http = allow_loopback_http
+        self._opener = build_opener(_NoRedirect())
+
+    def _post(self, claim: dict) -> dict:
+        body = json.dumps(claim, separators=(",", ":")).encode("utf-8")
+        if len(body) > 700:
+            raise MigrationError("The hosted upload request is too large.")
+        request = Request(self._service_origin + "/api/hosted-upload", data=body,
+                          headers={"Authorization": "Bearer " + self._device_token,
+                                   "Content-Type": "application/json",
+                                   "Content-Length": str(len(body))}, method="POST")
+        try:
+            with self._opener.open(request, timeout=self._timeout) as response:
+                if (response.status != 200 or
+                        response.headers.get("Content-Encoding", "identity") != "identity" or
+                        response.headers.get("Content-Type", "").split(";")[0] !=
+                        "application/json"):
+                    raise MigrationError("The hosted upload service response is invalid.")
+                data = response.read(_MAX_RESPONSE + 1)
+                if len(data) > _MAX_RESPONSE:
+                    raise MigrationError("The hosted upload service response is too large.")
+        except (HTTPError, URLError, OSError, ValueError):
+            # Never include the bearer, object path, response body or URL.
+            raise MigrationError("The hosted upload service is unavailable.") from None
+        try:
+            result = json.loads(data)
+        except (UnicodeError, ValueError):
+            raise MigrationError("The hosted upload service response is invalid.") from None
+        if not isinstance(result, dict):
+            raise MigrationError("The hosted upload service response is invalid.")
+        return result
+
+    def reserve(self, planned_bytes: int, *, apply: bool = False) -> str:
+        if apply is not True:
+            raise MigrationError("Hosted upload changes require explicit confirmation.")
+        if type(planned_bytes) is not int or not 0 < planned_bytes <= 1_000_000_000_000:
+            raise MigrationError("The hosted upload size is invalid.")
+        result = self._post({"action": "reserve", "vaultId": self._vault_id,
+                             "bytes": planned_bytes})
+        return self._reservation(result)
+
+    def renew(self, reservation_id: str, *, apply: bool = False) -> str:
+        if apply is not True:
+            raise MigrationError("Hosted upload changes require explicit confirmation.")
+        self._require_reservation(reservation_id)
+        result = self._post({"action": "renew", "vaultId": self._vault_id,
+                             "reservationId": reservation_id})
+        return self._reservation(result, reservation_id)
+
+    @staticmethod
+    def _require_reservation(reservation_id: str) -> None:
+        if not isinstance(reservation_id, str) or not _UUID.fullmatch(reservation_id):
+            raise MigrationError("The hosted upload reservation is invalid.")
+
+    @staticmethod
+    def _reservation(result: dict, expected: str = "") -> str:
+        value = result.get("reservationId")
+        if (set(result) != {"reservationId", "expiresAt"} or
+                not isinstance(value, str) or not _UUID.fullmatch(value) or
+                (expected and value != expected) or
+                not isinstance(result.get("expiresAt"), str) or
+                not re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z",
+                                 result["expiresAt"])):
+            raise MigrationError("The hosted upload reservation response is invalid.")
+        return value
+
+    def _item(self, expected: Mapping[str, Tuple[int, str]], key: str) -> dict:
+        if key not in expected:
+            raise MigrationError("The hosted object is outside the selected Vault.")
+        size, digest = expected[key]
+        return {"key": key, "bytes": size, "sha256": digest}
+
+    def _grant(self, result: dict, *, head: bool = False) -> str:
+        keys = {"action", "workerOrigin", "grant"} if head else {"workerOrigin", "grant"}
+        grant = result.get("grant")
+        if (set(result) != keys or (head and result.get("action") != "head") or
+                result.get("workerOrigin") != self._worker_origin or
+                not isinstance(grant, str) or not _GRANT.fullmatch(grant) or
+                len(grant) > 2048):
+            raise MigrationError("The hosted upload grant is invalid.")
+        return grant
+
+    def object_store(self, reservation_id: str,
+                     expected: Mapping[str, Tuple[int, str]], *,
+                     apply: bool = False) -> "HostedUploadObjectStore":
+        self._require_reservation(reservation_id)
+        if apply is not True:
+            raise MigrationError("Hosted upload changes require explicit confirmation.")
+        # Let the transport validate the exact relative-key inventory before
+        # any request. No broad bucket credentials reach this object.
+        CapabilityHttpStore(self._worker_origin, self._account_id, self._vault_id,
+                            expected, lambda *_: "invalid.invalid",
+                            timeout=self._timeout,
+                            allow_loopback_http=self._allow_loopback_http)
+        return HostedUploadObjectStore(self, reservation_id, dict(expected))
+
+
+class HostedUploadObjectStore:
+    """Interpret put_required as no HEAD grant, never as an observed 404."""
+
+    def __init__(self, client: HostedUploadClient, reservation_id: str,
+                 expected: Mapping[str, Tuple[int, str]]):
+        self._client = client
+        self._reservation_id = reservation_id
+        self._expected = expected
+
+    def _transport(self, method: str, key: str, grant: str) -> CapabilityHttpStore:
+        size, digest = self._expected[key]
+        scoped = (f"accounts/{self._client._account_id}/vaults/"
+                  f"{self._client._vault_id}/{key}")
+
+        def exact(request_method: str, request_key: str,
+                  request_size: int, request_digest: str) -> str:
+            if (request_method, request_key, request_size, request_digest) != (
+                    method, scoped, size, digest):
+                raise MigrationError("The hosted object grant does not match its inventory.")
+            return grant
+
+        return CapabilityHttpStore(
+            self._client._worker_origin, self._client._account_id,
+            self._client._vault_id, self._expected, exact,
+            timeout=self._client._timeout,
+            allow_loopback_http=self._client._allow_loopback_http)
+
+    def checked_metadata(self, key: str):
+        item = self._client._item(self._expected, key)
+        result = self._client._post({"action": "decide",
+                                     "vaultId": self._client._vault_id,
+                                     "reservationId": self._reservation_id,
+                                     "item": item})
+        if result == {"action": "put_required"}:
+            return None
+        grant = self._client._grant(result, head=True)
+        return self._transport("HEAD", key, grant).checked_metadata(key)
+
+    def put_if_absent(self, key, source, length):
+        item = self._client._item(self._expected, key)
+        result = self._client._post({"action": "put",
+                                     "vaultId": self._client._vault_id,
+                                     "reservationId": self._reservation_id,
+                                     "item": item})
+        grant = self._client._grant(result)
+        self._transport("PUT", key, grant).put_if_absent(key, source, length)
