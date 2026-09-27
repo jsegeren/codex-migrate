@@ -37,12 +37,14 @@ jobs:
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0003_purchase_enrollment.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0004_email_enrollment.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0005_initial_pairing.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0006_current_allowance.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-quota.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-publication.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-publication-scale.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-sessions.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-enrollment.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-enrollment-challenge.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-current-allowance.sql
 
   test:
     runs-on: macos-latest

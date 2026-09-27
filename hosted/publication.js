@@ -5,8 +5,8 @@ const { verifyStagedReceiptBatched } = require('./receipt');
 const { consumeAuthorizedScope } = require('./access');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-const PUBLISH_SQL = `SELECT hosted.publish_verified_snapshot(
-  $1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::jsonb
+const PUBLISH_SQL = `SELECT hosted.publish_verified_snapshot_current(
+  $1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::jsonb, $6::bigint
 ) AS published`;
 
 class HostedPublicationError extends Error {
@@ -29,7 +29,8 @@ async function publishStagedReceipt({ receipt, maxReceiptBytes, scope,
   let result;
   try {
     result = await query(PUBLISH_SQL, [scope.accountId, scope.vaultId,
-      reservationId, proof.snapshotId, JSON.stringify(proof.verifiedObjects)]);
+      reservationId, proof.snapshotId, JSON.stringify(proof.verifiedObjects),
+      scope.allowanceBytes]);
   } catch {
     // Database errors can contain connection details or tenant metadata.
     // The HTTP layer must never receive those through this coordinator.

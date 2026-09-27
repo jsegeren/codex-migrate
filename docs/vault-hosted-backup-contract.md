@@ -193,6 +193,10 @@ egress allowance. Do not claim that B2 restores are always free. See its
   once, consumes the reservation, and advances only that Vault's database
   last-good pointer. A failed publish leaves the previous pointer and counters
   unchanged; an exact retry cannot charge twice or roll back a newer pointer.
+  A later draft migration makes reservation and publication apply the freshly
+  checked subscription allowance under the same account-row lock. A downgrade
+  after reservation cannot use an older stored allowance to publish new bytes;
+  disposable PostgreSQL tests cover that transition and preserve last-good.
   Local PostgreSQL 18 tests cover those transitions and concurrent reservations
   across two Vaults. The service-side capacity planner agrees with the same
   physical-byte model. Neither the SQL function nor a client receipt proves
