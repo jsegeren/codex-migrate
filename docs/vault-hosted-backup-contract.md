@@ -123,8 +123,16 @@ requires a device bearer, rejects cross-origin browser calls, verifies the
 current sandbox database identity, and is closed unless explicitly enabled.
 It can return the last-good pointer, an inventory page, or one published-object
 GET grant. It cannot open against the live database and is **not enabled or
-customer-accessible**. Enrollment and client wiring are still absent, so this
-route is not a disaster-recovery proof.
+customer-accessible**. Buyer enrollment and app-UI wiring are still absent,
+so this route is not a disaster-recovery proof.
+The native recovery adapter now validates every inventory page, total count,
+total bytes, key order, and snapshot identity before constructing the existing
+authenticated download receipt. It requests one exact GET grant at a time and
+never persists the device token. A disposable loopback test created an
+encrypted Vault, staged it, removed its test Keychain key, fetched ciphertext
+through the API-shaped service, imported the separately held recovery key, and
+restored a known synthetic thread. This proves local client wiring only; it
+does **not** prove a real R2-backed, clean-Mac customer restore.
 Do not send a whole staged receipt as one Vercel Function request. A synthetic
 JSON receipt matching the measured newer Mac's 21,907 chunks is about 4.03 MB,
 close to [Vercel's 4.5 MB request and response limit](https://vercel.com/docs/functions/limitations/);

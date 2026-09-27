@@ -93,6 +93,8 @@ test('owned last-good and inventory responses contain no secret', async () => {
   });
   const latest = await f.send();
   assert.equal(latest.statusCode, 200);
+  assert.equal(latest.body.accountId, accountId);
+  assert.equal(latest.body.workerOrigin, 'https://fixture.example');
   assert.deepEqual(latest.body.latest,
     { snapshotId, totalObjects: 3, totalBytes: 30 });
   f.req.body = { action: 'objects', vaultId, snapshotId };

@@ -60,7 +60,8 @@ function makeHandler(load = recoveryRuntime, env = process.env) {
       const scope = await authorizeReadScope({ sessionToken: token,
         vaultId: data.vaultId, query });
       if (data.action === 'latest') {
-        return reply(res, 200, { latest: await getLastGoodSnapshot({ scope, query }) });
+        return reply(res, 200, { accountId: scope.accountId, workerOrigin,
+          latest: await getLastGoodSnapshot({ scope, query }) });
       }
       if (data.action === 'objects') {
         const page = await listPublishedObjects({ scope,
