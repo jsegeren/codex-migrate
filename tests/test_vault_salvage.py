@@ -1,0 +1,116 @@
+import json
+import io
+from pathlib import Path
+import tempfile
+import unittest
+from contextlib import redirect_stdout
+from unittest.mock import patch
+
+from codex_migrate.errors import MigrationError
+from codex_migrate.vault import search
+from codex_migrate import vault_salvage
+from codex_migrate.cli import main
+
+
+def record(text):
+    return (json.dumps({"payload": {"message": {"content": text}}}) + "\n").encode()
+
+
+class VaultSalvageTests(unittest.TestCase):
+    def fixture(self, root):
+        path = root / ".codex/sessions/damaged.jsonl"
+        path.parent.mkdir(parents=True)
+        return path
+
+    def test_recovers_bounded_records_around_nuls_without_changing_source(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            path = self.fixture(home)
+            original = (record("Before damage") + b"\x00\x00" + record("After NUL") +
+                        b"not-json\n" + record("After malformed record"))
+            path.write_bytes(original)
+            (home / ".codex/auth.json").write_text("NEVER-READ-AUTH", encoding="utf-8")
+            with self.assertRaisesRegex(MigrationError, "unreadable JSON"):
+                search(str(home), "After malformed")
+            result = vault_salvage.preview_damaged_thread(
+                str(home), "active", "damaged.jsonl")
+            self.assertEqual([entry.text for entry in result.entries],
+                             ["Before damage", "After NUL", "After malformed record"])
+            self.assertEqual((result.parsed_records, result.nul_repaired_records,
+                              result.skipped_records, result.preview_truncated),
+                             (3, 1, 1, False))
+            self.assertTrue(result.physical_file_only)
+            self.assertEqual(result.as_dict()["skipped_records"], 1)
+            self.assertEqual(path.read_bytes(), original)
+            self.assertEqual((home / ".codex/auth.json").read_text(), "NEVER-READ-AUTH")
+
+    def test_invalid_utf8_oversized_and_nonobject_records_are_counted_not_invented(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            path = self.fixture(home)
+            path.write_bytes(b"\xff\n" + b"x" * (vault_salvage.MAX_RECORD_BYTES + 8) +
+                             b"\n" + b"[]\n" + record("Survives"))
+            result = vault_salvage.preview_damaged_thread(
+                str(home), "active", "damaged.jsonl")
+            self.assertEqual([entry.text for entry in result.entries], ["Survives"])
+            self.assertEqual(result.skipped_records, 3)
+            self.assertEqual(result.parsed_records, 1)
+
+    def test_preview_limit_is_explicit_and_does_not_stop_damage_counting(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            path = self.fixture(home)
+            path.write_bytes(record("First") + record("Second") + b"bad\n")
+            result = vault_salvage.preview_damaged_thread(
+                str(home), "active", "damaged.jsonl", max_entries=1)
+            self.assertEqual([entry.text for entry in result.entries], ["First"])
+            self.assertTrue(result.preview_truncated)
+            self.assertEqual((result.parsed_records, result.skipped_records), (2, 1))
+
+    def test_linked_or_changed_source_is_refused(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            path = self.fixture(home)
+            outside = home / "outside.jsonl"
+            outside.write_bytes(record("Outside"))
+            path.symlink_to(outside)
+            with self.assertRaises(MigrationError):
+                vault_salvage.preview_damaged_thread(str(home), "active", "damaged.jsonl")
+            path.unlink()
+            path.write_bytes(record("Before"))
+            original_strings = vault_salvage._strings
+
+            def mutate(record_value):
+                path.write_bytes(record("Changed"))
+                return original_strings(record_value)
+
+            with patch.object(vault_salvage, "_strings", side_effect=mutate):
+                with self.assertRaisesRegex(MigrationError, "changed during salvage"):
+                    vault_salvage.preview_damaged_thread(
+                        str(home), "active", "damaged.jsonl")
+
+    def test_cli_requires_exact_collection_and_labels_incomplete_preview(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            path = self.fixture(home)
+            path.write_bytes(record("Recovered text") + b"bad\n")
+            output = io.StringIO()
+            with redirect_stdout(output):
+                status = main(["vault", "--source-home", str(home),
+                               "salvage-preview", "active", "damaged.jsonl"])
+            self.assertEqual(status, 0)
+            self.assertIn("INCOMPLETE READ-ONLY PREVIEW", output.getvalue())
+            self.assertIn("skipped: 1", output.getvalue())
+            self.assertIn("Recovered text", output.getvalue())
+            self.assertEqual(path.read_bytes(), record("Recovered text") + b"bad\n")
+
+    def test_scan_budget_is_explicit(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            path = self.fixture(home)
+            path.write_bytes(record("First") + record("Second"))
+            with patch.object(vault_salvage, "MAX_SCAN_BYTES", len(record("First"))):
+                result = vault_salvage.preview_damaged_thread(
+                    str(home), "active", "damaged.jsonl")
+            self.assertEqual([entry.text for entry in result.entries], ["First"])
+            self.assertTrue(result.scan_truncated)

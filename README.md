@@ -496,6 +496,20 @@ or installation identity files.
 ./codex-migrate vault search "launch checklist" --limit 25
 ```
 
+If one exact `.jsonl` transcript is damaged, the source CLI has an opt-in,
+read-only salvage preview:
+
+```bash
+./codex-migrate vault salvage-preview active 2026/09/22/rollout-example.jsonl
+```
+
+Use the path relative to `.codex/sessions` (`active`) or
+`.codex/archived_sessions` (`archived`). The preview skips malformed records,
+tries removing NUL bytes from an in-memory copy of bounded records, and reports
+omissions. It does not alter the original, reconstruct fork ancestry, restore
+the thread into Codex, or promise a complete transcript. Normal search remains
+strict. The desktop history browser does not yet expose salvage discovery.
+
 The packaged local helper exposes a history browser with
 per-thread Markdown download, print-to-PDF and the browser's native share sheet
 when supported, daily encrypted backup selected by default during the first
