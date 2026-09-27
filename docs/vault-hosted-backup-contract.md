@@ -107,6 +107,14 @@ Future orphan cleanup must wait beyond the last token's expiry. This is a tested
 building block, not an activated grant API: cleanup after failed/expired
 reservations and customer identity
 enrollment still need the same fail-closed review before deployment.
+The first cleanup transition now quarantines an upload reservation only after
+its lease has been expired for at least two minutes, under the same
+account-before-reservation lock order as upload and publication. It is safe to
+retry, blocks renewal and publication, and deliberately leaves both R2 objects
+and reserved quota untouched. A cleanup worker still must distinguish objects
+in published snapshots or other in-flight grants, prove safe provider deletion
+for exclusive orphans, and only then release quota. Quarantine alone is not
+orphan cleanup and is not enabled as a customer feature.
 The draft HEAD grant requires a fresh upload entitlement and active
 reservation, then checks that the exact key, size, and checksum either belong
 to a published snapshot of that Vault or have a PUT grant recorded under this
