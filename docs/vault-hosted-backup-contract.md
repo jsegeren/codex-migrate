@@ -96,9 +96,17 @@ that reservation. A server-only coordinator consumes a fresh, purchase- and
 subscription-checked scope before it signs one exact 30-second PUT; the SQL
 gate stops issuing grants when under one minute remains on the reservation.
 Future orphan cleanup must wait beyond the last token's expiry. This is a tested
-building block, not an activated grant API: HEAD reuse grants, published-only
-GET grants, cleanup after failed/expired reservations, and customer identity
+building block, not an activated grant API: HEAD reuse grants, cleanup after
+failed/expired reservations, and customer identity
 enrollment still need the same fail-closed review before deployment.
+The draft published-only GET issuer now requires an unrevoked device session
+bound to that Vault, consumes a one-use read scope, and signs only an exact
+object listed in a published snapshot, using the database-owned size and
+checksum. Its capability expires after 30 seconds. A lapsed subscription does
+not by itself revoke access to already retained ciphertext, so the customer
+can recover/export it during the eventual published retention window; that
+window and cancellation policy still require Founder approval. There is no
+customer read endpoint, installed-client flow, or clean-Mac restore proof.
 Do not send a whole staged receipt as one Vercel Function request. A synthetic
 JSON receipt matching the measured newer Mac's 21,907 chunks is about 4.03 MB,
 close to [Vercel's 4.5 MB request and response limit](https://vercel.com/docs/functions/limitations/);

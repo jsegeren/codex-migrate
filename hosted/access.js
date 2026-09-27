@@ -16,6 +16,10 @@ const AUTH_SQL = `SELECT sessions.account_id, sessions.vault_id,
     AND sessions.expires_at > clock_timestamp()`;
 const MAX_SCOPE_AGE_MS = 60_000;
 const authorizedScopes = new WeakMap();
+const authorizedReadScopes = new WeakMap();
+const READ_SQL = `SELECT account_id, vault_id FROM hosted.device_sessions
+  WHERE token_hash = $1 AND vault_id = $2 AND revoked_at IS NULL
+    AND expires_at > clock_timestamp()`;
 
 class HostedAccessError extends Error {
   constructor() { super('hosted_access_denied'); }
@@ -82,5 +86,37 @@ function consumeAuthorizedScope(scope) {
   return valid;
 }
 
+async function authorizeReadScope({ sessionToken, vaultId, query }) {
+  if (!UUID.test(vaultId) || typeof query !== 'function') throw new HostedAccessError();
+  const hash = tokenHash(sessionToken);
+  let row;
+  try {
+    const result = await query(READ_SQL, [hash, vaultId]);
+    row = result?.rows?.[0];
+    if (result?.rows?.length !== 1 || row.vault_id !== vaultId ||
+        !UUID.test(row.account_id)) throw new HostedAccessError();
+  } catch { throw new HostedAccessError(); }
+  // Reading an already published snapshot never reserves storage. If the
+  // subscription has lapsed but data remains in retention, let its owner
+  // recover/export it; retention duration is a separate launch policy.
+  const scope = Object.freeze({ accountId: row.account_id, vaultId });
+  authorizedReadScopes.set(scope, Date.now());
+  return scope;
+}
+
+function isAuthorizedReadScope(scope) {
+  const issuedAt = scope !== null && typeof scope === 'object' &&
+    authorizedReadScopes.get(scope);
+  const age = Date.now() - issuedAt;
+  return Number.isSafeInteger(issuedAt) && age >= 0 && age <= MAX_SCOPE_AGE_MS;
+}
+
+function consumeAuthorizedReadScope(scope) {
+  const valid = isAuthorizedReadScope(scope);
+  if (scope !== null && typeof scope === 'object') authorizedReadScopes.delete(scope);
+  return valid;
+}
+
 module.exports = { HostedAccessError, authorizeUploadScope,
-  isAuthorizedScope, consumeAuthorizedScope, tokenHash };
+  isAuthorizedScope, consumeAuthorizedScope, authorizeReadScope,
+  isAuthorizedReadScope, consumeAuthorizedReadScope, tokenHash };
