@@ -120,7 +120,13 @@ server-only decision now returns either a short-lived exact HEAD capability or
 `put_required` for an active, owned reservation. Invalid authority returns a
 denial, never `put_required`; the latter is not an upload capability and must
 be followed by a separate quota-recorded PUT grant. This decision is not yet
-wired to an authenticated customer HTTP route or installed client.
+wired to an installed client. A dark `/api/hosted-upload` route now joins
+reservation, renewal, decision, and exact PUT grant actions. It is available
+only when separately enabled in the pinned sandbox; each action rechecks the
+device, current Mac-app purchase, and current Stripe Subscription. An empty
+subscription-enrollment table binds a future hosted checkout to the purchased
+account and its environment. There is no hosted subscription checkout,
+enrollment write, customer upload, or live route yet.
 The draft published-only GET issuer now requires an unrevoked device session
 bound to that Vault, consumes a one-use read scope, and signs only an exact
 object listed in a published snapshot, using the database-owned size and

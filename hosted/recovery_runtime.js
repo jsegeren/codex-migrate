@@ -15,6 +15,11 @@ function recoveryConfiguration(env) {
       env.HOSTED_SANDBOX_RECOVERY_OPEN !== 'yes') {
     throw new HostedRecoveryRuntimeError();
   }
+  return storageConfiguration(env);
+}
+
+function storageConfiguration(env) {
+  if (env.HOSTED_MODE !== 'sandbox') throw new HostedRecoveryRuntimeError();
   let worker;
   let secret;
   try {
@@ -68,4 +73,5 @@ async function recoveryRuntime(env = process.env) {
 }
 
 module.exports = { HostedRecoveryRuntimeError, recoveryConfiguration,
-  recoveryRuntime, sandboxDatabaseUrl, sandboxDatabaseRuntime };
+  recoveryRuntime, storageConfiguration, sandboxDatabaseUrl,
+  sandboxDatabaseRuntime };
