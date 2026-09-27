@@ -118,6 +118,17 @@ egress allowance. Do not claim that B2 restores are always free. See its
   bytes, and the last-good reference. Upload grants also need bounded
   reservations so failed or abandoned publishes cannot accumulate unlimited
   unreferenced objects. None of this is a live customer entitlement yet.
+- A draft `hosted` database schema now reserves upload bytes by an atomic
+  account-row update, shared by all Vaults on that account. It was exercised
+  against an isolated local PostgreSQL 18 instance, including two concurrent
+  60-byte requests against a 100-byte allowance: the second waited for the
+  first commit and then refused. No hosted migration has been applied to
+  either Neon commerce environment. The separate migration runner requires
+  the exact direct database host and explicit environment confirmation.
+  Expiry does not release reservations automatically; provider cleanup must
+  first be proven. Snapshot publication, object inventory, release/garbage
+  collection, and live account authentication are still missing, so the
+  draft reservation function must not be exposed as a customer API.
 - An upload first sends immutable encrypted objects and manifest, then a
   reference. Remote metadata is stored per snapshot under
   `metadata/<snapshot-id>.json`, never overwritten as a single mutable
