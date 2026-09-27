@@ -59,7 +59,10 @@ async function prove(bucket) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (!['localhost', '127.0.0.1'].includes(url.hostname) ||
+    // The Wrangler config does not set this variable. An accidental deploy is
+    // inert; only a deliberate local dev invocation may enable the probe.
+    if (env.PROBE_ENABLED !== '1' ||
+        !['localhost', '127.0.0.1'].includes(url.hostname) ||
         request.method !== 'POST' || url.pathname !== '/probe') {
       return new Response('not found', { status: 404 });
     }
