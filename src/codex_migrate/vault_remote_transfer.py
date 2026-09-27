@@ -164,6 +164,51 @@ def _remote_state(store: ScopedObjectStore, item: VaultTransferFile) -> Optional
         return item.bytes, _digest(stream, item.bytes)
 
 
+def stage_encrypted_object(root: Path, item: VaultTransferFile,
+                           store: ScopedObjectStore) -> Tuple[StagedObject, bool]:
+    """Upload or reuse one frozen ciphertext file and check exact remote bytes.
+
+    This client-observed check is not the service's independent publication
+    proof. The caller may retain its object receipt and later discard only its
+    *own temporary ciphertext*, never a customer's durable local Vault.
+    """
+    with _open_vault_file(root, item) as source:
+        before = os.fstat(source.fileno())
+        # Freeze the object before exposing it to a network upload. A late
+        # in-place change must not transmit plaintext or inconsistent bytes.
+        ciphertext = source.read(item.bytes + 1)
+        if len(ciphertext) != item.bytes:
+            raise MigrationError("A Vault file changed during remote staging.")
+        local_digest = hashlib.sha256(ciphertext).hexdigest()
+        if local_digest != item.sha256:
+            raise MigrationError(
+                "A Vault file changed after its encrypted snapshot was verified.")
+        remote_state = _remote_state(store, item)
+        uploaded = remote_state is None
+        if uploaded:
+            with io.BytesIO(ciphertext) as frozen:
+                store.put_if_absent(item.remote_key, frozen, item.bytes)
+                if frozen.tell() != item.bytes:
+                    raise MigrationError("The object store did not consume the Vault file exactly.")
+            remote_state = _remote_state(store, item)
+        if remote_state != (item.bytes, local_digest):
+            raise MigrationError("A remote Vault object is missing or differs from its local version.")
+        after = os.fstat(source.fileno())
+        if ((before.st_dev, before.st_ino, before.st_size,
+             before.st_mtime_ns, before.st_ctime_ns) !=
+            (after.st_dev, after.st_ino, after.st_size,
+             after.st_mtime_ns, after.st_ctime_ns)):
+            raise MigrationError("A Vault file changed during remote staging.")
+        with _open_vault_file(root, item) as current:
+            pointed = os.fstat(current.fileno())
+            if ((before.st_dev, before.st_ino, before.st_size,
+                 before.st_mtime_ns, before.st_ctime_ns) !=
+                (pointed.st_dev, pointed.st_ino, pointed.st_size,
+                 pointed.st_mtime_ns, pointed.st_ctime_ns)):
+                raise MigrationError("A Vault file changed during remote staging.")
+        return StagedObject(item.remote_key, item.bytes, local_digest), uploaded
+
+
 def stage_encrypted_snapshot(
     vault: str,
     store: ScopedObjectStore,
@@ -183,33 +228,11 @@ def stage_encrypted_snapshot(
     uploaded = reused = checked_bytes = 0
     staged_objects = []
     for item in inventory.files:
-        with _open_vault_file(root, item) as source:
-            # Each object is bounded to 100 MB by inventory. Freeze its exact
-            # authenticated ciphertext before giving a stream to the store:
-            # an in-place file change during a network upload must never send
-            # different (potentially plaintext) bytes as an orphan object.
-            ciphertext = source.read(item.bytes + 1)
-            if len(ciphertext) != item.bytes:
-                raise MigrationError("A Vault file changed during remote staging.")
-            local_digest = hashlib.sha256(ciphertext).hexdigest()
-            if local_digest != item.sha256:
-                raise MigrationError(
-                    "A Vault file changed after its encrypted snapshot was verified."
-                )
-            remote_state = _remote_state(store, item)
-            if remote_state is None:
-                with io.BytesIO(ciphertext) as frozen:
-                    store.put_if_absent(item.remote_key, frozen, item.bytes)
-                    if frozen.tell() != item.bytes:
-                        raise MigrationError("The object store did not consume the Vault file exactly.")
-                uploaded += 1
-                remote_state = _remote_state(store, item)
-            else:
-                reused += 1
-            if remote_state != (item.bytes, local_digest):
-                raise MigrationError("A remote Vault object is missing or differs from its local version.")
-            checked_bytes += item.bytes
-            staged_objects.append(StagedObject(item.remote_key, item.bytes, local_digest))
+        staged, was_uploaded = stage_encrypted_object(root, item, store)
+        uploaded += int(was_uploaded)
+        reused += int(not was_uploaded)
+        checked_bytes += item.bytes
+        staged_objects.append(staged)
     current = encrypted_snapshot_inventory(
         vault, snapshot=snapshot, crypto_helper=crypto_helper)
     if current != inventory:

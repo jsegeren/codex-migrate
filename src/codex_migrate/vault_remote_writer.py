@@ -18,7 +18,11 @@ import tempfile
 from typing import Mapping, Protocol, Tuple
 
 from codex_migrate.errors import MigrationError
-from codex_migrate.vault_backup import _helper_path, _run_helper
+from codex_migrate.vault_backup import _canonical_macos_path, _helper_path, _run_helper
+from codex_migrate.vault_remote_inventory import (
+    MAX_ENCRYPTED_CHUNK_BYTES, _regular_file,
+)
+from codex_migrate.vault_remote_transfer import StagedObject, stage_encrypted_object
 
 
 _HEX = re.compile(r"[0-9a-f]{64}\Z")
@@ -27,6 +31,13 @@ _HEX = re.compile(r"[0-9a-f]{64}\Z")
 class PublishedChunkLookup(Protocol):
     def published_chunks(self, ids: list[str]) -> Mapping[str, Tuple[int, str]]:
         """Return scoped, previously published ciphertext size and digest."""
+
+
+class ScopedUploadClient(Protocol):
+    def object_store(self, reservation_id: str,
+                     expected: Mapping[str, Tuple[int, str]], *,
+                     apply: bool = False) -> object:
+        """Return an exact-key, reservation-scoped ciphertext transport."""
 
 
 @dataclass(frozen=True)
@@ -175,3 +186,45 @@ def prepare_remote_aware_file(source: Path, objects: Path, key_id: str,
     return PreparedRemoteFile(plan["sha256"], plan["size"],
                               tuple(rows), tuple(local),
                               {key: published[key] for key in set(remote)})
+
+
+def stage_prepared_file(prepared: PreparedRemoteFile, scratch: Path,
+                        client: ScopedUploadClient, reservation_id: str, *,
+                        apply: bool = False) -> Tuple[StagedObject, ...]:
+    """Check old remote ciphertext and upload new encrypted chunks for one file.
+
+    `scratch` is the same private object directory supplied to
+    `prepare_remote_aware_file`. This leaves scratch files in place. Deletion
+    requires a durable per-object
+    journal and a complete remote publication flow, neither supplied here.
+    """
+    if apply is not True:
+        raise MigrationError("Hosted upload changes require explicit confirmation.")
+    if not isinstance(prepared, PreparedRemoteFile):
+        raise MigrationError("The hosted prepared file is invalid.")
+    local = set(prepared.local_ids)
+    remote = set(prepared.remote_objects)
+    if (local & remote or
+            any(not isinstance(row, dict) for row in prepared.chunks) or
+            local | remote != {row["id"] for row in prepared.chunks}):
+        raise MigrationError("The hosted prepared file is incomplete.")
+    root = _canonical_macos_path(Path(scratch))
+    objects = []
+    for identifier in sorted(remote):
+        size, digest = prepared.remote_objects[identifier]
+        key = "objects/" + identifier[:2] + "/" + identifier[2:] + ".cvchunk"
+        store = client.object_store(reservation_id, {key: (size, digest)}, apply=True)
+        checked = getattr(store, "checked_metadata", None)
+        if not callable(checked) or checked(key) != (size, digest):
+            raise MigrationError("A previously published Vault chunk is missing remotely.")
+        objects.append(StagedObject(key, size, digest))
+    for identifier in sorted(local):
+        key = "objects/" + identifier[:2] + "/" + identifier[2:] + ".cvchunk"
+        relative = identifier[:2] + "/" + identifier[2:] + ".cvchunk"
+        item = _regular_file(root, relative, MAX_ENCRYPTED_CHUNK_BYTES,
+                             remote_key=key)
+        store = client.object_store(reservation_id,
+                                    {key: (item.bytes, item.sha256)}, apply=True)
+        staged, _ = stage_encrypted_object(root, item, store)
+        objects.append(staged)
+    return tuple(sorted(objects, key=lambda item: item.key))

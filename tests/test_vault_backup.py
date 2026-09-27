@@ -22,7 +22,9 @@ from codex_migrate.vault_recovery import (
 from codex_migrate import vault_remote_inventory
 from codex_migrate import vault_remote_recovery
 from codex_migrate import vault_remote_transfer
-from codex_migrate.vault_remote_writer import prepare_remote_aware_file
+from codex_migrate.vault_remote_writer import (
+    prepare_remote_aware_file, stage_prepared_file,
+)
 
 
 class MemoryObjectStore:
@@ -579,6 +581,71 @@ class VaultBackupTests(unittest.TestCase):
             finally:
                 self.delete_key(vault)
 
+    def test_remote_aware_file_stages_published_and_new_chunks(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            vault = root / "vault"
+            self.fixture(source)
+            try:
+                backup(str(source), str(vault), crypto_helper=str(self.helper))
+                key_id = json.loads((vault / "vault.json").read_text())["key_id"]
+                old_objects = root / "old-objects"
+                old_objects.mkdir(mode=0o700)
+                old = subprocess.run([
+                    str(self.helper), "store-chunks", "--key-id", key_id,
+                    "--chunk-size", "65536", "--object-dir", str(old_objects),
+                ], input=b"A" * 65536 + b"B" * 65536,
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+                published = {}
+                store = MetadataObjectStore()
+                for chunk in json.loads(old.stdout)["chunks"]:
+                    identifier = chunk["id"]
+                    key = "objects/" + identifier[:2] + "/" + identifier[2:] + ".cvchunk"
+                    ciphertext = (old_objects / identifier[:2] /
+                                  (identifier[2:] + ".cvchunk")).read_bytes()
+                    store.objects[key] = ciphertext
+                    published[identifier] = (len(ciphertext),
+                                             hashlib.sha256(ciphertext).hexdigest())
+
+                class Client:
+                    def published_chunks(self, ids):
+                        return {item: published[item] for item in ids if item in published}
+
+                    def object_store(self, reservation_id, expected, *, apply=False):
+                        self_assert = reservation_id == "reservation" and apply is True
+                        if not self_assert or len(expected) != 1:
+                            raise AssertionError("unscoped test upload")
+                        return store
+
+                transcript = root / "synthetic.jsonl"
+                transcript.write_bytes(b"A" * 65536 + b"B" * 65536 + b"C" * 65536)
+                scratch = root / "scratch"
+                scratch.mkdir(mode=0o700)
+                client = Client()
+                prepared = prepare_remote_aware_file(
+                    transcript, scratch, key_id, client,
+                    crypto_helper=str(self.helper), chunk_size=65536, apply=True)
+                self.assertEqual(set(prepared.remote_objects), set(published))
+                self.assertEqual(len(prepared.local_ids), 1)
+                staged = stage_prepared_file(prepared, scratch, client,
+                                             "reservation", apply=True)
+                self.assertEqual(len(staged), 3)
+                self.assertEqual(store.writes, 1)
+                self.assertEqual({item.key for item in staged}, set(store.objects))
+                staged_again = stage_prepared_file(prepared, scratch, client,
+                                                   "reservation", apply=True)
+                self.assertEqual(staged_again, staged)
+                self.assertEqual(store.writes, 1)
+                broken = next(iter(published))
+                key = "objects/" + broken[:2] + "/" + broken[2:] + ".cvchunk"
+                store.objects[key] = store.objects[key][:-1] + b"X"
+                with self.assertRaisesRegex(MigrationError, "missing remotely"):
+                    stage_prepared_file(prepared, scratch, client,
+                                        "reservation", apply=True)
+            finally:
+                self.delete_key(vault)
+
     def test_remote_staging_failure_never_replaces_or_publishes(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -606,6 +673,55 @@ class VaultBackupTests(unittest.TestCase):
                     vault_remote_transfer.stage_encrypted_snapshot(
                         str(destination), store, crypto_helper=str(self.helper))
                 self.assertNotIn("latest.json", store.objects)
+            finally:
+                self.delete_key(destination)
+
+    def test_one_object_staging_reuses_exact_remote_and_detects_local_change(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, destination = root / "source", root / "vault"
+            self.fixture(source)
+            try:
+                backup(str(source), str(destination), crypto_helper=str(self.helper))
+                inventory = vault_remote_inventory.encrypted_snapshot_inventory(
+                    str(destination), crypto_helper=str(self.helper))
+                item = next(item for item in inventory.files
+                            if item.relative_path.startswith("objects/"))
+                store = MemoryObjectStore()
+                staged, uploaded = vault_remote_transfer.stage_encrypted_object(
+                    destination.resolve(), item, store)
+                self.assertTrue(uploaded)
+                self.assertEqual(staged.key, item.remote_key)
+                self.assertEqual(staged.sha256, item.sha256)
+                self.assertEqual(len(store.objects), 1)
+                staged_again, uploaded_again = vault_remote_transfer.stage_encrypted_object(
+                    destination.resolve(), item, store)
+                self.assertFalse(uploaded_again)
+                self.assertEqual(staged_again, staged)
+
+                class ReplacingStore(MemoryObjectStore):
+                    def put_if_absent(self, key, stream, length):
+                        super().put_if_absent(key, stream, length)
+                        path = destination / item.relative_path
+                        replacement = path.with_name("replacement.cvchunk")
+                        replacement.write_bytes(path.read_bytes())
+                        replacement.chmod(0o600)
+                        os.replace(replacement, path)
+
+                with self.assertRaisesRegex(MigrationError, "changed during remote staging"):
+                    vault_remote_transfer.stage_encrypted_object(
+                        destination.resolve(), item, ReplacingStore())
+
+                class MutatingStore(MemoryObjectStore):
+                    def put_if_absent(self, key, stream, length):
+                        super().put_if_absent(key, stream, length)
+                        path = destination / item.relative_path
+                        original = path.read_bytes()
+                        path.write_bytes(original[::-1])
+
+                with self.assertRaisesRegex(MigrationError, "changed during remote staging"):
+                    vault_remote_transfer.stage_encrypted_object(
+                        destination.resolve(), item, MutatingStore())
             finally:
                 self.delete_key(destination)
 

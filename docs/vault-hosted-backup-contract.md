@@ -357,8 +357,12 @@ egress allowance. Do not claim that B2 restores are always free. See its
   fails without a snapshot claim. The lookup has a scoped database index so
   it does not scan all prior daily snapshots for each candidate. Whole-
   snapshot assembly, provider re-verification, bounded new-chunk staging,
-  publication, and restore of the mixed inventory remain open. The existing
-  local `store-chunks` behavior remains unchanged.
+  publication, and restore of the mixed inventory remain open. An internal
+  per-file stage can now HEAD-check reused published ciphertext and upload
+  each new ciphertext object with exact read-back; it leaves its private
+  scratch files intact. A durable per-object resume journal and verified
+  whole-snapshot publication are required before any scratch deletion. The
+  existing local `store-chunks` behavior remains unchanged.
 - Keep each local Vault in its own random, account-scoped remote namespace.
   Two Macs may each back up to separate Vaults under one subscription; this is
   not synchronization or a silent merge. Object names and snapshot times are
