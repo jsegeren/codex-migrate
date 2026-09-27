@@ -209,6 +209,18 @@ class HostedUploadClientTests(unittest.TestCase):
         self.server.server_close()
         self.thread.join(timeout=2)
 
+    def test_abandon_requires_confirmation_and_exact_service_acknowledgement(self):
+        with patch.object(self.client, "_post", return_value={"cleanupPending": True}) as post:
+            with self.assertRaisesRegex(MigrationError, "explicit confirmation"):
+                self.client.abandon(RESERVATION)
+            post.assert_not_called()
+            self.client.abandon(RESERVATION, apply=True)
+            post.assert_called_once_with({"action": "abandon", "vaultId": VAULT,
+                                          "reservationId": RESERVATION})
+        with patch.object(self.client, "_post", return_value={"cleanupPending": False}):
+            with self.assertRaisesRegex(MigrationError, "response is invalid"):
+                self.client.abandon(RESERVATION, apply=True)
+
     def _stage(self, directory, store):
         root = Path(directory).resolve()
         inventory = RemoteInventory(SNAPSHOT, (

@@ -2,7 +2,7 @@
 // device, app purchase, and subscription for *each* create or renewal. Never
 // trust an account, Vault, or allowance sent by a device.
 const { randomUUID } = require('node:crypto');
-const { consumeAuthorizedScope } = require('./access');
+const { consumeAuthorizedScope, consumeAuthorizedReadScope } = require('./access');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const LEASE_MS = 55 * 60 * 1000;
@@ -11,6 +11,9 @@ const CREATE_SQL = `SELECT hosted.reserve_upload_current(
 ) AS allowed`;
 const RENEW_SQL = `SELECT hosted.renew_upload_reservation_current(
   $1::uuid, $2::uuid, $3::uuid, $4::timestamptz, $5::bigint
+) AS allowed`;
+const ABANDON_SQL = `SELECT hosted.abandon_upload_reservation(
+  $1::uuid, $2::uuid, $3::uuid
 ) AS allowed`;
 
 class HostedReservationError extends Error {
@@ -48,5 +51,20 @@ async function renewUploadReservation({ scope, reservationId, query }) {
   } catch { throw new HostedReservationError(); }
 }
 
+async function abandonUploadReservation({ scope, reservationId, query }) {
+  // A lapsed subscription may stop a pending upload. Device ownership is
+  // still required, but no paid entitlement or customer-supplied account ID.
+  if (!consumeAuthorizedReadScope(scope) || !UUID.test(reservationId) ||
+      typeof query !== 'function') throw new HostedReservationError();
+  try {
+    const result = await query(ABANDON_SQL, [scope.accountId, scope.vaultId,
+      reservationId]);
+    if (result?.rows?.length !== 1 || result.rows[0].allowed !== true) {
+      throw new HostedReservationError();
+    }
+    return Object.freeze({ cleanupPending: true });
+  } catch { throw new HostedReservationError(); }
+}
+
 module.exports = { HostedReservationError, createUploadReservation,
-  renewUploadReservation };
+  renewUploadReservation, abandonUploadReservation };

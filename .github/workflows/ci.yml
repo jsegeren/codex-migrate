@@ -53,6 +53,7 @@ jobs:
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0019_cleanup_object_claims.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0020_cleanup_release.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0021_cleanup_delete_grant.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0022_abandon_upload.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-quota.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-publication.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-publication-scale.sql
@@ -66,6 +67,7 @@ jobs:
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-cleanup-object-claims.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-cleanup-release.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-cleanup-delete-grant.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-abandon-upload.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-upload-probe.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-upload-decision.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-subscription-enrollment.sql

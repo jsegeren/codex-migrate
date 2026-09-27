@@ -111,6 +111,16 @@ class HostedUploadClient:
                              "reservationId": reservation_id})
         return self._reservation(result, reservation_id)
 
+    def abandon(self, reservation_id: str, *, apply: bool = False) -> None:
+        """Quarantine this reservation; remote deletion and quota release follow later."""
+        if apply is not True:
+            raise MigrationError("Hosted upload changes require explicit confirmation.")
+        self._require_reservation(reservation_id)
+        result = self._post({"action": "abandon", "vaultId": self._vault_id,
+                             "reservationId": reservation_id})
+        if set(result) != {"cleanupPending"} or result["cleanupPending"] is not True:
+            raise MigrationError("The hosted upload abandon response is invalid.")
+
     @staticmethod
     def _require_reservation(reservation_id: str) -> None:
         if not isinstance(reservation_id, str) or not _UUID.fullmatch(reservation_id):

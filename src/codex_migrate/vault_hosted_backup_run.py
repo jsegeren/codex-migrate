@@ -154,3 +154,24 @@ class HostedBackupRun:
             except OSError as error:
                 raise MigrationError("The hosted backup published but its journal remains.") from error
             return result
+
+    def abandon_pending(self, *, apply: bool = False) -> bool:
+        """Stop retrying only after the service quarantines the exact reservation.
+
+        This does not claim that remote objects are deleted or quota is free.
+        If the response is lost, keep the journal so the same abandon can be
+        safely retried; the server operation is idempotent.
+        """
+        if apply is not True:
+            raise MigrationError("Hosted backup changes require explicit confirmation.")
+        with self._locked():
+            state = self._pending()
+            if state is None:
+                return False
+            self._client.abandon(state["reservationId"], apply=True)
+            try:
+                self._journal.unlink()
+                _fsync_directory(self._directory)
+            except OSError as error:
+                raise MigrationError("The hosted upload was quarantined but its journal remains.") from error
+            return True

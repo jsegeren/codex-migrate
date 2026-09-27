@@ -128,6 +128,29 @@ class HostedBackupRunTests(unittest.TestCase):
         with self.assertRaisesRegex(MigrationError, "does not match this account"):
             HostedBackupRun(other_client, str(self.home)).pending()
 
+    def test_explicit_abandon_keeps_journal_until_service_quarantines(self):
+        with patch("codex_migrate.vault_hosted_backup_run.encrypted_snapshot_inventory",
+                   return_value=self.inventory), patch.object(
+                   self.client, "reserve", return_value=RESERVATION), patch.object(
+                   self.client, "back_up_snapshot",
+                   side_effect=MigrationError("network interrupted")):
+            with self.assertRaises(MigrationError):
+                self.run.back_up_snapshot(str(self.root), apply=True)
+        with patch.object(self.client, "abandon",
+                          side_effect=[MigrationError("response lost"), None]) as abandon:
+            with self.assertRaisesRegex(MigrationError, "explicit confirmation"):
+                self.run.abandon_pending()
+            abandon.assert_not_called()
+            with self.assertRaisesRegex(MigrationError, "response lost"):
+                self.run.abandon_pending(apply=True)
+            self.assertEqual(self.run.pending(), {
+                "snapshotId": SNAPSHOT, "reservationId": RESERVATION})
+            self.assertTrue(self.run.abandon_pending(apply=True))
+            self.assertIsNone(self.run.pending())
+            self.assertFalse(self.run.abandon_pending(apply=True))
+            self.assertEqual(abandon.call_count, 2)
+            abandon.assert_any_call(RESERVATION, apply=True)
+
 
 if __name__ == "__main__":
     unittest.main()

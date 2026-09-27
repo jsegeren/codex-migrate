@@ -258,6 +258,14 @@ customer-facing retry or abandon flow remain release gates. The journal does
 not store the device bearer, recovery key, ciphertext, or conversation text.
 The run pins the upload to the journaled snapshot ID, even if the local
 `latest` pointer advances before staging starts.
+An explicit sandbox-only abandon operation now lets the same device quarantine
+its owned pending reservation, including after a subscription lapses. It
+refuses later grants and publication, retains reserved quota, and waits for
+the existing operator's replay-window and provider-absence checks before
+release. The local journal is removed only after the quarantine response;
+an ambiguous response retains it for idempotent retry. This is **not** a
+buyer-facing cancellation/status flow: the installed app does not show
+cleanup progress or know when quota is freed, and no cleanup worker is deployed.
 The draft Worker also has an HMAC-bound batch verification route: a service
 signs the exact JSON body for at most 512 scoped objects, and the Worker
 performs provider-checked R2 metadata reads before returning success. The

@@ -34,7 +34,15 @@ function fixture() {
         return { rows: [{ account_id: accountId, vault_id: vaultId,
           purchase_session_id: 'cs_test_fixture', purchase_mode: 'sandbox' }] };
       }
+      if (sql.includes('FROM hosted.device_sessions\n')) {
+        assert.deepEqual(values, [session.tokenHash, vaultId]);
+        return { rows: [{ account_id: accountId, vault_id: vaultId }] };
+      }
       writes++;
+      if (sql.includes('abandon_upload_reservation')) {
+        assert.deepEqual(values, [accountId, vaultId, reservationId]);
+        return { rows: [{ allowed: true }] };
+      }
       if (sql.includes('reserve_upload_current')) {
         assert.equal(values[3], 20);
         return { rows: [{ allowed: true }] };
@@ -127,6 +135,19 @@ test('lapsed subscription cannot reserve or grant any object', async () => {
   f.req.body = { action: 'put', vaultId, reservationId, item };
   assert.equal((await f.send()).statusCode, 403);
   assert.equal(f.writes(), 0);
+});
+
+test('owned device can quarantine pending upload even after subscription lapses', async () => {
+  const f = fixture();
+  f.setEntitlement('past_due');
+  f.req.body = { action: 'abandon', vaultId, reservationId };
+  const result = await f.send();
+  assert.equal(result.statusCode, 200);
+  assert.deepEqual(result.body, { cleanupPending: true });
+  assert.equal(f.writes(), 1);
+  f.req.body.vaultId = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+  assert.equal((await f.send()).statusCode, 403);
+  assert.equal(f.writes(), 1);
 });
 
 test('invalid item, foreign Vault, or unavailable runtime reveal no internals', async () => {

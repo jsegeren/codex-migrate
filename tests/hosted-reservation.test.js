@@ -1,7 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createUploadReservation, renewUploadReservation } =
+const { createUploadReservation, renewUploadReservation,
+  abandonUploadReservation } =
   require('../hosted/reservation');
+const { authorizeReadScope } = require('../hosted/access');
+const { mintSessionSecret } = require('./hosted-device-fixture');
 const { freshScope, accountId, vaultId } = require('./hosted-subscriber-fixture');
 
 test('fresh paid scope creates a bounded byte reservation', async () => {
@@ -64,4 +67,21 @@ test('database and quota errors never disclose internals', async () => {
       reservationId, query: execute }), error =>
       error.message === 'hosted_reservation_denied');
   }
+});
+
+test('abandon consumes owned read scope and never releases quota in its response', async () => {
+  const session = mintSessionSecret();
+  const scope = await authorizeReadScope({ sessionToken: session.token, vaultId,
+    query: async () => ({ rows: [{ account_id: accountId, vault_id: vaultId }] }) });
+  const reservationId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  const result = await abandonUploadReservation({ scope, reservationId,
+    query: async (sql, values) => {
+      assert.match(sql, /abandon_upload_reservation/);
+      assert.deepEqual(values, [accountId, vaultId, reservationId]);
+      return { rows: [{ allowed: true }] };
+    } });
+  assert.deepEqual(result, { cleanupPending: true });
+  await assert.rejects(abandonUploadReservation({ scope, reservationId,
+    query: async () => ({ rows: [{ allowed: true }] }) }),
+  /hosted_reservation_denied/);
 });
