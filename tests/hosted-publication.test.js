@@ -2,7 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { publishStagedReceipt } = require('../hosted/publication');
 const { validateReceipt } = require('../hosted/receipt');
-const { mintSessionSecret, authorizeUploadScope } = require('../hosted/access');
+const { authorizeUploadScope } = require('../hosted/access');
+const { mintSessionSecret } = require('./hosted-device-fixture');
 
 const snapshotId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const reservationId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';

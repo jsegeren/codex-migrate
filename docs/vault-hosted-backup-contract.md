@@ -148,14 +148,20 @@ egress allowance. Do not claim that B2 restores are always free. See its
   purchase, sends a separate one-use code to that purchase's email, limits
   issuance to one code per ten minutes and five per day, and atomically claims
   one zero-allowance account, first Vault, and hashed first-device session only
-  after accepted delivery and code entry. The device secret is returned once
-  to the future native helper and must be saved in Keychain; it is never an
-  emailed or stored plaintext server credential.
-  Uncertain mail delivery never activates a code. This is server-only code and
-  disposable database proof: there is no buyer-facing enrollment route,
-  edge/IP abuse limit, native Keychain binding and lost-response recovery,
-  second-device pairing, hosted trial, subscription checkout, or production
-  migration. The hosted option remains unavailable.
+  after accepted delivery and code entry. Uncertain mail delivery never
+  activates a code. The dark flow has the native helper generate
+  and store the first-device bearer secret in ThisDeviceOnly Keychain *before*
+  the claim. It sends only its
+  domain-separated digest and random device ID to the server, and verifies
+  local retrieval. The server claim returns no bearer secret. The helper can
+  list its own stored device IDs and digests without revealing tokens; after a
+  restart or lost claim response, the native client can authenticate with a
+  saved token and resolve the same account/Vault IDs while the session remains
+  valid. This is source
+  and disposable-Keychain test evidence, **not** a wired buyer flow. There is
+  no buyer-facing enrollment route, edge/IP abuse limit, second-device
+  pairing or lost-Mac re-enrollment, hosted trial, subscription checkout, or
+  production migration. The hosted option remains unavailable.
 - A provider-neutral subscription upload gate is implemented for a future
   service to call with a freshly retrieved Stripe Subscription, its
   server-held enrollment record, and a server-held catalog of approved price

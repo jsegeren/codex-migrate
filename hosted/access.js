@@ -1,7 +1,7 @@
 // Server-only authorization boundary for hosted Vault operations. A purchase
 // download link is not a storage credential. Call this for every operation;
 // do not cache its result across requests or accept account IDs from clients.
-const { createHash, randomBytes } = require('node:crypto');
+const { createHash } = require('node:crypto');
 const { uploadAllowance } = require('./stripe_entitlement');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -27,11 +27,6 @@ function tokenHash(token) {
   }
   return createHash('sha256').update('codex-vault-hosted-session-v1\0').update(token)
     .digest('hex');
-}
-
-function mintSessionSecret() {
-  const token = `hv1_${randomBytes(32).toString('base64url')}`;
-  return Object.freeze({ token, tokenHash: tokenHash(token) });
 }
 
 async function authorizeUploadScope({ sessionToken, vaultId, query,
@@ -87,5 +82,5 @@ function consumeAuthorizedScope(scope) {
   return valid;
 }
 
-module.exports = { HostedAccessError, mintSessionSecret, authorizeUploadScope,
-  isAuthorizedScope, consumeAuthorizedScope };
+module.exports = { HostedAccessError, authorizeUploadScope,
+  isAuthorizedScope, consumeAuthorizedScope, tokenHash };

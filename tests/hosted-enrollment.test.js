@@ -1,14 +1,18 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { beginEnrollment, claimEnrollment } = require('../hosted/enrollment');
+const { randomUUID } = require('node:crypto');
+const { beginEnrollment, claimEnrollment, resolveFirstDevice } = require('../hosted/enrollment');
+const { mintSessionSecret } = require('./hosted-device-fixture');
 
 const purchase = Object.freeze({ sessionId: 'cs_test_fixture', mode: 'sandbox',
   email: 'buyer@example.test' });
-const purchaseToken = 'private-purchase-locator';
+  const purchaseToken = 'private-purchase-locator';
 
 test('enrollment emails a fresh code and cannot issue an upload capability', async () => {
   let emailed;
   let savedHash;
+  const deviceId = randomUUID();
+  const device = mintSessionSecret();
   const verifyPurchase = async token => {
     assert.equal(token, purchaseToken);
     return purchase;
@@ -31,7 +35,8 @@ test('enrollment emails a fresh code and cannot issue an upload capability', asy
       assert.equal(values[2], purchase.mode);
       assert.match(values[4], /^[0-9a-f-]{36}$/);
       assert.match(values[5], /^[0-9a-f-]{36}$/);
-      assert.match(values[6], /^[0-9a-f]{64}$/);
+      assert.equal(values[5], deviceId);
+      assert.equal(values[6], device.tokenHash);
       return { rows: [{ account_id: values[3] }] };
     }
     throw Error('unexpected query');
@@ -51,13 +56,28 @@ test('enrollment emails a fresh code and cannot issue an upload capability', asy
   assert.equal('accountId' in begun, false);
 
   const claim = await claimEnrollment({ purchaseToken, code: emailed.code,
-    verifyPurchase, query });
+    deviceId, deviceTokenHash: device.tokenHash, verifyPurchase, query });
   assert.match(claim.accountId, /^[0-9a-f-]{36}$/);
   assert.match(claim.vaultId, /^[0-9a-f-]{36}$/);
-  assert.match(claim.deviceId, /^[0-9a-f-]{36}$/);
-  assert.match(claim.deviceToken, /^hv1_[A-Za-z0-9_-]{43}$/);
+  assert.equal(claim.deviceId, deviceId);
+  assert.equal('deviceToken' in claim, false);
   assert.equal(Object.isFrozen(claim), true);
-  assert.equal(savedHash.includes(claim.deviceToken), false);
+  assert.equal(savedHash.includes(device.token), false);
+
+  // A lost claim response does not strand the account: the native helper
+  // retains the token and can resolve the same account/Vault after restart.
+  const recovered = await resolveFirstDevice({ deviceToken: device.token,
+    deviceId, verifyPurchase: async (id, mode) => {
+      assert.deepEqual([id, mode], [purchase.sessionId, purchase.mode]);
+      return purchase;
+    }, query: async (sql, values) => {
+      assert.match(sql, /revoked_at IS NULL/);
+      assert.deepEqual(values, [device.tokenHash, deviceId]);
+      return { rows: [{ account_id: claim.accountId, vault_id: claim.vaultId,
+        device_id: deviceId, purchase_session_id: purchase.sessionId,
+        purchase_mode: purchase.mode }] };
+    } });
+  assert.deepEqual(recovered, claim);
 });
 
 test('rate limits, mail uncertainty, and payment failures cannot claim an account', async () => {
@@ -80,6 +100,33 @@ test('rate limits, mail uncertainty, and payment failures cannot claim an accoun
     verifyPurchase, query: async () => { throw Error('should not query'); } }),
   /hosted_enrollment_unavailable/);
   await assert.rejects(claimEnrollment({ purchaseToken, code: `hve1_${'a'.repeat(43)}`,
+    deviceId: randomUUID(), deviceTokenHash: 'a'.repeat(64),
     verifyPurchase, query: async () => ({ rows: [{ account_id: null }] }) }),
+  /hosted_enrollment_unavailable/);
+  await assert.rejects(claimEnrollment({ purchaseToken, code: `hve1_${'a'.repeat(43)}`,
+    deviceId: randomUUID(), deviceTokenHash: 'not-a-hash', verifyPurchase,
+    query: async () => { throw Error('should not query'); } }),
+  /hosted_enrollment_unavailable/);
+  await assert.rejects(resolveFirstDevice({ deviceToken: mintSessionSecret().token,
+    deviceId: randomUUID(), query: async () => ({ rows: [] }),
+    verifyPurchase: async () => { throw Error('should not verify'); } }),
+  /hosted_enrollment_unavailable/);
+  await assert.rejects(resolveFirstDevice({ deviceToken: mintSessionSecret().token,
+    deviceId: randomUUID(), query: async () => { throw Error('private DB'); },
+    verifyPurchase: async () => purchase }),
+  /hosted_enrollment_unavailable/);
+  const device = mintSessionSecret();
+  const deviceId = randomUUID();
+  await assert.rejects(resolveFirstDevice({ deviceToken: device.token,
+    deviceId, query: async () => ({ rows: [{ account_id: randomUUID(),
+      vault_id: randomUUID(), device_id: deviceId,
+      purchase_session_id: purchase.sessionId, purchase_mode: purchase.mode }] }),
+    verifyPurchase: async () => { throw Error('refunded purchase'); } }),
+  /hosted_enrollment_unavailable/);
+  await assert.rejects(resolveFirstDevice({ deviceToken: device.token,
+    deviceId, query: async () => ({ rows: [{ account_id: randomUUID(),
+      vault_id: randomUUID(), device_id: randomUUID(),
+      purchase_session_id: purchase.sessionId, purchase_mode: purchase.mode }] }),
+    verifyPurchase: async () => { throw Error('should not verify'); } }),
   /hosted_enrollment_unavailable/);
 });

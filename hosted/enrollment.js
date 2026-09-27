@@ -3,10 +3,12 @@
 // on a freshly verified, unrefunded Stripe purchase. No HTTP route uses this
 // module yet, and an enrolled account starts with zero upload allowance.
 const { createHash, randomBytes, randomUUID } = require('node:crypto');
-const { mintSessionSecret } = require('./access');
+const { tokenHash } = require('./access');
 
 const CHALLENGE = /^hve1_[A-Za-z0-9_-]{43}$/;
 const SESSION = /^cs_(?:test|live)_[A-Za-z0-9]+$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const DIGEST = /^[0-9a-f]{64}$/;
 const ISSUE_SQL = `SELECT hosted.issue_enrollment_challenge(
   $1::text, $2::text, $3::text
 ) AS issued`;
@@ -16,6 +18,14 @@ const DELIVERY_SQL = `SELECT hosted.record_enrollment_challenge_delivery(
 const CLAIM_SQL = `SELECT hosted.claim_and_pair_first_device(
   $1::text, $2::text, $3::text, $4::uuid, $5::uuid, $6::uuid, $7::text
 ) AS account_id`;
+const RESOLVE_SQL = `SELECT sessions.account_id, sessions.vault_id,
+    sessions.device_id, purchases.purchase_session_id, purchases.purchase_mode
+  FROM hosted.device_sessions AS sessions
+  JOIN hosted.purchase_enrollments AS purchases
+    ON purchases.account_id = sessions.account_id
+  WHERE sessions.token_hash = $1 AND sessions.device_id = $2
+    AND sessions.revoked_at IS NULL
+    AND sessions.expires_at > clock_timestamp()`;
 
 class HostedEnrollmentError extends Error {
   constructor() { super('hosted_enrollment_unavailable'); }
@@ -74,30 +84,52 @@ async function beginEnrollment({ purchaseToken, verifyPurchase, query,
   }
 }
 
-async function claimEnrollment({ purchaseToken, code, verifyPurchase, query }) {
+async function claimEnrollment({ purchaseToken, code, deviceId,
+  deviceTokenHash, verifyPurchase, query }) {
   if (typeof verifyPurchase !== 'function' || typeof query !== 'function') {
     throw new HostedEnrollmentError();
   }
   try {
+    if (!UUID.test(deviceId) || !DIGEST.test(deviceTokenHash)) {
+      throw new HostedEnrollmentError();
+    }
     const hash = challengeHash(code);
     const purchase = await verifyPurchase(purchaseToken);
     if (!purchaseEvidence(purchase)) throw new HostedEnrollmentError();
     const proposedAccount = randomUUID();
     const vaultId = randomUUID();
-    const deviceId = randomUUID();
-    const device = mintSessionSecret();
     const claimed = await query(CLAIM_SQL, [hash, purchase.sessionId,
-      purchase.mode, proposedAccount, vaultId, deviceId, device.tokenHash]);
+      purchase.mode, proposedAccount, vaultId, deviceId, deviceTokenHash]);
     if (claimed?.rows?.[0]?.account_id !== proposedAccount) {
       throw new HostedEnrollmentError();
     }
-    // Return the secret once, only to the native helper that supplied both
-    // purchase proof and the emailed code. The helper must save it in Keychain;
-    // a browser route must never echo, log, or persist the plaintext token.
+    // The native helper generated and saved the bearer secret before this
+    // call. Losing this response is recoverable by resolving that same device.
     // This is not a trial or an upload capability: allowance remains zero.
-    return Object.freeze({ accountId: proposedAccount, vaultId, deviceId,
-      deviceToken: device.token });
+    return Object.freeze({ accountId: proposedAccount, vaultId, deviceId });
   } catch { throw new HostedEnrollmentError(); }
 }
 
-module.exports = { HostedEnrollmentError, beginEnrollment, claimEnrollment };
+async function resolveFirstDevice({ deviceToken, deviceId, query,
+  verifyPurchase }) {
+  if (typeof query !== 'function' || typeof verifyPurchase !== 'function' ||
+      !UUID.test(deviceId)) throw new HostedEnrollmentError();
+  try {
+    const digest = tokenHash(deviceToken);
+    const result = await query(RESOLVE_SQL, [digest, deviceId]);
+    const row = result?.rows?.[0];
+    if (result?.rows?.length !== 1 || row.device_id !== deviceId ||
+        !UUID.test(row.account_id) || !UUID.test(row.vault_id)) {
+      throw new HostedEnrollmentError();
+    }
+    const purchase = await verifyPurchase(row.purchase_session_id,
+      row.purchase_mode);
+    if (purchase?.sessionId !== row.purchase_session_id ||
+        purchase?.mode !== row.purchase_mode) throw new HostedEnrollmentError();
+    return Object.freeze({ accountId: row.account_id, vaultId: row.vault_id,
+      deviceId });
+  } catch { throw new HostedEnrollmentError(); }
+}
+
+module.exports = { HostedEnrollmentError, beginEnrollment, claimEnrollment,
+  resolveFirstDevice };

@@ -1,7 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { mintSessionSecret, authorizeUploadScope, isAuthorizedScope } =
+const { authorizeUploadScope, isAuthorizedScope } =
   require('../hosted/access');
+const { mintSessionSecret } = require('./hosted-device-fixture');
 const { publishStagedReceipt } = require('../hosted/publication');
 
 const accountId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -43,7 +44,7 @@ function request(overrides = {}) {
     live: false, priceCatalog: catalog, ...overrides };
 }
 
-test('mints unpredictable token but persists only a digest and grants an owned Vault', async () => {
+test('accepts a client-minted token digest and grants an owned Vault', async () => {
   const first = mintSessionSecret();
   const second = mintSessionSecret();
   assert.match(first.token, /^hv1_[A-Za-z0-9_-]{43}$/);
