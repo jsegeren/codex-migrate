@@ -5,6 +5,36 @@ remaining acceptance checks continue. This is not full release certification.
 The [paid-beta launch record](paid-beta-launch-2026-09-07.md) controls the current
 distribution decision; the dated entries below preserve their original status.
 
+## September 26 private build-20 candidate — not released
+
+Clean, pushed source `d65cb7f0c46b56eb43e83a6dd36940808482aa3b` produced a
+Developer ID signed, Apple-notarized build-20 app. Apple's app submission
+`c54daf95-ccd3-4954-8946-760a195cc6fa` is Accepted; stapling and Gatekeeper
+assessment passed. The intermediate ZIP is 10,429,416 bytes with SHA-256
+`96c4e09fffa1798e1e3fdac17166d7fa6ae1642f756570cf582fdd5c85c590c1`.
+Its bundled engine passed 18 of 19 focused desktop tests, with the one
+case-sensitive-filesystem fixture skipped.
+
+The same app was packaged into the required one-time Sparkle key-rotation DMG.
+Apple accepted the separately signed disk-image submission
+`347833ad-2cf5-46ec-8797-6d2db55c25a3`; stapling and Gatekeeper assessment
+passed. The final DMG is 11,227,700 bytes with SHA-256
+`3f98ae4edbb479e1429e5c309c78eeda3448e4c4b6a01613a49041d1faf78a1a`.
+Sparkle's new-key signer produced signature
+`OMAFR0uulGy2nMZq0fli6hzZmZkCO3ThZnfnZN60Gj5lwMSU406bbyMydgpMr4/kAtJTiSlaGzE09F9hkMfrDQ==`
+and its verifier accepted that signature against the exact final bytes. The
+embedded public key is the approved rotated key. No private signing key is in
+this repository or artifact.
+
+The home-screen backup-health regression in this source passed 11 targeted
+browser-script tests and 63 setup tests locally. The exact source commit passed
+the GitHub Actions Python 3.9 and 3.12 jobs. This is an **artifact receipt, not
+release acceptance**: the DMG has not been uploaded to private delivery,
+offered to a paid buyer, installed through the production appcast, or exercised
+for clean-account Vault recovery. It does not prove hosted backup or two-Mac
+sync. Keep build 16 public and both integration and hosted PRs on hold until
+their stated acceptance gates pass.
+
 ## September 23 build 16 in-app update beta release
 
 The current paid artifact is `beta-build16-arm64`, from clean source
