@@ -346,9 +346,15 @@ egress allowance. Do not claim that B2 restores are always free. See its
   file digest or length changed after planning. A synthetic test covers both
   legacy raw and compressed reuse, one new chunk, changed content, and an
   exposed lookup file. This is still **not** a hosted-only backup: the buyer
-  path does not yet obtain authenticated published-object lookups, limit new-
-  chunk staging across the whole snapshot, or publish and restore that mixed
-  inventory. The existing local `store-chunks` behavior remains unchanged.
+  path does not yet use the new dark authenticated, 256-candidate service
+  lookup. That lookup returns size and ciphertext SHA-256 only for objects in
+  an already published snapshot of the same purchased, subscribed account and
+  Vault; staged and foreign objects are excluded. It grants no read or write
+  capability and its database result is not proof that R2 still holds the
+  object. Client orchestration, provider re-verification, bounded new-chunk
+  staging across the whole snapshot, publication, and restore of that mixed
+  inventory remain open. The existing local `store-chunks` behavior remains
+  unchanged.
 - Keep each local Vault in its own random, account-scoped remote namespace.
   Two Macs may each back up to separate Vaults under one subscription; this is
   not synchronization or a silent merge. Object names and snapshot times are
