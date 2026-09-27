@@ -201,11 +201,12 @@ using the same reservation after an interruption. A lost final response can be
 reconciled against the exact published reservation. Real Worker performance,
 clean-account recovery, and installed-app scheduling remain release gates.
 The native sandbox adapter can now run one selected encrypted local snapshot
-through reservation, immutable-object staging, bounded receipt pages, and
-checkpointed server verification/publication as one explicitly confirmed
-operation. It returns a protection receipt only after the service confirms the
+through immutable-object staging, bounded receipt pages, and checkpointed
+server verification/publication as one explicitly confirmed operation. The
+caller must first reserve and persist the reservation ID for safe retries. The
+adapter returns a protection receipt only after the service confirms the
 exact object count was published. A failed page or lost final response is not
-reported as success; the caller can pass the same reservation ID to retry and
+reported as success; the caller must pass the same reservation ID to retry and
 reuse already verified ciphertext objects. This does not create local
 snapshots, persist resume IDs, install a schedule, or
 open the buyer UI. It remains a dark integration step, not an available

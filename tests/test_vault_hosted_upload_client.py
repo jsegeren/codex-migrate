@@ -373,11 +373,13 @@ class HostedUploadClientTests(unittest.TestCase):
                        return_value=inventory), patch(
                        "codex_migrate.vault_remote_transfer._vault_root", return_value=root):
                 with self.assertRaisesRegex(MigrationError, "explicit confirmation"):
-                    self.client.back_up_snapshot(str(root))
+                    self.client.back_up_snapshot(str(root), reservation_id=RESERVATION)
                 self.assertEqual(self.server.actions, [])
+                self.assertEqual(self.client.reserve(apply=True), RESERVATION)
                 self.server.fail_next_page = True
                 with self.assertRaises(MigrationError):
-                    self.client.back_up_snapshot(str(root), apply=True)
+                    self.client.back_up_snapshot(str(root), reservation_id=RESERVATION,
+                                                 apply=True)
                 self.assertNotIn("publish_checkpointed", self.server.actions)
                 self.assertEqual(set(self.server.objects), set(self.server.expected))
                 self.server.fail_next_checkpoint_publish = True

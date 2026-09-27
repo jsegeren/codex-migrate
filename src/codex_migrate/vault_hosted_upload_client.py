@@ -286,31 +286,27 @@ class HostedUploadClient:
                                                   apply=True)
         raise MigrationError("Hosted verification did not complete safely.")
 
-    def back_up_snapshot(self, vault: str, *, snapshot: str = "latest",
-                         reservation_id: Optional[str] = None,
+    def back_up_snapshot(self, vault: str, *, reservation_id: str,
+                         snapshot: str = "latest",
                          crypto_helper: Optional[str] = None,
                          apply: bool = False) -> dict:
         """Upload one encrypted snapshot and return only a published receipt.
 
         This dark adapter does not create a local snapshot or install a schedule.
+        The caller must first reserve and durably record the reservation ID.
         A network error or lost publication response is ambiguous, never a
-        successful backup. Pass the same reservation ID after an interruption
-        when the caller retained it; objects are immutable and the service
-        independently verifies them before moving last-good. This method does
-        not durably save that ID for the caller.
+        successful backup. Retry with that same ID; objects are immutable and
+        the service independently verifies them before moving last-good.
         """
         if apply is not True:
             raise MigrationError("Hosted backup changes require explicit confirmation.")
-        if reservation_id is not None:
-            self._require_reservation(reservation_id)
+        self._require_reservation(reservation_id)
         inventory = encrypted_snapshot_inventory(
             vault, snapshot=snapshot, crypto_helper=crypto_helper)
         expected = {item.remote_key: (item.bytes, item.sha256)
                     for item in inventory.files}
         if len(expected) != len(inventory.files):
             raise MigrationError("The hosted snapshot inventory has duplicate objects.")
-        if reservation_id is None:
-            reservation_id = self.reserve(apply=True)
         store = self.object_store(reservation_id, expected, apply=True)
         staged = stage_encrypted_snapshot(
             vault, store, snapshot=snapshot, crypto_helper=crypto_helper)
