@@ -268,6 +268,13 @@ egress allowance. Do not claim that B2 restores are always free. See its
   starts with zero upload allowance; no live configuration can open the route.
   This is a test seam, not customer enrollment: there is no native buyer UI,
   subscription, second-device pairing, edge abuse protection, or hosted upload.
+  A matching native test adapter now requires explicit `apply=True` for the
+  email send, Keychain-device creation, and claim. It never puts the device
+  bearer in a claim or browser response; only the domain-separated digest
+  crosses the claim boundary. If the claim response is lost, it keeps the
+  Keychain item and can resolve the same device using its bearer over the
+  authenticated route. This is source-level loopback evidence, not an
+  installed-app or live-server enrollment acceptance.
 - A provider-neutral subscription upload gate is implemented for a future
   service to call with a freshly retrieved Stripe Subscription, its
   server-held enrollment record, and a server-held catalog of approved price
