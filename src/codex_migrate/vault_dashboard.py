@@ -375,6 +375,10 @@ async function runSearch(append=false){
   $("status").textContent=source==="history"?"Searching saved titles…":
     source==="backup"?"Searching the opened backup…":
     source==="local_titles"?"Searching current and old titles…":"Searching this Mac…";
+  const slowNotice=source==="local"?setTimeout(()=>{
+    if(request===searchRequest)$("status").textContent="Still searching this Mac. Large histories or recently changed conversations can take time."+
+      ($("index-build").disabled?"":" The optional search cache below speeds later searches.");
+  },4000):null;
   try{
     let data;
     if(source==="history"){
@@ -410,7 +414,7 @@ async function runSearch(append=false){
       source==="history"?"No matching saved title found. Choose one dated backup to search its full text.":
       source==="local_titles"?"No matching local title found. Try searching conversation text.":
       "No matching conversation text found.";
-  }catch(error){if(request===searchRequest)fail(error)}finally{if(request===searchRequest)$("more-results").disabled=false}
+  }catch(error){if(request===searchRequest)fail(error)}finally{if(slowNotice!==null)clearTimeout(slowNotice);if(request===searchRequest)$("more-results").disabled=false}
 }
 $("search").onsubmit=event=>{event.preventDefault();void runSearch()};
 $("more-results").onclick=()=>void runSearch(true);
