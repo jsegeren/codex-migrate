@@ -116,6 +116,8 @@ through saving the recovery key. During that first backup, daily automatic
 backup is selected by default and manual-only remains available. After the first
 snapshot verifies, the daily option installs a private macOS LaunchAgent that
 adds a verified encrypted snapshot every 24 hours, even when the app is closed.
+If a run fails, it retries at the next six-hour check without replacing the
+last good snapshot; successful runs keep the selected backup cadence.
 Turning automatic backup off removes only the local schedule; existing Vault
 snapshots remain. The local Vault page can also show
 the published backup history and recover a chosen verified snapshot into a
