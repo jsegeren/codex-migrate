@@ -346,6 +346,55 @@ class HostedUploadClientTests(unittest.TestCase):
             RESERVATION, SNAPSHOT, apply=True), 3)
         self.assertEqual(self.server.actions.count("publish_checkpointed"), 2)
 
+    def test_full_snapshot_requires_publication_and_retries_without_reupload(self):
+        manifest_key = f"manifests/{SNAPSHOT}.cvmanifest"
+        manifest = b"third"
+        self.server.expected[manifest_key] = (len(manifest),
+                                              hashlib.sha256(manifest).hexdigest())
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            (root / "manifests").mkdir()
+            (root / "refs").mkdir()
+            (root / "vault.json").write_bytes(FIRST)
+            (root / "manifests" / (SNAPSHOT + ".cvmanifest")).write_bytes(manifest)
+            (root / "refs" / (SNAPSHOT + ".json")).write_bytes(SECOND)
+            inventory = RemoteInventory(SNAPSHOT, (
+                VaultTransferFile("vault.json", FIRST_KEY, len(FIRST),
+                                  self.server.expected[FIRST_KEY][1]),
+                VaultTransferFile("manifests/" + SNAPSHOT + ".cvmanifest",
+                                  manifest_key, len(manifest),
+                                  self.server.expected[manifest_key][1]),
+                VaultTransferFile("refs/" + SNAPSHOT + ".json", SECOND_KEY,
+                                  len(SECOND), self.server.expected[SECOND_KEY][1]),
+            ), len(FIRST) + len(manifest) + len(SECOND), True)
+            with patch("codex_migrate.vault_hosted_upload_client.encrypted_snapshot_inventory",
+                       return_value=inventory), patch(
+                       "codex_migrate.vault_remote_transfer.encrypted_snapshot_inventory",
+                       return_value=inventory), patch(
+                       "codex_migrate.vault_remote_transfer._vault_root", return_value=root):
+                with self.assertRaisesRegex(MigrationError, "explicit confirmation"):
+                    self.client.back_up_snapshot(str(root))
+                self.assertEqual(self.server.actions, [])
+                self.server.fail_next_page = True
+                with self.assertRaises(MigrationError):
+                    self.client.back_up_snapshot(str(root), apply=True)
+                self.assertNotIn("publish_checkpointed", self.server.actions)
+                self.assertEqual(set(self.server.objects), set(self.server.expected))
+                self.server.fail_next_checkpoint_publish = True
+                with self.assertRaises(MigrationError):
+                    self.client.back_up_snapshot(str(root),
+                                                 reservation_id=RESERVATION,
+                                                 apply=True)
+                self.assertEqual(self.client.back_up_snapshot(
+                    str(root), reservation_id=RESERVATION, apply=True), {
+                    "snapshotId": SNAPSHOT, "verifiedObjectCount": 3,
+                    "uploadedFiles": 0, "reusedFiles": 3,
+                    "encryptedBytes": inventory.transfer_bytes,
+                })
+        self.assertEqual(self.server.actions.count("put"), 3)
+        self.assertEqual(self.server.actions.count("reserve"), 1)
+        self.assertEqual(self.server.actions.count("publish_checkpointed"), 2)
+
     def test_mutation_requires_apply_and_server_origin_is_pinned(self):
         with self.assertRaises(MigrationError):
             self.client.reserve()

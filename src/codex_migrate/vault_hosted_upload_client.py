@@ -10,14 +10,17 @@ from __future__ import annotations
 import json
 import re
 import time
-from typing import Mapping, Tuple
+from typing import Mapping, Optional, Tuple
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, build_opener
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_hosted_recovery_client import _origin
 from codex_migrate.vault_http_store import CapabilityHttpStore, _NoRedirect
-from codex_migrate.vault_remote_transfer import StageResult, StagedObject
+from codex_migrate.vault_remote_inventory import encrypted_snapshot_inventory
+from codex_migrate.vault_remote_transfer import (
+    StageResult, StagedObject, stage_encrypted_snapshot,
+)
 
 
 _UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z")
@@ -282,6 +285,51 @@ class HostedUploadClient:
                 return self.publish_checkpointed(reservation_id, snapshot_id,
                                                   apply=True)
         raise MigrationError("Hosted verification did not complete safely.")
+
+    def back_up_snapshot(self, vault: str, *, snapshot: str = "latest",
+                         reservation_id: Optional[str] = None,
+                         crypto_helper: Optional[str] = None,
+                         apply: bool = False) -> dict:
+        """Upload one encrypted snapshot and return only a published receipt.
+
+        This dark adapter does not create a local snapshot or install a schedule.
+        A network error or lost publication response is ambiguous, never a
+        successful backup. Pass the same reservation ID after an interruption
+        when the caller retained it; objects are immutable and the service
+        independently verifies them before moving last-good. This method does
+        not durably save that ID for the caller.
+        """
+        if apply is not True:
+            raise MigrationError("Hosted backup changes require explicit confirmation.")
+        if reservation_id is not None:
+            self._require_reservation(reservation_id)
+        inventory = encrypted_snapshot_inventory(
+            vault, snapshot=snapshot, crypto_helper=crypto_helper)
+        expected = {item.remote_key: (item.bytes, item.sha256)
+                    for item in inventory.files}
+        if len(expected) != len(inventory.files):
+            raise MigrationError("The hosted snapshot inventory has duplicate objects.")
+        if reservation_id is None:
+            reservation_id = self.reserve(apply=True)
+        store = self.object_store(reservation_id, expected, apply=True)
+        staged = stage_encrypted_snapshot(
+            vault, store, snapshot=snapshot, crypto_helper=crypto_helper)
+        if (staged.snapshot_id != inventory.snapshot_id or
+                len(staged.objects) != len(expected) or
+                {item.key: (item.bytes, item.sha256) for item in staged.objects}
+                != expected):
+            raise MigrationError("The hosted snapshot changed during staging.")
+        if self.submit_pages(reservation_id, staged, apply=True) != len(staged.objects):
+            raise MigrationError("The hosted snapshot receipt is incomplete.")
+        verified = self.verify_and_publish(
+            reservation_id, staged.snapshot_id, apply=True)
+        if verified != len(staged.objects):
+            raise MigrationError("The hosted publication receipt is incomplete.")
+        return {"snapshotId": staged.snapshot_id,
+                "verifiedObjectCount": verified,
+                "uploadedFiles": staged.uploaded_files,
+                "reusedFiles": staged.reused_files,
+                "encryptedBytes": staged.remote_bytes_checked}
 
 
 class HostedUploadObjectStore:
