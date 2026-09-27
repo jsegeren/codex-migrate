@@ -19,7 +19,9 @@ from codex_migrate.vault_backup import _helper_path, _read_json, _require_unlink
 from codex_migrate.vault_recovery import _snapshot
 
 
-MAX_CHUNKS = 1_000_000
+# Publication accepts at most one million objects including the required
+# metadata, manifest, and immutable reference.
+MAX_CHUNKS = 999_997
 MAX_ENCRYPTED_CHUNK_BYTES = 64 * 1024 * 1024 + 1024
 # The first hosted transport uses a Worker that refuses bodies above 100 MB.
 # Fail during planning, before uploading any objects the service cannot publish.

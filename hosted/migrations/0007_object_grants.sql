@@ -5,7 +5,7 @@ ALTER TABLE hosted.upload_reservations
   ADD COLUMN granted_bytes bigint NOT NULL DEFAULT 0
     CHECK (granted_bytes >= 0 AND granted_bytes <= reserved_bytes),
   ADD COLUMN granted_objects integer NOT NULL DEFAULT 0
-    CHECK (granted_objects >= 0 AND granted_objects <= 1000003);
+    CHECK (granted_objects >= 0 AND granted_objects <= 1000000);
 --> statement-breakpoint
 CREATE TABLE hosted.upload_object_grants (
   reservation_id uuid NOT NULL REFERENCES hosted.upload_reservations (reservation_id),
@@ -67,7 +67,7 @@ BEGIN
   IF FOUND THEN
     RETURN v_prior.object_bytes = p_bytes AND v_prior.sha256 = p_sha256;
   END IF;
-  IF v_reservation.granted_objects >= 1000003 OR
+  IF v_reservation.granted_objects >= 1000000 OR
       v_reservation.granted_bytes::numeric + p_bytes::numeric >
       v_reservation.reserved_bytes::numeric THEN RETURN false; END IF;
   INSERT INTO hosted.upload_object_grants
