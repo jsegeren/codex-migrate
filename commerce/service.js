@@ -209,7 +209,17 @@ function service({ config, stripe, store, sendMail, signDownload, signCanaryDown
     return { release: purchase.release.id, currentRelease: config.release.id,
       updateAvailable: newerCompatibleRelease(purchase.release, config.release, config.live) };
   }
-  return { fulfill, download, downloadLatest, downloadCanary, entitlement, status };
+  // Server-only input to hosted enrollment. This is not a route or a storage
+  // credential: the hosted flow must separately prove control of this email.
+  async function verifyForHostedEnrollment(token) {
+    const id = tokenSession(token, config);
+    const purchase = await verified(id);
+    await store.ensure(purchase);
+    return Object.freeze({ sessionId: purchase.sessionId, mode: purchase.mode,
+      email: purchase.email });
+  }
+  return { fulfill, download, downloadLatest, downloadCanary, entitlement,
+    status, verifyForHostedEnrollment };
 }
 function checkoutRecovery({ config, stripe, store, sendMail }) {
   async function recover(id) {

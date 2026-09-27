@@ -141,8 +141,15 @@ egress allowance. Do not claim that B2 restores are always free. See its
   of the purchase email with a short-lived, one-use challenge. Neither this
   schema nor an emailed download link issues a device session or starts the
   hosted trial. The database rejects device sessions for accounts without a
-  recorded purchase enrollment. The identity challenge, rate limits, and atomic claim flow
-  remain unimplemented, so the hosted option remains unavailable.
+  recorded purchase enrollment. A further draft flow now rechecks the paid
+  purchase, sends a separate one-use code to that purchase's email, limits
+  issuance to one code per ten minutes and five per day, and atomically claims
+  one zero-allowance account only after accepted delivery and code entry.
+  Uncertain mail delivery never activates a code. This is server-only code and
+  disposable database proof: there is no buyer-facing enrollment route,
+  edge/IP abuse limit, authenticated browser or device pairing, hosted trial,
+  subscription checkout, or production migration. The hosted option remains
+  unavailable.
 - A provider-neutral subscription upload gate is implemented for a future
   service to call with a freshly retrieved Stripe Subscription, its
   server-held enrollment record, and a server-held catalog of approved price

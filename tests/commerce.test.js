@@ -66,6 +66,20 @@ function recoveryFixture() {
     sendMail: async () => { sends++; return 'accepted'; } });
   return { ...f, api, sends: () => sends };
 }
+test('hosted enrollment receives fresh purchase evidence but never an upload credential', async () => {
+  const f = fixture();
+  const token = tokenFor(f.s.id, config);
+  const evidence = await f.api.verifyForHostedEnrollment(token);
+  assert.deepEqual(evidence, { sessionId: f.s.id, mode: 'sandbox',
+    email: 'buyer@example.invalid' });
+  assert.equal(Object.isFrozen(evidence), true);
+  assert.equal(f.records.has(f.s.id), true);
+  assert.equal('token' in evidence, false);
+  assert.equal('vaultId' in evidence, false);
+  f.s.payment_intent.latest_charge.refunded = true;
+  await assert.rejects(f.api.verifyForHostedEnrollment(token), /purchase_requires_support/);
+  await assert.rejects(f.api.verifyForHostedEnrollment('invalid'), /invalid_link/);
+});
 test('commerce defaults closed and requires reviewed release, matching key mode and valid secrets', () => {
   assert.throws(() => configuration({}), /checkout_closed/);
   assert.throws(() => configuration(env), /release_unavailable/);
