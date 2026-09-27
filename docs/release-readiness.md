@@ -5,6 +5,20 @@ remaining acceptance checks continue. This is not full release certification.
 The [paid-beta launch record](paid-beta-launch-2026-09-07.md) controls the current
 distribution decision; the dated entries below preserve their original status.
 
+## September 27 integrated-source local package — not released
+
+Committed source `e644570` packaged as an arm64 **local-test-only** build-20 app.
+The actual bundled engine passed 23 desktop and Vault-compression checks with
+two expected environment skips. An opt-in packaged restore-contention test
+created only disposable synthetic Codex history, verified its encrypted restore,
+and proved that both updater idle and shutdown were refused while restoration
+ran; shutdown succeeded after the restore completed. The disposable Vault key
+was removed by the test. The full source suite separately passed 942 Python
+tests (27 skipped) and 341 JavaScript tests (one skipped). This local package
+is ad-hoc signed, not notarized or distributable. It does not satisfy paid
+buyer installation, automatic update/relaunch, clean-account recovery, or
+hosted-backup acceptance. Build 16 remains public.
+
 ## September 26 private build-20 candidate — not released
 
 Clean, pushed source `d65cb7f0c46b56eb43e83a6dd36940808482aa3b` produced a
