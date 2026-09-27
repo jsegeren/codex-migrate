@@ -52,6 +52,19 @@ test('empty next page is only ready for a separate guarded publication', async (
   assert.deepEqual(events, []);
 });
 
+test('an already-published reservation can reconcile a lost final response', async () => {
+  const result = await verifyNextPage({ scope: await freshScope(),
+    reservationId, snapshotId, verifyBatch: async () => {
+      throw Error('published objects need no second scan');
+    }, query: async sql => {
+      assert.match(sql, /FROM hosted.upload_reservations/);
+      return { rows: [{ staged_count: 3, staged_bytes: '30',
+        declared_count: 3, declared_bytes: '30', state: 'published',
+        lease_valid: false }] };
+    } });
+  assert.deepEqual(result, { verifiedObjects: 0, ready: true });
+});
+
 test('provider failure, mismatched rows, and incomplete declarations record nothing', async () => {
   for (const failure of ['provider', 'cross_account', 'incomplete']) {
     const events = [];

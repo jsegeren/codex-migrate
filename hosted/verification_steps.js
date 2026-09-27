@@ -38,14 +38,21 @@ async function verifyNextPage({ scope, reservationId, snapshotId,
     const row = summary?.rows?.[0];
     const count = Number(row?.staged_count);
     const bytes = Number(row?.staged_bytes);
-    if (summary?.rows?.length !== 1 || row.state !== 'active' ||
-        row.lease_valid !== true || !Number.isSafeInteger(count) ||
+    if (summary?.rows?.length !== 1 ||
+        !['active', 'published'].includes(row.state) ||
+        (row.state === 'active' && row.lease_valid !== true) ||
+        !Number.isSafeInteger(count) ||
         count < 3 || count > 1_000_000 ||
         !Number.isSafeInteger(bytes) || bytes < count ||
         bytes > scope.allowanceBytes ||
         Number(row.declared_count) !== count ||
         Number(row.declared_bytes) !== bytes) {
       throw new HostedVerificationStepError();
+    }
+    // Reconcile an ambiguous final response without re-verifying a published
+    // immutable reservation. Finalization still checks the published snapshot.
+    if (row.state === 'published') {
+      return Object.freeze({ verifiedObjects: 0, ready: true });
     }
     const next = await query(NEXT_SQL, [reservationId]);
     const rows = next?.rows;

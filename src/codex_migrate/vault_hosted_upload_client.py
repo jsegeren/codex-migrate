@@ -256,6 +256,33 @@ class HostedUploadClient:
             raise MigrationError("The hosted publication response is invalid.")
         return count
 
+    def verify_and_publish(self, reservation_id: str, snapshot_id: str, *,
+                           apply: bool = False) -> int:
+        """Resume bounded proof steps; return only after publication succeeds.
+
+        A failed network request is ambiguous, never success. Reinvoking this
+        method with the same IDs resumes the service's exact verified pages.
+        """
+        if apply is not True:
+            raise MigrationError("Hosted upload changes require explicit confirmation.")
+        self._require_reservation(reservation_id)
+        if not isinstance(snapshot_id, str) or not _UUID.fullmatch(snapshot_id):
+            raise MigrationError("The hosted snapshot is invalid.")
+        last_renewal = time.monotonic()
+        # The server returns 128 until the final page. 7,814 calls cover its
+        # one-million-object maximum plus the empty ready check.
+        for _ in range(7_814):
+            if time.monotonic() - last_renewal >= 25 * 60:
+                self.renew(reservation_id, apply=True)
+                last_renewal = time.monotonic()
+            _, ready = self.verify_next(reservation_id, snapshot_id, apply=True)
+            if ready:
+                if time.monotonic() - last_renewal >= 25 * 60:
+                    self.renew(reservation_id, apply=True)
+                return self.publish_checkpointed(reservation_id, snapshot_id,
+                                                  apply=True)
+        raise MigrationError("Hosted verification did not complete safely.")
+
 
 class HostedUploadObjectStore:
     """Interpret put_required as no HEAD grant, never as an observed 404."""

@@ -74,6 +74,9 @@ class _Handler(BaseHTTPRequestHandler):
                     request["snapshotId"] != SNAPSHOT or
                     not self.server.verified_ready):
                 return self._json(503, {"error": "temporarily_unavailable"})
+            if self.server.fail_next_checkpoint_publish:
+                self.server.fail_next_checkpoint_publish = False
+                return self._json(503, {"error": "temporarily_unavailable"})
             return self._json(200, {"snapshotId": SNAPSHOT,
                                     "verifiedObjectCount": 3})
         if self.path == "/api/hosted-publish":
@@ -185,6 +188,7 @@ class HostedUploadClientTests(unittest.TestCase):
         self.server.fail_next_page = False
         self.server.fail_next_publish = False
         self.server.fail_next_verify = False
+        self.server.fail_next_checkpoint_publish = False
         self.server.verify_calls = 0
         self.server.verified_ready = False
         self.server.drop_next_put_response = False
@@ -328,6 +332,17 @@ class HostedUploadClientTests(unittest.TestCase):
         self.assertEqual(self.client.verify_next(RESERVATION, SNAPSHOT,
                                                  apply=True), (0, True))
         self.assertEqual(self.client.publish_checkpointed(
+            RESERVATION, SNAPSHOT, apply=True), 3)
+        self.assertEqual(self.server.actions.count("publish_checkpointed"), 2)
+
+    def test_verification_loop_retries_ambiguous_final_response_safely(self):
+        with self.assertRaises(MigrationError):
+            self.client.verify_and_publish(RESERVATION, SNAPSHOT)
+        self.server.fail_next_checkpoint_publish = True
+        with self.assertRaises(MigrationError):
+            self.client.verify_and_publish(RESERVATION, SNAPSHOT, apply=True)
+        self.assertTrue(self.server.verified_ready)
+        self.assertEqual(self.client.verify_and_publish(
             RESERVATION, SNAPSHOT, apply=True), 3)
         self.assertEqual(self.server.actions.count("publish_checkpointed"), 2)
 

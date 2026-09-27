@@ -195,8 +195,11 @@ last-good. The native sandbox adapter can request one step and finalization;
 neither is wired to an installed customer schedule or UI. Disposable
 PostgreSQL tests cover partial, stale, conflicting, retry, and 21,910-object
 finalization. This is a durable verification building block, not a remote R2
-scale result or a customer-protection claim. A long run still needs lease
-renewal and bounded client orchestration, plus real Worker performance proof.
+scale result or a customer-protection claim. The sandbox client now loops
+through bounded steps, renews the active lease during a long run, and retries
+using the same reservation after an interruption. A lost final response can be
+reconciled against the exact published reservation. Real Worker performance,
+clean-account recovery, and installed-app scheduling remain release gates.
 The draft Worker also has an HMAC-bound batch verification route: a service
 signs the exact JSON body for at most 512 scoped objects, and the Worker
 performs provider-checked R2 metadata reads before returning success. The
