@@ -80,6 +80,18 @@ test('hosted enrollment receives fresh purchase evidence but never an upload cre
   await assert.rejects(f.api.verifyForHostedEnrollment(token), /purchase_requires_support/);
   await assert.rejects(f.api.verifyForHostedEnrollment('invalid'), /invalid_link/);
 });
+test('hosted upload checks the original app purchase for current refunds', async () => {
+  const f = fixture();
+  const current = await f.api.verifyForHostedAuthorization(f.s.id, 'sandbox');
+  assert.deepEqual(current, { sessionId: f.s.id, mode: 'sandbox' });
+  assert.equal('email' in current, false);
+  await assert.rejects(f.api.verifyForHostedAuthorization(f.s.id, 'live'),
+    /purchase_not_verified/);
+  f.s.payment_intent.latest_charge.amount_refunded = 5000;
+  f.s.payment_intent.latest_charge.refunded = true;
+  await assert.rejects(f.api.verifyForHostedAuthorization(f.s.id, 'sandbox'),
+    /purchase_requires_support/);
+});
 test('commerce defaults closed and requires reviewed release, matching key mode and valid secrets', () => {
   assert.throws(() => configuration({}), /checkout_closed/);
   assert.throws(() => configuration(env), /release_unavailable/);

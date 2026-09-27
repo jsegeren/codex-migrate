@@ -120,8 +120,10 @@ egress allowance. Do not claim that B2 restores are always free. See its
   whose domain-separated digest, account, Vault, device, expiry (at most 30
   days), and revocation state are stored in PostgreSQL. Each upload-scope
   authorization queries that record for a live, unrevoked session bound to the
-  requested Vault, loads the enrollment for that account, and must fetch the
-  current Stripe Subscription before granting a scope. The checked subscription
+  requested Vault, joins its server-stored original purchase, rechecks that
+  purchase's current Stripe payment/refund/dispute state, loads the hosted
+  subscription enrollment, and must fetch the current Stripe Subscription
+  before granting a scope. The checked subscription
   allowance is carried in the one-use server scope; the publication coordinator
   rejects a receipt byte limit above that allowance before provider or database
   work. Aggregate retained-byte quota is still enforced separately by the
@@ -129,8 +131,9 @@ egress allowance. Do not claim that B2 restores are always free. See its
   coordinator rejects an ordinary client-shaped account/Vault object; it
   consumes a scope minted by this authorization path once, within 60 seconds.
   The actual identity
-  enrollment, token issuance/rotation and recovery, authenticated HTTP
-  handlers, and payment/refund binding are **not implemented**. These draft
+  enrollment-to-native-client delivery, token rotation and recovery,
+  authenticated HTTP handlers, and trial/billing activation are **not implemented**.
+  The recheck is a server-only primitive, not wired to a live endpoint. These draft
   primitives do not make the service customer-accessible or safe to launch.
 - A versioned draft purchase-enrollment table now binds each enrolled hosted
   account to one recorded $49 Mac-app purchase, and prevents a purchase from claiming two

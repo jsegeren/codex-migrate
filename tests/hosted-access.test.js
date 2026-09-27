@@ -11,6 +11,7 @@ const catalog = new Map([['price_fixture', { priceCents: 1000,
   allowanceBytes: 100_000_000_000 }]]);
 const enrollment = { accountId, subscriptionId: 'sub_fixture',
   customerId: 'cus_fixture', priceId: 'price_fixture' };
+const purchase = { sessionId: 'cs_test_fixture', mode: 'sandbox' };
 const subscription = { id: 'sub_fixture', customer: 'cus_fixture',
   livemode: false, status: 'active', collection_method: 'charge_automatically',
   pause_collection: null, items: { data: [{ quantity: 1, price: {
@@ -23,11 +24,17 @@ function request(overrides = {}) {
   const session = mintSessionSecret();
   return { sessionToken: session.token, vaultId,
     query: async (_sql, values) => {
-      assert.match(_sql, /revoked_at IS NULL/);
-      assert.match(_sql, /expires_at > clock_timestamp\(\)/);
+      assert.match(_sql, /sessions\.revoked_at IS NULL/);
+      assert.match(_sql, /sessions\.expires_at > clock_timestamp\(\)/);
+      assert.match(_sql, /JOIN hosted\.purchase_enrollments/);
       assert.equal(values[0], session.tokenHash);
       assert.equal(values[1], vaultId);
-      return { rows: [{ account_id: accountId, vault_id: vaultId }] };
+      return { rows: [{ account_id: accountId, vault_id: vaultId,
+        purchase_session_id: purchase.sessionId, purchase_mode: purchase.mode }] };
+    },
+    verifyPurchase: async (id, mode) => {
+      assert.deepEqual([id, mode], [purchase.sessionId, purchase.mode]);
+      return purchase;
     },
     getEntitlement: async id => {
       assert.equal(id, accountId);
@@ -71,6 +78,12 @@ test('missing, foreign, revoked, and expired sessions cannot mint an upload scop
 
 test('subscription, enrollment, and lookup failures reveal no private details', async () => {
   const cases = [
+    { verifyPurchase: async () => { throw Error('Stripe refund details'); } },
+    { verifyPurchase: async () => ({ ...purchase, mode: 'live' }) },
+    { verifyPurchase: async () => ({ ...purchase, sessionId: 'cs_test_other' }) },
+    { verifyPurchase: undefined },
+    { query: async () => ({ rows: [{ account_id: accountId, vault_id: vaultId,
+      purchase_session_id: purchase.sessionId, purchase_mode: 'live' }] }) },
     { getEntitlement: async () => ({ subscription: { ...subscription, status: 'past_due' }, enrollment }) },
     { getEntitlement: async () => ({ subscription, enrollment: { ...enrollment, accountId: otherVaultId } }) },
     { getEntitlement: async () => { throw Error('Stripe secret'); } },
@@ -81,6 +94,15 @@ test('subscription, enrollment, and lookup failures reveal no private details', 
     await assert.rejects(authorizeUploadScope(request(changes)), error =>
       error.message === 'hosted_access_denied');
   }
+});
+
+test('a refunded app purchase is denied before subscription lookup', async () => {
+  let entitlementCalls = 0;
+  await assert.rejects(authorizeUploadScope(request({
+    verifyPurchase: async () => { throw Error('refunded'); },
+    getEntitlement: async () => { entitlementCalls++; return { subscription, enrollment }; },
+  })), /hosted_access_denied/);
+  assert.equal(entitlementCalls, 0);
 });
 
 test('plain client-shaped scope cannot publish before provider or database access', async () => {

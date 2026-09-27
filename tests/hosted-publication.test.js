@@ -20,7 +20,10 @@ async function publicationScope() {
   const { token } = mintSessionSecret();
   return authorizeUploadScope({ sessionToken: token, vaultId: scope.vaultId,
     query: async () => ({ rows: [{ account_id: scope.accountId,
-      vault_id: scope.vaultId }] }),
+      vault_id: scope.vaultId, purchase_session_id: 'cs_test_fixture',
+      purchase_mode: 'sandbox' }] }),
+    verifyPurchase: async () => ({ sessionId: 'cs_test_fixture',
+      mode: 'sandbox' }),
     getEntitlement: async () => ({
       enrollment: { accountId: scope.accountId, subscriptionId: 'sub_fixture',
         customerId: 'cus_fixture', priceId: 'price_fixture' },

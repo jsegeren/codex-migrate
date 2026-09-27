@@ -218,8 +218,16 @@ function service({ config, stripe, store, sendMail, signDownload, signCanaryDown
     return Object.freeze({ sessionId: purchase.sessionId, mode: purchase.mode,
       email: purchase.email });
   }
+  // Server-only current-payment proof for an already enrolled account. The
+  // caller must obtain the session ID and mode from the purchase-enrollment
+  // row bound to the authenticated device, never from an HTTP request.
+  async function verifyForHostedAuthorization(id, mode) {
+    if (mode !== config.mode) throw new CommerceError('purchase_not_verified', 403);
+    const purchase = await verified(id);
+    return Object.freeze({ sessionId: purchase.sessionId, mode: purchase.mode });
+  }
   return { fulfill, download, downloadLatest, downloadCanary, entitlement,
-    status, verifyForHostedEnrollment };
+    status, verifyForHostedEnrollment, verifyForHostedAuthorization };
 }
 function checkoutRecovery({ config, stripe, store, sendMail }) {
   async function recover(id) {
