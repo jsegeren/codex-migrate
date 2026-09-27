@@ -419,6 +419,69 @@ class VaultBackupTests(unittest.TestCase):
             finally:
                 self.delete_key(vault)
 
+    def test_native_remote_writer_reuses_published_candidates_without_local_copies(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            vault = root / "vault"
+            self.fixture(source)
+            try:
+                backup(str(source), str(vault), crypto_helper=str(self.helper))
+                key_id = json.loads((vault / "vault.json").read_text())["key_id"]
+                content = b"A" * 65536 + b"B" * 65536 + b"C" * 65536
+                planned = subprocess.run([
+                    str(self.helper), "plan-chunks", "--key-id", key_id,
+                    "--chunk-size", "65536",
+                ], input=content, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    check=True)
+                plan = json.loads(planned.stdout)
+                first, second, third = plan["chunks"]
+                self.assertIsNotNone(second["compressed_id"])
+                lookup = root / "known.json"
+                lookup.write_text(json.dumps({
+                    "version": 1,
+                    "ids": [first["raw_id"], second["compressed_id"]],
+                }))
+                lookup.chmod(0o600)
+                objects = root / "remote-writer-objects"
+                objects.mkdir(mode=0o700)
+                command = [
+                    str(self.helper), "store-chunks-with-known", "--key-id", key_id,
+                    "--chunk-size", "65536", "--object-dir", str(objects),
+                    "--known-ids-file", str(lookup),
+                    "--expected-sha256", plan["sha256"],
+                    "--expected-size", str(plan["size"]),
+                ]
+                written = subprocess.run(command, input=content,
+                                         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                         check=True)
+                result = json.loads(written.stdout)
+                self.assertEqual(result["sha256"], plan["sha256"])
+                self.assertEqual(result["remote_ids"],
+                                 [first["raw_id"], second["compressed_id"]])
+                self.assertEqual([item["id"] for item in result["chunks"][:2]],
+                                 result["remote_ids"])
+                self.assertEqual(len(result["local_ids"]), 1)
+                self.assertIn(result["chunks"][2]["id"],
+                              [third["raw_id"], third["compressed_id"]])
+                self.assertEqual(result["local_ids"], [result["chunks"][2]["id"]])
+                self.assertEqual(len(list(objects.rglob("*.cvchunk"))), 1)
+                self.assertFalse((objects / first["raw_id"][:2] /
+                                  (first["raw_id"][2:] + ".cvchunk")).exists())
+
+                changed = subprocess.run(command, input=content[:-1] + b"D",
+                                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                self.assertNotEqual(changed.returncode, 0)
+                self.assertEqual(changed.stdout, b"")
+
+                lookup.chmod(0o644)
+                exposed = subprocess.run(command, input=content,
+                                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                self.assertNotEqual(exposed.returncode, 0)
+                self.assertEqual(exposed.stdout, b"")
+            finally:
+                self.delete_key(vault)
+
     def test_remote_staging_failure_never_replaces_or_publishes(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

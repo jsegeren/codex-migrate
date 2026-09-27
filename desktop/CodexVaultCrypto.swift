@@ -23,6 +23,19 @@ private struct StoredFile: Codable {
     let chunks: [Chunk]
 }
 
+private struct RemoteAwareStoredFile: Codable {
+    let sha256: String
+    let size: Int
+    let chunks: [Chunk]
+    let local_ids: [String]
+    let remote_ids: [String]
+}
+
+private struct KnownObjectIDs: Decodable {
+    let version: Int
+    let ids: [String]
+}
+
 private struct PlannedChunk: Codable {
     let raw_id: String
     let compressed_id: String?
@@ -756,7 +769,7 @@ private func storeChunksCommand(_ arguments: [String]) throws {
     var chunks: [Chunk] = []
     var total = 0
     while true {
-        let data = try FileHandle.standardInput.read(upToCount: chunkSize) ?? Data()
+        let data = try readInputChunk(chunkSize)
         if data.isEmpty { break }
         digest.update(data: data)
         total += data.count
@@ -764,6 +777,126 @@ private func storeChunksCommand(_ arguments: [String]) throws {
                                      identifiers: identifiers))
     }
     try printJSON(StoredFile(sha256: hex(digest.finalize()), size: total, chunks: chunks))
+}
+
+private func readInputChunk(_ size: Int) throws -> Data {
+    // A pipe can return a short read before EOF. Chunk identity must depend
+    // on the source bytes, not on when its producer writes to the pipe.
+    var chunk = Data()
+    while chunk.count < size {
+        let next = try FileHandle.standardInput.read(upToCount: size - chunk.count) ?? Data()
+        if next.isEmpty { break }
+        chunk.append(next)
+    }
+    return chunk
+}
+
+private func knownObjectIDs(_ path: String) throws -> Set<String> {
+    // The service's published-only lookup is expected to be persisted by the
+    // caller in a private file. Keyed IDs are not plaintext, but can reveal
+    // equality of the customer's chunks and must not be world-readable.
+    let descriptor = open(path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK)
+    guard descriptor >= 0 else {
+        throw VaultError.message("the remote object lookup is unavailable")
+    }
+    let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
+    var information = stat()
+    guard fstat(descriptor, &information) == 0,
+          (information.st_mode & S_IFMT) == S_IFREG,
+          information.st_uid == geteuid(), information.st_nlink == 1,
+          information.st_mode & 0o077 == 0,
+          information.st_size >= 0, information.st_size <= 8 * 1024 * 1024 else {
+        throw VaultError.message("the remote object lookup is not a private regular file")
+    }
+    let data = try handle.readToEnd() ?? Data()
+    guard data.count <= 8 * 1024 * 1024 else {
+        throw VaultError.message("the remote object lookup is too large")
+    }
+    guard let lookup = try? JSONDecoder().decode(KnownObjectIDs.self, from: data),
+          lookup.version == 1, lookup.ids.count <= 100_000,
+          lookup.ids.allSatisfy({ $0.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil }),
+          Set(lookup.ids).count == lookup.ids.count else {
+        throw VaultError.message("the remote object lookup is invalid")
+    }
+    return Set(lookup.ids)
+}
+
+private func storeChunksWithKnownCommand(_ arguments: [String]) throws {
+    let keyID = try canonicalKeyID(argument("--key-id", in: arguments))
+    let root = URL(fileURLWithPath: try argument("--object-dir", in: arguments), isDirectory: true)
+    let chunkSize = try chunkSizeArgument(arguments)
+    let known = try knownObjectIDs(argument("--known-ids-file", in: arguments))
+    let expectedDigest = try argument("--expected-sha256", in: arguments)
+    guard expectedDigest.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil,
+          let expectedSize = Int(try argument("--expected-size", in: arguments)),
+          expectedSize >= 0 else {
+        throw VaultError.message("the planned file verification is invalid")
+    }
+    let master = try loadKey(keyID)
+    let encryption = encryptionKey(master)
+    let identifiers = identifierKey(master)
+    var digest = SHA256()
+    var chunks: [Chunk] = []
+    var localIDs: [String] = []
+    var remoteIDs: [String] = []
+    var total = 0
+    while true {
+        let data = try readInputChunk(chunkSize)
+        if data.isEmpty { break }
+        digest.update(data: data)
+        guard total <= expectedSize, data.count <= expectedSize - total else {
+            throw VaultError.message("the conversation changed after chunk planning")
+        }
+        total += data.count
+        let raw = Chunk(id: objectID(data, key: identifiers), size: data.count,
+                        encoding: nil)
+        let compressedData = compressChunk(data)
+        let compressed = compressedData.map { _ in
+            Chunk(id: compressedObjectID(data, key: identifiers), size: data.count,
+                  encoding: "lzfse")
+        }
+        let selected: Chunk
+        let reusedRemotely: Bool
+        if FileManager.default.fileExists(atPath: try objectURL(root: root, id: raw.id).path) {
+            guard try readChunk(raw, root: root, encryption: encryption,
+                                identifiers: identifiers) == data else {
+                throw VaultError.message("an existing encrypted object failed content verification")
+            }
+            selected = raw
+            reusedRemotely = false
+        } else if let compressed = compressed,
+                  FileManager.default.fileExists(
+                    atPath: try objectURL(root: root, id: compressed.id).path) {
+            guard try readChunk(compressed, root: root, encryption: encryption,
+                                identifiers: identifiers) == data else {
+                throw VaultError.message("an existing encrypted object failed content verification")
+            }
+            selected = compressed
+            reusedRemotely = false
+        } else if known.contains(raw.id) {
+            selected = raw
+            reusedRemotely = true
+        } else if let compressed = compressed, known.contains(compressed.id) {
+            selected = compressed
+            reusedRemotely = true
+        } else {
+            selected = try storeChunk(data, root: root, encryption: encryption,
+                                      identifiers: identifiers)
+            reusedRemotely = false
+        }
+        chunks.append(selected)
+        if reusedRemotely {
+            remoteIDs.append(selected.id)
+        } else {
+            localIDs.append(selected.id)
+        }
+    }
+    guard total == expectedSize, hex(digest.finalize()) == expectedDigest else {
+        throw VaultError.message("the conversation changed after chunk planning")
+    }
+    try printJSON(RemoteAwareStoredFile(
+        sha256: expectedDigest, size: total, chunks: chunks,
+        local_ids: localIDs, remote_ids: remoteIDs))
 }
 
 private func chunkSizeArgument(_ arguments: [String]) throws -> Int {
@@ -787,7 +920,7 @@ private func planChunksCommand(_ arguments: [String]) throws {
     var chunks: [PlannedChunk] = []
     var total = 0
     while true {
-        let data = try FileHandle.standardInput.read(upToCount: chunkSize) ?? Data()
+        let data = try readInputChunk(chunkSize)
         if data.isEmpty { break }
         digest.update(data: data)
         total += data.count
@@ -1051,6 +1184,7 @@ private func run() throws {
     case "hosted-device-list": try listHostedDevicesCommand()
     case "hosted-device-delete": try deleteHostedDeviceCommand(arguments)
     case "store-chunks": try storeChunksCommand(arguments)
+    case "store-chunks-with-known": try storeChunksWithKnownCommand(arguments)
     case "plan-chunks": try planChunksCommand(arguments)
     case "seal-manifest": try sealManifestCommand(arguments)
     case "verify": try verifyCommand(arguments)

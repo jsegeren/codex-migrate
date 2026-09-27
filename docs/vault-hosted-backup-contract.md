@@ -337,6 +337,18 @@ egress allowance. Do not claim that B2 restores are always free. See its
   local-space reduction is implemented by that command alone. The eventual
   writer must recheck the source file after this first pass and fail closed on
   changes between planning and encryption.
+  The native helper also has a separate `store-chunks-with-known` primitive.
+  Given an owner-only file of keyed IDs that an authenticated service has
+  established belong to this Vault's published objects, it can select a
+  matching raw or compressed object without writing local ciphertext; unknown
+  chunks are encrypted locally once. It reports which IDs were reused remotely
+  and which have local ciphertext to upload, and refuses a source whose whole-
+  file digest or length changed after planning. A synthetic test covers both
+  legacy raw and compressed reuse, one new chunk, changed content, and an
+  exposed lookup file. This is still **not** a hosted-only backup: the buyer
+  path does not yet obtain authenticated published-object lookups, limit new-
+  chunk staging across the whole snapshot, or publish and restore that mixed
+  inventory. The existing local `store-chunks` behavior remains unchanged.
 - Keep each local Vault in its own random, account-scoped remote namespace.
   Two Macs may each back up to separate Vaults under one subscription; this is
   not synchronization or a silent merge. Object names and snapshot times are
