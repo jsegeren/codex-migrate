@@ -672,3 +672,13 @@ and 0.143 s respectively. This is a useful bounded performance smoke test,
 not a packaged-app or real-history latency acceptance: actual thread shapes,
 storage pressure, forks, and concurrent Codex writes still need their own
 measurement before making a performance promise.
+
+The same 1,000-thread, approximately 128 MiB synthetic corpus was then
+searched through the **bundled build-19 engine mounted from the exact
+notarized DMG**, not the source interpreter. The phrase was found before and
+after index creation; the missing phrase returned no results. Measured
+wall-clock times on this Mac were 1.015 s for the initial full search,
+1.628 s to build the index, 0.209 s for the indexed hit, and 0.205 s for the
+indexed miss. The DMG was mounted read-only and detached; the fixture lived
+in a temporary home and was removed. This closes a packaged synthetic
+large-history smoke test, but not real-history or concurrent-write acceptance.
