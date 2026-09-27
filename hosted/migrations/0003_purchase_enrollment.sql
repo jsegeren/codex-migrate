@@ -1,4 +1,4 @@
--- A hosted account must be claimed from exactly one recorded Mac-app purchase.
+-- A claimed hosted account maps to exactly one recorded Mac-app purchase.
 -- The purchase row is historical evidence, not current payment authority:
 -- enrollment must still recheck Stripe and prove control of the buyer email.
 CREATE TABLE hosted.purchase_enrollments (
