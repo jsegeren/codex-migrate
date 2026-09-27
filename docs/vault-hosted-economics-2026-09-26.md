@@ -147,16 +147,31 @@ database, support, and other costs. The $10 base covers those fixed service
 costs only as subscriber count grows; one subscriber alone does not prove
 healthy unit economics.
 
-For fairness and predictable bills, the customer would see a pre-upload size
-estimate and select a monthly spending cap. Warn before the cap; pause *new*
-uploads rather than silently charging overages or deleting the last good
-snapshot. A paused backup must be shown as stale, not protected. The product
-must define whether billing follows average daily retained GB-month or a
-capacity reservation, how first-month inclusion is bounded, how mid-month
-changes work, and how a cap maps to a safe upload allowance. The current SQL
-prototype enforces a byte allowance, **not metered billing**. No subscription,
-rate, or allowance is approved or live. Recheck after measuring actual
-incremental growth, verification costs, support, and restore behavior.
+The proposed billing unit is retained **encrypted object bytes**, not raw
+Codex-folder size, upload volume, thread count, snapshot count, or number of
+Macs. A reused object is counted once within its Vault; separate Vaults are
+counted together at the account level, with no unproved cross-Vault dedupe.
+Use average daily retained bytes for the monthly GB-month charge, matching
+R2's published daily-peak averaging convention. Show the current retained
+size, estimated second-month bill, and the customer's chosen hard spending
+ceiling before the first upload. Translate that ceiling conservatively to a
+maximum instantaneous byte allowance: when full, new uploads pause while the
+last verified snapshot remains intact and the UI clearly marks protection
+stale. Self-managed backups remain available without hosting fees.
+
+The promised first hosted month included with a $49 app purchase needs a
+published maximum capacity. **1 TB is a candidate ceiling, not an approved
+entitlement**: at R2 Standard's published rate, a full month of 1 TB storage
+costs about $15 before requests, Worker, database, and support. Larger Vaults
+would need a separate explicit quote rather than an unlimited free trial.
+Cancellation, proration, taxes, retention, and the exact first-month limit
+must be approved before any customer-facing checkout or invoice changes.
+
+The current SQL prototype enforces a byte allowance, **not metered billing**.
+No subscription, rate, or allowance is approved or live. Before charging,
+prove the daily-average meter and cap mapping against real provider storage,
+measure incremental growth, and recheck verification, support, and restore
+costs.
 
 ## Still to prove
 
