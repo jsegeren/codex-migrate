@@ -34,7 +34,8 @@ CREATE FUNCTION hosted.reserve_upload(
 ) RETURNS boolean LANGUAGE plpgsql AS $$
 BEGIN
   IF p_bytes IS NULL OR p_bytes <= 0 OR p_expires_at IS NULL OR
-     p_expires_at <= now() OR p_expires_at > now() + interval '1 hour' OR
+     p_expires_at <= clock_timestamp() OR
+     p_expires_at > clock_timestamp() + interval '1 hour' OR
      NOT EXISTS (SELECT 1 FROM hosted.vaults
        WHERE account_id = p_account_id AND vault_id = p_vault_id) THEN
     RETURN false;
@@ -49,6 +50,13 @@ BEGIN
      AND p_bytes::numeric <= allowance_bytes::numeric -
        retained_bytes::numeric - reserved_bytes::numeric;
   IF NOT FOUND THEN RETURN false; END IF;
+
+  -- The account lock may have waited behind another upload. Transactional
+  -- now() would still report the old start time and could mint an already
+  -- expired reservation after that wait.
+  IF p_expires_at <= clock_timestamp() THEN
+    RAISE EXCEPTION 'hosted_reservation_expired';
+  END IF;
 
   -- A duplicate reservation ID or deleted Vault aborts this transaction,
   -- rolling back the preceding quota update. Expiry never releases bytes by

@@ -134,20 +134,29 @@ The $49 one-time app purchase funds the first included hosted month only if
 the customer opts in; a later subscription must work on its own economics.
 
 `cost + 50%` is not a fat-margin plan: a 50% markup on cost creates only a
-33.3% margin *before* Stripe and all non-storage costs. It also turns normal
-backup/restore variation into unpredictable customer bills. Prefer simple,
-visible capacity tiers based on **total encrypted retained bytes across a
-customer's Vaults**, with warning and safe upload pause near the allowance;
-never silently charge overages or delete the last good snapshot. Candidate
-tiers for evaluation are $10/month up to 100 GB and $20/month up to 200 GB on
-R2. At their limits, R2 storage plus the illustrative Stripe fees leave
-approximately 78% and 80% of revenue respectively **before Worker overhead
-and other costs**. The
-measured 72–76 GB first backup of this user's two separate Macs would fit the
-lower tier initially; retained version growth could later require the higher
-tier. This is a capacity choice, not metered or automatic overage billing.
-These are **not approved or active** entitlements. Recheck them after real
-incremental growth, verification costs, support, and restore testing.
+33.3% margin *before* Stripe and all non-storage costs. A single unlimited
+price also makes light histories subsidize very large ones. The current
+**unapproved proposal** is $10/month including 50 GB, then $0.08 per
+additional GB-month of actual retained encrypted bytes across all of a
+customer's Vaults. At 72 GB this is about $11.76/month; 200 GB is $22;
+500 GB is $46; 1 TB is $86. These are illustrative charges, not published
+prices, and do not include taxes or the first included hosted month. R2
+Standard storage is $0.015/GB-month before operations; the $0.08 incremental
+rate leaves 81.25% gross *storage-only* margin before payment fees, Worker,
+database, support, and other costs. The $10 base covers those fixed service
+costs only as subscriber count grows; one subscriber alone does not prove
+healthy unit economics.
+
+For fairness and predictable bills, the customer would see a pre-upload size
+estimate and select a monthly spending cap. Warn before the cap; pause *new*
+uploads rather than silently charging overages or deleting the last good
+snapshot. A paused backup must be shown as stale, not protected. The product
+must define whether billing follows average daily retained GB-month or a
+capacity reservation, how first-month inclusion is bounded, how mid-month
+changes work, and how a cap maps to a safe upload allowance. The current SQL
+prototype enforces a byte allowance, **not metered billing**. No subscription,
+rate, or allowance is approved or live. Recheck after measuring actual
+incremental growth, verification costs, support, and restore behavior.
 
 ## Still to prove
 

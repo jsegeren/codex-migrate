@@ -109,26 +109,23 @@ egress allowance. Do not claim that B2 restores are always free. See its
   not create customer identity, checkout, enrollment, a signed webhook, a
   purchase-refund check, or an upload capability. Those are still mandatory
   before any service is exposed.
-- The service-side capacity planner now counts only newly retained encrypted
-  objects, so reused chunks do not consume a second allowance. Given a
-  complete inventory and the account-wide retained-byte total across both
-  Macs, it rejects digest conflicts and additions above the allowance. It is
-  not a quota transaction: the service must lock the account's usage record,
-  load the complete inventory, and atomically commit new objects, retained
-  bytes, and the last-good reference. Upload grants also need bounded
-  reservations so failed or abandoned publishes cannot accumulate unlimited
-  unreferenced objects. None of this is a live customer entitlement yet.
-- A draft `hosted` database schema now reserves upload bytes by an atomic
-  account-row update, shared by all Vaults on that account. It was exercised
-  against an isolated local PostgreSQL 18 instance, including two concurrent
-  60-byte requests against a 100-byte allowance: the second waited for the
-  first commit and then refused. No hosted migration has been applied to
-  either Neon commerce environment. The separate migration runner requires
-  the exact direct database host and explicit environment confirmation.
-  Expiry does not release reservations automatically; provider cleanup must
-  first be proven. Snapshot publication, object inventory, release/garbage
-  collection, and live account authentication are still missing, so the
-  draft reservation function must not be exposed as a customer API.
+- The draft `hosted` database schema reserves upload bytes by an atomic
+  account-row update shared by all Vaults. Its publication transaction records
+  an independently verified encrypted-object inventory, counts reused objects
+  once, consumes the reservation, and advances only that Vault's database
+  last-good pointer. A failed publish leaves the previous pointer and counters
+  unchanged; an exact retry cannot charge twice or roll back a newer pointer.
+  Local PostgreSQL 18 tests cover those transitions and concurrent reservations
+  across two Vaults. The service-side capacity planner agrees with the same
+  physical-byte model. Neither the SQL function nor a client receipt proves
+  storage: the service must authenticate ownership and pass only the frozen
+  object list it checked with the actual provider. No hosted migration has
+  been applied to either Neon commerce environment. The separate migration
+  runner requires the exact direct database host and explicit confirmation.
+  Expiry does not release reservations automatically: provider cleanup must
+  first be proven. Orphan cleanup, retention/deletion, live authentication,
+  and a real R2 proof are still missing; these draft functions are not a
+  customer API or a live entitlement.
 - An upload first sends immutable encrypted objects and manifest, then a
   reference. Remote metadata is stored per snapshot under
   `metadata/<snapshot-id>.json`, never overwritten as a single mutable
@@ -139,7 +136,8 @@ egress allowance. Do not claim that B2 restores are always free. See its
   `latest` or claim protection. The service must independently establish each
   object's exact size and integrity, enforce account scope and required
   metadata/manifest/reference presence, and only then atomically advance the
-  remote `latest` pointer. Do that through provider-validated checksums or
+  database last-good pointer. There is no mutable R2 `latest` object. Do that
+  through provider-validated checksums or
   storage-adjacent verification proven against the actual provider; do not
   route whole backups through the website backend on every run, trust a bare
   PUT response, or assume an ETag is SHA-256. A reusable presigned PUT must
@@ -158,15 +156,13 @@ egress allowance. Do not claim that B2 restores are always free. See its
   prefixes every relative object key with those server-owned IDs, so a valid
   receipt cannot pass by reading an identically named object in another
   account or Vault. The caller still has to prove the authenticated customer
-  owns both IDs; their syntax is not an authorization check. This is **not yet
-  a publish endpoint**: the authenticated service must also bind account/Vault
-  ownership, enforce the *aggregate* retained-storage quota, prove the real
-  provider adapter's checksum behavior, and commit the last-good pointer
-  transactionally. A per-receipt byte bound
-  does not enforce that aggregate quota.
-  After verification, the service receives an immutable list of the exact
-  scoped objects it checked; capacity accounting must use that list rather
-  than rereading a client receipt that may have changed during verification.
+  owns both IDs; their syntax is not an authorization check. The draft
+  server-only coordinator passes only that frozen verified list into the
+  database transaction, which enforces aggregate retained-byte accounting and
+  last-good publication. This is **not yet an authenticated publish endpoint**:
+  real provider checksum behavior, account ownership, entitlement, upload
+  grants, and clean-account recovery remain unproven. A per-receipt byte bound
+  alone does not enforce aggregate quota.
 - Preserve old snapshot references under a declared retention policy. Deleting
   an unreferenced chunk requires proof that no retained snapshot needs it.
   Cancellation, payment failure, account deletion, export grace, and final
