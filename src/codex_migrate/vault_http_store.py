@@ -86,8 +86,8 @@ class CapabilityHttpStore:
     def _request(self, method: str, key: str, body: Optional[BinaryIO] = None):
         try:
             size, digest = self._expected[key]
-        except KeyError as error:
-            raise MigrationError("The hosted object is outside the selected Vault.") from error
+        except KeyError:
+            raise MigrationError("The hosted object is outside the selected Vault.") from None
         scoped_key = self._prefix + key
         try:
             token = self._grant(method, scoped_key, size, digest)
@@ -131,7 +131,8 @@ class CapabilityHttpStore:
             raise MigrationError("The hosted upload does not match its inventory.")
         # The staging engine gives us an authenticated, frozen BytesIO. Check
         # it once more before granting a network send, without another 100 MB
-        # allocation, then rewind so its consumed-byte check still applies.
+        # allocation or advancing the stream; its consumed-byte check remains
+        # meaningful after the HTTP request.
         if not isinstance(source, io.BytesIO) or source.tell() != 0:
             raise MigrationError("The hosted upload source is not frozen.")
         view = source.getbuffer()
