@@ -391,42 +391,68 @@ let searchRequest=0;
 async function runSearch(append=false){
   const source=$("search-source").value,query=$("query").value.trim();
   if(append&&(!searchPage||searchPage.source!==source||searchPage.query!==query))append=false;
-  if(!append){searchRequest++;$("error").textContent="";$("thread").hidden=true;$("more-results").hidden=true;searchPage={source,query,offset:0}}
+  if(!append){
+    searchRequest++;$("error").textContent="";$("thread").hidden=true;
+    $("more-results").hidden=true;$("results-panel").hidden=true;$("results").replaceChildren();
+    searchPage={source,query,offset:0,shownKeys:new Set()};
+  }
   const request=searchRequest;
   const offset=append?searchPage.offset:0;
+  function buttonsFor(items){return items.map(item=>{
+    const button=document.createElement("button");button.type="button";button.className="result";
+    const small=document.createElement("small"),text=document.createElement("span"),title=document.createElement("strong");
+    if(source==="history"){
+      small.textContent=`${item.version_count} saved ${item.version_count===1?"version":"versions"} · ${item.identity_state}${item.at_risk?" · Needs review":""}`;
+      text.textContent=item.matching_title;
+      button.onclick=()=>openSavedResult(item);
+    }else{
+      item.source=source==="local_titles"?"local":source;
+      item.match_query=query;
+      small.textContent=`${item.collection}${item.timestamp?" · "+item.timestamp:""}`;
+      if(item.title)title.textContent=item.title;
+      text.textContent=item.snippet;button.onclick=()=>openThread(item);
+    }
+    button.append(small);if(title.textContent)button.append(title);button.append(text);return button;
+  })}
   $("more-results").disabled=true;
   $("status").textContent=source==="history"?"Searching saved titles…":
     source==="backup"?"Searching the opened backup…":
     source==="local_titles"?"Searching current and old titles…":"Searching this Mac…";
   const slowNotice=source==="local"?setTimeout(()=>{
-    if(request===searchRequest)$("status").textContent="Still searching this Mac. Large histories or recently changed conversations can take time."+
-      ($("index-build").disabled?"":" The optional search cache below speeds later searches.");
+    if(request===searchRequest){
+      const titles=$("results").children.length;
+      $("status").textContent=(titles?`${titles} matching ${titles===1?"title":"titles"} found. `:"")+
+        "Still searching conversation text. Large histories or recently changed conversations can take time."+
+        ($("index-build").disabled?"":" The optional search cache below speeds later searches.");
+    }
   },4000):null;
   try{
+    if(!append&&source==="local"){
+      try{
+        const quick=await api("/api/vault/search?"+new URLSearchParams({q:query,limit:"10",offset:"0",source:"local_titles"}));
+        if(request!==searchRequest)return;
+        const titles=quick.results||[];
+        for(const item of titles)searchPage.shownKeys.add(item.collection+"/"+item.transcript);
+        if(titles.length){
+          $("results").append(...buttonsFor(titles));$("results-panel").hidden=false;
+          $("status").textContent=`${titles.length} matching ${titles.length===1?"title":"titles"} found. Searching conversation text…`;
+        }
+      }catch(_error){/* A damaged title index must not block transcript search. */}
+    }
     let data;
     if(source==="history"){
       const vault=chosenVault();
       if(!vault)throw Error("Choose your Vault before searching saved titles.");
       data=await api("/api/vault/history-search?"+new URLSearchParams({vault,q:query}));
-    }else data=await api("/api/vault/search?"+new URLSearchParams({q:query,limit:"50",offset:String(offset),source}));
+    }else data=await api("/api/vault/search?"+new URLSearchParams({q:query,limit:"20",offset:String(offset),source}));
     if(request!==searchRequest)return;
-    const buttons=data.results.map(item=>{
-      const button=document.createElement("button");button.type="button";button.className="result";
-      const small=document.createElement("small"),text=document.createElement("span"),title=document.createElement("strong");
-      if(source==="history"){
-        small.textContent=`${item.version_count} saved ${item.version_count===1?"version":"versions"} · ${item.identity_state}${item.at_risk?" · Needs review":""}`;
-        text.textContent=item.matching_title;
-        button.onclick=()=>openSavedResult(item);
-      }else{
-        item.source=source==="local_titles"?"local":source;
-        item.match_query=query;
-        small.textContent=`${item.collection}${item.timestamp?" · "+item.timestamp:""}`;
-        if(item.title)title.textContent=item.title;
-        text.textContent=item.snippet;button.onclick=()=>openThread(item);
-      }
-      button.append(small);if(title.textContent)button.append(title);button.append(text);return button;
-    });
-    if(append)$("results").append(...buttons);else $("results").replaceChildren(...buttons);
+    const fresh=source==="local"?data.results.filter(item=>{
+      const key=item.collection+"/"+item.transcript;
+      if(searchPage.shownKeys.has(key))return false;
+      searchPage.shownKeys.add(key);return true;
+    }):data.results;
+    if(source==="local"||append)$("results").append(...buttonsFor(fresh));
+    else $("results").replaceChildren(...buttonsFor(fresh));
     searchPage.offset=offset+data.results.length;
     $("more-results").hidden=source==="history"||!data.has_more;
     $("results-panel").hidden=false;
@@ -441,6 +467,7 @@ async function runSearch(append=false){
     if(request===searchRequest){
       fail(error);
       if(source==="local"){
+        if($("results").children.length)$("status").textContent="Title matches remain available; conversation-text search stopped.";
         $("salvage-controls").open=true;
         $("salvage-status").textContent="If one file is damaged, find it by title or date here. Other read errors still need review.";
       }
