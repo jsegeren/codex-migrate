@@ -197,8 +197,14 @@ egress allowance. Do not claim that B2 restores are always free. See its
   latest only after the native crypto helper verifies its manifest and chunks
   using the separately imported recovery key. Local tests cover missing keys,
   interrupted reads, corrupted objects, unsafe receipts, and linked folders;
-  these do **not** prove the read path against R2, a real authenticated service,
-  or a genuinely clean macOS account. Those remain release gates.
+  a September 27 synthetic CI run also staged encrypted objects on one hosted
+  macOS runner, transferred only those objects, a content-free receipt, and a
+  disposable recovery key, then imported the key and restored the known
+  transcript on a second independent runner. It first proved the download
+  could not be completed without the key. This proves cross-Mac ciphertext
+  portability through the draft client staging/recovery modules, **not** the
+  read path against R2, a real authenticated service, or first use of an
+  installed buyer app in a clean account. Those remain release gates.
 - The staging client now emits a version-1, content-free receipt with the
   snapshot ID and each remote object's key, byte count, and SHA-256. The
   provider-neutral service validator rejects malformed paths, missing required
