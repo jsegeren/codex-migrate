@@ -15,6 +15,8 @@ test('a slow local search explains the wait without claiming it has finished', a
     ['more-results', { hidden: false, disabled: false }],
     ['status', { textContent: '' }],
     ['index-build', { disabled: false }],
+    ['salvage-controls', { open: false }],
+    ['salvage-status', { textContent: '' }],
   ]);
   let notice, rejectSearch, cleared = false;
   const context = {
@@ -35,6 +37,8 @@ test('a slow local search explains the wait without claiming it has finished', a
   rejectSearch(new Error('Search stopped'));
   await pending;
   assert.equal(elements.get('error').textContent, 'Search stopped');
+  assert.equal(elements.get('salvage-controls').open, true);
+  assert.match(elements.get('salvage-status').textContent, /find it by title or date/);
   assert.equal(cleared, true);
   assert.equal(elements.get('more-results').disabled, false);
 });
