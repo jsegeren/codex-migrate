@@ -1,7 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
-const { putImmutableChecked, verifiedHead, verifiedBatch } = require('../hosted/r2_verified_store');
+const { putImmutableChecked, verifiedHead, verifiedBatch,
+  readVerifiedBody } = require('../hosted/r2_verified_store');
 const { verifyStagedReceipt } = require('../hosted/receipt');
 
 const account = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -22,6 +23,16 @@ class FakeR2 {
         Buffer.from(record.checksum, 'hex')).buffer } : {} };
   }
   async head(key) { return this.metadata(key) || null; }
+  async get(key) {
+    const record = this.objects.get(key);
+    if (!record) return null;
+    return { ...this.metadata(key), body: new ReadableStream({
+      start(controller) {
+        controller.enqueue(Uint8Array.from(record.bytes));
+        controller.close();
+      },
+    }) };
+  }
   async put(key, body, options) {
     this.putCalls++;
     assert.equal(options.onlyIf.get('If-None-Match'), '*');
@@ -162,4 +173,23 @@ test('R2 batch verification enforces a bounded per-invocation object count', asy
   assert.equal(await verifiedBatch(bucket, [{ ...item, sha256: '0'.repeat(64) }]), false);
   assert.equal(await verifiedBatch(bucket, []), false);
   assert.equal(await verifiedBatch(bucket, Array(513).fill(item)), false);
+});
+
+test('restore streams only a matching encrypted object', async () => {
+  const bucket = new FakeR2();
+  const bytes = Buffer.from('encrypted restore chunk');
+  const item = itemFor(bytes);
+  await assert.rejects(readVerifiedBody(bucket, item), /hosted_object_unverified/);
+  await putImmutableChecked(bucket, item, bytes);
+  const stream = await readVerifiedBody(bucket, item);
+  assert.deepEqual(Buffer.from(await new Response(stream).arrayBuffer()), bytes);
+  for (const changed of [
+    { ...item, bytes: item.bytes + 1 },
+    { ...item, sha256: '0'.repeat(64) },
+    { ...item, key: '../other-vault' },
+  ]) {
+    await assert.rejects(readVerifiedBody(bucket, changed), /hosted_object_unverified/);
+  }
+  bucket.objects.get(key).checksum = null;
+  await assert.rejects(readVerifiedBody(bucket, item), /hosted_object_unverified/);
 });

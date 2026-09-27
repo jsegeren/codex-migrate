@@ -55,6 +55,25 @@ async function verifiedBatch(bucket, items) {
   return true;
 }
 
+async function readVerifiedBody(bucket, item) {
+  if (!validItem(item) || typeof bucket?.get !== 'function') {
+    throw new R2VerificationError();
+  }
+  try {
+    // The caller must have authenticated ownership of this exact scoped key.
+    // R2 returns metadata and a stream from the same GET; never buffer the
+    // ciphertext in a Worker or return a body whose stored digest is absent.
+    // The native client must still hash every received byte before recovery.
+    const object = await bucket.get(item.key);
+    if (!matches(object, item) || typeof object.body?.getReader !== 'function') {
+      throw new R2VerificationError();
+    }
+    return object.body;
+  } catch {
+    throw new R2VerificationError();
+  }
+}
+
 async function putImmutableChecked(bucket, item, body) {
   if (!validItem(item) || !body || typeof bucket?.head !== 'function' ||
       typeof bucket?.put !== 'function') throw new R2VerificationError();
@@ -84,4 +103,4 @@ async function putImmutableChecked(bucket, item, body) {
 }
 
 module.exports = { R2VerificationError, verifiedHead, verifiedBatch,
-  putImmutableChecked };
+  putImmutableChecked, readVerifiedBody };
