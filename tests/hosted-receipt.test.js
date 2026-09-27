@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
 const { validateReceipt, verifyStagedReceipt } = require('../hosted/receipt');
+const { planRetainedAddition } = require('../hosted/capacity');
 
 const snapshot = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const scope = { accountId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
@@ -33,6 +34,7 @@ test('independently verified objects produce only a content-free proof', async (
   assert.equal(validateReceipt(receipt, 1024).totalBytes, receipt.remote_bytes_checked);
   assert.deepEqual(await verifyStagedReceipt(receipt, 1024, scope, verify), {
     snapshotId: snapshot, objectCount: 4, totalBytes: receipt.remote_bytes_checked,
+    verifiedObjects: receipt.objects.map(item => ({ ...item, key: prefix + item.key })),
   });
 });
 
@@ -92,7 +94,7 @@ test('service scope is required and cannot read another account or Vault', async
 });
 
 test('provider errors are redacted and an async caller cannot rewrite the checked claim', async () => {
-  const { receipt, verify } = fixture();
+  const { receipt, stored, verify } = fixture();
   await assert.rejects(verifyStagedReceipt(receipt, 1024, scope, async () => {
     throw new Error('private provider endpoint and credential');
   }), error => error.message === 'hosted_receipt_invalid');
@@ -105,4 +107,10 @@ test('provider errors are redacted and an async caller cannot rewrite the checke
     return verify(item);
   });
   assert.equal(proof.objectCount, 4);
+  assert.equal(proof.verifiedObjects[1].sha256, digest(stored.get(prefix + keys[1])));
+  assert.ok(Object.isFrozen(proof.verifiedObjects));
+  assert.ok(Object.isFrozen(proof.verifiedObjects[1]));
+  const capacity = planRetainedAddition(0, 1024, proof.verifiedObjects, new Map());
+  assert.equal(capacity.retainedBytes, proof.totalBytes);
+  assert.ok(capacity.newObjects.every(item => item.key.startsWith(prefix)));
 });

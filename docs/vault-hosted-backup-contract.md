@@ -153,6 +153,9 @@ egress allowance. Do not claim that B2 restores are always free. See its
   provider adapter's checksum behavior, and commit the last-good pointer
   transactionally. A per-receipt byte bound
   does not enforce that aggregate quota.
+  After verification, the service receives an immutable list of the exact
+  scoped objects it checked; capacity accounting must use that list rather
+  than rereading a client receipt that may have changed during verification.
 - Preserve old snapshot references under a declared retention policy. Deleting
   an unreferenced chunk requires proof that no retained snapshot needs it.
   Cancellation, payment failure, account deletion, export grace, and final

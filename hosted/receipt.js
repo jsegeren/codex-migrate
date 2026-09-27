@@ -74,17 +74,21 @@ async function verifyStagedReceipt(receipt, maxReceiptBytes, scope, verifyObject
   if (typeof verifyObject !== 'function') throw new HostedReceiptError();
   const validated = validateReceipt(receipt, maxReceiptBytes);
   const prefix = storagePrefix(scope);
-  for (const item of validated.objects) {
+  const scopedObjects = Object.freeze(validated.objects.map(item => Object.freeze({
+    ...item, key: prefix + item.key,
+  })));
+  for (const item of scopedObjects) {
     // The service's verifier must independently establish the stored byte
     // count and SHA-256 within the authenticated account/Vault namespace.
     try {
-      if (await verifyObject(Object.freeze({ ...item, key: prefix + item.key })) !== true) {
+      if (await verifyObject(item) !== true) {
         throw new HostedReceiptError();
       }
     } catch { throw new HostedReceiptError(); }
   }
   return Object.freeze({ snapshotId: validated.snapshotId,
-    objectCount: validated.objects.length, totalBytes: validated.totalBytes });
+    objectCount: scopedObjects.length, totalBytes: validated.totalBytes,
+    verifiedObjects: scopedObjects });
 }
 
 module.exports = { HostedReceiptError, validateReceipt, verifyStagedReceipt };
