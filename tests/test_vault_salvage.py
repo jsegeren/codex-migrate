@@ -114,3 +114,22 @@ class VaultSalvageTests(unittest.TestCase):
                     str(home), "active", "damaged.jsonl")
             self.assertEqual([entry.text for entry in result.entries], ["First"])
             self.assertTrue(result.scan_truncated)
+
+    def test_discovery_finds_old_title_without_parsing_damaged_body(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            thread_id = "11111111-1111-4111-8111-111111111111"
+            path = home / ".codex/sessions/rollout-{}.jsonl".format(thread_id)
+            path.parent.mkdir(parents=True)
+            path.write_bytes(b"damaged JSONL\n")
+            (home / ".codex/session_index.jsonl").write_text(
+                json.dumps({"id": thread_id, "thread_name": "Old title"}) + "\n"
+                + json.dumps({"id": thread_id, "thread_name": "New title"}) + "\n")
+            result = vault_salvage.find_transcripts(str(home), "Old title")
+            self.assertEqual(result["results"][0]["title"], "New title")
+            self.assertEqual(result["results"][0]["transcript"], path.name)
+            self.assertTrue(result["titles_available"])
+            (home / ".codex/session_index.jsonl").write_bytes(b"invalid\n")
+            fallback = vault_salvage.find_transcripts(str(home), "rollout-")
+            self.assertFalse(fallback["titles_available"])
+            self.assertEqual(fallback["results"][0]["transcript"], path.name)

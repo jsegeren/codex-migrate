@@ -800,6 +800,28 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(self.request(path)[0], 400)
         self.assertEqual(self.request("/api/vault/summary", extra_headers={"Origin": "https://example.com"})[0], 403)
 
+    def test_damaged_transcript_discovery_and_preview_require_token_and_do_not_write(self):
+        path = self.home / ".codex/sessions/damaged.jsonl"
+        path.parent.mkdir(parents=True)
+        original = (json.dumps({"payload": {"message": {"content": "Surviving text"}}})
+                    + "\n").encode() + b"\x00bad\n"
+        path.write_bytes(original)
+        candidates = "/api/vault/salvage-candidates?q=damaged"
+        preview = "/api/vault/salvage-preview?collection=active&transcript=damaged.jsonl"
+        self.assertEqual(self.request(candidates, authorized=False)[0], 403)
+        self.assertEqual(self.request(preview, authorized=False)[0], 403)
+        self.assertEqual(self.request(candidates)[1]["results"][0]["transcript"],
+                         "damaged.jsonl")
+        code, result = self.request(preview)
+        self.assertEqual(code, 200)
+        self.assertEqual(result["entries"][0]["text"], "Surviving text")
+        self.assertEqual(result["skipped_records"], 1)
+        self.assertTrue(result["physical_file_only"])
+        self.assertEqual(path.read_bytes(), original)
+        self.assertEqual(self.request(
+            "/api/vault/salvage-preview?collection=active&transcript=../auth.json")[0], 400)
+        self.assertEqual(self.request("/api/vault/salvage-candidates?q=" + "x" * 201)[0], 400)
+
     def test_private_setup_and_picker_require_token(self):
         for path, data in (("/api/setup", None), ("/api/setup", self.config()),
                            ("/api/folders", {}), ("/api/suggestions", {})):

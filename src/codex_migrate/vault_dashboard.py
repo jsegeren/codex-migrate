@@ -13,9 +13,11 @@ VAULT_HTML = r'''<!doctype html>
 main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--light)}header{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:28px}h1{font-size:clamp(34px,7vw,58px);letter-spacing:-.045em;line-height:1;margin:10px 0}.lede,.muted{color:var(--muted)}.lede{font-size:18px;max-width:680px;margin:0}.panel{background:color-mix(in srgb,var(--panel) 95%,transparent);border:1px solid var(--line);border-radius:18px;padding:22px;margin:18px 0}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.metric{border:1px solid var(--line);border-radius:13px;padding:14px}.metric span{display:block;color:var(--muted);font-size:14px}.metric strong{font-size:22px}form,.actions{display:flex;gap:10px;flex-wrap:wrap}input,select,textarea,button,a.button{font:inherit;border-radius:10px;border:1px solid #8996ad;padding:11px 14px}input,select,textarea{background:#080b10;color:var(--text);flex:1;min-width:220px}textarea{display:block;width:100%;resize:none}button,a.button{background:var(--purple);color:white;font-weight:750;cursor:pointer;text-decoration:none}button.secondary,a.secondary{background:transparent}button:disabled,select:disabled{opacity:.55;cursor:wait}.result{width:100%;text-align:left;background:#151d2a;margin:10px 0;padding:15px;line-height:1.45}.result small{display:block;color:var(--muted);margin-bottom:5px}.entry{border-top:1px solid var(--line);padding:20px 0}.entry:first-child{border-top:0}.entry h3{margin:0 0 4px;font-size:17px}.entry time{display:block;color:var(--muted);font-size:14px;margin-bottom:10px}.entry p{white-space:pre-wrap;overflow-wrap:anywhere;margin:0}#error,#backup-error,#schedule-error,#restore-error,#install-error{color:#ffc3c8}#status,#backup-status,#schedule-status,#restore-status,#install-status{color:var(--muted)}#recovery{border-left:4px solid var(--light);padding-left:16px;margin-top:18px}.subsection{border-top:1px solid var(--line);margin-top:22px;padding-top:18px}[hidden]{display:none!important}fieldset{margin:18px 0;padding:0;border:0}legend{margin-bottom:10px;font-weight:750}fieldset label{display:flex;gap:11px;padding:13px 14px;margin:8px 0;border:1px solid var(--line);border-radius:11px;cursor:pointer}fieldset input{flex:0 0 auto;min-width:0;width:19px;height:19px;margin:3px 0 0;accent-color:var(--purple)}fieldset label span,fieldset label small{display:block}fieldset label small{margin-top:3px;color:var(--muted);font-size:14px}.retention-note{font-size:14px;margin-top:10px}
 .result strong{display:block;margin-bottom:4px}#browse-error,#thread-restore-error{color:#ffc3c8}#browse-status,#thread-restore-status{color:var(--muted)}
 #index-error{color:#ffc3c8}#index-status{color:var(--muted)}
+#salvage-error{color:#ffc3c8}#salvage-status{color:var(--muted)}#salvage-search{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end}#salvage-search label{grid-column:1/-1}#salvage-search input{min-width:0}
 .app{min-height:100vh;display:grid;grid-template-columns:238px 1fr}.sidebar{position:sticky;top:0;height:100vh;padding:28px 18px 24px;border-right:1px solid var(--line);background:#0c1018;display:flex;flex-direction:column}.brand{display:flex;gap:12px;align-items:center;padding:0 8px 26px}.brand-mark{width:36px;height:36px;display:grid;place-items:center;border-radius:11px;background:linear-gradient(145deg,#9475ff,#5735d6);font-size:14px;font-weight:850;box-shadow:0 10px 30px #6f4cff44}.brand strong,.brand small{display:block}.brand small{color:var(--muted);font-size:12px}.nav{display:grid;gap:8px}.nav a{display:flex;align-items:center;gap:12px;padding:12px 14px;color:#aeb8ca;border-radius:11px;text-decoration:none;font-weight:700}.nav a:hover,.nav a.active{color:white;background:#1d2434}.nav-icon{width:18px;text-align:center;color:#a991ff}.protection{margin-top:auto;border-top:1px solid var(--line);padding:18px 8px 0;font-size:13px;color:var(--muted)}.protection strong{color:var(--text)}.dot{display:inline-block;width:9px;height:9px;margin-right:8px;border-radius:50%;background:#45dfa0;box-shadow:0 0 0 5px #45dfa014}.content{min-width:0}.topline{font-size:14px;color:var(--muted);font-weight:750}.view-head h1{font-size:clamp(38px,5vw,58px)}.view-head{align-items:center;margin-bottom:26px}.panel h2{margin-top:0}.storage-assessment{border:1px solid var(--line);border-radius:13px;padding:14px 16px;margin:14px 0;background:#0c121d}.storage-assessment strong,.storage-assessment span{display:block}.storage-assessment span{color:var(--muted);font-size:14px;margin-top:3px}.storage-assessment.cloud_sync{border-color:#25654d;background:#0d251c}.storage-assessment.cloud_sync strong{color:#5ee5aa}.storage-assessment.local{border-color:#7a5824;background:#2c210f}.storage-assessment.local strong{color:#ffd58a}.storage-assessment.external_or_network{border-color:#4c5a74}.view-backup .summary,.view-recovery .summary,.view-backup #restore-panel,.view-backup #search-panel,.view-backup #results-panel,.view-backup #thread,.view-conversations #backup-panel,.view-conversations #restore-panel,.view-recovery #backup-panel,.view-recovery #search-panel,.view-recovery #results-panel,.view-recovery #thread{display:none!important}.view-conversations main{width:min(1120px,calc(100% - 48px))}.view-conversations #search-panel{margin-bottom:12px}.view-conversations #results-panel{width:36%;float:left;margin-right:14px}.view-conversations #thread{overflow:hidden;min-height:420px}.view-conversations #status,.view-conversations #error{clear:both}.view-recovery main{width:min(980px,calc(100% - 48px))}
 @media(max-width:820px){.app{display:block}.sidebar{position:static;width:auto;height:auto;padding:16px}.brand{padding-bottom:12px}.nav{display:flex;overflow-x:auto}.nav a{white-space:nowrap}.protection{display:none}.view-conversations #results-panel{float:none;width:auto;margin-right:0}.view-conversations #thread{min-height:0}}
 @media(max-width:620px){header{display:block}.view-head a.button{display:inline-block;margin-top:16px}.summary{grid-template-columns:1fr}.panel{padding:16px}main,.view-conversations main,.view-recovery main{width:min(100% - 24px,960px);margin-top:22px}.nav a{padding:10px}.nav-icon{display:none}}
+@media(max-width:620px){#salvage-search{grid-template-columns:1fr}#salvage-search button{width:100%}}
 @media print{body{background:white;color:black}header,.summary,#backup-panel,#restore-panel,#search-panel,#results-panel,.actions,#error,#status{display:none!important}main{width:auto;margin:0}.panel{border:0;padding:0;background:white}.entry{break-inside:avoid;border-color:#bbb}.entry time{color:#444}}
 </style>
 </head>
@@ -192,6 +194,24 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 <button type="submit">Search</button>
 </form>
 <p class="muted">Search this Mac's text or titles. For older versions, search saved titles, then open a backup to search its full text.</p>
+<details class="subsection" id="salvage-controls">
+<summary>Inspect a damaged conversation file</summary>
+<p class="muted">If ordinary search stops on an unreadable transcript, find its physical file by a known title or filename. This separate preview skips damaged records and never changes the original. It may be incomplete and does not restore the thread in Codex.</p>
+<form id="salvage-search">
+<label for="salvage-query">Title or filename (optional)</label>
+<input id="salvage-query" maxlength="200" autocomplete="off" placeholder="Blank shows recent files">
+<button type="submit" class="secondary">Find files</button>
+</form>
+<p id="salvage-status" role="status" aria-live="polite"></p>
+<p id="salvage-error" role="alert"></p>
+<div id="salvage-results"></div>
+<button id="salvage-more" type="button" class="secondary" hidden>Show more files</button>
+<section id="salvage-preview" hidden aria-label="Incomplete salvage preview">
+<h3>Incomplete read-only preview</h3>
+<p id="salvage-meta" role="status"></p>
+<div id="salvage-entries"></div>
+</section>
+</details>
 <div class="subsection" id="index-controls">
 <h3>Speed up search</h3>
 <p class="muted">For large histories, build a local cache instead of scanning every conversation. It may use several GB and stores <strong>unencrypted text fragments</strong> visible to your Mac account. Search and backups work without it; you can delete it anytime.</p>
@@ -418,6 +438,49 @@ async function runSearch(append=false){
 }
 $("search").onsubmit=event=>{event.preventDefault();void runSearch()};
 $("more-results").onclick=()=>void runSearch(true);
+let salvageOffset=0;
+async function findSalvageFiles(append=false){
+  const q=$("salvage-query").value.trim();
+  if(!append){salvageOffset=0;$("salvage-results").replaceChildren();$("salvage-preview").hidden=true}
+  $("salvage-error").textContent="";$("salvage-status").textContent="Finding conversation files…";
+  $("salvage-more").disabled=true;
+  try{
+    const data=await api("/api/vault/salvage-candidates?"+new URLSearchParams({q,offset:String(salvageOffset)}));
+    for(const item of data.results){
+      const button=document.createElement("button");button.type="button";button.className="result";
+      const small=document.createElement("small");
+      const when=new Date(item.modified_ms);
+      small.textContent=`${item.collection} · ${Number.isNaN(when.getTime())?"date unavailable":when.toLocaleString()}`;
+      const title=document.createElement("strong");title.textContent=item.title||"Untitled conversation file";
+      const path=document.createElement("span");path.textContent=item.transcript;
+      button.append(small,title,path);button.onclick=()=>void previewSalvageFile(item);
+      $("salvage-results").append(button);
+    }
+    salvageOffset += data.results.length;
+    $("salvage-more").hidden=!data.has_more;
+    $("salvage-status").textContent=$("salvage-results").children.length?
+      `${$("salvage-results").children.length} file${$("salvage-results").children.length===1?"":"s"} shown. Select one to inspect it without changing the original.${data.titles_available?"":" Title lookup is unavailable; filename lookup still works."}`:
+      "No matching file found. Try another title or leave the field blank to browse by date.";
+  }catch(error){$("salvage-error").textContent=error.message;$("salvage-status").textContent=""}
+  finally{$("salvage-more").disabled=false}
+}
+async function previewSalvageFile(item){
+  $("salvage-error").textContent="";$("salvage-status").textContent="Inspecting the selected file without changing it…";
+  try{
+    const data=await api("/api/vault/salvage-preview?"+new URLSearchParams({collection:item.collection,transcript:item.transcript}));
+    $("salvage-entries").replaceChildren(...data.entries.map((entry,index)=>{
+      const article=document.createElement("article");article.className="entry";
+      const h=document.createElement("h4");h.textContent=entry.role||`Entry ${index+1}`;article.append(h);
+      if(entry.timestamp){const time=document.createElement("time");time.textContent=entry.timestamp;article.append(time)}
+      const p=document.createElement("p");p.textContent=entry.text;article.append(p);return article;
+    }));
+    $("salvage-meta").textContent=`${item.transcript} · ${data.parsed_records} readable records, ${data.nul_repaired_records} recovered around NUL bytes, ${data.skipped_records} skipped. Physical file only; fork ancestry is not included.${data.preview_truncated||data.scan_truncated?" Preview limited; additional content may be omitted.":""}`;
+    $("salvage-preview").hidden=false;$("salvage-status").textContent="";
+    $("salvage-preview").scrollIntoView({behavior:"smooth"});
+  }catch(error){$("salvage-error").textContent=error.message;$("salvage-status").textContent=""}
+}
+$("salvage-search").onsubmit=event=>{event.preventDefault();void findSalvageFiles()};
+$("salvage-more").onclick=()=>void findSalvageFiles(true);
 let indexTimer=null;
 function indexView(data){
   const running=data.status==="running"||data.status==="stopping";

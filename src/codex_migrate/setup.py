@@ -28,6 +28,7 @@ from codex_migrate.pairing import Pairing
 from codex_migrate.vault import inspect as inspect_vault
 from codex_migrate.vault import markdown as vault_markdown
 from codex_migrate.vault import _find_transcript, markdown_chunks, read_thread, read_thread_page, search as search_vault
+from codex_migrate.vault_salvage import find_transcripts as find_salvage_transcripts, preview_damaged_thread
 from codex_migrate.vault_backup import backup as backup_vault
 from codex_migrate.vault_backup import plan as plan_vault_backup
 from codex_migrate.vault_dashboard import VAULT_HTML
@@ -1342,6 +1343,26 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                                                     titles_only=source == "local_titles"))
                             self._json(200, {"results": [item.as_dict() for item in results[:page_size]],
                                              "has_more": len(results) > page_size})
+                            return
+                        if (parsed.path == "/api/vault/salvage-candidates"
+                                and set(query) <= {"q", "offset"}
+                                and all(len(value) == 1 for value in query.values())):
+                            phrase = query.get("q", [""])[0]
+                            raw_offset = query.get("offset", ["0"])[0]
+                            if len(raw_offset) > 6:
+                                raise ValueError("invalid salvage discovery offset")
+                            self._json(200, find_salvage_transcripts(
+                                setup.source_home, phrase, offset=int(raw_offset)))
+                            return
+                        if (parsed.path == "/api/vault/salvage-preview"
+                                and set(query) == {"collection", "transcript"}
+                                and all(len(value) == 1 for value in query.values())):
+                            collection = query["collection"][0]
+                            transcript = query["transcript"][0]
+                            if len(collection) > 16 or len(transcript) > 4096:
+                                raise ValueError("invalid salvage transcript")
+                            self._json(200, preview_damaged_thread(
+                                setup.source_home, collection, transcript).as_dict())
                             return
                         if (parsed.path in ("/api/vault/thread", "/api/vault/export")
                                 and set(query) <= {"collection", "transcript", "source", "cursor", "match"}):

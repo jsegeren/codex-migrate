@@ -16,8 +16,9 @@ from typing import Dict, List
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault import (
     ThreadEntry, _find_transcript, _first_named_string, _strings, _timestamp,
+    _transcripts,
 )
-from codex_migrate.vault_identity import MAX_RECORD_BYTES
+from codex_migrate.vault_identity import MAX_RECORD_BYTES, filename_id, title_index
 
 MAX_SCAN_BYTES = 256 * 1024 * 1024
 
@@ -50,6 +51,50 @@ class SalvagePreview:
 def _stamp(info: os.stat_result):
     return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns,
             info.st_ctime_ns)
+
+
+def find_transcripts(source_home: str, query: str = "", *, offset: int = 0,
+                     limit: int = 50) -> Dict[str, object]:
+    """Find physical transcripts by filename or known title, without reading bodies.
+
+    This is a separate opt-in discovery path for damaged files; it does not
+    label any candidate corrupt or claim that a title index is complete.
+    """
+    if (not isinstance(query, str) or len(query) > 200 or
+            type(offset) is not int or not 0 <= offset <= 100000 or
+            type(limit) is not int or not 1 <= limit <= 100):
+        raise ValueError("invalid salvage discovery query")
+    discovered = list(_transcripts(source_home))
+    try:
+        titles = title_index(source_home)
+        titles_available = True
+    except MigrationError:
+        titles = {}
+        titles_available = False
+    needle = query.strip().casefold()
+    found = []
+    for folder, path, relative in discovered:
+        try:
+            info = path.lstat()
+        except OSError as error:
+            raise MigrationError("Conversation files changed during discovery; retry.") from error
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            raise MigrationError("A conversation file changed during discovery; retry.")
+        aliases = titles.get(filename_id(relative), [])
+        if needle and needle not in relative.casefold() and not any(
+                needle in title.casefold() for title in aliases):
+            continue
+        found.append({
+            "collection": "active" if folder == "sessions" else "archived",
+            "transcript": relative,
+            "title": aliases[-1] if aliases else None,
+            "modified_ms": info.st_mtime_ns // 1000000,
+        })
+    found.sort(key=lambda item: (item["modified_ms"], item["transcript"]),
+               reverse=True)
+    return {"results": found[offset:offset + limit],
+            "has_more": len(found) > offset + limit,
+            "titles_available": titles_available}
 
 
 def _drain_record(handle) -> bool:

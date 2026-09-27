@@ -508,7 +508,9 @@ Use the path relative to `.codex/sessions` (`active`) or
 tries removing NUL bytes from an in-memory copy of bounded records, and reports
 omissions. It does not alter the original, reconstruct fork ancestry, restore
 the thread into Codex, or promise a complete transcript. Normal search remains
-strict. The desktop history browser does not yet expose salvage discovery.
+strict. The desktop history browser has a separate opt-in "Inspect a damaged
+conversation file" panel that can find physical files by recent date, filename,
+or known current/old title, then show the same incomplete preview.
 
 The packaged local helper exposes a history browser with
 per-thread Markdown download, print-to-PDF and the browser's native share sheet
