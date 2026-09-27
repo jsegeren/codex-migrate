@@ -402,16 +402,23 @@ egress allowance. Do not claim that B2 restores are always free. See its
   the per-invocation R2 subrequest budget; one giant Worker verification call
   is not a valid implementation. The draft R2 adapter checks each 512-object
   batch in waves of 16 concurrent HEAD requests; a unit test bounds that
-  concurrency and stops after a failed wave. The eventual authenticated
-  service must bind each batch to the account and Vault, then prove realistic
-  multi-batch latency and retry behavior against R2. Cloudflare currently allows 1,000 internal
-  service subrequests per Free Worker invocation and defaults to 10,000 on
+  concurrency and stops after a failed wave. The sandbox-only authenticated
+  publication route now rechecks the purchase and subscription, assembles
+  admitted receipt pages inside the service, verifies the exact account/Vault-
+  scoped objects against R2, and advances last-good only through the matching
+  database transaction. The client cannot supply verification proof. This
+  route is dark by default and does not make hosted protection available to
+  customers. Realistic multi-batch latency, retries, and Vercel function
+  duration still require a live R2 proof; a synchronous request may not be
+  sufficient for large histories. Cloudflare currently allows 50 subrequests
+  per Free Worker invocation and defaults to 10,000 on
   Paid; see [Workers limits](https://developers.cloudflare.com/workers/platform/limits/).
   The database transaction enforces aggregate
-  retained-byte accounting and last-good publication. This is **not yet an authenticated publish endpoint**:
-  real provider checksum behavior, account ownership, entitlement, upload
-  grants, and clean-account recovery remain unproven. A per-receipt byte bound
-  alone does not enforce aggregate quota.
+  retained-byte accounting and last-good publication. This is **not a hosted
+  release**: realistic-scale provider verification, durable asynchronous
+  publication for histories that exceed a request window, and clean-account
+  recovery remain unproven. A per-receipt byte bound alone does not enforce
+  aggregate quota.
 - Preserve old snapshot references under a declared retention policy. Deleting
   an unreferenced chunk requires proof that no retained snapshot needs it.
   Cancellation, payment failure, account deletion, export grace, and final

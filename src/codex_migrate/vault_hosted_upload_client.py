@@ -51,11 +51,15 @@ class HostedUploadClient:
         self._allow_loopback_http = allow_loopback_http
         self._opener = build_opener(_NoRedirect())
 
-    def _post(self, claim: dict, *, receipt_page: bool = False) -> dict:
+    def _post(self, claim: dict, *, receipt_page: bool = False,
+              publication: bool = False) -> dict:
+        if receipt_page and publication:
+            raise MigrationError("The hosted upload request is invalid.")
         body = json.dumps(claim, separators=(",", ":")).encode("utf-8")
         if len(body) > (256 * 1024 if receipt_page else 700):
             raise MigrationError("The hosted upload request is too large.")
-        path = "/api/hosted-receipt-page" if receipt_page else "/api/hosted-upload"
+        path = ("/api/hosted-receipt-page" if receipt_page else
+                "/api/hosted-publish" if publication else "/api/hosted-upload")
         request = Request(self._service_origin + path, data=body,
                           headers={"Authorization": "Bearer " + self._device_token,
                                    "Content-Type": "application/json",
@@ -174,6 +178,29 @@ class HostedUploadClient:
                 raise MigrationError("The hosted receipt page was not acknowledged.")
             acknowledged += len(page)
         return acknowledged
+
+    def publish(self, reservation_id: str, snapshot_id: str, *,
+                apply: bool = False) -> int:
+        """Request independent server verification, then last-good publication.
+
+        A transport failure, including a lost successful response, is not a
+        protection receipt. The caller may retry this exact reservation and
+        snapshot; the server's publication transaction is idempotent.
+        """
+        if apply is not True:
+            raise MigrationError("Hosted upload changes require explicit confirmation.")
+        self._require_reservation(reservation_id)
+        if not isinstance(snapshot_id, str) or not _UUID.fullmatch(snapshot_id):
+            raise MigrationError("The hosted snapshot is invalid.")
+        result = self._post({"action": "publish", "vaultId": self._vault_id,
+                             "reservationId": reservation_id,
+                             "snapshotId": snapshot_id}, publication=True)
+        count = result.get("verifiedObjectCount")
+        if (set(result) != {"snapshotId", "verifiedObjectCount"} or
+                result.get("snapshotId") != snapshot_id or
+                type(count) is not int or not 3 <= count <= 1_000_000):
+            raise MigrationError("The hosted publication response is invalid.")
+        return count
 
 
 class HostedUploadObjectStore:

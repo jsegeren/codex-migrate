@@ -45,7 +45,8 @@ class _Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
-        if self.path not in ("/api/hosted-upload", "/api/hosted-receipt-page") or self.headers.get(
+        if self.path not in ("/api/hosted-upload", "/api/hosted-receipt-page",
+                             "/api/hosted-publish") or self.headers.get(
                 "Authorization") != "Bearer " + TOKEN:
             return self._json(403, {"error": "access_denied"})
         size = int(self.headers.get("Content-Length", "0"))
@@ -54,6 +55,15 @@ class _Handler(BaseHTTPRequestHandler):
         if request["vaultId"] != VAULT:
             return self._json(403, {"error": "access_denied"})
         action = request["action"]
+        if self.path == "/api/hosted-publish":
+            if (action != "publish" or request["reservationId"] != RESERVATION or
+                    request["snapshotId"] != SNAPSHOT):
+                return self._json(403, {"error": "access_denied"})
+            if self.server.fail_next_publish:
+                self.server.fail_next_publish = False
+                return self._json(503, {"error": "temporarily_unavailable"})
+            return self._json(200, {"snapshotId": SNAPSHOT,
+                                    "verifiedObjectCount": 3})
         if self.path == "/api/hosted-receipt-page":
             if (action != "page" or request["reservationId"] != RESERVATION or
                     request["snapshotId"] != SNAPSHOT):
@@ -150,6 +160,7 @@ class HostedUploadClientTests(unittest.TestCase):
         self.server.fail_next_put = False
         self.server.fail_renew = False
         self.server.fail_next_page = False
+        self.server.fail_next_publish = False
         self.server.drop_next_put_response = False
         self.server.pages = []
         self.server.expected = {
@@ -263,6 +274,18 @@ class HostedUploadClientTests(unittest.TestCase):
         self.assertEqual(self.client.submit_pages(RESERVATION, staged, apply=True), 3)
         self.assertEqual([len(page) for page in self.server.pages], [3])
         self.assertNotIn("publish", self.server.actions)
+
+    def test_publication_requires_apply_and_exact_server_receipt(self):
+        with self.assertRaises(MigrationError):
+            self.client.publish(RESERVATION, SNAPSHOT)
+        with self.assertRaises(MigrationError):
+            self.client.publish(RESERVATION, "wrong", apply=True)
+        self.assertNotIn("publish", self.server.actions)
+        self.server.fail_next_publish = True
+        with self.assertRaises(MigrationError):
+            self.client.publish(RESERVATION, SNAPSHOT, apply=True)
+        self.assertEqual(self.client.publish(RESERVATION, SNAPSHOT, apply=True), 3)
+        self.assertEqual(self.server.actions.count("publish"), 2)
 
     def test_mutation_requires_apply_and_server_origin_is_pinned(self):
         with self.assertRaises(MigrationError):
