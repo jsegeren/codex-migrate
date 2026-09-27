@@ -15,29 +15,38 @@ function recoveryConfiguration(env) {
       env.HOSTED_SANDBOX_RECOVERY_OPEN !== 'yes') {
     throw new HostedRecoveryRuntimeError();
   }
-  let database;
   let worker;
   let secret;
   try {
-    database = new URL(env.COMMERCE_DATABASE_URL);
     worker = new URL(env.HOSTED_R2_ORIGIN);
     secret = decodeSecret(env.HOSTED_CAPABILITY_SIGNING_KEY);
+  } catch { throw new HostedRecoveryRuntimeError(); }
+  if (worker.protocol !== 'https:' || !worker.hostname ||
+      worker.username || worker.password || worker.pathname !== '/' ||
+      worker.search || worker.hash) throw new HostedRecoveryRuntimeError();
+  return Object.freeze({ databaseUrl: sandboxDatabaseUrl(env),
+    workerOrigin: worker.origin, secret });
+}
+
+function sandboxDatabaseUrl(env) {
+  if (env.HOSTED_MODE !== 'sandbox') throw new HostedRecoveryRuntimeError();
+  let database;
+  try {
+    database = new URL(env.COMMERCE_DATABASE_URL);
   } catch { throw new HostedRecoveryRuntimeError(); }
   if (!['postgres:', 'postgresql:'].includes(database.protocol) ||
       ![SANDBOX_HOST, SANDBOX_POOLER_HOST].includes(database.hostname) ||
       database.pathname !== '/neondb' ||
-      database.username === '' || database.password === '' ||
-      worker.protocol !== 'https:' || !worker.hostname ||
-      worker.username || worker.password || worker.pathname !== '/' ||
-      worker.search || worker.hash) throw new HostedRecoveryRuntimeError();
-  return Object.freeze({ databaseUrl: database.toString(),
-    workerOrigin: worker.origin, secret });
+      database.username === '' || database.password === '') {
+    throw new HostedRecoveryRuntimeError();
+  }
+  return database.toString();
 }
 
-async function recoveryRuntime(env = process.env) {
-  const config = recoveryConfiguration(env);
+async function sandboxDatabaseRuntime(env = process.env) {
+  const databaseUrl = sandboxDatabaseUrl(env);
   try {
-    const sql = neon(config.databaseUrl);
+    const sql = neon(databaseUrl);
     const query = (text, params) => sql.query(text, params, {
       fullResults: true,
       fetchOptions: { signal: AbortSignal.timeout(15_000) },
@@ -47,10 +56,16 @@ async function recoveryRuntime(env = process.env) {
     if (identity?.rows?.length !== 1 || identity.rows[0].mode !== 'sandbox') {
       throw new HostedRecoveryRuntimeError();
     }
-    return Object.freeze({ query, workerOrigin: config.workerOrigin,
-      secret: config.secret });
+    return query;
   } catch { throw new HostedRecoveryRuntimeError(); }
 }
 
+async function recoveryRuntime(env = process.env) {
+  const config = recoveryConfiguration(env);
+  const query = await sandboxDatabaseRuntime(env);
+  return Object.freeze({ query, workerOrigin: config.workerOrigin,
+    secret: config.secret });
+}
+
 module.exports = { HostedRecoveryRuntimeError, recoveryConfiguration,
-  recoveryRuntime };
+  recoveryRuntime, sandboxDatabaseUrl, sandboxDatabaseRuntime };

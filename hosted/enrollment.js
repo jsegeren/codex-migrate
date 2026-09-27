@@ -1,7 +1,8 @@
 // Dark, server-only buyer enrollment. A download token locates a purchase but
 // never grants storage access: the buyer must also prove control of the email
-// on a freshly verified, unrefunded Stripe purchase. No HTTP route uses this
-// module yet, and an enrolled account starts with zero upload allowance.
+// on a freshly verified, unrefunded Stripe purchase. Only a sandbox-only,
+// explicitly gated HTTP route uses this module; an enrolled account starts
+// with zero upload allowance.
 const { createHash, randomBytes, randomUUID } = require('node:crypto');
 const { tokenHash } = require('./access');
 

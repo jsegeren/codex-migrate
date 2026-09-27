@@ -229,7 +229,7 @@ egress allowance. Do not claim that B2 restores are always free. See its
   consumes a scope minted by this authorization path once, within 60 seconds.
   The actual identity
   enrollment-to-native-client delivery, token rotation and recovery,
-  authenticated HTTP handlers, and trial/billing activation are **not implemented**.
+  upload HTTP handlers, and trial/billing activation are **not implemented**.
   The recheck is a server-only primitive, not wired to a live endpoint. These draft
   primitives do not make the service customer-accessible or safe to launch.
 - A versioned draft purchase-enrollment table now binds each enrolled hosted
@@ -256,9 +256,18 @@ egress allowance. Do not claim that B2 restores are always free. See its
   saved token and resolve the same account/Vault IDs while the session remains
   valid. This is source
   and disposable-Keychain test evidence, **not** a wired buyer flow. There is
-  no buyer-facing enrollment route, edge/IP abuse limit, second-device
+  no buyer-facing enrollment release, edge/IP abuse limit, second-device
   pairing or lost-Mac re-enrollment, hosted trial, subscription checkout, or
   production migration. The hosted option remains unavailable.
+- A dark `/api/hosted-enrollment` handler now exposes the existing begin,
+  claim, and resolve primitives **only** when the sandbox enrollment flag is
+  explicitly open. It pins the test database and test-commerce configuration
+  before network work, rechecks the original purchase, sends the one-use code
+  only to that purchase email, stores the first-device token digest rather
+  than the bearer, and returns only account/Vault/device IDs. A claim still
+  starts with zero upload allowance; no live configuration can open the route.
+  This is a test seam, not customer enrollment: there is no native buyer UI,
+  subscription, second-device pairing, edge abuse protection, or hosted upload.
 - A provider-neutral subscription upload gate is implemented for a future
   service to call with a freshly retrieved Stripe Subscription, its
   server-held enrollment record, and a server-held catalog of approved price
