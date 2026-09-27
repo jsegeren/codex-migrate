@@ -138,7 +138,8 @@ class HostedBackupRun:
                          "reservationId": reservation_id}
                 _atomic_json(self._journal, state)
             result = self._client.back_up_snapshot(
-                vault, reservation_id=state["reservationId"], snapshot=snapshot,
+                vault, reservation_id=state["reservationId"],
+                snapshot=state["snapshotId"],
                 crypto_helper=crypto_helper, apply=True)
             if result.get("snapshotId") != state["snapshotId"]:
                 raise MigrationError("The hosted publication did not match the pending snapshot.")

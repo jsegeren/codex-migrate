@@ -63,6 +63,8 @@ class HostedBackupRunTests(unittest.TestCase):
             self.assertEqual(upload.call_count, 2)
             self.assertEqual([call.kwargs["reservation_id"] for call in
                               upload.call_args_list], [RESERVATION, RESERVATION])
+            self.assertEqual([call.kwargs["snapshot"] for call in
+                              upload.call_args_list], [SNAPSHOT, SNAPSHOT])
 
     def test_different_snapshot_cannot_silently_displace_pending_run(self):
         with patch("codex_migrate.vault_hosted_backup_run.encrypted_snapshot_inventory",
