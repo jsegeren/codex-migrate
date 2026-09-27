@@ -411,7 +411,10 @@ egress allowance. Do not claim that B2 restores are always free. See its
   route is dark by default and does not make hosted protection available to
   customers. Realistic multi-batch latency, retries, and Vercel function
   duration still require a live R2 proof; a synchronous request may not be
-  sufficient for large histories. Cloudflare currently allows 50 subrequests
+  sufficient for large histories. The immutable receipt declaration detects
+  dropped pages from the first-party client; it cannot prove the semantic
+  completeness of an encrypted manifest against a deliberately dishonest
+  client. Cloudflare currently allows 50 subrequests
   per Free Worker invocation and defaults to 10,000 on
   Paid; see [Workers limits](https://developers.cloudflare.com/workers/platform/limits/).
   The database transaction enforces aggregate
