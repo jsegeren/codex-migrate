@@ -116,6 +116,17 @@ egress allowance. Do not claim that B2 restores are always free. See its
   to that customer's remote Vault. Never ship bucket credentials in the app or
   accept caller-supplied bucket/key prefixes. Treat a presigned URL as a bearer
   secret and keep it out of logs, analytics, and support email.
+- A draft server-only session boundary now uses a separate random device token
+  whose domain-separated digest, account, Vault, device, expiry (at most 30
+  days), and revocation state are stored in PostgreSQL. Each upload-scope
+  authorization queries that record for a live, unrevoked session bound to the
+  requested Vault, loads the enrollment for that account, and must fetch the
+  current Stripe Subscription before granting a scope. The publication
+  coordinator rejects an ordinary client-shaped account/Vault object; it
+  accepts only a scope minted by this authorization path. The actual identity
+  enrollment, token issuance/rotation and recovery, authenticated HTTP
+  handlers, and payment/refund binding are **not implemented**. These draft
+  primitives do not make the service customer-accessible or safe to launch.
 - A provider-neutral subscription upload gate is implemented for a future
   service to call with a freshly retrieved Stripe Subscription, its
   server-held enrollment record, and a server-held catalog of approved price
@@ -141,7 +152,7 @@ egress allowance. Do not claim that B2 restores are always free. See its
   been applied to either Neon commerce environment. The separate migration
   runner requires the exact direct database host and explicit confirmation.
   Expiry does not release reservations automatically: provider cleanup must
-  first be proven. Orphan cleanup, retention/deletion, live authentication,
+  first be proven. Orphan cleanup, retention/deletion, live identity enrollment,
   and authenticated end-to-end R2 service proof are still missing; these draft functions are not a
   customer API or a live entitlement.
 - An upload first sends immutable encrypted objects and manifest, then a

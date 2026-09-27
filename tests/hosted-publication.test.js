@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { publishStagedReceipt } = require('../hosted/publication');
 const { validateReceipt } = require('../hosted/receipt');
+const { mintSessionSecret, authorizeUploadScope } = require('../hosted/access');
 
 const snapshotId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const reservationId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
@@ -15,6 +16,28 @@ const objects = keys.map(key => ({ key, bytes: 10, sha256: 'a'.repeat(64) }));
 const receipt = () => ({ version: 1, snapshot_id: snapshotId,
   remote_bytes_checked: 40, objects: objects.map(item => ({ ...item })) });
 
+async function publicationScope() {
+  const { token } = mintSessionSecret();
+  return authorizeUploadScope({ sessionToken: token, vaultId: scope.vaultId,
+    query: async () => ({ rows: [{ account_id: scope.accountId,
+      vault_id: scope.vaultId }] }),
+    getEntitlement: async () => ({
+      enrollment: { accountId: scope.accountId, subscriptionId: 'sub_fixture',
+        customerId: 'cus_fixture', priceId: 'price_fixture' },
+      subscription: { id: 'sub_fixture', customer: 'cus_fixture',
+        livemode: false, status: 'active', collection_method: 'charge_automatically',
+        pause_collection: null, items: { data: [{ quantity: 1, price: {
+          id: 'price_fixture', livemode: false, type: 'recurring',
+          currency: 'usd', unit_amount: 1000, billing_scheme: 'per_unit',
+          recurring: { interval: 'month', interval_count: 1 },
+        } }] } },
+    }),
+    live: false,
+    priceCatalog: new Map([['price_fixture', { priceCents: 1000,
+      allowanceBytes: 100_000_000_000 }]]),
+  });
+}
+
 test('a receipt over the database object limit is rejected before verification', () => {
   const claim = receipt();
   claim.objects = Array(1_000_001);
@@ -26,7 +49,7 @@ test('publishes only the provider-verified frozen object list', async () => {
   const checked = [];
   const calls = [];
   const published = await publishStagedReceipt({ receipt: claim, maxReceiptBytes: 1000,
-    scope, reservationId,
+    scope: await publicationScope(), reservationId,
     verifyBatch: async batch => {
       checked.push(...batch.map(item => item.key));
       claim.objects[1].sha256 = 'b'.repeat(64);
@@ -49,7 +72,7 @@ test('publishes only the provider-verified frozen object list', async () => {
 test('a failed provider check never calls the database', async () => {
   let writes = 0;
   await assert.rejects(publishStagedReceipt({ receipt: receipt(),
-    maxReceiptBytes: 1000, scope, reservationId,
+    maxReceiptBytes: 1000, scope: await publicationScope(), reservationId,
     verifyBatch: async () => false,
     query: async () => { writes++; return { rows: [{ published: true }] }; },
   }), /hosted_receipt_invalid/);
@@ -60,14 +83,14 @@ test('missing reservation or database confirmation is not publication', async ()
   let checks = 0;
   for (const invalid of [undefined, 'not-a-uuid']) {
     await assert.rejects(publishStagedReceipt({ receipt: receipt(),
-      maxReceiptBytes: 1000, scope, reservationId: invalid,
+      maxReceiptBytes: 1000, scope: await publicationScope(), reservationId: invalid,
       verifyBatch: async () => { checks++; return true; },
       query: async () => ({ rows: [{ published: true }] }),
     }), /hosted_publication_failed/);
   }
   assert.equal(checks, 0);
   await assert.rejects(publishStagedReceipt({ receipt: receipt(),
-    maxReceiptBytes: 1000, scope, reservationId,
+    maxReceiptBytes: 1000, scope: await publicationScope(), reservationId,
     verifyBatch: async () => true,
     query: async () => ({ rows: [{ published: false }] }),
   }), /hosted_publication_failed/);
@@ -75,7 +98,7 @@ test('missing reservation or database confirmation is not publication', async ()
 
 test('database errors do not expose private publication details', async () => {
   await assert.rejects(publishStagedReceipt({ receipt: receipt(),
-    maxReceiptBytes: 1000, scope, reservationId,
+    maxReceiptBytes: 1000, scope: await publicationScope(), reservationId,
     verifyBatch: async () => true,
     query: async () => { throw new Error('private database endpoint and account'); },
   }), error => error.message === 'hosted_publication_failed');
@@ -95,7 +118,7 @@ test('a failed later batch never publishes a large receipt', async () => {
   let batches = 0;
   let writes = 0;
   await assert.rejects(publishStagedReceipt({ receipt: claim,
-    maxReceiptBytes: claim.remote_bytes_checked, scope, reservationId,
+    maxReceiptBytes: claim.remote_bytes_checked, scope: await publicationScope(), reservationId,
     verifyBatch: async () => ++batches !== 2,
     query: async () => { writes++; return { rows: [{ published: true }] }; },
   }), /hosted_receipt_invalid/);
