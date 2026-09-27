@@ -345,7 +345,7 @@ def search(
     offset: int = 0,
     titles_only: bool = False,
 ) -> List[VaultMatch]:
-    """Find recent matching conversations without retaining a local content index."""
+    """Find title matches first, then recent matching conversation text."""
     needle = query.strip().casefold()
     if not needle:
         raise ValueError("search query must not be empty")
@@ -368,11 +368,6 @@ def search(
         for item in (catalog or [])
     }
     discovered = list(_transcripts(source_home))
-    rollouts = _rollout_map(discovered) if not titles_only else None
-    indexed_candidates = None
-    if not titles_only:
-        from codex_migrate.vault_search_index import candidates
-        indexed_candidates = candidates(source_home, query.strip(), discovered)
     transcripts = []
     for folder, path, relative in discovered:
         try:
@@ -383,6 +378,7 @@ def search(
             raise MigrationError("A conversation transcript changed while it was being read.")
         transcripts.append((info.st_mtime_ns, folder, path, relative))
     transcripts.sort(key=lambda item: (item[0], item[3]), reverse=True)
+    prepared = []
     for _, folder, path, relative in transcripts:
         collection = "active" if folder == "sessions" else "archived"
         metadata = catalog_by_path.get((collection, relative))
@@ -391,42 +387,59 @@ def search(
         current_title = aliases[-1] if aliases else None
         title_match = next((title for title in reversed(aliases)
                             if needle in title.casefold()), None)
+        prepared.append((path, relative, collection, current_title, title_match))
+    # An old title must be findable without scanning gigabytes of newer body
+    # text first. A title hit represents its thread once; body search below
+    # skips it rather than adding a misleading duplicate result.
+    for _, relative, collection, current_title, title_match in prepared:
+        if title_match is None:
+            continue
+        match = VaultMatch(
+            collection=collection, transcript=relative, line=0,
+            timestamp=None, title=current_title,
+            snippet="Title: " + _snippet(title_match,
+                                          title_match.casefold().find(needle),
+                                          len(query.strip())),
+        )
+        if matched_threads >= offset:
+            matches.append(match)
+            if len(matches) >= limit:
+                return matches
+        matched_threads += 1
+    if titles_only:
+        return matches
+    rollouts = _rollout_map(discovered)
+    from codex_migrate.vault_search_index import candidates
+    indexed_candidates = candidates(source_home, query.strip(), discovered)
+    for path, relative, collection, current_title, title_match in prepared:
+        if title_match is not None:
+            continue
         match = None
-        if title_match:
-            match = VaultMatch(
-                collection=collection, transcript=relative, line=0,
-                timestamp=None,
-                title=current_title,
-                snippet="Title: " + _snippet(title_match,
-                                              title_match.casefold().find(needle),
-                                              len(query.strip())),
-            )
-        elif not titles_only:
-            segments = _lineage_segments(source_home, path, discovered, rollouts)
-            if (indexed_candidates is not None
-                    and not any(part in indexed_candidates for part, _ in segments)):
-                continue
-            for record, cursor, line_number in _lineage_records(segments):
-                seen = set()
-                for text in _strings(record):
-                    if text in seen:
-                        continue
-                    seen.add(text)
-                    position = text.casefold().find(needle)
-                    if position < 0:
-                        continue
-                    match = VaultMatch(
-                        collection=collection,
-                        transcript=relative,
-                        line=line_number,
-                        timestamp=_timestamp(record),
-                        title=current_title,
-                        snippet=_snippet(text, position, len(query.strip())),
-                        cursor=cursor,
-                    )
-                    break
-                if match is not None:
-                    break
+        segments = _lineage_segments(source_home, path, discovered, rollouts)
+        if (indexed_candidates is not None
+                and not any(part in indexed_candidates for part, _ in segments)):
+            continue
+        for record, cursor, line_number in _lineage_records(segments):
+            seen = set()
+            for text in _strings(record):
+                if text in seen:
+                    continue
+                seen.add(text)
+                position = text.casefold().find(needle)
+                if position < 0:
+                    continue
+                match = VaultMatch(
+                    collection=collection,
+                    transcript=relative,
+                    line=line_number,
+                    timestamp=_timestamp(record),
+                    title=current_title,
+                    snippet=_snippet(text, position, len(query.strip())),
+                    cursor=cursor,
+                )
+                break
+            if match is not None:
+                break
         if match is not None:
             if matched_threads >= offset:
                 matches.append(match)

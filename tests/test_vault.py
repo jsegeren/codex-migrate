@@ -5,6 +5,7 @@ import sqlite3
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault import inspect, markdown, markdown_chunks, read_thread, read_thread_page, search
@@ -136,6 +137,39 @@ class VaultTests(unittest.TestCase):
             self.assertEqual(len(old_name), 1)
             self.assertEqual(old_name[0].title, "Current sign-in title")
             self.assertEqual(search(str(root), "clerk", limit=10, titles_only=True), [])
+
+    def test_old_title_surfaces_before_newer_body_without_scanning_it(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            codex = root / ".codex"
+            folder = codex / "sessions"
+            folder.mkdir(parents=True)
+            thread_id = "11111111-1111-4111-8111-111111111111"
+            older = folder / ("rollout-" + thread_id + ".jsonl")
+            newer = folder / "newer.jsonl"
+            older.write_text(json.dumps({"payload": {"message": {
+                "content": "Earlier work"}}}) + "\n", encoding="utf-8")
+            newer.write_text(json.dumps({"payload": {"message": {
+                "content": "Discuss Unification Foundation today"}}}) + "\n",
+                encoding="utf-8")
+            os.utime(older, (1_000_000_000, 1_000_000_000))
+            os.utime(newer, (2_000_000_000, 2_000_000_000))
+            (codex / "session_index.jsonl").write_text(
+                json.dumps({"id": thread_id,
+                            "thread_name": "Unification Foundation"}) + "\n"
+                + json.dumps({"id": thread_id,
+                              "thread_name": "Current program"}) + "\n",
+                encoding="utf-8")
+            with patch("codex_migrate.vault._lineage_records",
+                       side_effect=AssertionError("body was scanned")):
+                first = search(str(root), "Unification Foundation", limit=1)
+            self.assertEqual(first[0].transcript, older.name)
+            self.assertEqual(first[0].title, "Current program")
+            self.assertIn("Unification Foundation", first[0].snippet)
+            full = search(str(root), "Unification Foundation", limit=2)
+            self.assertEqual([hit.transcript for hit in full], [older.name, newer.name])
+            self.assertEqual(search(str(root), "Unification Foundation",
+                                    limit=1, offset=1)[0].transcript, newer.name)
 
     def test_search_finds_text_appended_to_an_active_thread(self):
         with tempfile.TemporaryDirectory() as temporary:
