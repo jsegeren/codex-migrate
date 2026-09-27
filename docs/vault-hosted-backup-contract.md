@@ -115,7 +115,12 @@ of a staged object without exposing another staged upload. It grants only a
 30-second HEAD probe, not a read or overwrite. A missing or unrecorded object
 must use the reserved PUT path; a HEAD response alone never becomes publication
 proof. The installed client still needs an explicit pre-PUT decision for new
-objects; treating an authorization failure as "absent" would be unsafe.
+objects; treating an authorization failure as "absent" would be unsafe. A
+server-only decision now returns either a short-lived exact HEAD capability or
+`put_required` for an active, owned reservation. Invalid authority returns a
+denial, never `put_required`; the latter is not an upload capability and must
+be followed by a separate quota-recorded PUT grant. This decision is not yet
+wired to an authenticated customer HTTP route or installed client.
 The draft published-only GET issuer now requires an unrevoked device session
 bound to that Vault, consumes a one-use read scope, and signs only an exact
 object listed in a published snapshot, using the database-owned size and

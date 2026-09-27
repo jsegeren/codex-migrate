@@ -1,4 +1,4 @@
--- Disposable PostgreSQL only, after hosted migrations 0000-0011.
+-- Disposable PostgreSQL only, after hosted migrations 0000-0012.
 BEGIN;
 INSERT INTO hosted.accounts (account_id, allowance_bytes)
   VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 100);
@@ -44,6 +44,10 @@ BEGIN
   IF NOT hosted.can_probe_upload_object_current(v_account, v_vault,
       v_active, v_published, 10, repeat('a', 64), 100) THEN
     RAISE EXCEPTION 'published object unavailable for exact HEAD';
+  END IF;
+  IF hosted.classify_upload_object_current(v_account, v_vault,
+      v_active, v_published, 10, repeat('a', 64), 100) IS DISTINCT FROM 'head' THEN
+    RAISE EXCEPTION 'published object was not classified for HEAD';
   END IF;
   IF hosted.can_probe_upload_object_current(v_account, v_vault,
       v_active, v_new, 10, repeat('d', 64), 100) THEN
