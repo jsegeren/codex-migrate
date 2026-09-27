@@ -112,6 +112,11 @@ not by itself revoke access to already retained ciphertext, so the customer
 can recover/export it during the eventual published retention window; that
 window and cancellation policy still require Founder approval. There is no
 customer read endpoint, installed-client flow, or clean-Mac restore proof.
+The draft recovery inventory can enumerate one published snapshot in
+256-object pages under the same read authorization, with scoped key cursors,
+server-held object checksums/sizes, and the total expected count and bytes.
+The recovery client must reconcile the complete inventory before declaring a
+download successful; a page alone is not proof of a recoverable snapshot.
 Do not send a whole staged receipt as one Vercel Function request. A synthetic
 JSON receipt matching the measured newer Mac's 21,907 chunks is about 4.03 MB,
 close to [Vercel's 4.5 MB request and response limit](https://vercel.com/docs/functions/limitations/);
