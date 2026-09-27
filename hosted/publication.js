@@ -1,7 +1,7 @@
 // Server-only coordinator. The authenticated caller supplies its own account
 // and Vault records, an active reservation, a provider-backed verifier, and a
 // database query method. Never accept those authorities from the client body.
-const { verifyStagedReceipt } = require('./receipt');
+const { verifyStagedReceiptBatched } = require('./receipt');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const PUBLISH_SQL = `SELECT hosted.publish_verified_snapshot(
@@ -13,13 +13,13 @@ class HostedPublicationError extends Error {
 }
 
 async function publishStagedReceipt({ receipt, maxReceiptBytes, scope,
-  reservationId, verifyObject, query }) {
+  reservationId, verifyBatch, query }) {
   if (!UUID.test(reservationId) || typeof query !== 'function') {
     throw new HostedPublicationError();
   }
   // This copies and freezes the client claim before any asynchronous provider
   // check. The database receives only the exact scoped objects verified here.
-  const proof = await verifyStagedReceipt(receipt, maxReceiptBytes, scope, verifyObject);
+  const proof = await verifyStagedReceiptBatched(receipt, maxReceiptBytes, scope, verifyBatch);
   let result;
   try {
     result = await query(PUBLISH_SQL, [scope.accountId, scope.vaultId,

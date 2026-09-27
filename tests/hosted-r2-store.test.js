@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
-const { putImmutableChecked, verifiedHead } = require('../hosted/r2_verified_store');
+const { putImmutableChecked, verifiedHead, verifiedBatch } = require('../hosted/r2_verified_store');
 const { verifyStagedReceipt } = require('../hosted/receipt');
 
 const account = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -151,4 +151,15 @@ test('R2 metadata verifies the full scoped receipt without downloading ciphertex
   bucket.objects.delete(base + paths[1]);
   await assert.rejects(verifyStagedReceipt(receipt, 10_000, scope,
     item => verifiedHead(bucket, item)), /hosted_receipt_invalid/);
+});
+
+test('R2 batch verification enforces a bounded per-invocation object count', async () => {
+  const bucket = new FakeR2();
+  const bytes = Buffer.from('encrypted object');
+  const item = itemFor(bytes);
+  await putImmutableChecked(bucket, item, bytes);
+  assert.equal(await verifiedBatch(bucket, [item]), true);
+  assert.equal(await verifiedBatch(bucket, [{ ...item, sha256: '0'.repeat(64) }]), false);
+  assert.equal(await verifiedBatch(bucket, []), false);
+  assert.equal(await verifiedBatch(bucket, Array(513).fill(item)), false);
 });

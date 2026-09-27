@@ -1,7 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
-const { validateReceipt, verifyStagedReceipt } = require('../hosted/receipt');
+const { validateReceipt, verifyStagedReceipt,
+  verifyStagedReceiptBatched } = require('../hosted/receipt');
 const { planRetainedAddition } = require('../hosted/capacity');
 
 const snapshot = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -125,4 +126,27 @@ test('provider errors are redacted and an async caller cannot rewrite the checke
   const capacity = planRetainedAddition(0, 1024, proof.verifiedObjects, new Map());
   assert.equal(capacity.retainedBytes, proof.totalBytes);
   assert.ok(capacity.newObjects.every(item => item.key.startsWith(prefix)));
+});
+
+test('large receipts verify in bounded batches and stop after a failed batch', async () => {
+  const { receipt } = fixture();
+  receipt.objects.splice(1, 1);
+  for (let index = 0; index < 1200; index++) {
+    const digest = index.toString(16).padStart(64, '0');
+    receipt.objects.splice(receipt.objects.length - 2, 0, {
+      key: `objects/${digest.slice(0, 2)}/${digest.slice(2)}.cvchunk`,
+      bytes: 10, sha256: 'a'.repeat(64),
+    });
+  }
+  receipt.remote_bytes_checked = receipt.objects.reduce((sum, item) => sum + item.bytes, 0);
+  const sizes = [];
+  const proof = await verifyStagedReceiptBatched(receipt, receipt.remote_bytes_checked,
+    scope, async batch => { sizes.push(batch.length); return true; });
+  assert.deepEqual(sizes, [512, 512, 179]);
+  assert.equal(proof.objectCount, 1203);
+  assert.ok(proof.verifiedObjects.every(item => item.key.startsWith(prefix)));
+  let checks = 0;
+  await assert.rejects(verifyStagedReceiptBatched(receipt, receipt.remote_bytes_checked,
+    scope, async () => ++checks !== 2), /hosted_receipt_invalid/);
+  assert.equal(checks, 2);
 });

@@ -1,6 +1,7 @@
 // Storage-adjacent primitive for an authenticated R2 Worker. This is not an
 // HTTP endpoint: the caller must bind account/Vault ownership, entitlement,
 // and aggregate quota before accepting an object or publishing a snapshot.
+const { MAX_WORKER_OBJECT_BYTES, VERIFICATION_BATCH_SIZE } = require('./transport_limits');
 
 const HEX = /^[0-9a-f]{64}$/;
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
@@ -8,7 +9,6 @@ const OBJECT_PATH = `(?:metadata/${UUID}\\.json|objects/[0-9a-f]{2}/[0-9a-f]{62}
 const SCOPED_KEY = new RegExp(`^accounts/${UUID}/vaults/${UUID}/${OBJECT_PATH}$`);
 // The Free-account Worker inbound limit is 100 MB. Reject larger objects
 // rather than accepting a receipt for data this transport cannot upload.
-const MAX_WORKER_OBJECT_BYTES = 100 * 1000 * 1000;
 
 class R2VerificationError extends Error {
   constructor() { super('hosted_object_unverified'); }
@@ -46,6 +46,15 @@ async function verifiedHead(bucket, item) {
   }
 }
 
+async function verifiedBatch(bucket, items) {
+  if (!Array.isArray(items) || items.length < 1 ||
+      items.length > VERIFICATION_BATCH_SIZE) return false;
+  for (const item of items) {
+    if (!await verifiedHead(bucket, item)) return false;
+  }
+  return true;
+}
+
 async function putImmutableChecked(bucket, item, body) {
   if (!validItem(item) || !body || typeof bucket?.head !== 'function' ||
       typeof bucket?.put !== 'function') throw new R2VerificationError();
@@ -74,4 +83,5 @@ async function putImmutableChecked(bucket, item, body) {
   }
 }
 
-module.exports = { R2VerificationError, verifiedHead, putImmutableChecked };
+module.exports = { R2VerificationError, verifiedHead, verifiedBatch,
+  putImmutableChecked };

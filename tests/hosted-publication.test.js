@@ -20,9 +20,9 @@ test('publishes only the provider-verified frozen object list', async () => {
   const calls = [];
   const published = await publishStagedReceipt({ receipt: claim, maxReceiptBytes: 1000,
     scope, reservationId,
-    verifyObject: async item => {
-      checked.push(item.key);
-      if (checked.length === 1) claim.objects[1].sha256 = 'b'.repeat(64);
+    verifyBatch: async batch => {
+      checked.push(...batch.map(item => item.key));
+      claim.objects[1].sha256 = 'b'.repeat(64);
       return true;
     },
     query: async (...args) => {
@@ -43,7 +43,7 @@ test('a failed provider check never calls the database', async () => {
   let writes = 0;
   await assert.rejects(publishStagedReceipt({ receipt: receipt(),
     maxReceiptBytes: 1000, scope, reservationId,
-    verifyObject: async () => false,
+    verifyBatch: async () => false,
     query: async () => { writes++; return { rows: [{ published: true }] }; },
   }), /hosted_receipt_invalid/);
   assert.equal(writes, 0);
@@ -54,14 +54,14 @@ test('missing reservation or database confirmation is not publication', async ()
   for (const invalid of [undefined, 'not-a-uuid']) {
     await assert.rejects(publishStagedReceipt({ receipt: receipt(),
       maxReceiptBytes: 1000, scope, reservationId: invalid,
-      verifyObject: async () => { checks++; return true; },
+      verifyBatch: async () => { checks++; return true; },
       query: async () => ({ rows: [{ published: true }] }),
     }), /hosted_publication_failed/);
   }
   assert.equal(checks, 0);
   await assert.rejects(publishStagedReceipt({ receipt: receipt(),
     maxReceiptBytes: 1000, scope, reservationId,
-    verifyObject: async () => true,
+    verifyBatch: async () => true,
     query: async () => ({ rows: [{ published: false }] }),
   }), /hosted_publication_failed/);
 });
@@ -69,7 +69,29 @@ test('missing reservation or database confirmation is not publication', async ()
 test('database errors do not expose private publication details', async () => {
   await assert.rejects(publishStagedReceipt({ receipt: receipt(),
     maxReceiptBytes: 1000, scope, reservationId,
-    verifyObject: async () => true,
+    verifyBatch: async () => true,
     query: async () => { throw new Error('private database endpoint and account'); },
   }), error => error.message === 'hosted_publication_failed');
+});
+
+test('a failed later batch never publishes a large receipt', async () => {
+  const claim = receipt();
+  claim.objects.splice(1, 1);
+  for (let index = 0; index < 600; index++) {
+    const digest = index.toString(16).padStart(64, '0');
+    claim.objects.splice(claim.objects.length - 2, 0, {
+      key: `objects/${digest.slice(0, 2)}/${digest.slice(2)}.cvchunk`,
+      bytes: 10, sha256: 'a'.repeat(64),
+    });
+  }
+  claim.remote_bytes_checked = claim.objects.reduce((sum, item) => sum + item.bytes, 0);
+  let batches = 0;
+  let writes = 0;
+  await assert.rejects(publishStagedReceipt({ receipt: claim,
+    maxReceiptBytes: claim.remote_bytes_checked, scope, reservationId,
+    verifyBatch: async () => ++batches !== 2,
+    query: async () => { writes++; return { rows: [{ published: true }] }; },
+  }), /hosted_receipt_invalid/);
+  assert.equal(batches, 2);
+  assert.equal(writes, 0);
 });

@@ -2,6 +2,7 @@
 // published. The caller supplies server-owned account/Vault IDs and a verifier
 // backed by provider-validated checksums or storage-adjacent reads; this
 // module never treats a client receipt, a bare PUT response, or an ETag as proof.
+const { MAX_WORKER_OBJECT_BYTES, VERIFICATION_BATCH_SIZE } = require('./transport_limits');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const HEX = /^[0-9a-f]{64}$/;
@@ -9,7 +10,7 @@ const MAX_CHUNKS = 1_000_000;
 const MAX_CHUNK_BYTES = 64 * 1024 * 1024 + 1024;
 // The selected Worker upload route refuses request bodies above 100 MB.
 // Never certify a receipt for a manifest that this service cannot upload.
-const MAX_MANIFEST_BYTES = 100 * 1000 * 1000;
+const MAX_MANIFEST_BYTES = MAX_WORKER_OBJECT_BYTES;
 const MAX_METADATA_BYTES = 1024 * 1024;
 
 class HostedReceiptError extends Error {
@@ -74,23 +75,43 @@ function storagePrefix(scope) {
 
 async function verifyStagedReceipt(receipt, maxReceiptBytes, scope, verifyObject) {
   if (typeof verifyObject !== 'function') throw new HostedReceiptError();
+  const { validated, scopedObjects } = scopedReceipt(receipt, maxReceiptBytes, scope);
+  for (const item of scopedObjects) {
+    // The service's verifier must independently establish the stored byte
+    // count and SHA-256 within the authenticated account/Vault namespace.
+    try {
+      if (await verifyObject(item) !== true) throw new HostedReceiptError();
+    } catch { throw new HostedReceiptError(); }
+  }
+  return verifiedProof(validated, scopedObjects);
+}
+
+function scopedReceipt(receipt, maxReceiptBytes, scope) {
   const validated = validateReceipt(receipt, maxReceiptBytes);
   const prefix = storagePrefix(scope);
   const scopedObjects = Object.freeze(validated.objects.map(item => Object.freeze({
     ...item, key: prefix + item.key,
   })));
-  for (const item of scopedObjects) {
-    // The service's verifier must independently establish the stored byte
-    // count and SHA-256 within the authenticated account/Vault namespace.
-    try {
-      if (await verifyObject(item) !== true) {
-        throw new HostedReceiptError();
-      }
-    } catch { throw new HostedReceiptError(); }
-  }
+  return { validated, scopedObjects };
+}
+
+function verifiedProof(validated, scopedObjects) {
   return Object.freeze({ snapshotId: validated.snapshotId,
     objectCount: scopedObjects.length, totalBytes: validated.totalBytes,
     verifiedObjects: scopedObjects });
 }
 
-module.exports = { HostedReceiptError, validateReceipt, verifyStagedReceipt };
+async function verifyStagedReceiptBatched(receipt, maxReceiptBytes, scope, verifyBatch) {
+  if (typeof verifyBatch !== 'function') throw new HostedReceiptError();
+  const { validated, scopedObjects } = scopedReceipt(receipt, maxReceiptBytes, scope);
+  for (let start = 0; start < scopedObjects.length; start += VERIFICATION_BATCH_SIZE) {
+    const batch = Object.freeze(scopedObjects.slice(start, start + VERIFICATION_BATCH_SIZE));
+    try {
+      if (await verifyBatch(batch) !== true) throw new HostedReceiptError();
+    } catch { throw new HostedReceiptError(); }
+  }
+  return verifiedProof(validated, scopedObjects);
+}
+
+module.exports = { HostedReceiptError, validateReceipt, verifyStagedReceipt,
+  verifyStagedReceiptBatched };

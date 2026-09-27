@@ -162,9 +162,17 @@ egress allowance. Do not claim that B2 restores are always free. See its
   receipt cannot pass by reading an identically named object in another
   account or Vault. The caller still has to prove the authenticated customer
   owns both IDs; their syntax is not an authorization check. The draft
-  server-only coordinator passes only that frozen verified list into the
-  database transaction, which enforces aggregate retained-byte accounting and
-  last-good publication. This is **not yet an authenticated publish endpoint**:
+  server-only coordinator verifies the frozen list in batches of at most 512
+  objects and passes it to the database transaction only after every batch
+  succeeds. The default Vault chunk is 4 MiB, so a large snapshot can exceed
+  the per-invocation R2 subrequest budget; one giant Worker verification call
+  is not a valid implementation. The eventual authenticated service must bind
+  each batch to the account and Vault, then prove realistic multi-batch latency
+  and retry behavior against R2. Cloudflare currently allows 1,000 internal
+  service subrequests per Free Worker invocation and defaults to 10,000 on
+  Paid; see [Workers limits](https://developers.cloudflare.com/workers/platform/limits/).
+  The database transaction enforces aggregate
+  retained-byte accounting and last-good publication. This is **not yet an authenticated publish endpoint**:
   real provider checksum behavior, account ownership, entitlement, upload
   grants, and clean-account recovery remain unproven. A per-receipt byte bound
   alone does not enforce aggregate quota.
