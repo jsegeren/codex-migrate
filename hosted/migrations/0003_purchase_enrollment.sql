@@ -10,3 +10,7 @@ CREATE TABLE hosted.purchase_enrollments (
   FOREIGN KEY (purchase_session_id, purchase_mode)
     REFERENCES commerce_purchases (session_id, mode)
 );
+--> statement-breakpoint
+ALTER TABLE hosted.device_sessions
+  ADD CONSTRAINT hosted_device_sessions_purchase_enrollment_fk
+  FOREIGN KEY (account_id) REFERENCES hosted.purchase_enrollments (account_id);

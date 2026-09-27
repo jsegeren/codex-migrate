@@ -140,7 +140,8 @@ egress allowance. Do not claim that B2 restores are always free. See its
   revalidate the current Stripe payment/refund/dispute state and prove control
   of the purchase email with a short-lived, one-use challenge. Neither this
   schema nor an emailed download link issues a device session or starts the
-  hosted trial. The identity challenge, rate limits, and atomic claim flow
+  hosted trial. The database rejects device sessions for accounts without a
+  recorded purchase enrollment. The identity challenge, rate limits, and atomic claim flow
   remain unimplemented, so the hosted option remains unavailable.
 - A provider-neutral subscription upload gate is implemented for a future
   service to call with a freshly retrieved Stripe Subscription, its
