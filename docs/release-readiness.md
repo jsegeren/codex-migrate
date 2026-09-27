@@ -28,12 +28,15 @@ this repository or artifact.
 
 The home-screen backup-health regression in this source passed 11 targeted
 browser-script tests and 63 setup tests locally. The exact source commit passed
-the GitHub Actions Python 3.9 and 3.12 jobs. This is an **artifact receipt, not
-release acceptance**: the DMG has not been uploaded to private delivery,
-offered to a paid buyer, installed through the production appcast, or exercised
-for clean-account Vault recovery. It does not prove hosted backup or two-Mac
-sync. Keep build 16 public and both integration and hosted PRs on hold until
-their stated acceptance gates pass.
+the GitHub Actions Python 3.9 and 3.12 jobs. The operator-only upload placed
+the exact DMG under a private **sandbox** pathname and read back all 11,227,700
+bytes with the same SHA-256. Its catalog entry is `testingOnly: true` and
+`accepted: false`; 114 focused commerce/update tests passed with that entry.
+This is an **artifact and private-storage receipt, not release acceptance**:
+the DMG has not been offered to a paid buyer, installed through the production
+appcast, or exercised for clean-account Vault recovery. It does not prove
+hosted backup or two-Mac sync. Keep build 16 public and both integration and
+hosted PRs on hold until their stated acceptance gates pass.
 
 ## September 23 build 16 in-app update beta release
 
