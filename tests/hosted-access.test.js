@@ -93,3 +93,34 @@ test('plain client-shaped scope cannot publish before provider or database acces
   }), /hosted_publication_failed/);
   assert.equal(calls, 0);
 });
+
+test('publication scope is short-lived and cannot be reused after a failed attempt', async () => {
+  const scope = await authorizeUploadScope(request());
+  assert.equal(isAuthorizedScope(scope), true);
+  const attempt = () => publishStagedReceipt({
+    scope, reservationId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+    receipt: {}, maxReceiptBytes: 1000,
+    verifyBatch: async () => true,
+    query: async () => ({ rows: [{ published: true }] }),
+  });
+  await assert.rejects(attempt(), /hosted_receipt_invalid/);
+  assert.equal(isAuthorizedScope(scope), false);
+  await assert.rejects(attempt(), /hosted_publication_failed/);
+});
+
+test('an authenticated scope expires before a delayed publication attempt', async () => {
+  const scope = await authorizeUploadScope(request());
+  const originalNow = Date.now;
+  try {
+    Date.now = () => originalNow() + 61_000;
+    assert.equal(isAuthorizedScope(scope), false);
+    await assert.rejects(publishStagedReceipt({
+      scope, reservationId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      receipt: {}, maxReceiptBytes: 1000,
+      verifyBatch: async () => true,
+      query: async () => ({ rows: [{ published: true }] }),
+    }), /hosted_publication_failed/);
+  } finally {
+    Date.now = originalNow;
+  }
+});

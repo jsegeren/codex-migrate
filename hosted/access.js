@@ -9,7 +9,8 @@ const SESSION_TOKEN = /^hv1_[A-Za-z0-9_-]{43}$/;
 const AUTH_SQL = `SELECT account_id, vault_id FROM hosted.device_sessions
   WHERE token_hash = $1 AND vault_id = $2 AND revoked_at IS NULL
     AND expires_at > clock_timestamp()`;
-const authorizedScopes = new WeakSet();
+const MAX_SCOPE_AGE_MS = 60_000;
+const authorizedScopes = new WeakMap();
 
 class HostedAccessError extends Error {
   constructor() { super('hosted_access_denied'); }
@@ -50,13 +51,22 @@ async function authorizeUploadScope({ sessionToken, vaultId, query,
     throw new HostedAccessError();
   }
   const scope = Object.freeze({ accountId, vaultId });
-  authorizedScopes.add(scope);
+  authorizedScopes.set(scope, Date.now());
   return scope;
 }
 
 function isAuthorizedScope(scope) {
-  return scope !== null && typeof scope === 'object' && authorizedScopes.has(scope);
+  const issuedAt = scope !== null && typeof scope === 'object' &&
+    authorizedScopes.get(scope);
+  const age = Date.now() - issuedAt;
+  return Number.isSafeInteger(issuedAt) && age >= 0 && age <= MAX_SCOPE_AGE_MS;
+}
+
+function consumeAuthorizedScope(scope) {
+  const valid = isAuthorizedScope(scope);
+  if (scope !== null && typeof scope === 'object') authorizedScopes.delete(scope);
+  return valid;
 }
 
 module.exports = { HostedAccessError, mintSessionSecret, authorizeUploadScope,
-  isAuthorizedScope };
+  isAuthorizedScope, consumeAuthorizedScope };

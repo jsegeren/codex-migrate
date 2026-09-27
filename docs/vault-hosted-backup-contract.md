@@ -123,7 +123,8 @@ egress allowance. Do not claim that B2 restores are always free. See its
   requested Vault, loads the enrollment for that account, and must fetch the
   current Stripe Subscription before granting a scope. The publication
   coordinator rejects an ordinary client-shaped account/Vault object; it
-  accepts only a scope minted by this authorization path. The actual identity
+  consumes a scope minted by this authorization path once, within 60 seconds.
+  The actual identity
   enrollment, token issuance/rotation and recovery, authenticated HTTP
   handlers, and payment/refund binding are **not implemented**. These draft
   primitives do not make the service customer-accessible or safe to launch.

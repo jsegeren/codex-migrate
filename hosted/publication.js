@@ -2,7 +2,7 @@
 // and Vault records, an active reservation, a provider-backed verifier, and a
 // database query method. Never accept those authorities from the client body.
 const { verifyStagedReceiptBatched } = require('./receipt');
-const { isAuthorizedScope } = require('./access');
+const { consumeAuthorizedScope } = require('./access');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const PUBLISH_SQL = `SELECT hosted.publish_verified_snapshot(
@@ -15,7 +15,7 @@ class HostedPublicationError extends Error {
 
 async function publishStagedReceipt({ receipt, maxReceiptBytes, scope,
   reservationId, verifyBatch, query }) {
-  if (!isAuthorizedScope(scope) || !UUID.test(reservationId) ||
+  if (!consumeAuthorizedScope(scope) || !UUID.test(reservationId) ||
       typeof query !== 'function') {
     throw new HostedPublicationError();
   }
