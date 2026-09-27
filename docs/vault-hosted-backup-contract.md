@@ -67,6 +67,20 @@ the candidate transport uses a small authenticated Worker with R2's
 checksum-checked conditional PUT. Its $5/month paid-plan minimum matters for
 the first few customers. The adapter is still test-only; the full storage
 transport and disaster-recovery release gates below remain open.
+The draft object Worker now accepts only a short-lived HMAC capability for one
+exact method, account/Vault-scoped key, byte length, and SHA-256. Uploads are
+stream-size bounded and immutable; reads require matching stored checksum
+metadata. Focused tests, a Wrangler **dry-run bundle**, and a synthetic
+PUT/reuse/HEAD/GET round trip against Wrangler's **local R2 simulation** pass.
+The real Worker path uses Cloudflare's
+[FixedLengthStream](https://developers.cloudflare.com/workers/runtime-apis/streams/transformstream/)
+so R2 accepts the bounded stream without buffering the object in Worker
+memory. It has no
+deployment configuration, live signing key, grant-issuing service, or customer
+route. The eventual service must check device identity, purchase, subscription,
+Vault ownership, quota reservation, and published-snapshot membership before
+signing the appropriate capability. This code is not evidence of a usable or
+safe hosted backup yet.
 R2's published September 2026
 pricing is $0.015/GB-month, $4.50/million Class A writes, $0.36/million Class B
 reads, and no R2 ingress or direct egress bandwidth charge. The account-wide
