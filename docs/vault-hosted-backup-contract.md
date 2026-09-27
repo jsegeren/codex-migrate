@@ -96,9 +96,14 @@ that reservation. A server-only coordinator consumes a fresh, purchase- and
 subscription-checked scope before it signs one exact 30-second PUT; the SQL
 gate stops issuing grants when under one minute remains on the reservation.
 Future orphan cleanup must wait beyond the last token's expiry. This is a tested
-building block, not an activated grant API: HEAD reuse grants, cleanup after
-failed/expired reservations, and customer identity
+building block, not an activated grant API: cleanup after failed/expired
+reservations and customer identity
 enrollment still need the same fail-closed review before deployment.
+The draft HEAD reuse grant requires a fresh upload entitlement and active
+reservation, then checks that the exact key, size, and checksum already belong
+to a published snapshot of that Vault. It grants only a 30-second HEAD probe,
+not a read or overwrite. A missing or unrecorded object must use the reserved
+PUT path; a HEAD response alone never becomes publication proof.
 The draft published-only GET issuer now requires an unrevoked device session
 bound to that Vault, consumes a one-use read scope, and signs only an exact
 object listed in a published snapshot, using the database-owned size and
@@ -179,11 +184,14 @@ egress allowance. Do not claim that B2 restores are always free. See its
   recovery key. Neither Stripe nor the storage service can recover it. Losing
   both makes the ciphertext unrecoverable. Do not silently escrow keys.
 - The service authenticates a customer independently of the one-time purchase
-  download link, checks an active entitlement and capacity on every capability
-  grant, and signs only short-lived, single-object PUT/GET capabilities scoped
+  download link, checks an active entitlement and capacity on every upload or
+  reuse grant, and signs only short-lived, exact-object PUT/HEAD/GET capabilities scoped
   to that customer's remote Vault. Never ship bucket credentials in the app or
   accept caller-supplied bucket/key prefixes. Treat a presigned URL as a bearer
   secret and keep it out of logs, analytics, and support email.
+  A GET for already published, still-retained ciphertext requires the owner's
+  unrevoked device session and published-snapshot membership, but not an
+  active upload subscription; the retention window remains unapproved.
 - A draft server-only session boundary now uses a separate random device token
   whose domain-separated digest, account, Vault, device, expiry (at most 30
   days), and revocation state are stored in PostgreSQL. Each upload-scope
