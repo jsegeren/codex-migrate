@@ -4,6 +4,7 @@ const { neon } = require('@neondatabase/serverless');
 const { decodeSecret } = require('./object_capability');
 
 const SANDBOX_HOST = 'ep-square-queen-av5us6bx.c-11.us-east-1.aws.neon.tech';
+const SANDBOX_POOLER_HOST = 'ep-square-queen-av5us6bx-pooler.c-11.us-east-1.aws.neon.tech';
 
 class HostedRecoveryRuntimeError extends Error {
   constructor() { super('hosted_recovery_unavailable'); }
@@ -23,7 +24,8 @@ function recoveryConfiguration(env) {
     secret = decodeSecret(env.HOSTED_CAPABILITY_SIGNING_KEY);
   } catch { throw new HostedRecoveryRuntimeError(); }
   if (!['postgres:', 'postgresql:'].includes(database.protocol) ||
-      database.hostname !== SANDBOX_HOST || database.pathname !== '/neondb' ||
+      ![SANDBOX_HOST, SANDBOX_POOLER_HOST].includes(database.hostname) ||
+      database.pathname !== '/neondb' ||
       database.username === '' || database.password === '' ||
       worker.protocol !== 'https:' || !worker.hostname ||
       worker.username || worker.password || worker.pathname !== '/' ||

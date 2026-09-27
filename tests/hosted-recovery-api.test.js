@@ -127,6 +127,10 @@ test('sandbox runtime refuses live and unexpected database or Worker origins', (
     HOSTED_R2_ORIGIN: 'https://r2.example',
     HOSTED_CAPABILITY_SIGNING_KEY: secret.toString('base64url') };
   assert.equal(recoveryConfiguration(env).workerOrigin, 'https://r2.example');
+  assert.equal(recoveryConfiguration({ ...env,
+    COMMERCE_DATABASE_URL: env.COMMERCE_DATABASE_URL.replace(
+      'ep-square-queen-av5us6bx.', 'ep-square-queen-av5us6bx-pooler.'),
+  }).workerOrigin, 'https://r2.example');
   for (const changes of [
     { HOSTED_MODE: 'live' },
     { COMMERCE_DATABASE_URL: env.COMMERCE_DATABASE_URL.replace('ep-square-queen', 'ep-other') },
