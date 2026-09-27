@@ -59,3 +59,6 @@ BEGIN
   RETURN true;
 END;
 $$;
+--> statement-breakpoint
+REVOKE EXECUTE ON FUNCTION hosted.reserve_upload(uuid, uuid, uuid, bigint, timestamptz)
+  FROM PUBLIC;
