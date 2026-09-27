@@ -315,9 +315,19 @@ egress allowance. Do not claim that B2 restores are always free. See its
   Codex authentication credential, installation identity, repository,
   plaintext transcript, or recovery key enters the hosted service.
   This currently requires enough local space for that encrypted snapshot.
-  A hosted-only customer flow needs an explicit temporary-staging and
-  post-publication cleanup policy; it must never delete the sole verified
-  copy after an ambiguous upload or before a clean-account restore proof.
+  A hosted-only customer flow cannot simply make a temporary Vault and delete
+  its chunks after publication. Chunk IDs are stable for the same plaintext
+  and key, but AES-GCM uses a fresh random nonce: recreating a deleted local
+  chunk produces different ciphertext under the same remote object key. The
+  immutable store correctly rejects that conflict. A synthetic regression
+  proves this with the same key and source history. **Keep the current local
+  Vault intact** while this adapter is used; do not describe it as a
+  low-local-storage hosted-only option. The hosted-only release needs a
+  remote-aware writer that reuses the exact previously published ciphertext
+  and encrypts each new chunk only once into bounded temporary space. It must
+  prove a remotely complete snapshot and clean-account restore before it can
+  discard its temporary ciphertext. An ambiguous upload cannot authorize
+  local deletion.
 - Keep each local Vault in its own random, account-scoped remote namespace.
   Two Macs may each back up to separate Vaults under one subscription; this is
   not synchronization or a silent merge. Object names and snapshot times are
@@ -561,6 +571,11 @@ egress allowance. Do not claim that B2 restores are always free. See its
    exact remote bytes, verify and read/export a known thread. Repeat with an
    interrupted upload and a corrupt remote object; the prior good snapshot
    must remain recoverable. Include two distinct Mac Vaults under one account.
+   For the hosted-only choice, run the scheduled snapshot again after removing
+   its temporary local chunks. It must reuse the exact previously published
+   remote ciphertext, upload only new chunks, and leave both versions readable
+   on a clean Mac. A fresh nonce under an existing object ID must fail rather
+   than overwrite or silently count as protected.
 4. **Prove commerce and operations:** separate Stripe *subscription* checkout
    and webhook state from the existing one-time purchase; enforce active,
    past-due, cancellation, refund, and dispute states; publish no entitlement

@@ -334,6 +334,48 @@ class VaultBackupTests(unittest.TestCase):
             finally:
                 self.delete_key(destination)
 
+    def test_recreated_local_ciphertext_cannot_replace_remote_chunk(self):
+        """Hosted-only cleanup needs remote-aware reuse, not local re-encryption."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            first_vault = root / "first-vault"
+            recreated_vault = root / "recreated-vault"
+            self.fixture(source)
+            try:
+                first = backup(str(source), str(first_vault),
+                               crypto_helper=str(self.helper))
+                store = MemoryObjectStore()
+                vault_remote_transfer.stage_encrypted_snapshot(
+                    str(first_vault), store, snapshot=first.snapshot_id,
+                    crypto_helper=str(self.helper))
+
+                # Preserve the same encryption key, but deliberately remove
+                # the local ciphertext cache as a naive hosted-only flow might.
+                recreated_vault.mkdir(mode=0o700)
+                metadata = recreated_vault / "vault.json"
+                metadata.write_bytes((first_vault / "vault.json").read_bytes())
+                metadata.chmod(0o600)
+                second = backup(str(source), str(recreated_vault),
+                                crypto_helper=str(self.helper))
+                first_chunks = vault_remote_inventory.encrypted_snapshot_inventory(
+                    str(first_vault), snapshot=first.snapshot_id,
+                    crypto_helper=str(self.helper)).files[1:-2]
+                second_chunks = vault_remote_inventory.encrypted_snapshot_inventory(
+                    str(recreated_vault), snapshot=second.snapshot_id,
+                    crypto_helper=str(self.helper)).files[1:-2]
+                self.assertEqual([item.remote_key for item in first_chunks],
+                                 [item.remote_key for item in second_chunks])
+                self.assertNotEqual([item.sha256 for item in first_chunks],
+                                    [item.sha256 for item in second_chunks])
+                with self.assertRaisesRegex(MigrationError, "remote Vault object.*differs"):
+                    vault_remote_transfer.stage_encrypted_snapshot(
+                        str(recreated_vault), store, snapshot=second.snapshot_id,
+                        crypto_helper=str(self.helper))
+                self.assertIn(f"refs/{first.snapshot_id}.json", store.objects)
+            finally:
+                self.delete_key(first_vault)
+
     def test_remote_staging_failure_never_replaces_or_publishes(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
