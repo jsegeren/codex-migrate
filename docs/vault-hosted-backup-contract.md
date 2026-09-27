@@ -1,6 +1,6 @@
 # Optional hosted Vault backup — product and release contract
 
-Status: approved direction with local transport-staging tests, **not a hosted
+Status: approved direction with local and synthetic live-R2 transport tests, **not a hosted
 service or for sale**. This document does not authorize a production bucket, a
 live subscription checkout, or changing the current $49 one-time checkout.
 Codex Migrate remains the product name.
@@ -48,17 +48,20 @@ Cloudflare's setup requires a separate Cloudflare account and R2 subscription
 checkout, even for included free monthly usage; hosting the website on Vercel
 does not itself activate R2. The Founder activated R2 on September 27, 2026,
 and a private Standard-class sandbox bucket exists. A synthetic Worker proof
-passed all six checks against Wrangler's **local simulation**. No customer
-data has been uploaded. No real-R2 checksum or conditional-write proof has
-passed, and no hosted service or production bucket is live. The sandbox probe
-is inert unless explicitly enabled for local development; a Cloudflare
-credential capable of remote bindings has not been created. See the
+passed all six checks against both Wrangler's **local simulation** and a
+**remote binding to real R2** on September 27: upload, checksum check,
+immutable reuse, wrong-digest rejection, read-back, and removal. The R2
+dashboard showed zero objects and zero bytes afterward. No customer data has
+been uploaded; no hosted service or production bucket is live. The sandbox
+probe is inert unless explicitly enabled for local development. This small
+proof does not establish authenticated customer uploads, realistic object-count
+performance, quota enforcement, retention, or clean-Mac restore. See the
 [R2 setup documentation](https://developers.cloudflare.com/r2/get-started/).
 R2's presigned S3 PUT alone does not satisfy immutable SHA-256 verification:
 the candidate transport uses a small authenticated Worker with R2's
 checksum-checked conditional PUT. Its $5/month paid-plan minimum matters for
-the first few customers. The adapter is still test-only; actual R2 behavior
-remains a sandbox release gate.
+the first few customers. The adapter is still test-only; the full storage
+transport and disaster-recovery release gates below remain open.
 R2's published September 2026
 pricing is $0.015/GB-month, $4.50/million Class A writes, $0.36/million Class B
 reads, and no R2 ingress or direct egress bandwidth charge. The account-wide
@@ -134,7 +137,7 @@ egress allowance. Do not claim that B2 restores are always free. See its
   runner requires the exact direct database host and explicit confirmation.
   Expiry does not release reservations automatically: provider cleanup must
   first be proven. Orphan cleanup, retention/deletion, live authentication,
-  and a real R2 proof are still missing; these draft functions are not a
+  and authenticated end-to-end R2 service proof are still missing; these draft functions are not a
   customer API or a live entitlement.
 - An upload first sends immutable encrypted objects and manifest, then a
   reference. Remote metadata is stored per snapshot under
@@ -150,7 +153,8 @@ egress allowance. Do not claim that B2 restores are always free. See its
   It can compare those claims to authenticated provider-checked metadata without
   downloading unchanged ciphertext; stores lacking that capability retain the
   full read-back path. Either receipt is a client assertion, not service proof.
-  The draft metadata path needs a real R2 and service-identity test before use.
+  The draft metadata path needs an authenticated service-identity test against
+  real R2 before use; the synthetic Worker probe does not satisfy that gate.
   Staging does not write
   `latest` or claim protection. The service must independently establish each
   object's exact size and integrity, enforce account scope and required
