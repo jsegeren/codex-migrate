@@ -14,7 +14,9 @@ from unittest.mock import patch
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_hosted_upload_client import HostedUploadClient
 from codex_migrate.vault_remote_inventory import RemoteInventory, VaultTransferFile
-from codex_migrate.vault_remote_transfer import stage_encrypted_snapshot
+from codex_migrate.vault_remote_transfer import (
+    StageResult, StagedObject, stage_encrypted_snapshot,
+)
 
 
 ACCOUNT = "11111111-1111-4111-8111-111111111111"
@@ -43,7 +45,7 @@ class _Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
-        if self.path != "/api/hosted-upload" or self.headers.get(
+        if self.path not in ("/api/hosted-upload", "/api/hosted-receipt-page") or self.headers.get(
                 "Authorization") != "Bearer " + TOKEN:
             return self._json(403, {"error": "access_denied"})
         size = int(self.headers.get("Content-Length", "0"))
@@ -52,6 +54,15 @@ class _Handler(BaseHTTPRequestHandler):
         if request["vaultId"] != VAULT:
             return self._json(403, {"error": "access_denied"})
         action = request["action"]
+        if self.path == "/api/hosted-receipt-page":
+            if (action != "page" or request["reservationId"] != RESERVATION or
+                    request["snapshotId"] != SNAPSHOT):
+                return self._json(403, {"error": "access_denied"})
+            if self.server.fail_next_page:
+                self.server.fail_next_page = False
+                return self._json(503, {"error": "temporarily_unavailable"})
+            self.server.pages.append(request["objects"])
+            return self._json(200, {"acceptedObjects": len(request["objects"])})
         if action == "reserve":
             if request["bytes"] != 1:
                 return self._json(403, {"error": "access_denied"})
@@ -138,7 +149,9 @@ class HostedUploadClientTests(unittest.TestCase):
         self.server.actions = []
         self.server.fail_next_put = False
         self.server.fail_renew = False
+        self.server.fail_next_page = False
         self.server.drop_next_put_response = False
+        self.server.pages = []
         self.server.expected = {
             FIRST_KEY: (len(FIRST), hashlib.sha256(FIRST).hexdigest()),
             SECOND_KEY: (len(SECOND), hashlib.sha256(SECOND).hexdigest()),
@@ -232,6 +245,24 @@ class HostedUploadClientTests(unittest.TestCase):
             store.checked_metadata(SECOND_KEY)
         self.assertEqual(self.server.actions[-1], "renew")
         self.assertNotIn("put", self.server.actions)
+
+    def test_receipt_pages_are_retryable_claims_not_publication(self):
+        manifest_key = f"manifests/{SNAPSHOT}.cvmanifest"
+        staged = StageResult(SNAPSHOT, 3, 0, len(FIRST) + len(SECOND) + 5,
+                             (StagedObject(FIRST_KEY, len(FIRST),
+                                           self.server.expected[FIRST_KEY][1]),
+                              StagedObject(manifest_key, 5,
+                                           hashlib.sha256(b"third").hexdigest()),
+                              StagedObject(SECOND_KEY, len(SECOND),
+                                           self.server.expected[SECOND_KEY][1])))
+        with self.assertRaises(MigrationError):
+            self.client.submit_pages(RESERVATION, staged)
+        self.server.fail_next_page = True
+        with self.assertRaises(MigrationError):
+            self.client.submit_pages(RESERVATION, staged, apply=True)
+        self.assertEqual(self.client.submit_pages(RESERVATION, staged, apply=True), 3)
+        self.assertEqual([len(page) for page in self.server.pages], [3])
+        self.assertNotIn("publish", self.server.actions)
 
     def test_mutation_requires_apply_and_server_origin_is_pinned(self):
         with self.assertRaises(MigrationError):

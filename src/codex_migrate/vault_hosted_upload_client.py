@@ -17,6 +17,7 @@ from urllib.request import Request, build_opener
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_hosted_recovery_client import _origin
 from codex_migrate.vault_http_store import CapabilityHttpStore, _NoRedirect
+from codex_migrate.vault_remote_transfer import StageResult
 
 
 _UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z")
@@ -50,11 +51,12 @@ class HostedUploadClient:
         self._allow_loopback_http = allow_loopback_http
         self._opener = build_opener(_NoRedirect())
 
-    def _post(self, claim: dict) -> dict:
+    def _post(self, claim: dict, *, receipt_page: bool = False) -> dict:
         body = json.dumps(claim, separators=(",", ":")).encode("utf-8")
-        if len(body) > 700:
+        if len(body) > (256 * 1024 if receipt_page else 700):
             raise MigrationError("The hosted upload request is too large.")
-        request = Request(self._service_origin + "/api/hosted-upload", data=body,
+        path = "/api/hosted-receipt-page" if receipt_page else "/api/hosted-upload"
+        request = Request(self._service_origin + path, data=body,
                           headers={"Authorization": "Bearer " + self._device_token,
                                    "Content-Type": "application/json",
                                    "Content-Length": str(len(body))}, method="POST")
@@ -143,6 +145,35 @@ class HostedUploadClient:
                             timeout=self._timeout,
                             allow_loopback_http=self._allow_loopback_http)
         return HostedUploadObjectStore(self, reservation_id, dict(expected))
+
+    def submit_pages(self, reservation_id: str, staged: StageResult, *,
+                     apply: bool = False) -> int:
+        """Admit bounded claims; an ACK is not R2 verification or protection.
+
+        Retrying from the first page is safe because the server admits exact
+        duplicate claims idempotently and rejects conflicting object facts.
+        """
+        if apply is not True:
+            raise MigrationError("Hosted upload changes require explicit confirmation.")
+        self._require_reservation(reservation_id)
+        if (not isinstance(staged, StageResult) or
+                not isinstance(staged.snapshot_id, str) or
+                not _UUID.fullmatch(staged.snapshot_id) or
+                not isinstance(staged.objects, tuple) or
+                not 3 <= len(staged.objects) <= 1_000_000):
+            raise MigrationError("The staged hosted inventory is invalid.")
+        acknowledged = 0
+        for page in staged.object_pages():
+            result = self._post({"action": "page", "vaultId": self._vault_id,
+                                 "reservationId": reservation_id,
+                                 "snapshotId": staged.snapshot_id,
+                                 "objects": page}, receipt_page=True)
+            if (set(result) != {"acceptedObjects"} or
+                    type(result["acceptedObjects"]) is not int or
+                    result["acceptedObjects"] != len(page)):
+                raise MigrationError("The hosted receipt page was not acknowledged.")
+            acknowledged += len(page)
+        return acknowledged
 
 
 class HostedUploadObjectStore:
