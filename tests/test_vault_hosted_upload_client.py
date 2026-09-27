@@ -12,6 +12,7 @@ import unittest
 from unittest.mock import patch
 
 from codex_migrate.errors import MigrationError
+from codex_migrate.vault_hosted_backup_run import HostedBackupRun
 from codex_migrate.vault_hosted_upload_client import HostedUploadClient
 from codex_migrate.vault_remote_inventory import RemoteInventory, VaultTransferFile
 from codex_migrate.vault_remote_transfer import (
@@ -396,6 +397,51 @@ class HostedUploadClientTests(unittest.TestCase):
         self.assertEqual(self.server.actions.count("put"), 3)
         self.assertEqual(self.server.actions.count("reserve"), 1)
         self.assertEqual(self.server.actions.count("publish_checkpointed"), 2)
+
+    def test_journaled_run_retries_after_page_failure_without_new_reservation(self):
+        manifest_key = f"manifests/{SNAPSHOT}.cvmanifest"
+        manifest = b"third"
+        self.server.expected[manifest_key] = (len(manifest),
+                                              hashlib.sha256(manifest).hexdigest())
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            home = root / "home"
+            vault = root / "vault"
+            home.mkdir()
+            (vault / "manifests").mkdir(parents=True)
+            (vault / "refs").mkdir()
+            (vault / "vault.json").write_bytes(FIRST)
+            (vault / "manifests" / (SNAPSHOT + ".cvmanifest")).write_bytes(manifest)
+            (vault / "refs" / (SNAPSHOT + ".json")).write_bytes(SECOND)
+            inventory = RemoteInventory(SNAPSHOT, (
+                VaultTransferFile("vault.json", FIRST_KEY, len(FIRST),
+                                  self.server.expected[FIRST_KEY][1]),
+                VaultTransferFile("manifests/" + SNAPSHOT + ".cvmanifest",
+                                  manifest_key, len(manifest),
+                                  self.server.expected[manifest_key][1]),
+                VaultTransferFile("refs/" + SNAPSHOT + ".json", SECOND_KEY,
+                                  len(SECOND), self.server.expected[SECOND_KEY][1]),
+            ), len(FIRST) + len(manifest) + len(SECOND), True)
+            with patch("codex_migrate.vault_hosted_backup_run.encrypted_snapshot_inventory",
+                       return_value=inventory), patch(
+                       "codex_migrate.vault_hosted_upload_client.encrypted_snapshot_inventory",
+                       return_value=inventory), patch(
+                       "codex_migrate.vault_remote_transfer.encrypted_snapshot_inventory",
+                       return_value=inventory), patch(
+                       "codex_migrate.vault_remote_transfer._vault_root", return_value=vault):
+                self.server.fail_next_page = True
+                run = HostedBackupRun(self.client, str(home))
+                with self.assertRaises(MigrationError):
+                    run.back_up_snapshot(str(vault), apply=True)
+                self.assertEqual(run.pending(), {
+                    "snapshotId": SNAPSHOT, "reservationId": RESERVATION})
+                relaunched = HostedBackupRun(self.client, str(home))
+                receipt = relaunched.back_up_snapshot(str(vault), apply=True)
+                self.assertEqual(receipt["verifiedObjectCount"], 3)
+                self.assertEqual(receipt["uploadedFiles"], 0)
+                self.assertIsNone(relaunched.pending())
+        self.assertEqual(self.server.actions.count("reserve"), 1)
+        self.assertEqual(self.server.actions.count("put"), 3)
 
     def test_mutation_requires_apply_and_server_origin_is_pinned(self):
         with self.assertRaises(MigrationError):

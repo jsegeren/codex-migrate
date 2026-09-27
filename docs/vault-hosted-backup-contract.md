@@ -208,9 +208,18 @@ adapter returns a protection receipt only after the service confirms the
 exact object count was published. A failed page or lost final response is not
 reported as success; the caller must pass the same reservation ID to retry and
 reuse already verified ciphertext objects. This does not create local
-snapshots, persist resume IDs, install a schedule, or
+snapshots, install a schedule, or
 open the buyer UI. It remains a dark integration step, not an available
 hosted-backup feature.
+An owner-only local journal now wraps that dark adapter. It records the opaque
+account, Vault, snapshot, and reservation IDs before staging, retains them
+after a failed run, and reuses the same reservation on a later invocation.
+It refuses a different snapshot or account instead of silently replacing a
+pending run, and removes the journal only after the service's publication
+receipt. A crash after reservation but before the journal write can still
+leave an unused server reservation; server expiry/orphan cleanup and a
+customer-facing retry or abandon flow remain release gates. The journal does
+not store the device bearer, recovery key, ciphertext, or conversation text.
 The draft Worker also has an HMAC-bound batch verification route: a service
 signs the exact JSON body for at most 512 scoped objects, and the Worker
 performs provider-checked R2 metadata reads before returning success. The
