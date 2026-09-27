@@ -52,14 +52,19 @@ class HostedUploadClient:
         self._opener = build_opener(_NoRedirect())
 
     def _post(self, claim: dict, *, receipt_page: bool = False,
-              publication: bool = False) -> dict:
-        if receipt_page and publication:
+              publication: bool = False, verification: bool = False,
+              checkpointed_publication: bool = False) -> dict:
+        if sum((receipt_page, publication, verification,
+                checkpointed_publication)) > 1:
             raise MigrationError("The hosted upload request is invalid.")
         body = json.dumps(claim, separators=(",", ":")).encode("utf-8")
         if len(body) > (256 * 1024 if receipt_page else 700):
             raise MigrationError("The hosted upload request is too large.")
         path = ("/api/hosted-receipt-page" if receipt_page else
-                "/api/hosted-publish" if publication else "/api/hosted-upload")
+                "/api/hosted-publish" if publication else
+                "/api/hosted-verify-step" if verification else
+                "/api/hosted-publish-checkpointed" if checkpointed_publication
+                else "/api/hosted-upload")
         request = Request(self._service_origin + path, data=body,
                           headers={"Authorization": "Bearer " + self._device_token,
                                    "Content-Type": "application/json",
@@ -205,6 +210,45 @@ class HostedUploadClient:
         result = self._post({"action": "publish", "vaultId": self._vault_id,
                              "reservationId": reservation_id,
                              "snapshotId": snapshot_id}, publication=True)
+        count = result.get("verifiedObjectCount")
+        if (set(result) != {"snapshotId", "verifiedObjectCount"} or
+                result.get("snapshotId") != snapshot_id or
+                type(count) is not int or not 3 <= count <= 1_000_000):
+            raise MigrationError("The hosted publication response is invalid.")
+        return count
+
+    def verify_next(self, reservation_id: str, snapshot_id: str, *,
+                    apply: bool = False) -> Tuple[int, bool]:
+        """Checkpoint at most 128 provider-verified objects; not protection."""
+        if apply is not True:
+            raise MigrationError("Hosted upload changes require explicit confirmation.")
+        self._require_reservation(reservation_id)
+        if not isinstance(snapshot_id, str) or not _UUID.fullmatch(snapshot_id):
+            raise MigrationError("The hosted snapshot is invalid.")
+        result = self._post({"action": "verify_next", "vaultId": self._vault_id,
+                             "reservationId": reservation_id,
+                             "snapshotId": snapshot_id}, verification=True)
+        count = result.get("verifiedObjects")
+        ready = result.get("ready")
+        if (set(result) != {"verifiedObjects", "ready"} or
+                type(count) is not int or not 0 <= count <= 128 or
+                type(ready) is not bool or ready != (count == 0)):
+            raise MigrationError("The hosted verification response is invalid.")
+        return count, ready
+
+    def publish_checkpointed(self, reservation_id: str, snapshot_id: str, *,
+                             apply: bool = False) -> int:
+        """Only the server's completed publication returns a protection count."""
+        if apply is not True:
+            raise MigrationError("Hosted upload changes require explicit confirmation.")
+        self._require_reservation(reservation_id)
+        if not isinstance(snapshot_id, str) or not _UUID.fullmatch(snapshot_id):
+            raise MigrationError("The hosted snapshot is invalid.")
+        result = self._post({"action": "publish_checkpointed",
+                             "vaultId": self._vault_id,
+                             "reservationId": reservation_id,
+                             "snapshotId": snapshot_id},
+                            checkpointed_publication=True)
         count = result.get("verifiedObjectCount")
         if (set(result) != {"snapshotId", "verifiedObjectCount"} or
                 result.get("snapshotId") != snapshot_id or

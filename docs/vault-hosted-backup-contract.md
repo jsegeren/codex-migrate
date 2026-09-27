@@ -184,6 +184,19 @@ still does not close the hosted release gate: a dark authenticated sandbox
 route now admits bounded, idempotent claim pages, but there is no asynchronous
 provider-verification/publication job, real-scale R2 run, or clean-account
 recovery proof. A page ACK must never appear as a protected backup.
+The draft now has a resumable alternative to verifying the whole staged set
+inside one web request. A dark sandbox endpoint checks at most 128 exact
+objects through the authenticated R2 batch verifier, then records those
+specific object facts in PostgreSQL under the active reservation. A failed
+request can retry; an incomplete, mismatched, or older-than-24-hours proof
+cannot publish. A separate dark publication endpoint rechecks that every
+declared staged object has a fresh matching proof before it atomically moves
+last-good. The native sandbox adapter can request one step and finalization;
+neither is wired to an installed customer schedule or UI. Disposable
+PostgreSQL tests cover partial, stale, conflicting, retry, and 21,910-object
+finalization. This is a durable verification building block, not a remote R2
+scale result or a customer-protection claim. A long run still needs lease
+renewal and bounded client orchestration, plus real Worker performance proof.
 The draft Worker also has an HMAC-bound batch verification route: a service
 signs the exact JSON body for at most 512 scoped objects, and the Worker
 performs provider-checked R2 metadata reads before returning success. The
