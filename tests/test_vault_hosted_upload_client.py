@@ -60,6 +60,8 @@ class _Handler(BaseHTTPRequestHandler):
         if request.get("reservationId") != RESERVATION:
             return self._json(403, {"error": "access_denied"})
         if action == "renew":
+            if self.server.fail_renew:
+                return self._json(403, {"error": "access_denied"})
             return self._json(200, {"reservationId": RESERVATION,
                                     "expiresAt": EXPIRY})
         item = request["item"]
@@ -135,6 +137,7 @@ class HostedUploadClientTests(unittest.TestCase):
         self.server.conflicts = set()
         self.server.actions = []
         self.server.fail_next_put = False
+        self.server.fail_renew = False
         self.server.drop_next_put_response = False
         self.server.expected = {
             FIRST_KEY: (len(FIRST), hashlib.sha256(FIRST).hexdigest()),
@@ -217,6 +220,18 @@ class HostedUploadClientTests(unittest.TestCase):
         # immutable object, and neither attempt publishes a latest pointer.
         self.assertEqual(self.server.actions.count("put"), 1)
         self.assertNotIn("publish", self.server.actions)
+
+    def test_long_transfer_renews_before_next_object_and_fails_closed(self):
+        store = self.client.object_store(RESERVATION, self.server.expected, apply=True)
+        store._last_renewal -= 25 * 60 + 1
+        self.assertIsNone(store.checked_metadata(FIRST_KEY))
+        self.assertEqual(self.server.actions[:2], ["renew", "decide"])
+        self.server.fail_renew = True
+        store._last_renewal -= 25 * 60 + 1
+        with self.assertRaises(MigrationError):
+            store.checked_metadata(SECOND_KEY)
+        self.assertEqual(self.server.actions[-1], "renew")
+        self.assertNotIn("put", self.server.actions)
 
     def test_mutation_requires_apply_and_server_origin_is_pinned(self):
         with self.assertRaises(MigrationError):

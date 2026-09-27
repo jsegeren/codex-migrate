@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from typing import Mapping, Tuple
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, build_opener
@@ -151,6 +152,16 @@ class HostedUploadObjectStore:
         self._client = client
         self._reservation_id = reservation_id
         self._expected = expected
+        self._last_renewal = time.monotonic()
+
+    def _ensure_lease(self) -> None:
+        # A 55-minute reservation cannot cover a slow first backup. Renew
+        # well before expiry, with fresh server-side entitlement checks. A
+        # suspended process whose lease expired fails closed on renewal.
+        now = time.monotonic()
+        if now - self._last_renewal >= 25 * 60:
+            self._client.renew(self._reservation_id, apply=True)
+            self._last_renewal = time.monotonic()
 
     def _transport(self, method: str, key: str, grant: str) -> CapabilityHttpStore:
         size, digest = self._expected[key]
@@ -172,6 +183,7 @@ class HostedUploadObjectStore:
 
     def checked_metadata(self, key: str):
         item = self._client._item(self._expected, key)
+        self._ensure_lease()
         result = self._client._post({"action": "decide",
                                      "vaultId": self._client._vault_id,
                                      "reservationId": self._reservation_id,
@@ -183,6 +195,7 @@ class HostedUploadObjectStore:
 
     def put_if_absent(self, key, source, length):
         item = self._client._item(self._expected, key)
+        self._ensure_lease()
         result = self._client._post({"action": "put",
                                      "vaultId": self._client._vault_id,
                                      "reservationId": self._reservation_id,
