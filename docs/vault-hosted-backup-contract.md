@@ -253,6 +253,10 @@ egress allowance. Do not claim that B2 restores are always free. See its
   The client creates and verifies a local snapshot before mirroring it. No
   Codex authentication credential, installation identity, repository,
   plaintext transcript, or recovery key enters the hosted service.
+  This currently requires enough local space for that encrypted snapshot.
+  A hosted-only customer flow needs an explicit temporary-staging and
+  post-publication cleanup policy; it must never delete the sole verified
+  copy after an ambiguous upload or before a clean-account restore proof.
 - Keep each local Vault in its own random, account-scoped remote namespace.
   Two Macs may each back up to separate Vaults under one subscription; this is
   not synchronization or a silent merge. Object names and snapshot times are
