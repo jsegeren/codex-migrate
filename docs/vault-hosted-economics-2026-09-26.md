@@ -55,9 +55,12 @@ HEAD before each upload and HEAD after a successful conditional PUT, rather
 than a full read-back: the older Mac's 14,449 chunks imply roughly 14,449
 writes and 28,898 metadata reads; both Macs together imply about 36,356
 writes and 72,712 metadata reads. At published R2 Standard rates **before the
-account-wide free allowance**, those combined operations cost about $0.164
-for writes and $0.026 for HEADs. A full restore adds about 36,356 GETs, or
-$0.013 in R2 read operations, with no direct egress fee. Immutable manifests,
+account-wide free allowance and billable-unit rounding**, the metered amounts
+are about $0.164 for writes and $0.026 for HEADs. A full restore adds about
+36,356 GETs, or $0.013 in metered R2 read operations, with no direct egress
+fee. Cloudflare applies monthly account-wide free allowances and rounds
+billable operations up to the next million; these fractional amounts are
+cost-allocation estimates, not invoice predictions. Immutable manifests,
 per-snapshot metadata, and references add a small number of operations.
 Repeating an unchanged backup should reuse existing chunks; a
 rewritten or compacted transcript can create new chunks and must be measured.
@@ -102,10 +105,17 @@ account accommodates ordinary encrypted chunks, but an oversized manifest
 must fail safely or use a separately proven path.
 
 Workers Free allows 100,000 requests/day. One initial upload of this user's
-two Vaults entails about 36,356 object requests, and checking every object on
-each later daily run would be about 1.09 million requests/month for this one
-customer. A few similar customers can exceed the Free daily request ceiling;
-do not build the offer around it. Workers Paid has a **$5/month account
+two Vaults entails about 36,356 object requests. A naive daily retry of every
+unchanged object through the upload route would create about 1.09 million
+Worker requests/month for this one customer; do not ship that behavior. The
+draft bounded proof instead needs about 29 + 43 = **72 Worker batch requests**
+to check both unchanged Vaults, while still making roughly 36,356 R2 HEAD
+subrequests per daily proof. Over 30 daily proofs that is about 2,160 Worker
+requests and 1.09 million R2 Class B HEADs (about $0.39 at the unrounded
+metered rate, before the account-wide allowance). New or changed chunks still
+need individual upload requests. A few initial uploads on one day can exceed
+the Free daily request ceiling; do not build the offer around it. The batch
+network endpoint and actual provider behavior remain unproved. Workers Paid has a **$5/month account
 minimum**, including 10 million monthly requests and 30 million CPU-ms, then
 $0.30/million requests and $0.02/million CPU-ms. This $5 is shared fixed
 overhead, not a per-customer charge. R2 read/write operations are separate.
