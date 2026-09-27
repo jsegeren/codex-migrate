@@ -160,9 +160,14 @@ egress allowance. Do not claim that B2 restores are always free. See its
 - The draft R2 read adapter opens an encrypted object only when the same GET
   returns the expected scoped key, byte count, and stored SHA-256; it streams
   the body without buffering it in a Worker. This is not an authenticated
-  download endpoint. The native client must verify the full received ciphertext
-  against its authenticated manifest before decryption or recovery, including
-  short reads and transport interruption.
+  download endpoint. The draft native recovery path now checks each downloaded
+  ciphertext object's exact size and SHA-256, reuses only matching files after
+  interruption, and builds a separate owner-only Vault. It marks the snapshot
+  latest only after the native crypto helper verifies its manifest and chunks
+  using the separately imported recovery key. Local tests cover missing keys,
+  interrupted reads, corrupted objects, unsafe receipts, and linked folders;
+  these do **not** prove the read path against R2, a real authenticated service,
+  or a genuinely clean macOS account. Those remain release gates.
 - The staging client now emits a version-1, content-free receipt with the
   snapshot ID and each remote object's key, byte count, and SHA-256. The
   provider-neutral service validator rejects malformed paths, missing required

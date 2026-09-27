@@ -20,7 +20,9 @@ from codex_migrate.vault_recovery import _snapshot
 
 MAX_CHUNKS = 1_000_000
 MAX_ENCRYPTED_CHUNK_BYTES = 64 * 1024 * 1024 + 1024
-MAX_ENCRYPTED_MANIFEST_BYTES = 128 * 1024 * 1024 + 1024
+# The first hosted transport uses a Worker that refuses bodies above 100 MB.
+# Fail during planning, before uploading any objects the service cannot publish.
+MAX_ENCRYPTED_MANIFEST_BYTES = 100 * 1000 * 1000
 
 
 @dataclass(frozen=True)

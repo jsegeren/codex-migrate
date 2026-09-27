@@ -20,6 +20,7 @@ from codex_migrate.vault_recovery import (
     vault_storage_usage, verify_snapshot,
 )
 from codex_migrate import vault_remote_inventory
+from codex_migrate import vault_remote_recovery
 from codex_migrate import vault_remote_transfer
 
 
@@ -397,6 +398,198 @@ class VaultBackupTests(unittest.TestCase):
                 self.assertNotIn("latest.json", store.objects)
                 self.assertFalse(any(b"NEVER-COPY-AUTH" in value
                                      for value in store.objects.values()))
+            finally:
+                self.delete_key(destination)
+
+    def test_hosted_recovery_requires_reimported_key_then_resumes_without_live_writes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, destination = root / "source", root / "vault"
+            recovered, transcripts = root / "hosted-recovery", root / "transcripts"
+            self.fixture(source)
+            store = MemoryObjectStore()
+            try:
+                saved = backup(str(source), str(destination), crypto_helper=str(self.helper))
+                staged = vault_remote_transfer.stage_encrypted_snapshot(
+                    str(destination), store, crypto_helper=str(self.helper))
+                self.delete_key(destination)
+                with self.assertRaises(MigrationError):
+                    vault_remote_recovery.download_encrypted_snapshot(
+                        str(source), str(recovered), store, staged.receipt(),
+                        max_bytes=1024 * 1024, crypto_helper=str(self.helper))
+                self.assertFalse((recovered / "latest.json").exists())
+                self.assertTrue((recovered / "vault.json").is_file())
+                (recovered / "vault.json.cvdownload").write_bytes(b"interrupted ciphertext")
+
+                import_recovery_key(
+                    str(recovered), saved.recovery_key, crypto_helper=str(self.helper))
+                result = vault_remote_recovery.download_encrypted_snapshot(
+                    str(source), str(recovered), store, staged.receipt(),
+                    max_bytes=1024 * 1024, crypto_helper=str(self.helper))
+                self.assertEqual(result.snapshot_id, saved.snapshot_id)
+                self.assertEqual(result.downloaded_files, 0)
+                self.assertEqual(result.reused_files, len(staged.objects))
+                self.assertEqual(result.transcript_files, 2)
+                self.assertFalse((recovered / ".hosted-recovery.json").exists())
+                self.assertFalse((recovered / "vault.json.cvdownload").exists())
+                self.assertEqual(verify_snapshot(str(recovered), crypto_helper=str(self.helper))
+                                 .snapshot_id, saved.snapshot_id)
+                restore_snapshot(str(source), str(recovered), str(transcripts),
+                                 crypto_helper=str(self.helper))
+                self.assertEqual(
+                    (transcripts / "sessions/2026/09/17/active.jsonl").read_bytes(),
+                    (source / ".codex/sessions/2026/09/17/active.jsonl").read_bytes())
+                self.assertEqual(
+                    (transcripts / "archived_sessions/archived.jsonl").read_bytes(),
+                    (source / ".codex/archived_sessions/archived.jsonl").read_bytes())
+                self.assertEqual((source / ".codex/auth.json").read_text(), "NEVER-COPY-AUTH")
+                self.assertFalse((recovered / "auth.json").exists())
+            finally:
+                self.delete_key(destination)
+
+    def test_hosted_recovery_retries_interrupted_read_and_rejects_corruption(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, destination = root / "source", root / "vault"
+            recovered = root / "hosted-recovery"
+            self.fixture(source)
+            store = MemoryObjectStore()
+            try:
+                backup(str(source), str(destination), crypto_helper=str(self.helper))
+                staged = vault_remote_transfer.stage_encrypted_snapshot(
+                    str(destination), store, crypto_helper=str(self.helper))
+                original_read = store.open_read
+                reads = 0
+
+                def interrupted(key):
+                    nonlocal reads
+                    reads += 1
+                    if reads == 2:
+                        raise OSError("disposable download interruption")
+                    return original_read(key)
+
+                store.open_read = interrupted
+                with self.assertRaisesRegex(OSError, "interruption"):
+                    vault_remote_recovery.download_encrypted_snapshot(
+                        str(source), str(recovered), store, staged.receipt(),
+                        max_bytes=1024 * 1024, crypto_helper=str(self.helper))
+                self.assertFalse((recovered / "latest.json").exists())
+                store.open_read = original_read
+                damaged_key = next(key for key in store.objects if key.startswith("objects/"))
+                original = store.objects[damaged_key]
+                store.objects[damaged_key] = original[:-1] + bytes([original[-1] ^ 1])
+                with self.assertRaisesRegex(MigrationError, "differs from its receipt"):
+                    vault_remote_recovery.download_encrypted_snapshot(
+                        str(source), str(recovered), store, staged.receipt(),
+                        max_bytes=1024 * 1024, crypto_helper=str(self.helper))
+                self.assertFalse((recovered / "latest.json").exists())
+                store.objects[damaged_key] = original
+                result = vault_remote_recovery.download_encrypted_snapshot(
+                    str(source), str(recovered), store, staged.receipt(),
+                    max_bytes=1024 * 1024, crypto_helper=str(self.helper))
+                self.assertGreaterEqual(result.reused_files, 1)
+                self.assertEqual(result.transcript_files, 2)
+            finally:
+                self.delete_key(destination)
+
+    def test_hosted_recovery_rejects_unsafe_receipt_and_unrelated_destination(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, destination = root / "source", root / "vault"
+            recovered = root / "hosted-recovery"
+            self.fixture(source)
+            store = MemoryObjectStore()
+            try:
+                backup(str(source), str(destination), crypto_helper=str(self.helper))
+                staged = vault_remote_transfer.stage_encrypted_snapshot(
+                    str(destination), store, crypto_helper=str(self.helper))
+                receipt = staged.receipt()
+                receipt["objects"][0]["key"] = "../auth.json"
+                with self.assertRaisesRegex(MigrationError, "receipt is invalid"):
+                    vault_remote_recovery.download_encrypted_snapshot(
+                        str(source), str(recovered), store, receipt,
+                        max_bytes=1024 * 1024, crypto_helper=str(self.helper))
+                self.assertFalse(recovered.exists())
+                with self.assertRaisesRegex(MigrationError, "size limit"):
+                    vault_remote_recovery.download_encrypted_snapshot(
+                        str(source), str(recovered), store, staged.receipt(),
+                        max_bytes=1, crypto_helper=str(self.helper))
+                self.assertFalse(recovered.exists())
+
+                recovered.mkdir(mode=0o700)
+                (recovered / "keep.txt").write_text("keep")
+                with self.assertRaisesRegex(MigrationError, "not an interrupted"):
+                    vault_remote_recovery.download_encrypted_snapshot(
+                        str(source), str(recovered), store, staged.receipt(),
+                        max_bytes=1024 * 1024, crypto_helper=str(self.helper))
+                self.assertEqual((recovered / "keep.txt").read_text(), "keep")
+                with self.assertRaisesRegex(MigrationError, "outside"):
+                    vault_remote_recovery.download_encrypted_snapshot(
+                        str(source), str(source / ".codex/recovered"), store,
+                        staged.receipt(), max_bytes=1024 * 1024,
+                        crypto_helper=str(self.helper))
+                running_home = root / "running-home"
+                (running_home / ".codex").mkdir(parents=True)
+                with patch.object(vault_remote_recovery.Path, "home",
+                                  return_value=running_home):
+                    with self.assertRaisesRegex(MigrationError, "outside"):
+                        vault_remote_recovery.download_encrypted_snapshot(
+                            str(source), str(running_home / ".codex/recovered"), store,
+                            staged.receipt(), max_bytes=1024 * 1024,
+                            crypto_helper=str(self.helper))
+            finally:
+                self.delete_key(destination)
+
+    def test_hosted_recovery_refuses_link_swapped_in_partial_folder(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, destination = root / "source", root / "vault"
+            recovered = root / "hosted-recovery"
+            self.fixture(source)
+            store = MemoryObjectStore()
+            try:
+                backup(str(source), str(destination), crypto_helper=str(self.helper))
+                staged = vault_remote_transfer.stage_encrypted_snapshot(
+                    str(destination), store, crypto_helper=str(self.helper))
+                original_read = store.open_read
+
+                def interrupt_after_metadata(key):
+                    if key.startswith("objects/"):
+                        raise OSError("disposable interruption")
+                    return original_read(key)
+
+                store.open_read = interrupt_after_metadata
+                with self.assertRaisesRegex(OSError, "interruption"):
+                    vault_remote_recovery.download_encrypted_snapshot(
+                        str(source), str(recovered), store, staged.receipt(),
+                        max_bytes=1024 * 1024, crypto_helper=str(self.helper))
+                chunk_key = next(item.key for item in staged.objects
+                                 if item.key.startswith("objects/"))
+                prefix = recovered / "objects" / chunk_key.split("/")[1]
+                prefix.rmdir()
+                prefix.symlink_to(source / ".codex")
+                store.open_read = original_read
+                with self.assertRaises(MigrationError):
+                    vault_remote_recovery.download_encrypted_snapshot(
+                        str(source), str(recovered), store, staged.receipt(),
+                        max_bytes=1024 * 1024, crypto_helper=str(self.helper))
+                self.assertEqual((source / ".codex/auth.json").read_text(), "NEVER-COPY-AUTH")
+                self.assertFalse((recovered / "latest.json").exists())
+            finally:
+                self.delete_key(destination)
+
+    def test_hosted_manifest_limit_fails_before_upload(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, destination = root / "source", root / "vault"
+            self.fixture(source)
+            try:
+                backup(str(source), str(destination), crypto_helper=str(self.helper))
+                with patch.object(vault_remote_inventory,
+                                  "MAX_ENCRYPTED_MANIFEST_BYTES", 10):
+                    with self.assertRaisesRegex(MigrationError, "unsupported"):
+                        vault_remote_inventory.encrypted_snapshot_inventory(
+                            str(destination), crypto_helper=str(self.helper))
             finally:
                 self.delete_key(destination)
 
