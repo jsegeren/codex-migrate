@@ -6,7 +6,9 @@ const { MAX_WORKER_OBJECT_BYTES, VERIFICATION_BATCH_SIZE } = require('./transpor
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const HEX = /^[0-9a-f]{64}$/;
-const MAX_CHUNKS = 1_000_000;
+// The publication transaction accepts at most one million total objects,
+// including the required metadata, manifest, and reference.
+const MAX_OBJECTS = 1_000_000;
 const MAX_CHUNK_BYTES = 64 * 1024 * 1024 + 1024;
 // The selected Worker upload route refuses request bodies above 100 MB.
 // Never certify a receipt for a manifest that this service cannot upload.
@@ -33,7 +35,7 @@ function validateReceipt(receipt, maxReceiptBytes) {
       !exactKeys(receipt, ['version', 'snapshot_id', 'remote_bytes_checked', 'objects']) ||
       receipt.version !== 1 || typeof receipt.snapshot_id !== 'string' ||
       !UUID.test(receipt.snapshot_id) || !Array.isArray(receipt.objects) ||
-      receipt.objects.length < 3 || receipt.objects.length > MAX_CHUNKS + 3 ||
+      receipt.objects.length < 3 || receipt.objects.length > MAX_OBJECTS ||
       !Number.isSafeInteger(receipt.remote_bytes_checked)) throw new HostedReceiptError();
 
   const { snapshot_id: snapshotId, objects } = receipt;

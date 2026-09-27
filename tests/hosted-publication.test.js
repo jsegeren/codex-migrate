@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { publishStagedReceipt } = require('../hosted/publication');
+const { validateReceipt } = require('../hosted/receipt');
 
 const snapshotId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const reservationId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
@@ -13,6 +14,12 @@ const keys = [`metadata/${snapshotId}.json`,
 const objects = keys.map(key => ({ key, bytes: 10, sha256: 'a'.repeat(64) }));
 const receipt = () => ({ version: 1, snapshot_id: snapshotId,
   remote_bytes_checked: 40, objects: objects.map(item => ({ ...item })) });
+
+test('a receipt over the database object limit is rejected before verification', () => {
+  const claim = receipt();
+  claim.objects = Array(1_000_001);
+  assert.throws(() => validateReceipt(claim, 1000), /hosted_receipt_invalid/);
+});
 
 test('publishes only the provider-verified frozen object list', async () => {
   const claim = receipt();
