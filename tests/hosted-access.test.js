@@ -45,7 +45,7 @@ test('mints unpredictable token but persists only a digest and grants an owned V
   assert.notEqual(first.tokenHash, second.tokenHash);
   assert.equal(first.tokenHash.includes(first.token), false);
   const scope = await authorizeUploadScope(request());
-  assert.deepEqual(scope, { accountId, vaultId });
+  assert.deepEqual(scope, { accountId, vaultId, allowanceBytes: 100_000_000_000 });
   assert.equal(Object.isFrozen(scope), true);
   assert.equal(isAuthorizedScope(scope), true);
   assert.equal(isAuthorizedScope({ accountId, vaultId }), false);
@@ -106,6 +106,18 @@ test('publication scope is short-lived and cannot be reused after a failed attem
   await assert.rejects(attempt(), /hosted_receipt_invalid/);
   assert.equal(isAuthorizedScope(scope), false);
   await assert.rejects(attempt(), /hosted_publication_failed/);
+});
+
+test('publication cannot exceed the fresh subscription allowance', async () => {
+  let calls = 0;
+  await assert.rejects(publishStagedReceipt({
+    scope: await authorizeUploadScope(request()),
+    reservationId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+    receipt: {}, maxReceiptBytes: 100_000_000_001,
+    verifyBatch: async () => { calls++; return true; },
+    query: async () => { calls++; return { rows: [{ published: true }] }; },
+  }), /hosted_publication_failed/);
+  assert.equal(calls, 0);
 });
 
 test('an authenticated scope expires before a delayed publication attempt', async () => {

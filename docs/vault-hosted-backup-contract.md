@@ -121,7 +121,11 @@ egress allowance. Do not claim that B2 restores are always free. See its
   days), and revocation state are stored in PostgreSQL. Each upload-scope
   authorization queries that record for a live, unrevoked session bound to the
   requested Vault, loads the enrollment for that account, and must fetch the
-  current Stripe Subscription before granting a scope. The publication
+  current Stripe Subscription before granting a scope. The checked subscription
+  allowance is carried in the one-use server scope; the publication coordinator
+  rejects a receipt byte limit above that allowance before provider or database
+  work. Aggregate retained-byte quota is still enforced separately by the
+  database reservation/publication path. The publication
   coordinator rejects an ordinary client-shaped account/Vault object; it
   consumes a scope minted by this authorization path once, within 60 seconds.
   The actual identity

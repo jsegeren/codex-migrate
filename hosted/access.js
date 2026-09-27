@@ -35,6 +35,7 @@ async function authorizeUploadScope({ sessionToken, vaultId, query,
       typeof getEntitlement !== 'function') throw new HostedAccessError();
   const hash = tokenHash(sessionToken);
   let accountId;
+  let allowanceBytes;
   try {
     const result = await query(AUTH_SQL, [hash, vaultId]);
     if (result?.rows?.length !== 1 || result.rows[0].vault_id !== vaultId ||
@@ -43,14 +44,15 @@ async function authorizeUploadScope({ sessionToken, vaultId, query,
     // This callback must fetch the enrollment from our account record and the
     // current Subscription directly from Stripe, never a webhook or client.
     const evidence = await getEntitlement(accountId);
+    allowanceBytes = uploadAllowance(evidence?.subscription,
+      evidence?.enrollment, live, priceCatalog);
     if (evidence?.enrollment?.accountId !== accountId ||
-        uploadAllowance(evidence.subscription, evidence.enrollment,
-          live, priceCatalog) === null) throw new HostedAccessError();
+        allowanceBytes === null) throw new HostedAccessError();
   } catch {
     // No token, account, Vault, Stripe, or database detail crosses the API.
     throw new HostedAccessError();
   }
-  const scope = Object.freeze({ accountId, vaultId });
+  const scope = Object.freeze({ accountId, vaultId, allowanceBytes });
   authorizedScopes.set(scope, Date.now());
   return scope;
 }

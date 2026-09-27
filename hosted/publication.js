@@ -16,12 +16,16 @@ class HostedPublicationError extends Error {
 async function publishStagedReceipt({ receipt, maxReceiptBytes, scope,
   reservationId, verifyBatch, query }) {
   if (!consumeAuthorizedScope(scope) || !UUID.test(reservationId) ||
+      !Number.isSafeInteger(maxReceiptBytes) || maxReceiptBytes <= 0 ||
+      maxReceiptBytes > scope.allowanceBytes ||
       typeof query !== 'function') {
     throw new HostedPublicationError();
   }
   // This copies and freezes the client claim before any asynchronous provider
   // check. The database receives only the exact scoped objects verified here.
-  const proof = await verifyStagedReceiptBatched(receipt, maxReceiptBytes, scope, verifyBatch);
+  const storageScope = Object.freeze({ accountId: scope.accountId, vaultId: scope.vaultId });
+  const proof = await verifyStagedReceiptBatched(
+    receipt, maxReceiptBytes, storageScope, verifyBatch);
   let result;
   try {
     result = await query(PUBLISH_SQL, [scope.accountId, scope.vaultId,
