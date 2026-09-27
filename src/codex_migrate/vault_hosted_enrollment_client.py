@@ -16,7 +16,9 @@ from urllib.request import Request, build_opener
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_backup import _helper_path, _run_helper
+from codex_migrate.vault_hosted_recovery_client import HostedRecoveryClient
 from codex_migrate.vault_hosted_recovery_client import _origin
+from codex_migrate.vault_hosted_upload_client import HostedUploadClient
 from codex_migrate.vault_http_store import _NoRedirect
 
 
@@ -56,6 +58,7 @@ class HostedEnrollmentClient:
                 not 0 < timeout <= 120):
             raise MigrationError("The hosted enrollment timeout is invalid.")
         self._timeout = timeout
+        self._allow_loopback_http = allow_loopback_http
         self._opener = build_opener(_NoRedirect())
 
     def _post(self, claim: dict, token: str = "") -> dict:
@@ -134,8 +137,8 @@ class HostedEnrollmentClient:
                              "deviceTokenHash": selected[0]["token_hash"]})
         return _identity(result, device_id)
 
-    def resolve(self, device_id: str, *, crypto_helper: Optional[str] = None) -> dict:
-        """Recover an ambiguous claim using the same Keychain-held bearer."""
+    def _credential(self, device_id: str, crypto_helper: Optional[str]) -> str:
+        """Read and validate the bearer only inside the native client process."""
         if not isinstance(device_id, str) or not re.fullmatch(_UUID, device_id):
             raise MigrationError("The hosted device identifier is invalid.")
         credential = _run_helper(_helper_path(crypto_helper), [
@@ -150,5 +153,32 @@ class HostedEnrollmentClient:
                                token.encode("ascii")).hexdigest() !=
                 credential["token_hash"]):
             raise MigrationError("The hosted device credential is invalid.")
-        result = self._post({"action": "resolve", "deviceId": device_id}, token)
-        return _identity(result, device_id)
+        return token
+
+    def _session(self, device_id: str, crypto_helper: Optional[str]) -> tuple:
+        token = self._credential(device_id, crypto_helper)
+        identity = _identity(
+            self._post({"action": "resolve", "deviceId": device_id}, token),
+            device_id)
+        return token, identity
+
+    def resolve(self, device_id: str, *, crypto_helper: Optional[str] = None) -> dict:
+        """Recover an ambiguous claim using the same Keychain-held bearer."""
+        return self._session(device_id, crypto_helper)[1]
+
+    def upload_client(self, device_id: str, worker_origin: str, *,
+                      crypto_helper: Optional[str] = None) -> HostedUploadClient:
+        """Open a dark upload adapter without handing its bearer to browser code."""
+        token, identity = self._session(device_id, crypto_helper)
+        return HostedUploadClient(
+            self._origin, worker_origin, token, identity["accountId"],
+            identity["vaultId"], timeout=self._timeout,
+            allow_loopback_http=self._allow_loopback_http)
+
+    def recovery_client(self, device_id: str, *,
+                        crypto_helper: Optional[str] = None) -> HostedRecoveryClient:
+        """Open a dark recovery adapter using only the Keychain-held bearer."""
+        token, identity = self._session(device_id, crypto_helper)
+        return HostedRecoveryClient(
+            self._origin, token, identity["vaultId"], timeout=self._timeout,
+            allow_loopback_http=self._allow_loopback_http)

@@ -320,7 +320,10 @@ egress allowance. Do not claim that B2 restores are always free. See its
   bearer in a claim or browser response; only the domain-separated digest
   crosses the claim boundary. If the claim response is lost, it keeps the
   Keychain item and can resolve the same device using its bearer over the
-  authenticated route. This is source-level loopback evidence, not an
+  authenticated route. The native sandbox client can now open upload and
+  recovery adapters from that validated Keychain item and the service-resolved
+  account/Vault identity, without returning the bearer to browser code. This
+  is source-level loopback evidence, not an
   installed-app or live-server enrollment acceptance.
 - A provider-neutral subscription upload gate is implemented for a future
   service to call with a freshly retrieved Stripe Subscription, its

@@ -8,6 +8,8 @@ from unittest.mock import patch
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_hosted_enrollment_client import HostedEnrollmentClient
+from codex_migrate.vault_hosted_recovery_client import HostedRecoveryClient
+from codex_migrate.vault_hosted_upload_client import HostedUploadClient
 
 
 ACCOUNT = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
@@ -118,6 +120,27 @@ class HostedEnrollmentClientTests(unittest.TestCase):
         self.assertFalse(any("delete" in part for call in self.helper_calls
                              for part in call))
 
+    def test_keychain_credential_opens_native_upload_and_recovery_clients(self):
+        with patch("codex_migrate.vault_hosted_enrollment_client._helper_path",
+                   return_value=Path("/synthetic/helper")), \
+                patch("codex_migrate.vault_hosted_enrollment_client._run_helper",
+                      side_effect=self.fake_helper):
+            client = self.client()
+            upload = client.upload_client(DEVICE, "http://127.0.0.1:54321")
+            recovery = client.recovery_client(DEVICE)
+        self.assertIsInstance(upload, HostedUploadClient)
+        self.assertIsInstance(recovery, HostedRecoveryClient)
+        self.assertEqual((upload._account_id, upload._vault_id), (ACCOUNT, VAULT))
+        self.assertEqual(recovery._vault_id, VAULT)
+        self.assertNotIn(TOKEN, repr(upload) + repr(recovery))
+        self.assertEqual([body["action"] for body, _ in self.server.calls],
+                         ["resolve", "resolve"])
+        self.assertTrue(all(auth == "Bearer " + TOKEN
+                            for _, auth in self.server.calls))
+        self.assertEqual(self.helper_calls, [
+            ["hosted-device-read", "--device-id", DEVICE],
+            ["hosted-device-read", "--device-id", DEVICE]])
+
     def test_bad_inputs_refuse_network_or_keychain_work(self):
         with self.assertRaises(MigrationError):
             HostedEnrollmentClient("http://example.com")
@@ -150,6 +173,10 @@ class HostedEnrollmentClientTests(unittest.TestCase):
                       side_effect=forged):
             with self.assertRaisesRegex(MigrationError, "credential is invalid"):
                 self.client().resolve(DEVICE)
+            with self.assertRaisesRegex(MigrationError, "credential is invalid"):
+                self.client().upload_client(DEVICE, "http://127.0.0.1:54321")
+            with self.assertRaisesRegex(MigrationError, "credential is invalid"):
+                self.client().recovery_client(DEVICE)
         self.assertEqual(self.server.calls, [])
 
 
