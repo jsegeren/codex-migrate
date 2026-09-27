@@ -90,6 +90,8 @@ BEGIN
       AND snapshot_id = p_snapshot_id;
   IF FOUND THEN
     IF v_existing.reservation_id <> p_reservation_id OR
+       NOT EXISTS (SELECT 1 FROM hosted.upload_reservations
+         WHERE reservation_id = p_reservation_id AND state = 'published') OR
        v_existing.verified_object_count <> v_count OR EXISTS (
          SELECT item.key, item.bytes, item.sha256
            FROM jsonb_to_recordset(p_verified_objects)
