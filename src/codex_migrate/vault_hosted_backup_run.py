@@ -123,9 +123,14 @@ class HostedBackupRun:
         if apply is not True:
             raise MigrationError("Hosted backup changes require explicit confirmation.")
         with self._locked():
-            inventory = encrypted_snapshot_inventory(
-                vault, snapshot=snapshot, crypto_helper=crypto_helper)
             state = self._pending()
+            # A newer local snapshot may become "latest" while an interrupted
+            # upload is waiting. Finish the pinned snapshot before starting a
+            # different one; never abandon its reservation implicitly.
+            selected_snapshot = (state["snapshotId"] if state is not None
+                                 and snapshot == "latest" else snapshot)
+            inventory = encrypted_snapshot_inventory(
+                vault, snapshot=selected_snapshot, crypto_helper=crypto_helper)
             if state is not None and state["snapshotId"] != inventory.snapshot_id:
                 raise MigrationError(
                     "A different hosted snapshot is pending; review it before starting another.")

@@ -81,6 +81,23 @@ class HostedBackupRunTests(unittest.TestCase):
             upload.assert_called_once()
             self.assertEqual(self.run.pending()["snapshotId"], SNAPSHOT)
 
+    def test_default_latest_retries_pinned_snapshot_after_local_latest_moves(self):
+        receipt = {"snapshotId": SNAPSHOT, "verifiedObjectCount": 3}
+        with patch("codex_migrate.vault_hosted_backup_run.encrypted_snapshot_inventory",
+                   return_value=self.inventory) as inventory, patch.object(
+                   self.client, "reserve", return_value=RESERVATION) as reserve, patch.object(
+                   self.client, "back_up_snapshot",
+                   side_effect=[MigrationError("network interrupted"), receipt]) as upload:
+            with self.assertRaises(MigrationError):
+                self.run.back_up_snapshot(str(self.root), apply=True)
+            self.assertEqual(self.run.back_up_snapshot(str(self.root), apply=True), receipt)
+            self.assertEqual([call.kwargs["snapshot"] for call in
+                              inventory.call_args_list], ["latest", SNAPSHOT])
+            self.assertEqual([call.kwargs["snapshot"] for call in
+                              upload.call_args_list], [SNAPSHOT, SNAPSHOT])
+            reserve.assert_called_once()
+            self.assertIsNone(self.run.pending())
+
     def test_unsafe_journal_is_not_used_for_retry(self):
         with patch("codex_migrate.vault_hosted_backup_run.encrypted_snapshot_inventory",
                    return_value=self.inventory), patch.object(
