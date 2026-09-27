@@ -107,11 +107,15 @@ Future orphan cleanup must wait beyond the last token's expiry. This is a tested
 building block, not an activated grant API: cleanup after failed/expired
 reservations and customer identity
 enrollment still need the same fail-closed review before deployment.
-The draft HEAD reuse grant requires a fresh upload entitlement and active
-reservation, then checks that the exact key, size, and checksum already belong
-to a published snapshot of that Vault. It grants only a 30-second HEAD probe,
-not a read or overwrite. A missing or unrecorded object must use the reserved
-PUT path; a HEAD response alone never becomes publication proof.
+The draft HEAD grant requires a fresh upload entitlement and active
+reservation, then checks that the exact key, size, and checksum either belong
+to a published snapshot of that Vault or have a PUT grant recorded under this
+same reservation. The latter permits read-after-write verification and retry
+of a staged object without exposing another staged upload. It grants only a
+30-second HEAD probe, not a read or overwrite. A missing or unrecorded object
+must use the reserved PUT path; a HEAD response alone never becomes publication
+proof. The installed client still needs an explicit pre-PUT decision for new
+objects; treating an authorization failure as "absent" would be unsafe.
 The draft published-only GET issuer now requires an unrevoked device session
 bound to that Vault, consumes a one-use read scope, and signs only an exact
 object listed in a published snapshot, using the database-owned size and

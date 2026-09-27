@@ -10,16 +10,15 @@ const item = Object.freeze({ key: `accounts/${accountId}/vaults/${vaultId}/` +
   'objects/aa/' + 'a'.repeat(62) + '.cvchunk', bytes: 20, sha256: 'b'.repeat(64) });
 const secret = randomBytes(32);
 
-test('only an exact published object under an active upload receives a HEAD grant', async () => {
+test('only an exact published or reserved object receives a HEAD grant', async () => {
   const scope = await freshScope();
   let calls = 0;
   const token = await issueReuseHead({ scope, reservationId, item, secret,
     query: async (sql, values) => {
       calls++;
-      assert.match(sql, /hosted\.snapshot_objects/);
-      assert.match(sql, /r\.state = 'active'/);
+      assert.match(sql, /hosted\.can_probe_upload_object_current/);
       assert.deepEqual(values, [accountId, vaultId, reservationId,
-        item.key, item.bytes, item.sha256]);
+        item.key, item.bytes, item.sha256, 100_000_000]);
       return { rows: [{ allowed: true }] };
     } });
   assert.deepEqual(await verifyObjectCapability(token, 'HEAD', item.key, secret), item);
@@ -32,7 +31,7 @@ test('only an exact published object under an active upload receives a HEAD gran
   assert.equal(calls, 1);
 });
 
-test('foreign, client-shaped, unpublished, and expired reservations cannot probe', async () => {
+test('foreign, client-shaped, unrecorded, and expired reservations cannot probe', async () => {
   let calls = 0;
   const query = async () => { calls++; return { rows: [{ allowed: false }] }; };
   await assert.rejects(issueReuseHead({ scope: { accountId, vaultId },
