@@ -20,7 +20,7 @@ class PaidUpdateCanaryClientTests(unittest.TestCase):
         selected = CANARY.canary()
         root = ElementTree.fromstring(CANARY.appcast_xml(selected))
         item = root.find("channel/item")
-        self.assertEqual(item.find("{http://www.andymatuschak.org/xml-namespaces/sparkle}version").text, "19")
+        self.assertEqual(item.find("{http://www.andymatuschak.org/xml-namespaces/sparkle}version").text, "20")
         enclosure = item.find("enclosure")
         self.assertEqual(enclosure.get("url"), "https://migrate.segeren.com/api/update-archive")
         self.assertEqual(enclosure.get("length"), str(selected["size"]))
