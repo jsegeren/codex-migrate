@@ -315,15 +315,27 @@ async function loadOverview(){
     const conversations=(summary.active_transcripts||0)+(summary.archived_transcripts||0);
     const label=`${conversations.toLocaleString()} ${conversations===1?"conversation":"conversations"}`;
     const verifiedScheduled=schedule.enabled&&schedule.healthy&&schedule.last_run?.status==="completed";
-    const attention=schedule.last_run?.status==="needs_attention"||backup.status==="needs_attention";
+    const contentRisk=schedule.last_run?.status==="needs_attention"||backup.status==="needs_attention";
+    const failedRun=["failed","unknown"].includes(schedule.last_run?.status);
+    const scheduleProblem=Boolean(schedule.error)||failedRun||(schedule.enabled&&!schedule.healthy);
+    const attention=contentRisk||scheduleProblem||backup.status==="failed";
     $("overview-health-card").classList.toggle("attention",!verifiedScheduled||attention);
     $("overview-health-icon").textContent=verifiedScheduled&&!attention?"✓":"!";
-    if(attention){
+    if(contentRisk){
       $("overview-health").textContent="Conversation backup needs review";
       $("overview-health-detail").textContent="An earlier verified version may hold missing content.";
+    }else if(scheduleProblem){
+      $("overview-health").textContent="Automatic backup needs attention";
+      $("overview-health-detail").textContent=schedule.error||"Open Backups to check the schedule and last good snapshot.";
+    }else if(backup.status==="failed"){
+      $("overview-health").textContent="Backup attempt failed";
+      $("overview-health-detail").textContent="Open Backups to retry. Earlier verified snapshots may still be available.";
     }else if(verifiedScheduled){
       $("overview-health").textContent="Automatic backup verified";
       $("overview-health-detail").textContent=`${label} · Daily encrypted backup`;
+    }else if(schedule.enabled&&schedule.last_run?.status==="running"){
+      $("overview-health").textContent="Scheduled backup running";
+      $("overview-health-detail").textContent=`${label} · Open Backups to see its progress`;
     }else if(schedule.enabled){
       $("overview-health").textContent="First scheduled backup pending";
       $("overview-health-detail").textContent=`${label} · Initial snapshot alone is not scheduled protection`;
@@ -331,8 +343,8 @@ async function loadOverview(){
       $("overview-health").textContent="Snapshot verified";
       $("overview-health-detail").textContent=`${label} · Automatic backup is off`;
     }else{
-      $("overview-health").textContent="Backup protection is not set up";
-      $("overview-health-detail").textContent=`${label} found on this Mac`;
+      $("overview-health").textContent="Backup status not checked";
+      $("overview-health-detail").textContent=`${label} found · Open Backups to choose or verify a Vault`;
     }
   }catch(error){
     $("overview-health-card").classList.add("attention");
