@@ -394,8 +394,12 @@ egress allowance. Do not claim that B2 restores are always free. See its
   catalog is accepted as a first backup only when the service explicitly
   reports no published snapshot. A changed last-good pointer or altered
   manifest fails closed. The installed backup path still must call this
-  adapter and pin the prior snapshot through publication; the adapter alone
-  does not prevent another writer from advancing last-good meanwhile. The
+  adapter. A draft database guard now captures last-good when a reservation
+  starts and rejects any later publication if another upload advanced that
+  Vault in the meantime. Overlapping uploads can continue, but the stale one
+  cannot call itself protected or silently replace last-good. The installed
+  path still must reserve first, then fetch the prior catalog and distinguish
+  a stale-publication rejection for a safe retry. The
   staged hosted-only object graph has also been recovered through the native
   download, key-import, verification, and restore path in a synthetic test
   without first creating a full ciphertext Vault on the source Mac. That test

@@ -55,7 +55,9 @@ jobs:
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0021_cleanup_delete_grant.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0022_abandon_upload.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0023_published_chunk_lookup.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0024_publication_base.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-quota.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-publication-base.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-publication.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-publication-scale.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-sessions.sql
