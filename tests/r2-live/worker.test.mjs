@@ -73,3 +73,17 @@ test('probe checks exact deletion, retry, and wrong-digest refusal', async () =>
   assert.equal(Object.values(flags).every(Boolean), true);
   assert.equal(bucket.objects.size, 0);
 });
+
+test('transport probe exercises the authenticated Worker route and cleans up', async () => {
+  const bucket = new SyntheticBucket();
+  const response = await worker.fetch(new Request('http://127.0.0.1/probe-transport',
+    { method: 'POST' }), { PROBE_ENABLED: '1', SANDBOX_BUCKET: bucket });
+  assert.equal(response.status, 200);
+  const flags = await response.json();
+  assert.deepEqual(Object.keys(flags).sort(), [
+    'uploaded', 'reused', 'checked', 'restored', 'wrongMethodBlocked',
+    'corruptBodyBlocked', 'deleted', 'removed',
+  ].sort());
+  assert.equal(Object.values(flags).every(Boolean), true);
+  assert.equal(bucket.objects.size, 0);
+});
