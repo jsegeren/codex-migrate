@@ -5,6 +5,19 @@ remaining acceptance checks continue. This is not full release certification.
 The [paid-beta launch record](paid-beta-launch-2026-09-07.md) controls the current
 distribution decision; the dated entries below preserve their original status.
 
+## September 28 paginated-history coverage hold
+
+The installed Codex runtime uses a paginated thread-history database in
+addition to JSONL rollouts. A read-only check found cases where the database
+projection offset is beyond the current rollout length and its user/agent
+message counts materially exceed the current file's counts. Vault's current encrypted snapshot
+contains JSONL transcript trees, not that database. This does not establish
+which items are unique, but it prevents us from claiming full paginated-thread
+coverage from a green JSONL verification alone. The next public release is
+held until the [paginated-history coverage gate](vault-thread-history-contract.md#paginated-history-coverage-gate-september-28)
+is resolved and independently reviewed. Build 16 remains the public beta under
+its existing testing disclosure; no customer data was changed by this check.
+
 ## September 27 integrated-source local package — not released
 
 Committed source `e644570` packaged as an arm64 **local-test-only** build-20 app.
