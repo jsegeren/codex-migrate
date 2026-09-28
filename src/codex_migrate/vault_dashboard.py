@@ -309,7 +309,7 @@ async function openThread(item){
     $("restore-thread").hidden=!fromBackup||item.collection==="paginated";
     $("thread-restore-note").hidden=!fromBackup||item.collection==="paginated";
     $("thread-restore-status").textContent=item.collection==="paginated"
-      ?"Saved paginated history can be read and exported here. Copying it into Codex is not supported.":"";
+      ?"Paginated history can be read and exported here. Copying it into Codex is not supported.":"";
     $("thread-restore-error").textContent="";
     threadExcerpted=thread.entries.some(entry=>entry.excerpted);
     $("thread-meta").textContent=`${fromBackup?"Opened backup":"This Mac"} · ${thread.collection} · ${fromMatch?"Starting at the search match · ":""}${thread.entries.length} readable entries${threadExcerpted?". A long message is excerpted here; Download Markdown for full text.":thread.next_cursor!==null&&thread.next_cursor!==undefined?" so far. Download Markdown includes the full conversation.":""}`;

@@ -2,6 +2,7 @@ import json
 import os
 from http.client import HTTPConnection
 from pathlib import Path
+import sqlite3
 import subprocess
 import tempfile
 import threading
@@ -206,6 +207,65 @@ class SetupTests(unittest.TestCase):
             "collection": "paginated", "transcript": thread_id + ".jsonl",
             "source": "local",
         })[0], 400)
+
+    def test_live_paginated_history_search_and_open_without_a_backup(self):
+        thread_id = "55555555-5555-4555-8555-555555555555"
+        codex = self.home / ".codex"
+        codex.mkdir()
+        database = codex / "thread_history_1.sqlite"
+        with sqlite3.connect(database) as connection:
+            connection.execute("CREATE TABLE thread_items (thread_id TEXT, turn_id TEXT, "
+                               "item_id TEXT, rollout_ordinal INTEGER, created_at_ms INTEGER, "
+                               "item_json TEXT, item_type TEXT, updated_at_ordinal INTEGER)")
+            connection.execute("CREATE TABLE thread_history_projection_state ("
+                               "thread_id TEXT, next_rollout_byte_offset INTEGER, "
+                               "next_rollout_ordinal INTEGER)")
+            for ordinal, body in ((1, "Earlier synthetic work"),
+                                  (2, "Configure Clerk for the fixture")):
+                connection.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                   (thread_id, "turn-1", "item-%d" % ordinal, ordinal,
+                                    100 + ordinal,
+                                    json.dumps({"id": "item-%d" % ordinal,
+                                                "type": "userMessage", "text": body}),
+                                    "userMessage", ordinal))
+        original = database.read_bytes()
+        code, results = self.request("/api/vault/search?q=clerk")
+        self.assertEqual(code, 200)
+        self.assertEqual(len(results["results"]), 1)
+        match = results["results"][0]
+        self.assertEqual(match["collection"], "paginated")
+        self.assertEqual(match["cursor"], 1)
+        transcript = quote(thread_id + ".jsonl")
+        path = ("/api/vault/thread?collection=paginated&transcript=" + transcript
+                + "&source=local&cursor=1&match=clerk")
+        code, page = self.request(path)
+        self.assertEqual(code, 200)
+        self.assertEqual([entry["text"] for entry in page["entries"]],
+                         ["Configure Clerk for the fixture"])
+        self.assertEqual(self.request(path.replace("match=clerk", "match=missing"))[0], 400)
+        self.assertEqual(self.request(path.replace(thread_id, "66666666-6666-4666-8666-666666666666"))[0], 400)
+        code, grant = self.request("/api/vault/export-ticket", {
+            "collection": "paginated", "transcript": thread_id + ".jsonl",
+            "source": "local",
+        })
+        self.assertEqual(code, 200)
+        code, exported = self.request(grant["url"], authorized=False)
+        self.assertEqual(code, 200)
+        self.assertIn("Configure Clerk for the fixture", exported)
+        self.assertIn("live Codex paginated source", exported)
+        self.assertEqual(database.read_bytes(), original)
+        code, grant = self.request("/api/vault/export-ticket", {
+            "collection": "paginated", "transcript": thread_id + ".jsonl",
+            "source": "local",
+        })
+        self.assertEqual(code, 200)
+        with sqlite3.connect(database) as connection:
+            connection.execute("UPDATE thread_items SET item_json=? WHERE item_id='item-2'",
+                               (json.dumps({"id": "item-2", "type": "userMessage",
+                                            "text": "Changed after ticket"}),))
+        code, body = self.request(grant["url"], authorized=False)
+        self.assertEqual(code, 409)
+        self.assertNotIn("Changed after ticket", body)
 
     def test_export_ticket_refuses_thread_changed_before_download(self):
         transcript = self.home / ".codex/sessions/2026/09/changing.jsonl"

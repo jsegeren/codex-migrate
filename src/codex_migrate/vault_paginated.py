@@ -64,6 +64,16 @@ class PaginatedSource:
         except sqlite3.Error as error:
             raise MigrationError("Codex paginated history could not be listed safely.") from error
 
+    def has_thread(self, thread_id: str) -> bool:
+        if canonical_id(thread_id) != thread_id:
+            raise ValueError("thread id must be a canonical UUID")
+        try:
+            return self._connection.execute(
+                "SELECT 1 FROM thread_items WHERE thread_id=? LIMIT 1",
+                (thread_id,)).fetchone() is not None
+        except sqlite3.Error as error:
+            raise MigrationError("Codex paginated history could not be inspected safely.") from error
+
     def items(self, thread_id: str) -> Iterator[PaginatedItem]:
         if canonical_id(thread_id) != thread_id:
             raise ValueError("thread id must be a canonical UUID")

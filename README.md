@@ -74,8 +74,11 @@ This repository now includes the first open-source Codex Vault primitives for
 local conversation history: read-only inspection, streaming search, a local
 browser, Markdown/PDF/share exports, and versioned client-side encrypted
 backup. The current paid build backs up only active and archived transcript
-trees; the draft next-build paginated-history capture and browser recovery are
-not released or independently certified yet. Vault does not
+trees; the draft next build also searches, reads, and exports current paginated
+Codex history, then encrypts its items as a separately labelled source for
+saved search, reading, and export. Live reads do not create a backup. These
+additions are not released or independently certified yet.
+Vault does not
 copy `auth.json`, `installation_id`, SSH keys, logs, caches, or runtime locks.
 If Codex's optional title index is damaged, Vault still encrypts and verifies
 intact transcripts. It warns that saved title search may be incomplete; text

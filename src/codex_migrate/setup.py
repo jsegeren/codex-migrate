@@ -28,6 +28,7 @@ from codex_migrate.pairing import Pairing
 from codex_migrate.vault import inspect as inspect_vault
 from codex_migrate.vault import markdown as vault_markdown
 from codex_migrate.vault import _find_transcript, markdown_chunks, markdown_source_stamp, read_thread, read_thread_page, search as search_vault
+from codex_migrate.vault_paginated import open_paginated_source
 from codex_migrate.vault_salvage import (
     find_transcripts as find_salvage_transcripts,
     incomplete_markdown as salvage_markdown,
@@ -885,21 +886,31 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                             expected_query=expected_query)
 
     def issue_vault_export_ticket(self, collection, transcript, source="backup"):
-        if (collection not in (("active", "archived", "paginated") if source == "backup"
-                              else ("active", "archived")) or not isinstance(transcript, str)) \
+        if (collection not in ("active", "archived", "paginated")
+                or not isinstance(transcript, str)) \
                 or not transcript or len(transcript) > 4096 or source not in ("backup", "local"):
             raise MigrationError("Choose an opened conversation to export")
         with self._browse_data_lock if source == "backup" else nullcontext():
             if source == "backup" and self._browse_home is None:
                 raise MigrationError("Open a verified Vault backup before exporting it")
             export_home = str(self._browse_home) if source == "backup" else str(self.source_home)
-            if collection != "paginated":
-                _find_transcript(export_home, collection, transcript)
-            source_stamp = markdown_source_stamp(export_home, collection, transcript)
-            expected_bytes = sum(len(chunk) for chunk in markdown_chunks(
-                export_home, collection, transcript))
-            if markdown_source_stamp(export_home, collection, transcript) != source_stamp:
-                raise MigrationError("The conversation changed while preparing export.")
+            if source == "local" and collection == "paginated":
+                with open_paginated_source(export_home) as live_source:
+                    digest = hashlib.sha256()
+                    expected_bytes = 0
+                    for chunk in markdown_chunks(export_home, collection, transcript,
+                                                 live_paginated_source=live_source):
+                        digest.update(chunk)
+                        expected_bytes += len(chunk)
+                    source_stamp = digest.hexdigest()
+            else:
+                if collection != "paginated":
+                    _find_transcript(export_home, collection, transcript)
+                source_stamp = markdown_source_stamp(export_home, collection, transcript)
+                expected_bytes = sum(len(chunk) for chunk in markdown_chunks(
+                    export_home, collection, transcript))
+                if markdown_source_stamp(export_home, collection, transcript) != source_stamp:
+                    raise MigrationError("The conversation changed while preparing export.")
         ticket = secrets.token_urlsafe(32)
         with self._export_ticket_lock:
             now = time.monotonic()
@@ -1252,30 +1263,45 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                                 raise MigrationError("The opened backup changed before export")
                             if source == "local" and export_home != str(setup.source_home):
                                 raise MigrationError("The local source changed before export")
-                            if markdown_source_stamp(export_home, collection, transcript) != source_stamp:
-                                raise MigrationError("The conversation changed before export")
-                            chunks = markdown_chunks(export_home, collection, transcript)
-                            first = next(chunks)
-                            self.send_response(200)
-                            self.send_header("Content-Type", "text/markdown; charset=utf-8")
-                            self.send_header("Content-Disposition", 'attachment; filename="codex-conversation.md"')
-                            self.send_header("Content-Length", str(expected_bytes))
-                            self.send_header("Cache-Control", "no-store")
-                            self.send_header("X-Content-Type-Options", "nosniff")
-                            self.send_header("Referrer-Policy", "no-referrer")
-                            self.send_header("Connection", "close")
-                            self.end_headers()
-                            stream_started = True
-                            written = len(first)
-                            self.wfile.write(first)
-                            for chunk in chunks:
-                                written += len(chunk)
-                                if written > expected_bytes:
+                            live_paginated = source == "local" and collection == "paginated"
+                            with (open_paginated_source(export_home) if live_paginated
+                                  else nullcontext(None)) as live_source:
+                                if live_paginated:
+                                    digest = hashlib.sha256()
+                                    actual_bytes = 0
+                                    for chunk in markdown_chunks(export_home, collection, transcript,
+                                                                 live_paginated_source=live_source):
+                                        digest.update(chunk)
+                                        actual_bytes += len(chunk)
+                                    if actual_bytes != expected_bytes or digest.hexdigest() != source_stamp:
+                                        raise MigrationError("The conversation changed before export")
+                                    chunks = markdown_chunks(export_home, collection, transcript,
+                                                             live_paginated_source=live_source)
+                                else:
+                                    if markdown_source_stamp(export_home, collection, transcript) != source_stamp:
+                                        raise MigrationError("The conversation changed before export")
+                                    chunks = markdown_chunks(export_home, collection, transcript)
+                                first = next(chunks)
+                                self.send_response(200)
+                                self.send_header("Content-Type", "text/markdown; charset=utf-8")
+                                self.send_header("Content-Disposition", 'attachment; filename="codex-conversation.md"')
+                                self.send_header("Content-Length", str(expected_bytes))
+                                self.send_header("Cache-Control", "no-store")
+                                self.send_header("X-Content-Type-Options", "nosniff")
+                                self.send_header("Referrer-Policy", "no-referrer")
+                                self.send_header("Connection", "close")
+                                self.end_headers()
+                                stream_started = True
+                                written = len(first)
+                                self.wfile.write(first)
+                                for chunk in chunks:
+                                    written += len(chunk)
+                                    if written > expected_bytes:
+                                        raise MigrationError("The saved conversation changed during export")
+                                    self.wfile.write(chunk)
+                                if written != expected_bytes:
                                     raise MigrationError("The saved conversation changed during export")
-                                self.wfile.write(chunk)
-                            if written != expected_bytes:
-                                raise MigrationError("The saved conversation changed during export")
-                            self.close_connection = True
+                                self.close_connection = True
                     except MigrationError:
                         if stream_started:
                             self.close_connection = True
@@ -1404,7 +1430,6 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                             source = query.get("source", ["local"])[0]
                             if (len(collection) > 16 or len(transcript) > 4096
                                 or source not in ("local", "backup")
-                                or (collection == "paginated" and source != "backup")
                                 or ("cursor" in query and (parsed.path != "/api/vault/thread"
                                         or len(query["cursor"]) != 1
                                         or len(query["cursor"][0]) > 20))
@@ -1420,13 +1445,15 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                                         collection, transcript, cursor, expected_query)
                                     if source == "backup" else
                                     read_thread_page(setup.source_home, collection, transcript,
-                                                     cursor, expected_query=expected_query))
+                                                     cursor, expected_query=expected_query,
+                                                     live_paginated=collection == "paginated"))
                                 self._json(200, {**thread.as_dict(),
                                                  "next_cursor": next_cursor})
                                 return
                             thread = (setup.read_vault_backup_thread(collection, transcript)
                                       if source == "backup" else
-                                      read_thread(setup.source_home, collection, transcript))
+                                      read_thread(setup.source_home, collection, transcript,
+                                                  live_paginated=collection == "paginated"))
                             if parsed.path == "/api/vault/thread":
                                 self._json(200, thread.as_dict())
                             else:
