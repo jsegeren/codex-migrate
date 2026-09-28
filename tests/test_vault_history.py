@@ -85,6 +85,21 @@ class IdentityTests(unittest.TestCase):
                     "size": 950, "assistant_messages": 0}]
         self.assertEqual(loss_warnings(previous, current), [THREAD_ID])
 
+    def test_single_lost_turn_is_flagged_even_when_file_remains_large(self):
+        previous = [{"thread_id": THREAD_ID, "identity_state": "verified",
+                     "size": 2_000_000, "assistant_messages": 12, "user_messages": 4}]
+        for counts in ({"assistant_messages": 11, "user_messages": 4},
+                       {"assistant_messages": 12, "user_messages": 3}):
+            current = [{**previous[0], "size": 1_900_000, **counts}]
+            self.assertEqual(loss_warnings(previous, current), [THREAD_ID])
+
+    def test_append_does_not_trigger_loss_warning(self):
+        previous = [{"thread_id": THREAD_ID, "identity_state": "verified",
+                     "size": 1000, "assistant_messages": 3, "user_messages": 2}]
+        current = [{**previous[0], "size": 1200,
+                    "assistant_messages": 4, "user_messages": 3}]
+        self.assertEqual(loss_warnings(previous, current), [])
+
     def test_reported_851mb_to_7mb_compaction_shape_flags_previous_version(self):
         previous = [{"thread_id": THREAD_ID, "identity_state": "verified",
                      "size": 851046757, "records": 122877,

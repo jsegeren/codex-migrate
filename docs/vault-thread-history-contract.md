@@ -61,9 +61,10 @@ first verified snapshot or to turns written since the latest verified capture.
   cloud-sync folder does not prove that its provider completed off-device
   upload; report sync state as unverified until independently verified.
 - New captures preserve older immutable versions, including when a rollout
-  shrinks or is rewritten. Detect conspicuous loss of records or assistant
-  turns and surface the last intact version. Risk is carried forward in the
-  encrypted manifest on later captures; a cryptographically valid capture of
+  shrinks or is rewritten. Flag any drop in counted user or assistant turns,
+  or a large byte-size shrink, for review; this is a conservative warning,
+  not proof that Codex lost content. Surface the last intact version. Risk is
+  carried forward in the encrypted manifest on later captures; a cryptographically valid capture of
   a truncated rollout must not turn an at-risk thread green.
 
 ## Pre-compaction proof gate
