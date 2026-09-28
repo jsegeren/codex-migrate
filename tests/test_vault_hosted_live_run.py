@@ -274,6 +274,30 @@ class HostedLiveRunTests(unittest.TestCase):
             publish.assert_called_once()
             self.assertIsNone(self.run.pending())
 
+    def test_cleanup_preflight_os_error_keeps_published_run_retryable(self):
+        with patch.object(self.upload, "reserve_with_base",
+                          side_effect=lambda *, reservation_id, apply:
+                          (reservation_id, None)), patch(
+                "codex_migrate.vault_hosted_live_run.stage_reserved_hosted_snapshot",
+                return_value="staged") as stage, patch.object(
+                self.upload, "publish_hosted_stage") as publish:
+            publish.side_effect = lambda reservation_id, value, *, apply: {
+                "snapshotId": self.run.pending()["snapshotId"],
+                "verifiedObjectCount": 3}
+            with patch.object(self.run, "_private_file",
+                              side_effect=PermissionError("synthetic preflight failure")):
+                with self.assertRaisesRegex(MigrationError, "needs local cleanup"):
+                    self.back_up()
+            pending = self.run.pending()
+            self.assertIsNotNone(pending)
+            with patch.object(self.upload, "reservation_receipt", return_value={
+                    "state": "published", "snapshotId": pending["snapshotId"],
+                    "verifiedObjectCount": 3}):
+                self.assertEqual(self.back_up()["snapshotId"], pending["snapshotId"])
+            stage.assert_called_once()
+            publish.assert_called_once()
+            self.assertIsNone(self.run.pending())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -277,7 +277,10 @@ class HostedLiveBackupRun:
             raise MigrationError("The published hosted journal needs local cleanup.") from error
 
     def _finish(self, snapshot_id: str) -> None:
-        self._retire_published_journal(snapshot_id)
+        try:
+            self._retire_published_journal(snapshot_id)
+        except OSError as error:
+            raise MigrationError("The published hosted journal needs local cleanup.") from error
         try:
             self._state.unlink()
             _fsync_directory(self._directory)
