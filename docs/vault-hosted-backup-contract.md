@@ -258,6 +258,14 @@ customer-facing retry or abandon flow remain release gates. The journal does
 not store the device bearer, recovery key, ciphertext, or conversation text.
 The run pins the upload to the journaled snapshot ID, even if the local
 `latest` pointer advances before staging starts.
+The dark reservation endpoint now also accepts a client-generated UUID that a
+future live-history runner can record *before* the network call. Repeating that
+exact ID after a lost response returns its original base and expiry without
+reserving bytes twice; a foreign, expired, or quarantined reservation is not
+revived. The server still freshly verifies device, purchase, and subscription
+on each attempt. The older local-Vault mirror runner does not yet use this
+pre-recorded-ID protocol, so its crash gap remains; the hosted-only installed
+runner and cleanup UX are still release gates.
 An explicit sandbox-only abandon operation now lets the same device quarantine
 its owned pending reservation, including after a subscription lapses. It
 refuses later grants and publication, retains reserved quota, and waits for

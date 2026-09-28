@@ -29,7 +29,8 @@ function requestBody(req) {
   }
   const data = req.body;
   const keys = Object.keys(data).sort().join(',');
-  const expected = data.action === 'reserve' ? 'action,bytes,vaultId' :
+  const expected = data.action === 'reserve' ?
+    (keys === 'action,bytes,reservationId,vaultId' ? keys : 'action,bytes,vaultId') :
     ['renew', 'abandon', 'status'].includes(data.action) ?
       'action,reservationId,vaultId' :
     ['decide', 'put'].includes(data.action) ?
@@ -39,7 +40,10 @@ function requestBody(req) {
   }
   if (data.action === 'reserve') {
     if (!Number.isSafeInteger(data.bytes) || data.bytes < 1 ||
-        data.bytes > 1_000_000_000_000) throw Error('invalid_request');
+        data.bytes > 1_000_000_000_000 ||
+        (data.reservationId !== undefined && !UUID.test(data.reservationId))) {
+      throw Error('invalid_request');
+    }
   } else if (!UUID.test(data.reservationId)) throw Error('invalid_request');
   if (data.action === 'decide' || data.action === 'put') {
     const item = data.item;
@@ -86,7 +90,7 @@ function makeHandler(load = uploadRuntime, env = process.env) {
         live, priceCatalog });
       if (data.action === 'reserve') {
         return reply(res, 200, await createUploadReservation({ scope,
-          bytes: data.bytes, query }));
+          bytes: data.bytes, reservationId: data.reservationId, query }));
       }
       if (data.action === 'renew') {
         return reply(res, 200, await renewUploadReservation({ scope,

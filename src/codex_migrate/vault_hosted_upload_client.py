@@ -149,17 +149,24 @@ class HostedUploadClient:
     def reserve(self, *, apply: bool = False) -> str:
         return self.reserve_with_base(apply=apply)[0]
 
-    def reserve_with_base(self, *, apply: bool = False
+    def reserve_with_base(self, *, reservation_id: Optional[str] = None,
+                          apply: bool = False
                           ) -> Tuple[str, Optional[str]]:
-        """Return the exact last-good pointer captured by this reservation."""
+        """Retry a pre-recorded ID without creating another reservation."""
         if apply is not True:
             raise MigrationError("Hosted upload changes require explicit confirmation.")
+        if reservation_id is not None:
+            self._require_reservation(reservation_id)
         # New PUT grants grow the reservation by exact distinct ciphertext
         # bytes. Reserving the full snapshot would falsely exhaust capacity
         # for a mostly-unchanged incremental backup.
-        result = self._post({"action": "reserve", "vaultId": self._vault_id,
-                             "bytes": 1})
+        claim = {"action": "reserve", "vaultId": self._vault_id, "bytes": 1}
+        if reservation_id is not None:
+            claim["reservationId"] = reservation_id
+        result = self._post(claim)
         reservation_id = self._reservation(result, include_base=True)
+        if claim.get("reservationId") is not None and reservation_id != claim["reservationId"]:
+            raise MigrationError("The hosted upload reservation changed on retry.")
         return reservation_id, result["baseSnapshotId"]
 
     def renew(self, reservation_id: str, *, apply: bool = False) -> str:

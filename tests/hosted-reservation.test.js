@@ -12,12 +12,13 @@ test('fresh paid scope creates a bounded byte reservation', async () => {
   const receipt = await createUploadReservation({ scope: await freshScope(),
     bytes: 1234, query: async (sql, values) => {
       calls++;
-      assert.match(sql, /reserve_upload_with_base_current/);
+      assert.match(sql, /reserve_upload_idempotent_current/);
       assert.deepEqual(values.slice(0, 2), [accountId, vaultId]);
       assert.match(values[2], /^[0-9a-f-]{36}$/);
       assert.equal(values[3], 1234);
       assert.equal(values[5], 100_000_000);
-      return { rows: [{ allowed: true, base_snapshot_id: null }] };
+      return { rows: [{ allowed: true, base_snapshot_id: null,
+        expires_at: values[4] }] };
     } });
   assert.equal(calls, 1);
   assert.equal(receipt.reservationId.length, 36);
@@ -30,14 +31,33 @@ test('fresh paid scope creates a bounded byte reservation', async () => {
 test('reservation returns its atomic prior base and rejects malformed receipts', async () => {
   const base = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const receipt = await createUploadReservation({ scope: await freshScope(),
-    bytes: 1, query: async () => ({ rows: [{ allowed: true,
-      base_snapshot_id: base }] }) });
+    bytes: 1, query: async (_sql, values) => ({ rows: [{ allowed: true,
+      base_snapshot_id: base, expires_at: values[4] }] }) });
   assert.equal(receipt.baseSnapshotId, base);
   for (const bad of [undefined, 'not-an-id', 7]) {
     await assert.rejects(createUploadReservation({ scope: await freshScope(),
       bytes: 1, query: async () => ({ rows: [{ allowed: true,
-        base_snapshot_id: bad }] }) }), /hosted_reservation_denied/);
+        base_snapshot_id: bad, expires_at: new Date(Date.now() + 55 * 60_000) }] }) }),
+    /hosted_reservation_denied/);
   }
+});
+
+test('caller-recorded ID is reused and server returns the original expiry', async () => {
+  const reservationId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  const original = new Date(Date.now() + 40 * 60_000);
+  const receipt = await createUploadReservation({ scope: await freshScope(),
+    bytes: 1, reservationId, query: async (sql, values) => {
+      assert.match(sql, /reserve_upload_idempotent_current/);
+      assert.equal(values[2], reservationId);
+      return { rows: [{ allowed: true, base_snapshot_id: null,
+        expires_at: original }] };
+    } });
+  assert.equal(receipt.reservationId, reservationId);
+  assert.equal(receipt.expiresAt, original.toISOString());
+  await assert.rejects(createUploadReservation({ scope: await freshScope(),
+    bytes: 1, reservationId: 'not-a-uuid', query: async () => {
+      throw Error('must not query');
+    } }), /hosted_reservation_denied/);
 });
 
 test('renewal rechecks scope and does not trust client-shaped quota', async () => {
@@ -98,6 +118,15 @@ test('abandon consumes owned read scope and never releases quota in its response
   await assert.rejects(abandonUploadReservation({ scope, reservationId,
     query: async () => ({ rows: [{ allowed: true }] }) }),
   /hosted_reservation_denied/);
+});
+
+test('invalid or expired database receipt is never an upload lease', async () => {
+  for (const expires_at of [undefined, 'not-a-time',
+    new Date(Date.now() - 1000), new Date(Date.now() + 2 * 60 * 60_000)]) {
+    await assert.rejects(createUploadReservation({ scope: await freshScope(),
+      bytes: 1, query: async () => ({ rows: [{ allowed: true,
+        base_snapshot_id: null, expires_at }] }) }), /hosted_reservation_denied/);
+  }
 });
 
 test('status reads only an owned reservation and cannot replay its read scope', async () => {

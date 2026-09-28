@@ -257,6 +257,18 @@ class HostedUploadClientTests(unittest.TestCase):
             with self.assertRaisesRegex(MigrationError, "response is invalid"):
                 self.client.reserve_with_base(apply=True)
 
+    def test_pre_recorded_reservation_id_is_sent_and_must_be_echoed(self):
+        with patch.object(self.client, "_post", return_value={
+                "reservationId": RESERVATION, "expiresAt": EXPIRY,
+                "baseSnapshotId": None}) as post:
+            self.assertEqual(self.client.reserve_with_base(
+                reservation_id=RESERVATION, apply=True), (RESERVATION, None))
+            post.assert_called_once_with({"action": "reserve", "vaultId": VAULT,
+                                          "bytes": 1, "reservationId": RESERVATION})
+            with self.assertRaisesRegex(MigrationError, "reservation changed"):
+                self.client.reserve_with_base(reservation_id=SNAPSHOT,
+                                              apply=True)
+
     def test_reservation_status_accepts_only_a_known_server_state(self):
         with patch.object(self.client, "_post", return_value={"state": "released"}) as post:
             self.assertEqual(self.client.reservation_status(RESERVATION), "released")

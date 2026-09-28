@@ -50,9 +50,10 @@ function fixture() {
         assert.deepEqual(values, [accountId, vaultId, reservationId]);
         return { rows: [{ allowed: true }] };
       }
-      if (sql.includes('reserve_upload_with_base_current')) {
+      if (sql.includes('reserve_upload_idempotent_current')) {
         assert.equal(values[3], 20);
-        return { rows: [{ allowed: true, base_snapshot_id: null }] };
+        return { rows: [{ allowed: true, base_snapshot_id: null,
+          expires_at: values[4] }] };
       }
       if (sql.includes('renew_upload_reservation_current')) {
         assert.equal(values[2], reservationId);
@@ -136,6 +137,19 @@ test('paid sandbox device can reserve, renew, decide and get exact PUT/HEAD gran
     'HEAD', key, secret), { key, bytes: item.bytes, sha256: item.sha256 });
   assert.equal(JSON.stringify(head.body).includes('hv1_'), false);
   assert.equal(f.writes(), 5);
+});
+
+test('pre-recorded reservation ID survives a repeated request', async () => {
+  const f = fixture();
+  f.req.body.reservationId = reservationId;
+  const first = await f.send();
+  const second = await f.send();
+  assert.equal(first.statusCode, 200);
+  assert.equal(second.statusCode, 200);
+  assert.equal(first.body.reservationId, reservationId);
+  assert.equal(second.body.reservationId, reservationId);
+  f.req.body.reservationId = 'bad';
+  assert.equal((await f.send()).statusCode, 400);
 });
 
 test('lapsed subscription cannot reserve or grant any object', async () => {

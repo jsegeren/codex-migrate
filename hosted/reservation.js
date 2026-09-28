@@ -6,7 +6,8 @@ const { consumeAuthorizedScope, consumeAuthorizedReadScope } = require('./access
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const LEASE_MS = 55 * 60 * 1000;
-const CREATE_SQL = `SELECT allowed, base_snapshot_id FROM hosted.reserve_upload_with_base_current(
+const CREATE_SQL = `SELECT allowed, base_snapshot_id, expires_at
+  FROM hosted.reserve_upload_idempotent_current(
   $1::uuid, $2::uuid, $3::uuid, $4::bigint, $5::timestamptz, $6::bigint
 )`;
 const RENEW_SQL = `SELECT hosted.renew_upload_reservation_current(
@@ -24,22 +25,27 @@ class HostedReservationError extends Error {
   constructor() { super('hosted_reservation_denied'); }
 }
 
-async function createUploadReservation({ scope, bytes, query }) {
+async function createUploadReservation({ scope, bytes, reservationId, query }) {
   if (!consumeAuthorizedScope(scope) || !Number.isSafeInteger(bytes) ||
-      bytes < 1 || bytes > scope.allowanceBytes || typeof query !== 'function') {
+      bytes < 1 || bytes > scope.allowanceBytes ||
+      (reservationId !== undefined && !UUID.test(reservationId)) ||
+      typeof query !== 'function') {
     throw new HostedReservationError();
   }
-  const reservationId = randomUUID();
+  reservationId ??= randomUUID();
   const expiresAt = new Date(Date.now() + LEASE_MS).toISOString();
   try {
     const result = await query(CREATE_SQL, [scope.accountId, scope.vaultId,
       reservationId, bytes, expiresAt, scope.allowanceBytes]);
     const row = result?.rows?.[0];
+    const expiry = new Date(row?.expires_at);
     if (result?.rows?.length !== 1 || row.allowed !== true ||
-        (row.base_snapshot_id !== null && !UUID.test(row.base_snapshot_id))) {
+        (row.base_snapshot_id !== null && !UUID.test(row.base_snapshot_id)) ||
+        !Number.isFinite(expiry.getTime()) || expiry.getTime() <= Date.now() ||
+        expiry.getTime() > Date.now() + LEASE_MS + 1000) {
       throw new HostedReservationError();
     }
-    return Object.freeze({ reservationId, expiresAt,
+    return Object.freeze({ reservationId, expiresAt: expiry.toISOString(),
       baseSnapshotId: row.base_snapshot_id });
   } catch { throw new HostedReservationError(); }
 }
