@@ -317,6 +317,56 @@ class PackagedVaultCompressionTests(unittest.TestCase):
             self.assertFalse(index.exists())
             self.assertEqual(len(search_for("Clerk follow-up")), 1)
 
+    def test_bundled_engine_indexes_database_backed_history_without_hiding_new_items(self):
+        app = Path(os.environ["CODEX_MIGRATE_PACKAGED_APP"])
+        engine = app / "Contents/Resources/engine/codex-migrate-engine"
+        self.assertTrue(engine.is_file())
+        with tempfile.TemporaryDirectory(prefix="vault-package-db-index-test-") as temporary:
+            source = Path(temporary) / "source"
+            database = source / ".codex/thread_history_1.sqlite"
+            database.parent.mkdir(parents=True)
+            thread_id = "11111111-1111-4111-8111-111111111111"
+            with sqlite3.connect(database) as connection:
+                connection.execute("CREATE TABLE thread_items (thread_id TEXT, turn_id TEXT, "
+                                   "item_id TEXT, rollout_ordinal INTEGER, created_at_ms INTEGER, "
+                                   "item_json TEXT, item_type TEXT, updated_at_ordinal INTEGER)")
+                connection.execute("CREATE TABLE thread_history_projection_state ("
+                                   "thread_id TEXT, next_rollout_byte_offset INTEGER, "
+                                   "next_rollout_ordinal INTEGER)")
+                connection.execute("INSERT INTO thread_items VALUES (?,?,?,?,?,?,?,?)", (
+                    thread_id, "turn-1", "item-1", 1, 1,
+                    json.dumps({"id": "item-1", "type": "userMessage",
+                                "text": "Earlier database work"}), "userMessage", 1))
+
+            def search_for(phrase):
+                return json.loads(run_packaged([
+                    str(engine), "vault", "--source-home", str(source),
+                    "search", phrase, "--json",
+                ]))
+
+            built = json.loads(run_packaged([
+                str(engine), "vault", "--source-home", str(source),
+                "search-index", "--apply", "--json",
+            ]))
+            self.assertTrue(built["paginated_indexed"])
+            self.assertEqual(built["paginated_threads"], 1)
+            self.assertEqual(search_for("Earlier database work")[0]["collection"],
+                             "paginated")
+            self.assertEqual(search_for("Clerk follow-up"), [])
+
+            with sqlite3.connect(database) as connection:
+                connection.execute("INSERT INTO thread_items VALUES (?,?,?,?,?,?,?,?)", (
+                    thread_id, "turn-2", "item-2", 2, 2,
+                    json.dumps({"id": "item-2", "type": "userMessage",
+                                "text": "Clerk follow-up"}), "userMessage", 2))
+            self.assertEqual(search_for("Clerk follow-up")[0]["collection"], "paginated")
+            refreshed = json.loads(run_packaged([
+                str(engine), "vault", "--source-home", str(source),
+                "search-index", "--apply", "--json",
+            ]))
+            self.assertTrue(refreshed["paginated_indexed"])
+            self.assertEqual(search_for("Clerk follow-up")[0]["collection"], "paginated")
+
     def test_bundled_engine_search_ignores_missing_thread_store_table(self):
         app = Path(os.environ["CODEX_MIGRATE_PACKAGED_APP"])
         engine = app / "Contents/Resources/engine/codex-migrate-engine"

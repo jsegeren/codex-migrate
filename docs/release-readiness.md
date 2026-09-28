@@ -7,6 +7,18 @@ distribution decision; the dated entries below preserve their original status.
 
 ## September 28 paginated-history coverage hold
 
+Exact pushed source `fff67ffb9758ec25d7d3c2377116935cb8997d77` produced an
+arm64 local-test-only build 20 with ZIP SHA-256
+`0710d30e686009ac8765d5b1520be97ca112bea352271580638022e9386497f0`.
+Its bundled engine passed two opt-in synthetic search-index checks: one for
+JSONL transcripts and one for a database-only thread. The latter found the
+thread before and after indexing, found a newly appended database item while
+the index was stale, and still found it after refresh. The fixture used only a
+disposable source home and created no Vault Keychain key or backup schedule.
+This checks packaged database search and stale-index fallback; it does **not**
+measure large-history latency, prove clean-account recovery, sign or notarize
+this build, or clear the public build-20 release hold.
+
 Exact committed source `ffb096b` produced an ad-hoc-signed local-test build 20
 with ZIP SHA-256
 `5cf44ff9a58455544ffe1a32240fa29c081a718ce464983231fc2c592c1577d1`.
