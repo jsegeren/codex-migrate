@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import sqlite3
 import subprocess
 import tempfile
 import unittest
@@ -16,7 +17,7 @@ from codex_migrate.vault_backup import backup, plan
 from codex_migrate.vault_identity import TranscriptChanged
 from codex_migrate.vault_recovery import (
     export_recovery_key, import_recovery_key, list_snapshots, restore_snapshot,
-    vault_storage_usage, verify_snapshot,
+    snapshot_catalog, vault_storage_usage, verify_snapshot,
 )
 
 
@@ -138,6 +139,62 @@ class VaultBackupTests(unittest.TestCase):
                 self.assertNotIn(b"PRIVATE-ARCHIVED-CONTENT", stored)
                 self.assertNotIn(b"NEVER-COPY-AUTH", stored)
                 self.assertNotIn(b"NEVER-COPY-ID", stored)
+            finally:
+                self.delete_key(destination)
+
+    def test_paginated_items_are_encrypted_separately_and_recoverable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            destination = root / "vault"
+            codex = source / ".codex"
+            codex.mkdir(parents=True)
+            database = codex / "thread_history_1.sqlite"
+            thread_id = "44444444-4444-4444-8444-444444444444"
+            item = {"id": "item-1", "type": "userMessage",
+                    "content": [{"type": "text", "text": "SYNTHETIC-DATABASE-ONLY-TURN"}]}
+            with sqlite3.connect(database) as connection:
+                connection.execute("CREATE TABLE thread_items (thread_id TEXT, turn_id TEXT, "
+                                   "item_id TEXT, rollout_ordinal INTEGER, created_at_ms INTEGER, "
+                                   "item_json TEXT, item_type TEXT, updated_at_ordinal INTEGER)")
+                connection.execute("CREATE TABLE thread_history_projection_state ("
+                                   "thread_id TEXT, next_rollout_byte_offset INTEGER, "
+                                   "next_rollout_ordinal INTEGER)")
+                connection.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                   (thread_id, "turn-1", "item-1", 1, 100,
+                                    json.dumps(item), "userMessage", 1))
+            original = database.read_bytes()
+            try:
+                first = backup(str(source), str(destination), crypto_helper=str(self.helper),
+                               chunk_size=64 * 1024)
+                self.assertTrue(first.paginated_history_unprotected)
+                self.assertTrue(first.needs_attention)
+                self.assertEqual(first.transcript_files, 1)
+                self.assertEqual(database.read_bytes(), original)
+                catalog = snapshot_catalog(str(destination), crypto_helper=str(self.helper))
+                self.assertEqual([(file["collection"], file["thread_id"])
+                                  for file in catalog], [("paginated", thread_id)])
+                encrypted = b"".join(path.read_bytes() for path in
+                                     destination.rglob("*") if path.is_file())
+                self.assertNotIn(b"SYNTHETIC-DATABASE-ONLY-TURN", encrypted)
+                restored = root / "restored"
+                restore_snapshot(str(source), str(destination), str(restored),
+                                 crypto_helper=str(self.helper))
+                rows = (restored / "paginated_history" /
+                        (thread_id + ".jsonl")).read_text().splitlines()
+                self.assertEqual(len(rows), 1)
+                self.assertEqual(json.loads(json.loads(rows[0])["item_json"]), item)
+                second = backup(str(source), str(destination), crypto_helper=str(self.helper),
+                                chunk_size=64 * 1024)
+                self.assertTrue(second.needs_attention)
+                self.assertEqual(len(list((destination / "objects").rglob("*.cvchunk"))), 1)
+                with sqlite3.connect(database) as connection:
+                    connection.execute("UPDATE thread_items SET item_json='not JSON'")
+                with self.assertRaises(MigrationError):
+                    backup(str(source), str(destination), crypto_helper=str(self.helper),
+                           chunk_size=64 * 1024)
+                self.assertEqual(json.loads((destination / "latest.json").read_text())
+                                 ["snapshot_id"], second.snapshot_id)
             finally:
                 self.delete_key(destination)
 

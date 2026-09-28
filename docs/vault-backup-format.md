@@ -6,6 +6,27 @@ any operated storage service. A Vault folder may live on a local disk or in a
 customer-owned sync folder once that provider keeps all files locally while a
 backup runs.
 
+## Draft paginated-history snapshot v3 (not a customer release)
+
+The integration branch can now read the known
+`~/.codex/thread_history_1.sqlite` projection in one read-only SQLite
+transaction. It writes one provenance-labelled JSONL stream per validated
+thread directly into the authenticated chunk helper through a pipe; it never
+stages the database or its plaintext items in a Vault file. Each stream is a
+separate `paginated` collection entry at `<thread UUID>.jsonl`, with its own
+digest, message counts, and encrypted chunk list. It is **not** a fabricated
+Codex rollout, and matching thread IDs in the `active`/`archived` and
+`paginated` collections are not silently merged. Verification reads back every
+chunk before advancing `latest.json`. Recovery stages these entries under
+`paginated_history/`, never into Codex's live database.
+
+Readers accept v1/v2 snapshots unchanged. Unknown SQLite schemas, malformed
+items, or incomplete streams abort before reference publication. This is only
+the encrypted capture foundation: the customer browser does not yet find,
+read, or export these staged records, and clean-account recovery is unproved.
+The snapshot and schedule therefore remain `needs attention` when this source
+exists; no complete-history claim is authorized by v3 ciphertext alone.
+
 ## Security boundary
 
 Version 1 enumerates only regular `.jsonl` files below:

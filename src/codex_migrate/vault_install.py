@@ -171,7 +171,7 @@ def _tree_records(
     _require_unlinked_path(root)
     require_local(root)
     if strict_root:
-        allowed = set(TRANSCRIPT_FOLDERS) | {"restore-receipt.json"}
+        allowed = set(TRANSCRIPT_FOLDERS) | {"restore-receipt.json", "paginated_history"}
         try:
             if any(item.name not in allowed for item in root.iterdir()):
                 raise MigrationError("The recovered snapshot contains an unexpected item.")

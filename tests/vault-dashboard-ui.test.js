@@ -44,7 +44,7 @@ test('backup view names missing paginated coverage without inventing an earlier 
   context.backupView({ status: 'needs_attention', at_risk_threads: 0,
     paginated_history_unprotected: true });
   const message = elements.get('backup-status').textContent;
-  assert.match(message, /paginated history is not included/);
+  assert.match(message, /paginated history is not yet fully recoverable/);
   assert.match(message, /may be missing messages/);
   assert.doesNotMatch(message, /earlier saved version|0 conversations/);
 });

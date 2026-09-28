@@ -551,7 +551,7 @@ def schedule_status(source_home: str) -> Dict[str, object]:
     if _paginated_history_unprotected(source_home):
         result["healthy"] = False
         result["paginated_history_unprotected"] = True
-        result["error"] = "Codex's paginated history is not included in this Vault backup."
+        result["error"] = "Codex's paginated history is not yet fully recoverable in Vault."
     if result["healthy"]:
         if status and status["status"] == "completed":
             last_activity = status["completed_at"]

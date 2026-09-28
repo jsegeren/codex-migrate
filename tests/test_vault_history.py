@@ -33,9 +33,17 @@ class IdentityTests(unittest.TestCase):
             self.assertFalse(_paginated_history_unprotected(temporary))
             database = codex / "thread_history_1.sqlite"
             with sqlite3.connect(database) as connection:
-                connection.execute("CREATE TABLE thread_items (thread_id TEXT, payload TEXT)")
-                connection.execute("INSERT INTO thread_items VALUES (?, ?)",
-                                   (THREAD_ID, "private synthetic test content"))
+                connection.execute("CREATE TABLE thread_items (thread_id TEXT, turn_id TEXT, "
+                                   "item_id TEXT, rollout_ordinal INTEGER, created_at_ms INTEGER, "
+                                   "item_json TEXT, item_type TEXT, updated_at_ordinal INTEGER)")
+                connection.execute("CREATE TABLE thread_history_projection_state ("
+                                   "thread_id TEXT, next_rollout_byte_offset INTEGER, "
+                                   "next_rollout_ordinal INTEGER)")
+                connection.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                   (THREAD_ID, "turn-1", "item-1", 1, 100,
+                                    json.dumps({"id": "item-1", "type": "userMessage",
+                                                "content": [{"type": "text", "text": "synthetic"}]}),
+                                    "userMessage", 1))
             original = database.read_bytes()
             self.assertTrue(_paginated_history_unprotected(temporary))
             self.assertEqual(database.read_bytes(), original)
@@ -164,9 +172,17 @@ class EncryptedHistoryTests(unittest.TestCase):
             path.write_text(original)
             database = codex / "thread_history_1.sqlite"
             with sqlite3.connect(database) as connection:
-                connection.execute("CREATE TABLE thread_items (thread_id TEXT, payload TEXT)")
-                connection.execute("INSERT INTO thread_items VALUES (?, ?)",
-                                   (THREAD_ID, "private synthetic test content"))
+                connection.execute("CREATE TABLE thread_items (thread_id TEXT, turn_id TEXT, "
+                                   "item_id TEXT, rollout_ordinal INTEGER, created_at_ms INTEGER, "
+                                   "item_json TEXT, item_type TEXT, updated_at_ordinal INTEGER)")
+                connection.execute("CREATE TABLE thread_history_projection_state ("
+                                   "thread_id TEXT, next_rollout_byte_offset INTEGER, "
+                                   "next_rollout_ordinal INTEGER)")
+                connection.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                   (THREAD_ID, "turn-1", "item-1", 1, 100,
+                                    json.dumps({"id": "item-1", "type": "userMessage",
+                                                "content": [{"type": "text", "text": "synthetic"}]}),
+                                    "userMessage", 1))
             before = database.read_bytes()
             vault = root / "vault"
             try:
@@ -178,6 +194,10 @@ class EncryptedHistoryTests(unittest.TestCase):
                                 crypto_helper=str(self.helper))
                 self.assertFalse(snapshot_catalog(str(vault),
                                                  crypto_helper=str(self.helper))[0]["at_risk"])
+                second = backup(str(source), str(vault), crypto_helper=str(self.helper))
+                self.assertEqual(second.at_risk_threads, 0)
+                self.assertEqual([item["collection"] for item in snapshot_catalog(
+                    str(vault), crypto_helper=str(self.helper))], ["active", "paginated"])
                 self.assertEqual(path.read_text(), original)
                 self.assertEqual(database.read_bytes(), before)
             finally:

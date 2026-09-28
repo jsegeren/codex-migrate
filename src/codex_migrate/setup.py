@@ -329,7 +329,7 @@ async function loadOverview(){
     $("overview-health-icon").textContent=verifiedScheduled&&!attention?"✓":"!";
     if(paginatedRisk){
       $("overview-health").textContent="Conversation coverage needs review";
-      $("overview-health-detail").textContent="Codex's paginated history is not included in this backup. Keep an independent full backup; this snapshot may not contain every message.";
+      $("overview-health-detail").textContent="Codex's paginated history is not yet fully recoverable in Vault. Keep an independent full backup; this snapshot may not contain every message.";
     }else if(contentRisk){
       $("overview-health").textContent="Conversation backup needs review";
       $("overview-health-detail").textContent="An earlier verified version may hold missing content.";

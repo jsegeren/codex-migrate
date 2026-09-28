@@ -8,7 +8,7 @@ import Security
 private let keychainService = "com.segeren.codex-vault"
 private let keychainInteractionError = "Vault could not access its key without interactive Keychain approval. No backup was published. Contact support if this persists"
 private let formatVersion = 1
-private let snapshotFormatVersion = 2
+private let snapshotFormatVersion = 3
 
 private struct Chunk: Codable {
     let id: String
@@ -672,7 +672,7 @@ private func openedManifest(_ arguments: [String]) throws ->
                                   key: encryption, aad: aad)
     let manifest = try JSONDecoder().decode(Manifest.self, from: manifestData)
     guard manifest.format == "codex-vault-snapshot",
-          (manifest.version == formatVersion || manifest.version == snapshotFormatVersion),
+          (manifest.version >= formatVersion && manifest.version <= snapshotFormatVersion),
           manifest.snapshot_id.lowercased() == snapshotID else {
         throw VaultError.message("the decrypted manifest has an unsupported identity or format")
     }
@@ -688,7 +688,7 @@ private func validatedSnapshot(_ arguments: [String]) throws ->
     var totalChunks = 0
     var seenPaths = Set<String>()
     for file in manifest.files {
-        guard file.collection == "active" || file.collection == "archived",
+        guard ["active", "archived", "paginated"].contains(file.collection),
               !file.path.isEmpty, !file.path.hasPrefix("/"), !file.path.contains("\\"),
               file.path.split(separator: "/", omittingEmptySubsequences: false).allSatisfy({
                   !$0.isEmpty && $0 != "." && $0 != ".."
@@ -696,7 +696,7 @@ private func validatedSnapshot(_ arguments: [String]) throws ->
               file.sha256.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil else {
             throw VaultError.message("the decrypted manifest contains an unsafe transcript record")
         }
-        if manifest.version == snapshotFormatVersion {
+        if manifest.version >= 2 {
             guard let state = file.identity_state,
                   ["verified", "unverified", "needs_review"].contains(state),
                   let records = file.records, records >= 0,
@@ -713,6 +713,13 @@ private func validatedSnapshot(_ arguments: [String]) throws ->
             }
             if state == "verified" && file.thread_id == nil {
                 throw VaultError.message("the decrypted manifest has an unbound verified identity")
+            }
+        }
+        if file.collection == "paginated" {
+            guard manifest.version >= 3, let id = file.thread_id,
+                  file.identity_state == "verified", file.path == id + ".jsonl",
+                  file.size > 0, file.mtime_ns == 0 else {
+                throw VaultError.message("the decrypted manifest has an invalid paginated source")
             }
         }
         let logicalPath = file.collection + "/" + file.path
@@ -792,7 +799,8 @@ private func restoreCommand(_ arguments: [String]) throws {
     let objectRoot = URL(fileURLWithPath: try argument("--object-dir", in: arguments),
                          isDirectory: true)
     for file in manifest.files {
-        let collection = file.collection == "active" ? "sessions" : "archived_sessions"
+        let collection = file.collection == "active" ? "sessions" :
+            (file.collection == "archived" ? "archived_sessions" : "paginated_history")
         let target = output.appendingPathComponent(collection, isDirectory: true)
             .appendingPathComponent(file.path, isDirectory: false)
         let parent = target.deletingLastPathComponent()

@@ -92,7 +92,7 @@ test('paginated history coverage is never presented as a healthy backup', async 
   const result = await overview({ enabled: true, healthy: false,
     last_run: { status: 'needs_attention', paginated_history_unprotected: true } });
   assert.equal(result.title, 'Conversation coverage needs review');
-  assert.match(result.detail, /paginated history is not included/);
+  assert.match(result.detail, /paginated history is not yet fully recoverable/);
   assert.doesNotMatch(result.detail, /earlier verified version/);
   assert.equal(result.attention, true);
 });

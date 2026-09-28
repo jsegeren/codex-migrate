@@ -27,12 +27,16 @@ new backup guarantee. Per-thread loss flags remain reserved for thread-specific
 loss or identity evidence; this source-level warning is not silently inherited
 by every future thread version.
 
-A private read-only source adapter now checks the installed paginated schema,
-pins a SQLite read transaction, and streams one thread's raw item records at a
-time. Synthetic concurrent-write, unsupported-schema, malformed-item, and
-linked-source tests pass; a metadata-only check matched the installed schema.
-This adapter is **not connected to encryption, snapshots, search, or restore**.
-It does not make any customer backup more complete or change the release hold.
+A private read-only source adapter checks the installed paginated schema and
+pins a SQLite read transaction. Draft v3 snapshots now stream each thread's
+provenance-labelled item records directly to the encryption helper, verify the
+sealed chunks, and stage recovery in a separate `paginated_history` folder.
+Synthetic concurrency, unknown-schema, malformed-item, linked-source, and
+encrypted recovery tests exercise this foundation. The customer browser still
+cannot find, read, or export these items; a clean-account recovery and actual
+installed-runtime scale test are also missing. These snapshots deliberately
+remain `needs attention`. This work is **not released** and does not clear the
+paginated-history or next-build hold.
 
 ## September 27 integrated-source local package — not released
 

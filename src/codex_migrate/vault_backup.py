@@ -18,6 +18,7 @@ from pathlib import Path
 import stat
 import subprocess
 import sys
+import threading
 from typing import BinaryIO, Callable, Dict, Iterator, List, Optional, Tuple
 import uuid
 
@@ -32,7 +33,7 @@ from codex_migrate.vault_local_lock import local_history_lock
 
 
 FORMAT_VERSION = 1
-SNAPSHOT_FORMAT_VERSION = 2
+SNAPSHOT_FORMAT_VERSION = 3
 DEFAULT_CHUNK_SIZE = 4 * 1024 * 1024
 METADATA_NAME = "vault.json"
 STORAGE_CODEC = "lzfse-v1"
@@ -174,6 +175,47 @@ def _run_helper(
     if not isinstance(payload, dict):
         raise MigrationError("The authenticated backup helper returned an invalid result.")
     return payload
+
+
+def _store_paginated_thread(helper: Path, objects: Path, chunk_size: int,
+                            key_id: str, source: object, thread_id: str
+                            ) -> Tuple[Dict[str, object], int, int, int]:
+    """Encrypt a SQLite thread through a pipe, without plaintext staging files."""
+    from codex_migrate.vault_paginated import encoded_item
+
+    read_fd, write_fd = os.pipe()
+    failure: List[BaseException] = []
+    counts = [0, 0, 0]
+
+    def produce() -> None:
+        try:
+            with os.fdopen(write_fd, "wb") as output:
+                for item in source.items(thread_id):
+                    output.write(encoded_item(item))
+                    counts[0] += 1
+                    counts[1] += item.item_type == "userMessage"
+                    counts[2] += item.item_type == "agentMessage"
+        except BaseException as error:
+            failure.append(error)
+
+    producer = threading.Thread(target=produce, name="vault-paginated-encryption")
+    producer.start()
+    try:
+        with os.fdopen(read_fd, "rb") as input_file:
+            stored = _run_helper(
+                helper,
+                ["store-chunks", "--key-id", key_id,
+                 "--object-dir", str(objects), "--chunk-size", str(chunk_size)],
+                input_file=input_file,
+            )
+    finally:
+        producer.join()
+    if failure:
+        error = failure[0]
+        if isinstance(error, MigrationError):
+            raise error
+        raise MigrationError("Codex paginated history changed or could not be encrypted safely.") from error
+    return stored, *counts
 
 
 def _json_bytes(value: object) -> bytes:
@@ -328,11 +370,11 @@ def _previous_catalog(root: Path, key_id: str, helper: Path) -> List[Dict[str, o
 
 
 def _paginated_history_unprotected(source_home: str) -> bool:
-    """Fail the complete-history claim while this source is not captured.
+    """Hold complete-history claims while paginated read/export is unproved.
 
     Its presence alone is enough: reading projection offsets cannot prove that
-    the JSONL files contain everything in the database. Never open or mutate
-    the Codex-owned SQLite file to decide whether a snapshot is complete.
+    the JSONL files contain everything in the database. This presence check
+    never opens or mutates the Codex-owned SQLite file.
     """
     database = _canonical_macos_path(Path(source_home) / ".codex/thread_history_1.sqlite")
     try:
@@ -504,17 +546,70 @@ def _backup_unlocked(
                 progress(len(manifest_files), len(files), total_bytes, expected_bytes)
 
         mark_simultaneous_conflicts(manifest_files)
-        at_risk = set(loss_warnings(previous_files, manifest_files))
+        at_risk = set(loss_warnings(
+            (item for item in previous_files
+             if item.get("collection") in ("active", "archived")),
+            manifest_files,
+        ))
+        # Keep the database projection separate from the JSONL rollout. Equal
+        # thread IDs across these two sources are not a simultaneous-file
+        # conflict and are never treated as proof that their bodies agree.
+        if paginated_history_unprotected:
+            from codex_migrate.vault_paginated import open_paginated_source
+            with open_paginated_source(source_home) as source:
+                for thread_id in source.thread_ids():
+                    stored, records, users, assistants = _store_paginated_thread(
+                        helper, objects, chunk_size, key_id, source, thread_id)
+                    size = stored.get("size")
+                    digest = stored.get("sha256")
+                    chunks = stored.get("chunks")
+                    if (not isinstance(size, int) or size <= 0
+                            or not isinstance(digest, str) or len(digest) != 64
+                            or any(character not in "0123456789abcdef" for character in digest)
+                            or not isinstance(chunks, list) or records <= 0):
+                        raise MigrationError("The paginated history helper returned invalid verification data.")
+                    for chunk in chunks:
+                        if (not isinstance(chunk, dict)
+                                or set(chunk) not in ({"id", "size"}, {"id", "size", "encoding"})
+                                or not isinstance(chunk.get("id"), str)
+                                or len(chunk["id"]) != 64
+                                or any(character not in "0123456789abcdef" for character in chunk["id"])
+                                or not isinstance(chunk.get("size"), int)
+                                or chunk["size"] < 0 or chunk["size"] > chunk_size
+                                or ("encoding" in chunk and chunk["encoding"] != "lzfse")):
+                            raise MigrationError("The paginated history helper returned invalid chunk metadata.")
+                    manifest_files.append({
+                        "collection": "paginated",
+                        "path": thread_id + ".jsonl",
+                        "size": size,
+                        "mtime_ns": 0,
+                        "sha256": digest,
+                        "chunks": chunks,
+                        "thread_id": thread_id,
+                        "identity_state": "verified",
+                        "titles": list(titles.get(thread_id, [])),
+                        "records": records,
+                        "assistant_messages": assistants,
+                        "user_messages": users,
+                        "at_risk": False,
+                    })
+                    total_bytes += size
+                    total_chunks += len(chunks)
         paginated_history_unprotected |= _paginated_history_unprotected(source_home)
         for item in manifest_files:
+            if item["collection"] == "paginated":
+                continue
             if item["identity_state"] == "needs_review":
                 at_risk.add(item["collection"] + "/" + item["path"])
         for item in manifest_files:
+            if item["collection"] == "paginated":
+                continue
             item["at_risk"] = (item.get("thread_id") in at_risk or
                                item["collection"] + "/" + item["path"] in at_risk)
         manifest = {
             "format": "codex-vault-snapshot",
-            "version": SNAPSHOT_FORMAT_VERSION,
+            "version": (SNAPSHOT_FORMAT_VERSION if any(
+                item["collection"] == "paginated" for item in manifest_files) else 2),
             "snapshot_id": snapshot_id,
             "created_at": created_at,
             "files": manifest_files,

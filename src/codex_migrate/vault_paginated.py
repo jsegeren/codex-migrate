@@ -58,6 +58,8 @@ class PaginatedSource:
                 if canonical_id(thread_id) != thread_id:
                     raise MigrationError("Codex paginated history has an invalid thread identity.")
                 result.append(thread_id)
+                if len(result) > 100000:
+                    raise MigrationError("Codex paginated history has too many threads to capture safely.")
             return result
         except sqlite3.Error as error:
             raise MigrationError("Codex paginated history could not be listed safely.") from error
@@ -92,6 +94,20 @@ class PaginatedSource:
                                     created_at, item_type, raw)
         except sqlite3.Error as error:
             raise MigrationError("Codex paginated history could not be read safely.") from error
+
+
+def encoded_item(item: PaginatedItem) -> bytes:
+    """One self-contained, provenance-labelled record; never a synthetic rollout."""
+    return (json.dumps({
+        "source": "codex-paginated-thread-items-v1",
+        "thread_id": item.thread_id,
+        "turn_id": item.turn_id,
+        "item_id": item.item_id,
+        "rollout_ordinal": item.rollout_ordinal,
+        "created_at_ms": item.created_at_ms,
+        "item_type": item.item_type,
+        "item_json": item.item_json,
+    }, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
 
 
 def _check_schema(connection: sqlite3.Connection) -> None:
@@ -131,7 +147,10 @@ def open_paginated_source(source_home: str) -> Iterator[PaginatedSource]:
     uri = "file:" + quote(str(database), safe="/") + "?mode=ro"
     connection = None
     try:
-        connection = sqlite3.connect(uri, uri=True, isolation_level=None, timeout=2)
+        # The bounded pipe producer uses this pinned read transaction on one
+        # worker thread while the main thread waits for the crypto helper.
+        connection = sqlite3.connect(uri, uri=True, isolation_level=None,
+                                     timeout=2, check_same_thread=False)
         connection.execute("PRAGMA query_only=ON")
         connection.execute("BEGIN")
         _check_schema(connection)
