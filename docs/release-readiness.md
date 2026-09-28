@@ -72,6 +72,22 @@ and bytes; it did not log message content, create a snapshot, or alter Codex.
 This is one installed-version source-read scale check, **not** an encrypted
 full-size backup, scheduled run, clean-account restore, or second-Mac proof.
 
+The opt-in, disposable `tests/bench_vault_paginated.py` exercised the draft
+encrypted backup path without reading customer data. A 1,615-thread,
+801,040-item synthetic SQLite source occupied 371,687,424 bytes; its first
+backup and verification took 26.5 seconds, the unchanged second backup and
+verification took 25.1 seconds, and all 1,615 encrypted objects were reused.
+`/usr/bin/time -l` measured about 215 MB peak resident memory. Those short,
+identical payloads compressed to only 9.7 MB of Vault files, so they are a
+record-count test, **not** a realistic storage-size or cost estimate.
+Separately, 100,000 varied 8 KiB synthetic items across 200 threads occupied
+875,958,272 SQLite bytes. First backup and verification took 22.1 seconds;
+the unchanged second backup and verification took 21.3 seconds with all 400
+objects reused. The Vault occupied 469,896,622 bytes and peak resident memory
+was about 503 MB. The benchmark deletes its disposable key and data on exit.
+Neither run was made by the installed scheduler, used the real 6.6 GB item
+payload volume, proved off-device recovery, or clears the public-release hold.
+
 ## September 27 integrated-source local package — not released
 
 Committed source `e644570` packaged as an arm64 **local-test-only** build-20 app.
