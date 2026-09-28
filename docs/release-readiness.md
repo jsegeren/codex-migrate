@@ -7,6 +7,23 @@ distribution decision; the dated entries below preserve their original status.
 
 ## September 28 paginated-history coverage hold
 
+Exact committed source `ffb096b` produced an ad-hoc-signed local-test build 20
+with ZIP SHA-256
+`5cf44ff9a58455544ffe1a32240fa29c081a718ce464983231fc2c592c1577d1`.
+An opt-in test used only a disposable synthetic Codex home: it made a first
+encrypted snapshot with one database-only item, installed a temporary macOS
+LaunchAgent, added a second item, made the schedule due, and invoked the real
+service with `launchctl kickstart`. The agent published a second snapshot with
+a `needs_attention` receipt. Both versions independently restored with their
+expected one and two items, and the source database stayed byte-for-byte
+unchanged by the scheduled capture. The test unloaded the LaunchAgent and
+deleted its test Keychain key; a follow-up check found neither the service nor
+the account-level plist. This proves the packaged engine can run that capture
+under this logged-in account after a forced wake. It does **not** prove a
+natural 24-hour wake, clean-account key import, production signing, a paid
+update, two-Mac recovery, or complete installed-Codex coverage. No personal
+Codex history or backup schedule was used. The public release hold remains.
+
 Exact committed source `8db1976` was built as a clean, ad-hoc-signed local-test
 build 20. Its ZIP SHA-256 is
 `5fa80d7f480e7b7b17b62e2e51b8c6e63bd84371d803e7d536f8b945ac15ce14`.

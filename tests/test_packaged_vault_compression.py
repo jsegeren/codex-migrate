@@ -12,6 +12,7 @@ from pathlib import Path
 import signal
 import sqlite3
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
@@ -154,7 +155,8 @@ class PackagedVaultCompressionTests(unittest.TestCase):
                 if key_id is not None:
                     run_packaged([str(helper), "delete-key", "--key-id", key_id])
 
-    @unittest.skipUnless(os.environ.get("CODEX_MIGRATE_LAUNCHAGENT_PAGINATED_TEST") == "yes",
+    @unittest.skipUnless(sys.platform == "darwin" and
+                         os.environ.get("CODEX_MIGRATE_LAUNCHAGENT_PAGINATED_TEST") == "yes",
                          "opt in to a disposable real macOS LaunchAgent test")
     def test_real_launch_agent_captures_appended_paginated_history(self):
         app = Path(os.environ["CODEX_MIGRATE_PACKAGED_APP"])
