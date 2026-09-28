@@ -219,10 +219,18 @@ snapshot restored into a separate folder passes the same search/read case;
 the export stamp includes ancestor files so a changed parent invalidates a
 prepared download. This follows the upstream paginated reader's use of
 rollout IDs and ordinal bounds, not Codex's incomplete global-search behavior.
-It has **not** been exercised against the installed runtime's actual forked
-database, a clean macOS account, or a real customer history. Missing or
-ambiguous lineage still requires review, and this synthetic proof does not
-clear the paginated-history release hold or establish complete source coverage.
+An opt-in proof using installed Codex CLI 0.158.0-alpha.2 created a real
+paginated parent/fork in a disposable `CODEX_HOME` against a loopback-only
+synthetic model, with all API credentials removed from its process environment.
+Vault found the inherited message under the child through the installed
+database schema. After Codex exited, the test replaced that marker only in
+the disposable JSONL rollouts with equal-length bytes, preserving the actual
+Codex-generated lineage offsets; the database retained the message and Vault
+still found and opened it under the child. This proves the draft reader against
+the installed fork format and a controlled database-only case. It does **not**
+prove Codex naturally performs that rewrite, a real customer-history recovery,
+or clean-account recovery. Missing or ambiguous lineage still requires review,
+and the paginated-history release hold remains open.
 
 - Establish whether the JSONL rollout or the projected database owns each
   durable turn when their lengths disagree, including a post-rewrite case.
