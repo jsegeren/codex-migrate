@@ -1,5 +1,5 @@
 import json
-from contextlib import redirect_stderr, redirect_stdout
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 import io
 import os
 from pathlib import Path
@@ -153,6 +153,32 @@ class SearchIndexTests(unittest.TestCase):
             self.assertIsNone(paginated_candidates(temporary, "Clerk"))
             self.assertEqual([item.transcript for item in search(temporary, "Clerk")],
                              [thread_id + ".jsonl"])
+
+    @unittest.skipUnless(supported(), "requires SQLite FTS5 contentless-delete")
+    def test_new_message_before_read_view_cannot_be_hidden_by_old_index(self):
+        import codex_migrate.vault_paginated as paginated
+
+        with tempfile.TemporaryDirectory() as temporary:
+            thread_id = "11111111-1111-4111-8111-111111111111"
+            database = write_paginated(Path(temporary), ((thread_id, 1, "Earlier work"),))
+            build(temporary, apply=True)
+            self.assertEqual(paginated_candidates(temporary, "Clerk"), set())
+            open_source = paginated.open_paginated_source
+
+            @contextmanager
+            def changed_before_read_view(source_home):
+                with sqlite3.connect(database) as connection:
+                    connection.execute("INSERT INTO thread_items VALUES (?,?,?,?,?,?,?,?)", (
+                        thread_id, "turn-2", "item-2", 2, 2,
+                        json.dumps({"id": "item-2", "type": "userMessage",
+                                    "text": "New Clerk detail"}), "userMessage", 2))
+                with open_source(source_home) as source:
+                    yield source
+
+            with patch.object(paginated, "open_paginated_source",
+                              changed_before_read_view):
+                self.assertEqual([item.transcript for item in search(temporary, "Clerk")],
+                                 [thread_id + ".jsonl"])
 
     @unittest.skipUnless(supported(), "requires SQLite FTS5 contentless-delete")
     def test_paginated_fork_search_uses_parent_rollout_candidates(self):
