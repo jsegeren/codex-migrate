@@ -14,9 +14,12 @@ from unittest.mock import patch
 from codex_migrate.errors import MigrationError
 from codex_migrate import vault_backup
 from codex_migrate.vault_hosted_chunk_journal import HostedChunkJournal
+from codex_migrate.vault_hosted_live_run import HostedLiveBackupRun
 from codex_migrate.vault_hosted_manifest import stage_hosted_manifest
+from codex_migrate.vault_hosted_recovery_client import HostedRecoveryClient
 from codex_migrate.vault_hosted_snapshot_tail import stage_hosted_snapshot_tail
 from codex_migrate.vault_hosted_snapshot_stage import stage_hosted_snapshot
+from codex_migrate.vault_hosted_upload_client import HostedUploadClient
 from codex_migrate.vault_backup import backup, plan
 from codex_migrate.vault_identity import TranscriptChanged
 from codex_migrate.vault_recovery import (
@@ -421,6 +424,111 @@ class VaultBackupTests(unittest.TestCase):
                 if key_id is not None:
                     subprocess.run([str(self.helper), "delete-key", "--key-id", key_id],
                                    check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    def test_hosted_live_runner_stages_publishes_and_restores_synthetic_history(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            source.mkdir(mode=0o700)
+            self.fixture(source)
+            active = (source / ".codex/sessions/2026/09/17/active.jsonl").read_bytes()
+            archived = (source / ".codex/archived_sessions/archived.jsonl").read_bytes()
+            key_result = json.loads(subprocess.run(
+                [str(self.helper), "create-key"], check=True,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout)
+            key_id = key_result["key_id"]
+            account_id, vault_id = str(uuid.uuid4()), str(uuid.uuid4())
+            origin = "http://127.0.0.1:49111"
+            token = "hv1_" + "a" * 43
+
+            class Upload(HostedUploadClient):
+                def __init__(self):
+                    super().__init__(origin, "http://127.0.0.1:49112", token,
+                                     account_id, vault_id, allow_loopback_http=True)
+                    self.store = MetadataObjectStore()
+                    self.staged = None
+
+                def reserve_with_base(self, *, reservation_id=None, apply=False):
+                    assert apply is True and reservation_id is not None
+                    return reservation_id, None
+
+                def published_chunks(self, ids):
+                    return {}
+
+                def object_store(self, reservation_id, expected, *, apply=False):
+                    assert apply is True and reservation_id is not None
+                    return self.store
+
+                def publish_hosted_stage(self, reservation_id, staged, *, apply=False):
+                    assert apply is True and reservation_id == staged.reservation_id
+                    for item in staged.objects:
+                        data = self.store.objects[item.key]
+                        assert len(data) == item.bytes
+                        assert hashlib.sha256(data).hexdigest() == item.sha256
+                    self.staged = staged
+                    return {"snapshotId": staged.snapshot_id,
+                            "verifiedObjectCount": len(staged.objects)}
+
+            class Recovery(HostedRecoveryClient):
+                def prior_catalog(self, *, key_id, crypto_helper, max_bytes,
+                                  expected_snapshot_id, expected_account_id):
+                    assert expected_snapshot_id is None
+                    assert expected_account_id == account_id
+                    return None, []
+
+            upload = Upload()
+            recovery = Recovery(origin, token, vault_id, allow_loopback_http=True)
+            metadata = {"format": "codex-vault", "version": 1,
+                        "key_id": key_id,
+                        "created_at": "2026-09-27T00:00:00+00:00"}
+            try:
+                runner = HostedLiveBackupRun(upload, recovery, str(source))
+                published = runner.back_up_live_history(
+                    metadata, crypto_helper=str(self.helper),
+                    max_prior_bytes=5_000_000, apply=True)
+                self.assertIsNone(runner.pending())
+                self.assertEqual(published["verifiedObjectCount"], 5)
+                self.assertEqual(upload.staged.snapshot_id,
+                                 published["snapshotId"])
+                self.assertFalse((root / "vault").exists())
+                combined = b"".join(upload.store.objects.values())
+                self.assertNotIn(b"PRIVATE-ACTIVE-CONTENT", combined)
+                self.assertNotIn(b"PRIVATE-ARCHIVED-CONTENT", combined)
+                self.assertNotIn(b"NEVER-COPY-AUTH", combined)
+
+                remote = MemoryObjectStore()
+                remote.objects = dict(upload.store.objects)
+                recovered = root / "recovered-vault"
+                empty_home = root / "empty-home"
+                empty_home.mkdir(mode=0o700)
+                subprocess.run([str(self.helper), "delete-key", "--key-id", key_id],
+                               check=True, stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE)
+                key_id = None
+                with self.assertRaises(MigrationError):
+                    vault_remote_recovery.download_encrypted_snapshot(
+                        str(empty_home), str(recovered), remote,
+                        upload.staged.upload_claim().receipt(),
+                        max_bytes=5_000_000, crypto_helper=str(self.helper))
+                key_id = import_recovery_key(
+                    str(recovered), key_result["recovery_key"],
+                    crypto_helper=str(self.helper))
+                vault_remote_recovery.download_encrypted_snapshot(
+                    str(empty_home), str(recovered), remote,
+                    upload.staged.upload_claim().receipt(),
+                    max_bytes=5_000_000, crypto_helper=str(self.helper))
+                restored = root / "restored"
+                restore_snapshot(str(empty_home), str(recovered), str(restored),
+                                 crypto_helper=str(self.helper))
+                self.assertEqual((restored / "sessions/2026/09/17/active.jsonl").read_bytes(),
+                                 active)
+                self.assertEqual((restored / "archived_sessions/archived.jsonl").read_bytes(),
+                                 archived)
+            finally:
+                if key_id is not None:
+                    subprocess.run([str(self.helper), "delete-key", "--key-id", key_id],
+                                   check=True, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE)
 
     def test_backup_is_encrypted_versioned_verified_and_incremental(self):
         with tempfile.TemporaryDirectory() as temporary:

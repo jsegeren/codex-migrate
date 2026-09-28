@@ -273,6 +273,13 @@ the service reports that exact snapshot as published. It does not yet run on a
 schedule or in the installed app, and its completed local chunk-journal
 cleanup is still a release gate. None of this makes hosted backup available
 to customers yet.
+A synthetic end-to-end runner test now encrypts two disposable Codex transcripts,
+stages the whole object graph without a full local ciphertext Vault, checks
+every staged object's bytes and digest before simulating publication, deletes
+the test key, re-imports the saved recovery key, downloads, and restores both
+transcripts. This connects the new runner to the real native crypto and restore
+code, but uses an in-memory object store and the same macOS login. It is not
+a real-R2 publication or clean-account recovery receipt.
 An explicit sandbox-only abandon operation now lets the same device quarantine
 its owned pending reservation, including after a subscription lapses. It
 refuses later grants and publication, retains reserved quota, and waits for
