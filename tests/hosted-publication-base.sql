@@ -24,6 +24,23 @@ RETURNS jsonb LANGUAGE sql AS $$
       'bytes', 10, 'sha256', repeat('c', 64)));
 $$;
 
+-- Mirrors the server's exact last-good-only manifest lookup. An old but
+-- retained snapshot must not be eligible for an incremental-backup grant.
+CREATE FUNCTION pg_temp.last_good_manifest(p_account uuid, p_vault uuid,
+  p_snapshot uuid, p_key text)
+RETURNS TABLE(bytes bigint, sha256 text) LANGUAGE sql AS $$
+  SELECT o.bytes, o.sha256
+    FROM hosted.vaults AS v
+    JOIN hosted.snapshot_objects AS so
+      ON so.account_id = v.account_id AND so.vault_id = v.vault_id
+        AND so.snapshot_id = v.last_good_snapshot_id
+    JOIN hosted.objects AS o
+      ON o.account_id = so.account_id AND o.vault_id = so.vault_id
+        AND o.object_key = so.object_key
+    WHERE v.account_id = p_account AND v.vault_id = p_vault
+      AND v.last_good_snapshot_id = p_snapshot AND so.object_key = p_key;
+$$;
+
 DO $$
 DECLARE
   v_account uuid := 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -44,6 +61,10 @@ DECLARE
   v_sqlstate text;
   v_allowed boolean;
   v_base uuid;
+  v_manifest_key text;
+  v_manifest_count integer;
+  v_manifest_bytes bigint;
+  v_manifest_digest text;
 BEGIN
   SELECT allowed, base_snapshot_id INTO v_allowed, v_base
     FROM hosted.reserve_upload_with_base_current(v_account, v_vault,
@@ -117,6 +138,28 @@ BEGIN
     WHERE account_id = v_account AND vault_id = v_vault;
   IF v_last <> v_next THEN
     RAISE EXCEPTION 'old retry rolled back current last-good';
+  END IF;
+  v_manifest_key := 'accounts/' || v_account || '/vaults/' || v_vault ||
+    '/manifests/' || v_next || '.cvmanifest';
+  SELECT count(*), max(bytes), max(sha256)
+    INTO v_manifest_count, v_manifest_bytes, v_manifest_digest
+    FROM pg_temp.last_good_manifest(v_account, v_vault, v_next, v_manifest_key);
+  IF v_manifest_count <> 1 OR v_manifest_bytes <> 10 OR
+      v_manifest_digest <> repeat('b', 64) THEN
+    RAISE EXCEPTION 'current last-good manifest was not found';
+  END IF;
+  SELECT count(*) INTO v_manifest_count
+    FROM pg_temp.last_good_manifest(v_account, v_vault, v_first,
+      'accounts/' || v_account || '/vaults/' || v_vault ||
+        '/manifests/' || v_first || '.cvmanifest');
+  IF v_manifest_count <> 0 THEN
+    RAISE EXCEPTION 'retained old snapshot received a last-good manifest grant';
+  END IF;
+  SELECT count(*) INTO v_manifest_count
+    FROM pg_temp.last_good_manifest(v_account, v_other_vault, v_other,
+      v_manifest_key);
+  IF v_manifest_count <> 0 THEN
+    RAISE EXCEPTION 'other Vault received this Vault manifest';
   END IF;
 END;
 $$;
