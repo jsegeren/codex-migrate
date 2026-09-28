@@ -88,6 +88,23 @@ test('possible thread-content loss outranks schedule health', async () => {
   assert.match(result.detail, /earlier verified version/);
 });
 
+test('paginated history coverage is never presented as a healthy backup', async () => {
+  const result = await overview({ enabled: true, healthy: false,
+    last_run: { status: 'needs_attention', paginated_history_unprotected: true } });
+  assert.equal(result.title, 'Conversation coverage needs review');
+  assert.match(result.detail, /paginated history is not included/);
+  assert.doesNotMatch(result.detail, /earlier verified version/);
+  assert.equal(result.attention, true);
+});
+
+test('an older green schedule receipt cannot override current paginated coverage', async () => {
+  const result = await overview({ enabled: true, healthy: false,
+    paginated_history_unprotected: true, last_run: { status: 'completed' } });
+  assert.equal(result.title, 'Conversation coverage needs review');
+  assert.equal(result.icon, '!');
+  assert.equal(result.attention, true);
+});
+
 test('manual backup failure is not mistaken for absent backup', async () => {
   const result = await overview({ enabled: false }, { status: 'failed' });
   assert.equal(result.title, 'Backup attempt failed');

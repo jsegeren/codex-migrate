@@ -193,6 +193,12 @@ by itself prove that all current Codex history is recoverable. Do not advertise
 complete paginated-history protection or call the next release certified until
 the following are proved on synthetic data and the current installed runtime:
 
+The draft interim guard treats the presence of `thread_history_1.sqlite` as
+unverified source coverage, even if a rollout file appears complete. It marks
+the new snapshot and scheduled health as needing attention without opening or
+modifying Codex's database. This conservative warning is not a substitute for
+capturing database-only durable content and proving off-device recovery.
+
 - Establish whether the JSONL rollout or the projected database owns each
   durable turn when their lengths disagree, including a post-rewrite case.
 - Capture any database-only recoverable content with a consistent, encrypted

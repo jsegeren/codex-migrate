@@ -8,6 +8,69 @@ const runSearch = source.match(/async function runSearch\(append=false\)\{[\s\S]
 const completeVisibleConversation = vm.runInNewContext(
   '(' + source.match(/function completeVisibleConversation\([\s\S]*?\n\}/)[0] + ')');
 const markdownFile = source.match(/async function markdownFile\(\)\{[\s\S]*?\n\}/)[0];
+const backupView = source.match(/function backupView\(data\)\{[\s\S]*?\n\}/)[0];
+const scheduleView = source.match(/function scheduleView\(data\)\{[^\n]*\}/)[0];
+
+test('schedule view explicitly disclaims incomplete paginated coverage', () => {
+  const elements = new Map();
+  const context = {
+    $: id => {
+      if (!elements.has(id)) elements.set(id, { value: '', textContent: '', checked: false });
+      return elements.get(id);
+    },
+    storageView: () => {}, backupFrequencyView: () => {},
+    refreshScheduleButton: () => {}, refreshRestoreButton: () => {},
+  };
+  vm.createContext(context);
+  vm.runInContext('let scheduleEnabled=false; ' + scheduleView, context);
+  context.scheduleView({ enabled: true, healthy: false,
+    paginated_history_unprotected: true });
+  assert.match(elements.get('schedule-status').textContent, /not complete protection/);
+});
+
+test('backup view names missing paginated coverage without inventing an earlier safe version', () => {
+  const elements = new Map();
+  const context = {
+    $: id => {
+      if (!elements.has(id)) elements.set(id, { value: '', textContent: '', hidden: false, disabled: false });
+      return elements.get(id);
+    },
+    installRunning: false, scheduleEnabled: false, backupTimer: null,
+    lastSizedSnapshot: null, pendingAutomaticBackup: false,
+    fmt: () => '1 KB', refreshScheduleButton: () => {}, refreshRestoreButton: () => {},
+  };
+  vm.createContext(context);
+  vm.runInContext('let verifiedBackup=false; ' + backupView, context);
+  context.backupView({ status: 'needs_attention', at_risk_threads: 0,
+    paginated_history_unprotected: true });
+  const message = elements.get('backup-status').textContent;
+  assert.match(message, /paginated history is not included/);
+  assert.match(message, /may be missing messages/);
+  assert.doesNotMatch(message, /earlier saved version|0 conversations/);
+});
+
+test('coverage warning keeps the selected daily backup without scheduling a known lost turn', () => {
+  const elements = new Map();
+  let scheduled = 0;
+  const context = {
+    $: id => {
+      if (!elements.has(id)) elements.set(id, { value: '', textContent: '', hidden: false, disabled: false });
+      return elements.get(id);
+    },
+    installRunning: false, scheduleEnabled: false, backupTimer: null,
+    lastSizedSnapshot: null, pendingAutomaticBackup: true,
+    fmt: () => '1 KB', refreshScheduleButton: () => {}, refreshRestoreButton: () => {},
+    enableRequestedSchedule: () => { scheduled++; },
+  };
+  vm.createContext(context);
+  vm.runInContext('let verifiedBackup=false; ' + backupView, context);
+  context.backupView({ status: 'needs_attention', at_risk_threads: 0,
+    paginated_history_unprotected: true });
+  assert.equal(scheduled, 1);
+  context.backupView({ status: 'needs_attention', at_risk_threads: 1,
+    paginated_history_unprotected: true });
+  assert.equal(scheduled, 1);
+});
 
 test('print and share require the whole non-excerpted conversation', () => {
   assert.equal(completeVisibleConversation({ cursor: 100, line: 2 }, false, null), false);

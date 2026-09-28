@@ -495,6 +495,46 @@ class VaultScheduleTests(unittest.TestCase):
             self.assertTrue(last_run["title_index_unavailable"])
             self.assertNotIn("key_id", last_run)
             self.assertNotIn("recovery_key", last_run)
+            (home / ".codex").mkdir(exist_ok=True)
+            (home / ".codex/thread_history_1.sqlite").write_bytes(b"synthetic marker")
+            with patch("codex_migrate.vault_schedule._loaded", return_value=True):
+                status = schedule_status(str(home))
+            self.assertFalse(status["healthy"])
+            self.assertTrue(status["paginated_history_unprotected"])
+            self.assertEqual(status["last_run"]["status"], "completed")
+
+    def test_scheduled_run_preserves_paginated_coverage_warning(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            home, vault, helper, verified = self.fixture(root)
+            engine = root / "engine"
+            engine.write_text("fixture", encoding="utf-8")
+            engine.chmod(0o700)
+            with patch("codex_migrate.vault_schedule.verify_snapshot",
+                       return_value=verified), \
+                    patch("codex_migrate.vault_schedule._loaded", return_value=False), \
+                    patch("codex_migrate.vault_schedule._launchctl"):
+                install_schedule(str(home), str(vault), crypto_helper=str(helper),
+                                 engine_command=[str(engine)])
+            config_path = home / "Library/Application Support/Codex Vault/schedule.json"
+            self.make_schedule_due(config_path)
+            incomplete = BackupResult(
+                destination=str(vault), snapshot_id="incomplete-snapshot",
+                transcript_files=1, transcript_bytes=99, chunks=1,
+                key_id="private-key-id", recovery_key=None,
+                needs_attention=True, paginated_history_unprotected=True,
+            )
+            with patch("codex_migrate.vault_schedule.backup", return_value=incomplete):
+                self.assertEqual(run_scheduled_backup(str(config_path)), 0)
+            last_run = json.loads((config_path.parent / "last-run.json").read_text(
+                encoding="utf-8"))
+            self.assertEqual(last_run["status"], "needs_attention")
+            self.assertTrue(last_run["paginated_history_unprotected"])
+            self.assertEqual(last_run["at_risk_threads"], 0)
+            with patch("codex_migrate.vault_schedule._loaded", return_value=True):
+                status = schedule_status(str(home))
+            self.assertFalse(status["healthy"])
+            self.assertTrue(status["last_run"]["paginated_history_unprotected"])
 
     def test_successful_run_waits_for_chosen_cadence_despite_retry_wakes(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -527,11 +567,13 @@ class VaultScheduleTests(unittest.TestCase):
                 self.assertEqual(status["snapshot_id"], "first-snapshot")
                 status["status"] = "needs_attention"
                 status["at_risk_threads"] = 1
+                status["paginated_history_unprotected"] = True
                 status_path.write_text(json.dumps(status), encoding="utf-8")
                 self.assertEqual(run_scheduled_backup(str(config_path)), 0)
                 backup.assert_called_once()
                 status["status"] = "completed"
                 del status["at_risk_threads"]
+                del status["paginated_history_unprotected"]
                 status["completed_at"] = (
                     datetime.now(timezone.utc) - timedelta(hours=25)).isoformat()
                 status_path.write_text(json.dumps(status), encoding="utf-8")

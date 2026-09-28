@@ -18,6 +18,15 @@ held until the [paginated-history coverage gate](vault-thread-history-contract.m
 is resolved and independently reviewed. Build 16 remains the public beta under
 its existing testing disclosure; no customer data was changed by this check.
 
+The draft next-build source now marks a JSONL snapshot `needs_attention`
+whenever Codex's separate paginated-history database exists. Scheduled status
+stays unhealthy, and the browser says that message coverage is unverified. This
+check never opens the database and does **not** capture its content or clear the
+release hold. It is an interim guard against a misleading green status, not a
+new backup guarantee. Per-thread loss flags remain reserved for thread-specific
+loss or identity evidence; this source-level warning is not silently inherited
+by every future thread version.
+
 ## September 27 integrated-source local package — not released
 
 Committed source `e644570` packaged as an arm64 **local-test-only** build-20 app.

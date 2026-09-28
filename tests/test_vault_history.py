@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 import platform
+import sqlite3
 import subprocess
 import tempfile
 import unittest
@@ -8,7 +9,7 @@ from unittest.mock import patch
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault import search
-from codex_migrate.vault_backup import backup
+from codex_migrate.vault_backup import _paginated_history_unprotected, backup
 from codex_migrate.vault_history import _group_key, search_titles, thread_timeline
 from codex_migrate import vault_identity
 from codex_migrate.vault_identity import (
@@ -25,6 +26,32 @@ def record(kind, payload):
 
 
 class IdentityTests(unittest.TestCase):
+    def test_paginated_history_presence_never_claims_complete_jsonl_coverage(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            codex = Path(temporary) / ".codex"
+            codex.mkdir()
+            self.assertFalse(_paginated_history_unprotected(temporary))
+            database = codex / "thread_history_1.sqlite"
+            with sqlite3.connect(database) as connection:
+                connection.execute("CREATE TABLE thread_items (thread_id TEXT, payload TEXT)")
+                connection.execute("INSERT INTO thread_items VALUES (?, ?)",
+                                   (THREAD_ID, "private synthetic test content"))
+            original = database.read_bytes()
+            self.assertTrue(_paginated_history_unprotected(temporary))
+            self.assertEqual(database.read_bytes(), original)
+
+    def test_linked_paginated_history_is_rejected_without_following_it(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            codex = root / "source/.codex"
+            codex.mkdir(parents=True)
+            outside = root / "outside.sqlite"
+            outside.write_bytes(b"private synthetic test content")
+            (codex / "thread_history_1.sqlite").symlink_to(outside)
+            with self.assertRaises(MigrationError):
+                _paginated_history_unprotected(str(root / "source"))
+            self.assertEqual(outside.read_bytes(), b"private synthetic test content")
+
     def test_static_malformed_record_is_not_retried_as_a_live_change(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "broken.jsonl"
@@ -125,6 +152,40 @@ class EncryptedHistoryTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.build.cleanup()
+
+    def test_paginated_history_marks_verified_jsonl_snapshot_incomplete(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            codex = source / ".codex"
+            path = codex / "sessions" / ("rollout-" + THREAD_ID + ".jsonl")
+            path.parent.mkdir(parents=True)
+            original = record("session_meta", {"id": THREAD_ID})
+            path.write_text(original)
+            database = codex / "thread_history_1.sqlite"
+            with sqlite3.connect(database) as connection:
+                connection.execute("CREATE TABLE thread_items (thread_id TEXT, payload TEXT)")
+                connection.execute("INSERT INTO thread_items VALUES (?, ?)",
+                                   (THREAD_ID, "private synthetic test content"))
+            before = database.read_bytes()
+            vault = root / "vault"
+            try:
+                result = backup(str(source), str(vault), crypto_helper=str(self.helper))
+                self.assertTrue(result.needs_attention)
+                self.assertTrue(result.paginated_history_unprotected)
+                self.assertEqual(result.at_risk_threads, 0)
+                verify_snapshot(str(vault), snapshot=result.snapshot_id,
+                                crypto_helper=str(self.helper))
+                self.assertFalse(snapshot_catalog(str(vault),
+                                                 crypto_helper=str(self.helper))[0]["at_risk"])
+                self.assertEqual(path.read_text(), original)
+                self.assertEqual(database.read_bytes(), before)
+            finally:
+                if (vault / "vault.json").exists():
+                    key_id = json.loads((vault / "vault.json").read_text())["key_id"]
+                    subprocess.run([str(self.helper), "delete-key", "--key-id", key_id],
+                                   check=True, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE)
 
     def test_unreadable_optional_title_index_does_not_block_transcript_backup(self):
         with tempfile.TemporaryDirectory() as temporary:

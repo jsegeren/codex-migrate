@@ -320,13 +320,17 @@ async function loadOverview(){
     const conversations=(summary.active_transcripts||0)+(summary.archived_transcripts||0);
     const label=`${conversations.toLocaleString()} ${conversations===1?"conversation":"conversations"}`;
     const verifiedScheduled=schedule.enabled&&schedule.healthy&&schedule.last_run?.status==="completed";
+    const paginatedRisk=Boolean(schedule.paginated_history_unprotected||schedule.last_run?.paginated_history_unprotected||backup.paginated_history_unprotected);
     const contentRisk=schedule.last_run?.status==="needs_attention"||backup.status==="needs_attention";
     const failedRun=["failed","unknown"].includes(schedule.last_run?.status);
     const scheduleProblem=Boolean(schedule.error)||failedRun||(schedule.enabled&&!schedule.healthy);
     const attention=contentRisk||scheduleProblem||backup.status==="failed";
     $("overview-health-card").classList.toggle("attention",!verifiedScheduled||attention);
     $("overview-health-icon").textContent=verifiedScheduled&&!attention?"✓":"!";
-    if(contentRisk){
+    if(paginatedRisk){
+      $("overview-health").textContent="Conversation coverage needs review";
+      $("overview-health-detail").textContent="Codex's paginated history is not included in this backup. Keep an independent full backup; this snapshot may not contain every message.";
+    }else if(contentRisk){
       $("overview-health").textContent="Conversation backup needs review";
       $("overview-health-detail").textContent="An earlier verified version may hold missing content.";
     }else if(scheduleProblem){

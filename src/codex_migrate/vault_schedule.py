@@ -28,6 +28,7 @@ from codex_migrate.vault_backup import (
     _fsync_directory,
     _helper_path,
     _metadata,
+    _paginated_history_unprotected,
     _read_json,
     _require_unlinked_path,
     backup,
@@ -349,13 +350,14 @@ def _last_run(path: Path) -> Dict[str, object]:
             and all(isinstance(value.get(key), int) and value[key] >= 0
                     for key in ("transcript_files", "transcript_bytes"))
     elif status == "needs_attention":
-        valid = set(value) in ({
+        required = {
             "status", "completed_at", "snapshot_id", "transcript_files",
             "transcript_bytes", "at_risk_threads",
-        }, {
-            "status", "completed_at", "snapshot_id", "transcript_files",
-            "transcript_bytes", "at_risk_threads", "title_index_unavailable",
-        }) and isinstance(value.get("title_index_unavailable", False), bool) \
+        }
+        valid = required <= set(value) <= required | {
+            "title_index_unavailable", "paginated_history_unprotected",
+        } and isinstance(value.get("title_index_unavailable", False), bool) \
+            and isinstance(value.get("paginated_history_unprotected", False), bool) \
             and isinstance(value.get("completed_at"), str) \
             and isinstance(value.get("snapshot_id"), str) \
             and all(isinstance(value.get(key), int) and value[key] >= 0
@@ -546,6 +548,10 @@ def schedule_status(source_home: str) -> Dict[str, object]:
         if status.get("status") in ("needs_attention", "failed", "unknown"):
             result["healthy"] = False
             result["error"] = "The latest automatic backup needs attention. Earlier snapshots remain available."
+    if _paginated_history_unprotected(source_home):
+        result["healthy"] = False
+        result["paginated_history_unprotected"] = True
+        result["error"] = "Codex's paginated history is not included in this Vault backup."
     if result["healthy"]:
         if status and status["status"] == "completed":
             last_activity = status["completed_at"]
@@ -610,6 +616,8 @@ def run_scheduled_backup(config_path: str) -> int:
                 "transcript_files": result.transcript_files,
                 "transcript_bytes": result.transcript_bytes,
                 **({"at_risk_threads": result.at_risk_threads} if result.needs_attention else {}),
+                **({"paginated_history_unprotected": True}
+                   if result.paginated_history_unprotected else {}),
                 **({"title_index_unavailable": True} if result.title_index_unavailable else {}),
             }, replace=True)
             return 0
