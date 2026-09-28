@@ -275,6 +275,12 @@ owner-only generated journal files; an unexpected file or unreceipted scratch
 chunk keeps the run marker and requires review rather than being deleted.
 Customer-facing cleanup and failure guidance remain release gates. None of
 this makes hosted backup available to customers yet.
+An opt-in synthetic macOS scale probe of the hosted-only runner staged and
+restored 2,051 transcript files, including one approximately 72 MiB transcript
+that crosses the 64 MiB staging window. It completed in 56 seconds on the
+older Mac with an in-memory object store. This checks the client file-count and
+window path; it does not measure real-R2 latency, 72–76 GB customer-scale
+storage, a clean-account restore, or the service's authenticated publication.
 A synthetic end-to-end runner test now encrypts two disposable Codex transcripts,
 stages the whole object graph without a full local ciphertext Vault, checks
 every staged object's bytes and digest before simulating publication, deletes

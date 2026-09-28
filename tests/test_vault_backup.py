@@ -448,6 +448,7 @@ class VaultBackupTests(unittest.TestCase):
                     self.store = MetadataObjectStore()
                     self.staged = None
                     self.published_id = None
+                    self.published_objects = {}
 
                 def reserve_with_base(self, *, reservation_id=None, apply=False):
                     assert apply is True and reservation_id is not None
@@ -460,7 +461,7 @@ class VaultBackupTests(unittest.TestCase):
                     for identifier in ids:
                         key = ("objects/" + identifier[:2] + "/" +
                                identifier[2:] + ".cvchunk")
-                        value = self.store.objects.get(key)
+                        value = self.published_objects.get(key)
                         if value is not None:
                             facts[identifier] = (len(value), hashlib.sha256(value).hexdigest())
                     return facts
@@ -477,6 +478,9 @@ class VaultBackupTests(unittest.TestCase):
                         assert hashlib.sha256(data).hexdigest() == item.sha256
                     self.staged = staged
                     self.published_id = staged.snapshot_id
+                    self.published_objects = {
+                        item.key: self.store.objects[item.key] for item in staged.objects
+                    }
                     return {"snapshotId": staged.snapshot_id,
                             "verifiedObjectCount": len(staged.objects)}
 
@@ -526,6 +530,38 @@ class VaultBackupTests(unittest.TestCase):
                 self.assertEqual(upload.store.writes, 9)
                 self.assertIsNone(runner.pending())
 
+                # Opt-in local scale probe: exercise the real hosted-only
+                # staging path across many files and several 64 MiB windows.
+                # This uses synthetic data and an in-memory object store; it
+                # is not a real-R2 or clean-account recovery receipt.
+                scale_digest = None
+                if os.environ.get("CODEX_MIGRATE_HOSTED_SCALE_PROBE") == "1":
+                    bulk = source / ".codex/sessions/2026/09/17/scale"
+                    bulk.mkdir(mode=0o700)
+                    for index in range(2048):
+                        (bulk / f"thread-{index:04d}.jsonl").write_bytes(
+                            json.dumps({"thread": index, "text": f"synthetic-{index:04d}"})
+                            .encode("utf-8") + b"\n")
+                    long_path = bulk / "long-thread.jsonl"
+                    scale_digest = hashlib.sha256()
+                    with long_path.open("wb") as stream:
+                        for index in range(1152):
+                            line = (b'{"payload":{"message":{"content":"' +
+                                    f"{index:04d}".encode("ascii") + b"x" * 65536 +
+                                    b'"}}}\n')
+                            stream.write(line)
+                            scale_digest.update(line)
+                    before_writes = upload.store.writes
+                    recovery.base_id = second["snapshotId"]
+                    third = runner.back_up_live_history(
+                        metadata, crypto_helper=str(self.helper),
+                        max_prior_bytes=5_000_000, apply=True)
+                    self.assertEqual(third["snapshotId"], upload.staged.snapshot_id)
+                    self.assertEqual(upload.staged.transcript_files, 2051)
+                    self.assertGreaterEqual(upload.store.writes - before_writes, 2051)
+                    self.assertIsNone(runner.pending())
+                    self.assertFalse((root / "vault").exists())
+
                 remote = MemoryObjectStore()
                 remote.objects = dict(upload.store.objects)
                 recovered = root / "recovered-vault"
@@ -554,6 +590,12 @@ class VaultBackupTests(unittest.TestCase):
                                  active)
                 self.assertEqual((restored / "archived_sessions/archived.jsonl").read_bytes(),
                                  archived)
+                if scale_digest is not None:
+                    self.assertEqual(len(list((restored / "sessions/2026/09/17/scale")
+                                              .glob("thread-*.jsonl"))), 2048)
+                    self.assertEqual(hashlib.sha256(
+                        (restored / "sessions/2026/09/17/scale/long-thread.jsonl")
+                        .read_bytes()).hexdigest(), scale_digest.hexdigest())
             finally:
                 if key_id is not None:
                     subprocess.run([str(self.helper), "delete-key", "--key-id", key_id],
