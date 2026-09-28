@@ -28,6 +28,9 @@ CHILD_THREAD = "22222222-2222-4222-8222-222222222222"
 INHERITED_TEXT = "portable inherited database-only turn"
 PARENT_LATER_TEXT = "portable excluded parent-only turn"
 CHILD_TEXT = "portable child-local database turn"
+EMPTY_PARENT_THREAD = "55555555-5555-4555-8555-555555555555"
+ONLY_CHILD_THREAD = "66666666-6666-4666-8666-666666666666"
+ONLY_CHILD_TEXT = "portable child with no parent database rows"
 
 
 def write_fork_rollouts(codex: Path) -> None:
@@ -46,6 +49,16 @@ def write_fork_rollouts(codex: Path) -> None:
         "thread_id": PARENT_THREAD, "end_ordinal_exclusive": 2,
         "end_byte_offset": len(parent_prefix.encode()),
     }}) + record(3, "event_msg", {"event": "child metadata"}))
+    empty_parent_prefix = (record(0, "session_meta", {"id": EMPTY_PARENT_THREAD})
+                           + record(1, "event_msg", {"event": "no database rows"}))
+    (archived / ("rollout-" + EMPTY_PARENT_THREAD + ".jsonl")).write_text(
+        empty_parent_prefix)
+    (child.parent / ("rollout-" + ONLY_CHILD_THREAD + ".jsonl")).write_text(
+        record(2, "session_meta", {"id": ONLY_CHILD_THREAD,
+                                   "history_base": {
+            "thread_id": EMPTY_PARENT_THREAD, "end_ordinal_exclusive": 2,
+            "end_byte_offset": len(empty_parent_prefix.encode()),
+        }}) + record(3, "event_msg", {"event": "child metadata"}))
 
 
 def write_paginated_fixture(database: Path) -> None:
@@ -64,7 +77,8 @@ def write_paginated_fixture(database: Path) -> None:
         for thread_id, ordinal, item_id, text in (
                 (PARENT_THREAD, 1, "item-parent", INHERITED_TEXT),
                 (PARENT_THREAD, 2, "item-parent-later", PARENT_LATER_TEXT),
-                (CHILD_THREAD, 3, "item-child", CHILD_TEXT)):
+                (CHILD_THREAD, 3, "item-child", CHILD_TEXT),
+                (ONLY_CHILD_THREAD, 3, "item-only-child", ONLY_CHILD_TEXT)):
             connection.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                                (thread_id, "turn-" + item_id, item_id, ordinal,
                                 100 + ordinal,
@@ -96,7 +110,7 @@ def produce(bundle: Path, helper: Path) -> None:
     try:
         result = backup(str(source), str(vault), crypto_helper=str(helper))
         key_id = result.key_id
-        if result.transcript_files != 6 or not result.recovery_key:
+        if result.transcript_files != 9 or not result.recovery_key:
             raise AssertionError("Synthetic snapshot was not created")
         receipt = verify_snapshot(str(vault), crypto_helper=str(helper))
         if receipt.snapshot_id != result.snapshot_id:
@@ -128,7 +142,7 @@ def consume(bundle: Path, helper: Path) -> None:
     try:
         key_id = import_recovery_key(str(vault), recovery_key, crypto_helper=str(helper))
         verified = verify_snapshot(str(vault), crypto_helper=str(helper))
-        if verified.transcript_files != 6:
+        if verified.transcript_files != 9:
             raise AssertionError("Imported snapshot file count changed")
         empty_home = bundle.parent / "vault-portability-synthetic-empty-home"
         empty_home.mkdir(mode=0o700, exist_ok=False)
@@ -149,12 +163,13 @@ def consume(bundle: Path, helper: Path) -> None:
             raise AssertionError("Cross-Mac paginated search did not find the database-only turn")
         page, next_cursor = read_thread_page(
             str(restored_home), "paginated", DATABASE_THREAD + ".jsonl",
-            expected_query=DATABASE_TEXT,
+            expected_query=DATABASE_TEXT, catalog=catalog,
         )
         if next_cursor is not None or [entry.text for entry in page.entries] != [DATABASE_TEXT]:
             raise AssertionError("Cross-Mac paginated read did not recover the database-only turn")
         exported = b"".join(markdown_chunks(
-            str(restored_home), "paginated", DATABASE_THREAD + ".jsonl"))
+            str(restored_home), "paginated", DATABASE_THREAD + ".jsonl",
+            catalog=catalog))
         if DATABASE_TEXT.encode("utf-8") not in exported:
             raise AssertionError("Cross-Mac paginated Markdown export lost the turn")
         inherited = search(str(restored_home), INHERITED_TEXT, catalog=catalog)
@@ -167,15 +182,34 @@ def consume(bundle: Path, helper: Path) -> None:
                 ("paginated", PARENT_THREAD + ".jsonl")}:
             raise AssertionError("Cross-Mac fork search included post-fork parent content")
         child_page, next_cursor = read_thread_page(
-            str(restored_home), "paginated", CHILD_THREAD + ".jsonl")
+            str(restored_home), "paginated", CHILD_THREAD + ".jsonl",
+            catalog=catalog)
         if (next_cursor is not None or [entry.text for entry in child_page.entries]
                 != [INHERITED_TEXT, CHILD_TEXT]):
             raise AssertionError("Cross-Mac fork read lost inherited database content")
         child_export = b"".join(markdown_chunks(
-            str(restored_home), "paginated", CHILD_THREAD + ".jsonl"))
+            str(restored_home), "paginated", CHILD_THREAD + ".jsonl",
+            catalog=catalog))
         if (INHERITED_TEXT.encode() not in child_export
                 or PARENT_LATER_TEXT.encode() in child_export):
             raise AssertionError("Cross-Mac fork export used the wrong parent bounds")
+        if (restored / "paginated_history" / (EMPTY_PARENT_THREAD + ".jsonl")).exists():
+            raise AssertionError("Cross-Mac backup invented a zero-row parent projection")
+        child_only = search(str(restored_home), ONLY_CHILD_TEXT, catalog=catalog)
+        if {(match.collection, match.transcript) for match in child_only} != {
+                ("paginated", ONLY_CHILD_THREAD + ".jsonl")}:
+            raise AssertionError("Cross-Mac fork search lost a child with a zero-row parent")
+        child_only_page, next_cursor = read_thread_page(
+            str(restored_home), "paginated", ONLY_CHILD_THREAD + ".jsonl",
+            catalog=catalog)
+        if (next_cursor is not None or [entry.text for entry in child_only_page.entries]
+                != [ONLY_CHILD_TEXT]):
+            raise AssertionError("Cross-Mac fork read lost a child with a zero-row parent")
+        child_only_export = b"".join(markdown_chunks(
+            str(restored_home), "paginated", ONLY_CHILD_THREAD + ".jsonl",
+            catalog=catalog))
+        if ONLY_CHILD_TEXT.encode() not in child_only_export:
+            raise AssertionError("Cross-Mac fork export lost a child with a zero-row parent")
         print("Synthetic snapshot decrypted and restored on independent Mac")
     finally:
         if key_id:
