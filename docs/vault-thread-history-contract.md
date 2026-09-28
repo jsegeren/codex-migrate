@@ -199,6 +199,17 @@ the new snapshot and scheduled health as needing attention without opening or
 modifying Codex's database. This conservative warning is not a substitute for
 capturing database-only durable content and proving off-device recovery.
 
+The current [official app-server contract](https://learn.chatgpt.com/docs/app-server)
+can list and summarize existing paginated threads, but its full-history read
+and item-pagination operations fail closed for them. It is not a supported
+complete export path today. Metadata-only inspection of the installed schema
+found durable `thread_items.item_json` rows and a separate projection cursor;
+no private item content was copied into this document. The capture adapter must
+pin a consistent read view, version-check the schema, encrypt the needed item
+records without creating a plaintext full-history staging copy, and fail closed
+on an unknown schema. It must keep database-derived records distinguishable
+from the JSONL rollout so divergent copies cannot be silently merged.
+
 - Establish whether the JSONL rollout or the projected database owns each
   durable turn when their lengths disagree, including a post-rewrite case.
 - Capture any database-only recoverable content with a consistent, encrypted
