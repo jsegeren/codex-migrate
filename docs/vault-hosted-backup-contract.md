@@ -325,9 +325,11 @@ egress allowance. Do not claim that B2 restores are always free. See its
   low-local-storage hosted-only option. The hosted-only release needs a
   remote-aware writer that reuses the exact previously published ciphertext
   and encrypts each new chunk only once into bounded temporary space. It must
-  prove a remotely complete snapshot and clean-account restore before it can
-  discard its temporary ciphertext. An ambiguous upload cannot authorize
-  local deletion.
+  pass whole-snapshot publication and clean-account restore acceptance before
+  that low-local-storage path is offered to buyers. An ambiguous upload cannot
+  authorize local deletion: each temporary chunk may be discarded during
+  staging only after exact remote read-back and an fsynced, reservation-bound
+  receipt; the whole snapshot is not protected until independently published.
   The native helper now has a read-only `plan-chunks` first pass: for each
   plaintext chunk it returns only the keyed raw and (when useful) compressed
   candidate IDs, byte counts, and a whole-file digest. A synthetic parity test
@@ -356,13 +358,19 @@ egress allowance. Do not claim that B2 restores are always free. See its
   source identity, length, and digest are rechecked, and a changed transcript
   fails without a snapshot claim. The lookup has a scoped database index so
   it does not scan all prior daily snapshots for each candidate. Whole-
-  snapshot assembly, provider re-verification, bounded new-chunk staging,
-  publication, and restore of the mixed inventory remain open. An internal
-  per-file stage can now HEAD-check reused published ciphertext and upload
-  each new ciphertext object with exact read-back; it leaves its private
-  scratch files intact. A durable per-object resume journal and verified
-  whole-snapshot publication are required before any scratch deletion. The
-  existing local `store-chunks` behavior remains unchanged.
+  snapshot assembly, provider re-verification, publication, and restore of the
+  mixed inventory remain open. An internal per-file stage HEAD-checks reused
+  ciphertext and uploads each new object with exact read-back. A separate
+  owner-only, fsynced chunk journal records each verified new object; retries
+  HEAD-check journaled objects before omitting their local ciphertext. A
+  synthetic interrupted upload now resumes in bounded plaintext/ciphertext
+  windows, retaining an ambiguous window's scratch and removing only its own
+  exactly journaled scratch after successful staging. The test bounded a
+  five-chunk file to two scratch chunks at a time. This is a dark per-file
+  building block, not a complete hosted-only backup: no whole-snapshot
+  assembly, independently verified publication, clean-Mac recovery, installed
+  schedule, or buyer UI is wired to it. The existing local `store-chunks`
+  behavior remains unchanged.
 - Keep each local Vault in its own random, account-scoped remote namespace.
   Two Macs may each back up to separate Vaults under one subscription; this is
   not synchronization or a silent merge. Object names and snapshot times are

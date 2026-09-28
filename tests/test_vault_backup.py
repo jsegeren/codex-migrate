@@ -25,6 +25,7 @@ from codex_migrate import vault_remote_recovery
 from codex_migrate import vault_remote_transfer
 from codex_migrate.vault_remote_writer import (
     prepare_remote_aware_file, stage_prepared_file,
+    stage_remote_aware_file_windowed,
 )
 
 
@@ -682,6 +683,103 @@ class VaultBackupTests(unittest.TestCase):
                             transcript, scratch, key_id, client,
                             crypto_helper=str(self.helper), chunk_size=65536,
                             journal=journal, reservation_id=reservation, apply=True)
+            finally:
+                self.delete_key(vault)
+
+    def test_windowed_hosted_stage_bounds_scratch_and_retries_interruption(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            vault = root / "vault"
+            self.fixture(source)
+            try:
+                backup(str(source), str(vault), crypto_helper=str(self.helper))
+                key_id = json.loads((vault / "vault.json").read_text())["key_id"]
+                transcript = root / "synthetic.jsonl"
+                payload = (b"A" * 65536 + b"B" * 65536 +
+                           b"C" * 65536 + b"A" * 65536 + b"D" * 65536)
+                transcript.write_bytes(payload)
+                journal_dir = root / "journal"
+                journal_dir.mkdir(mode=0o700)
+
+                class TrackingStore(MetadataObjectStore):
+                    def __init__(self):
+                        super().__init__()
+                        self.peak_scratch_files = 0
+
+                    def put_if_absent(self, key, source_file, length):
+                        scratch = journal_dir / "scratch"
+                        self.peak_scratch_files = max(
+                            self.peak_scratch_files,
+                            len(list(scratch.rglob("*.cvchunk"))))
+                        return super().put_if_absent(key, source_file, length)
+
+                store = TrackingStore()
+                reservation = "44444444-4444-4444-8444-444444444444"
+
+                class Client:
+                    def published_chunks(self, ids):
+                        return {}
+
+                    def object_store(self, reservation_id, expected, *, apply=False):
+                        if reservation_id != reservation or apply is not True:
+                            raise AssertionError("unscoped window upload")
+                        return store
+
+                client = Client()
+                with HostedChunkJournal(
+                    journal_dir,
+                    account_id="11111111-1111-4111-8111-111111111111",
+                    vault_id="22222222-2222-4222-8222-222222222222",
+                    reservation_id=reservation,
+                    snapshot_id="33333333-3333-4333-8333-333333333333",
+                    key_id=key_id,
+                ) as journal:
+                    with self.assertRaisesRegex(MigrationError, "explicit confirmation"):
+                        stage_remote_aware_file_windowed(
+                            transcript, key_id, client, reservation, journal,
+                            crypto_helper=str(self.helper), chunk_size=65536,
+                            window_bytes=2 * 65536)
+                    store.fail_on_write = 2
+                    with self.assertRaisesRegex(OSError, "interruption"):
+                        stage_remote_aware_file_windowed(
+                            transcript, key_id, client, reservation, journal,
+                            crypto_helper=str(self.helper), chunk_size=65536,
+                            window_bytes=2 * 65536, apply=True)
+                    self.assertEqual(len(journal.records), 1)
+                    self.assertEqual(len(list((journal_dir / "scratch").rglob("*.cvchunk"))), 2)
+                    store.fail_on_write = None
+                    result = stage_remote_aware_file_windowed(
+                        transcript, key_id, client, reservation, journal,
+                        crypto_helper=str(self.helper), chunk_size=65536,
+                        window_bytes=2 * 65536, apply=True)
+                    self.assertEqual(result.sha256, hashlib.sha256(payload).hexdigest())
+                    self.assertEqual(result.size, len(payload))
+                    self.assertEqual(len(result.chunks), 5)
+                    self.assertEqual(len(result.objects), 4)
+                    self.assertEqual(len(store.objects), 4)
+                    self.assertEqual(len(journal.records), 4)
+                    self.assertEqual(list((journal_dir / "scratch").rglob("*.cvchunk")), [])
+                    self.assertLessEqual(store.peak_scratch_files, 2)
+                    self.assertEqual(store.writes, 5)
+
+                    class ChangingClient(Client):
+                        lookups = 0
+
+                        def published_chunks(self, ids):
+                            self.lookups += 1
+                            if self.lookups == 2:
+                                transcript.write_bytes(payload[:2 * 65536] +
+                                                       b"Z" + payload[2 * 65536 + 1:])
+                            return {}
+
+                    remote_before = dict(store.objects)
+                    with self.assertRaises(MigrationError):
+                        stage_remote_aware_file_windowed(
+                            transcript, key_id, ChangingClient(), reservation, journal,
+                            crypto_helper=str(self.helper), chunk_size=65536,
+                            window_bytes=2 * 65536, apply=True)
+                    self.assertEqual(store.objects, remote_before)
             finally:
                 self.delete_key(vault)
 

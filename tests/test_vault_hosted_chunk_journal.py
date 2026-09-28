@@ -76,6 +76,19 @@ class HostedChunkJournalTests(unittest.TestCase):
         with self.journal():
             pass
 
+    def test_directory_replacement_is_refused_before_scratch_cleanup(self):
+        moved = self.directory.with_name("moved-journal")
+        with self.journal() as journal:
+            self.directory.rename(moved)
+            self.directory.mkdir(mode=0o700)
+            try:
+                with self.assertRaisesRegex(MigrationError, "folder changed"):
+                    journal.ensure_private_directory()
+            finally:
+                self.directory.rmdir()
+                moved.rename(self.directory)
+            journal.ensure_private_directory()
+
     def test_incomplete_final_line_is_discarded_but_complete_records_survive(self):
         with self.journal() as journal:
             journal.record(CHUNK, 1024, DIGEST)

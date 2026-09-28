@@ -46,6 +46,7 @@ class HostedChunkJournal:
         self._metadata = self.directory / "journal.json"
         self._log = self.directory / "chunks.jsonl"
         self._lock = self.directory / "journal.lock"
+        self._directory_identity: Optional[Tuple[int, int]] = None
         self._lock_descriptor: Optional[int] = None
         self._descriptor: Optional[int] = None
         self.records: Dict[str, Tuple[int, str]] = {}
@@ -58,9 +59,27 @@ class HostedChunkJournal:
     def key_id(self) -> str:
         return self._header["keyId"]
 
-    def verified_records(self) -> Dict[str, Tuple[int, str]]:
+    def ensure_open(self) -> None:
         if self._descriptor is None or self._lock_descriptor is None:
             raise MigrationError("The hosted chunk journal is not locked.")
+
+    def ensure_private_directory(self) -> None:
+        self.ensure_open()
+        try:
+            info = self.directory.lstat()
+        except OSError as error:
+            raise MigrationError("The hosted chunk journal folder moved during backup.") from error
+        if (not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or
+                info.st_mode & 0o077 or
+                (info.st_dev, info.st_ino) != self._directory_identity):
+            raise MigrationError("The hosted chunk journal folder changed during backup.")
+
+    def fact(self, identifier: str) -> Optional[Tuple[int, str]]:
+        self.ensure_open()
+        return self.records.get(identifier)
+
+    def verified_records(self) -> Dict[str, Tuple[int, str]]:
+        self.ensure_open()
         return dict(self.records)
 
     def __enter__(self) -> "HostedChunkJournal":
@@ -69,6 +88,7 @@ class HostedChunkJournal:
         if (not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or
                 info.st_mode & 0o077):
             raise MigrationError("The hosted chunk journal folder is not private.")
+        self._directory_identity = (info.st_dev, info.st_ino)
         try:
             lock = os.open(self._lock,
                            os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
@@ -129,6 +149,7 @@ class HostedChunkJournal:
         if self._lock_descriptor is not None:
             os.close(self._lock_descriptor)
             self._lock_descriptor = None
+        self._directory_identity = None
 
     def _read_records(self) -> Dict[str, Tuple[int, str]]:
         assert self._descriptor is not None

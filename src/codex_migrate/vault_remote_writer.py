@@ -1,14 +1,16 @@
-"""Prepare one transcript for a future low-local-storage hosted snapshot.
+"""Dark remote-aware transcript staging for a future hosted snapshot.
 
-Only previously published objects may be reused without local ciphertext.
-This is not snapshot publication or a protection receipt. The caller must
-upload every new local object, independently verify every remote object, and
-publish the complete manifest before removing any temporary ciphertext.
+Previously published or same-reservation journaled objects may be reused only
+after exact remote checks. The windowed path discards *its own* scratch chunks
+after their fsynced receipts; it never discards a customer's durable local
+Vault. Staging is not publication or a protection receipt: the service must
+independently verify and publish the complete snapshot before any such claim.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -41,6 +43,10 @@ class ScopedUploadClient(Protocol):
         """Return an exact-key, reservation-scoped ciphertext transport."""
 
 
+class RemoteAwareClient(PublishedChunkLookup, ScopedUploadClient, Protocol):
+    """The same authenticated client must own lookup and upload."""
+
+
 @dataclass(frozen=True)
 class PreparedRemoteFile:
     sha256: str
@@ -48,6 +54,16 @@ class PreparedRemoteFile:
     chunks: Tuple[dict, ...]
     local_ids: Tuple[str, ...]
     remote_objects: Mapping[str, Tuple[int, str]]
+
+
+@dataclass(frozen=True)
+class StagedRemoteFile:
+    """One fully staged transcript, not a published or recoverable snapshot."""
+
+    sha256: str
+    size: int
+    chunks: Tuple[dict, ...]
+    objects: Tuple[StagedObject, ...]
 
 
 def _identity(info: os.stat_result) -> tuple[int, int, int, int, int]:
@@ -93,6 +109,75 @@ def _candidate_ids(plan: dict, expected_size: int, chunk_size: int) -> list[str]
     return unique
 
 
+def _reusable_chunks(candidates: list[str], lookup: PublishedChunkLookup,
+                     journal: Optional[HostedChunkJournal],
+                     reservation_id: Optional[str]) -> dict[str, Tuple[int, str]]:
+    published: dict[str, Tuple[int, str]] = {}
+    for start in range(0, len(candidates), 256):
+        page = candidates[start:start + 256]
+        observed = lookup.published_chunks(page)
+        if not isinstance(observed, Mapping) or not set(observed).issubset(page):
+            raise MigrationError("The hosted chunk lookup is invalid.")
+        for identifier, facts in observed.items():
+            if (not isinstance(identifier, str) or not _HEX.fullmatch(identifier) or
+                    not isinstance(facts, tuple) or len(facts) != 2 or
+                    type(facts[0]) is not int or not 1 <= facts[0] <= 100_000_000 or
+                    not isinstance(facts[1], str) or not _HEX.fullmatch(facts[1])):
+                raise MigrationError("The hosted chunk lookup is invalid.")
+            published[identifier] = facts
+    reusable = dict(published)
+    if journal is not None:
+        journal.ensure_open()
+        object_store = getattr(lookup, "object_store", None)
+        for identifier in candidates:
+            facts = journal.fact(identifier)
+            if facts is None:
+                continue
+            if identifier in published:
+                if published[identifier] != facts:
+                    raise MigrationError("A hosted chunk has conflicting remote receipts.")
+                continue
+            key = "objects/" + identifier[:2] + "/" + identifier[2:] + ".cvchunk"
+            if not callable(object_store):
+                raise MigrationError("The hosted chunk lookup cannot verify staged objects.")
+            store = object_store(reservation_id, {key: facts}, apply=True)
+            checked = getattr(store, "checked_metadata", None)
+            if not callable(checked):
+                raise MigrationError("The hosted chunk lookup cannot verify staged objects.")
+            if checked(key) != facts:
+                raise MigrationError("A staged hosted chunk is missing or changed remotely.")
+            reusable[identifier] = facts
+    return reusable
+
+
+def _validated_prepared(stored: dict, plan: dict,
+                        reusable: Mapping[str, Tuple[int, str]]) -> PreparedRemoteFile:
+    rows = stored.get("chunks")
+    local = stored.get("local_ids")
+    remote = stored.get("remote_ids")
+    if (set(stored) != {"sha256", "size", "chunks", "local_ids", "remote_ids"} or
+            stored["sha256"] != plan["sha256"] or stored["size"] != plan["size"] or
+            not isinstance(rows, list) or len(rows) != len(plan["chunks"]) or
+            not isinstance(local, list) or not isinstance(remote, list) or
+            not all(isinstance(item, str) and _HEX.fullmatch(item)
+                    for item in local + remote) or
+            len(local) + len(remote) != len(rows)):
+        raise MigrationError("The hosted chunk writer returned an invalid result.")
+    for row, candidate in zip(rows, plan["chunks"]):
+        if (not isinstance(row, dict) or
+                set(row) not in ({"id", "size"}, {"id", "size", "encoding"}) or
+                row.get("size") != candidate["size"] or
+                row.get("id") not in (candidate["raw_id"], candidate["compressed_id"]) or
+                ("encoding" in row) != (row["id"] == candidate["compressed_id"]) or
+                ("encoding" in row and row["encoding"] != "lzfse")):
+            raise MigrationError("The hosted chunk writer returned an invalid result.")
+    if (set(local) | set(remote) != {row["id"] for row in rows} or
+            set(local) & set(remote) or not set(remote).issubset(reusable)):
+        raise MigrationError("The hosted chunk writer returned an invalid result.")
+    return PreparedRemoteFile(plan["sha256"], plan["size"], tuple(rows),
+                              tuple(local), {key: reusable[key] for key in set(remote)})
+
+
 def prepare_remote_aware_file(source: Path, objects: Path, key_id: str,
                               lookup: PublishedChunkLookup, *,
                               crypto_helper: str, chunk_size: int,
@@ -116,7 +201,8 @@ def prepare_remote_aware_file(source: Path, objects: Path, key_id: str,
               journal.reservation_id != reservation_id or
               journal.key_id != key_id))):
         raise MigrationError("The hosted chunk journal does not match this reservation.")
-    journaled = journal.verified_records() if journal is not None else {}
+    if journal is not None:
+        journal.ensure_open()
     helper = _helper_path(crypto_helper)
     root = Path(objects)
     try:
@@ -139,41 +225,7 @@ def prepare_remote_aware_file(source: Path, objects: Path, key_id: str,
                                     "--chunk-size", str(chunk_size)],
                            input_file=handle)
         candidates = _candidate_ids(plan, before.st_size, chunk_size)
-        published: dict[str, Tuple[int, str]] = {}
-        for start in range(0, len(candidates), 256):
-            page = candidates[start:start + 256]
-            observed = lookup.published_chunks(page)
-            if not isinstance(observed, Mapping) or not set(observed).issubset(page):
-                raise MigrationError("The hosted chunk lookup is invalid.")
-            for identifier, facts in observed.items():
-                if (not isinstance(identifier, str) or not _HEX.fullmatch(identifier) or
-                        not isinstance(facts, tuple) or len(facts) != 2 or
-                        type(facts[0]) is not int or not 1 <= facts[0] <= 100_000_000 or
-                        not isinstance(facts[1], str) or not _HEX.fullmatch(facts[1])):
-                    raise MigrationError("The hosted chunk lookup is invalid.")
-                published[identifier] = facts
-        reusable = dict(published)
-        if journaled:
-            object_store = getattr(lookup, "object_store", None)
-            if not callable(object_store):
-                raise MigrationError("The hosted chunk lookup cannot verify staged objects.")
-            for identifier in candidates:
-                facts = journaled.get(identifier)
-                if facts is None:
-                    continue
-                if identifier in published:
-                    if published[identifier] != facts:
-                        raise MigrationError("A hosted chunk has conflicting remote receipts.")
-                    continue
-                key = "objects/" + identifier[:2] + "/" + identifier[2:] + ".cvchunk"
-                store = object_store(reservation_id, {key: facts}, apply=True)
-                checked = getattr(store, "checked_metadata", None)
-                if not callable(checked):
-                    raise MigrationError("The hosted chunk lookup cannot verify staged objects.")
-                observed = checked(key)
-                if observed != facts:
-                    raise MigrationError("A staged hosted chunk is missing or changed remotely.")
-                reusable[identifier] = facts
+        reusable = _reusable_chunks(candidates, lookup, journal, reservation_id)
         if _identity(os.fstat(handle.fileno())) != _identity(before):
             raise MigrationError("The conversation changed during hosted planning.")
         with tempfile.TemporaryDirectory(prefix="codex-vault-known-") as temporary:
@@ -193,31 +245,7 @@ def prepare_remote_aware_file(source: Path, objects: Path, key_id: str,
         if (_identity(os.fstat(handle.fileno())) != _identity(before) or
                 _identity(source.lstat()) != _identity(before)):
             raise MigrationError("The conversation changed during hosted backup.")
-    rows = stored.get("chunks")
-    local = stored.get("local_ids")
-    remote = stored.get("remote_ids")
-    if (set(stored) != {"sha256", "size", "chunks", "local_ids", "remote_ids"} or
-            stored["sha256"] != plan["sha256"] or stored["size"] != plan["size"] or
-            not isinstance(rows, list) or len(rows) != len(plan["chunks"]) or
-            not isinstance(local, list) or not isinstance(remote, list) or
-            not all(isinstance(item, str) and _HEX.fullmatch(item)
-                    for item in local + remote) or
-            len(local) + len(remote) != len(rows)):
-        raise MigrationError("The hosted chunk writer returned an invalid result.")
-    for row, candidate in zip(rows, plan["chunks"]):
-        if (not isinstance(row, dict) or
-                set(row) not in ({"id", "size"}, {"id", "size", "encoding"}) or
-                row.get("size") != candidate["size"] or
-                row.get("id") not in (candidate["raw_id"], candidate["compressed_id"]) or
-                ("encoding" in row) != (row["id"] == candidate["compressed_id"]) or
-                ("encoding" in row and row["encoding"] != "lzfse")):
-            raise MigrationError("The hosted chunk writer returned an invalid result.")
-    if (set(local) | set(remote) != {row["id"] for row in rows} or
-            set(local) & set(remote) or not set(remote).issubset(reusable)):
-        raise MigrationError("The hosted chunk writer returned an invalid result.")
-    return PreparedRemoteFile(plan["sha256"], plan["size"],
-                              tuple(rows), tuple(local),
-                              {key: reusable[key] for key in set(remote)})
+    return _validated_prepared(stored, plan, reusable)
 
 
 def stage_prepared_file(prepared: PreparedRemoteFile, scratch: Path,
@@ -238,6 +266,8 @@ def stage_prepared_file(prepared: PreparedRemoteFile, scratch: Path,
     if journal is not None and (not isinstance(journal, HostedChunkJournal) or
                                 journal.reservation_id != reservation_id):
         raise MigrationError("The hosted chunk journal does not match this reservation.")
+    if journal is not None:
+        journal.ensure_open()
     local = set(prepared.local_ids)
     remote = set(prepared.remote_objects)
     if (local & remote or
@@ -266,3 +296,156 @@ def stage_prepared_file(prepared: PreparedRemoteFile, scratch: Path,
             journal.record(identifier, staged.bytes, staged.sha256)
         objects.append(staged)
     return tuple(sorted(objects, key=lambda item: item.key))
+
+
+def _private_scratch(journal: HostedChunkJournal) -> Path:
+    journal.ensure_private_directory()
+    root = journal.directory / "scratch"
+    try:
+        root.mkdir(mode=0o700)
+    except FileExistsError:
+        pass
+    info = root.lstat()
+    if (not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or
+            info.st_mode & 0o077):
+        raise MigrationError("The hosted ciphertext scratch folder is unsafe.")
+    return root
+
+
+def _discard_journaled_scratch(root: Path, identifiers: Tuple[str, ...],
+                               journal: HostedChunkJournal, *,
+                               allow_missing: bool = False) -> None:
+    """Remove only our exact ciphertext after its fsynced remote receipt."""
+    if root != journal.directory / "scratch":
+        raise MigrationError("The hosted ciphertext scratch folder is not owned by this run.")
+    journal.ensure_private_directory()
+    for identifier in sorted(set(identifiers)):
+        facts = journal.fact(identifier)
+        if facts is None:
+            raise MigrationError("A hosted chunk cannot be discarded before its receipt.")
+        relative = identifier[:2] + "/" + identifier[2:] + ".cvchunk"
+        path = root / relative
+        if allow_missing and not os.path.lexists(path):
+            continue
+        item = _regular_file(root, relative, MAX_ENCRYPTED_CHUNK_BYTES)
+        if (item.bytes, item.sha256) != facts:
+            raise MigrationError("A hosted scratch chunk changed after remote verification.")
+        before = path.lstat()
+        directory = os.open(path.parent,
+                            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            pointed = os.stat(path.name, dir_fd=directory, follow_symlinks=False)
+            if _identity(pointed) != _identity(before):
+                raise MigrationError("A hosted scratch chunk changed before cleanup.")
+            os.unlink(path.name, dir_fd=directory)
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+
+
+def stage_remote_aware_file_windowed(
+    source: Path, key_id: str, client: RemoteAwareClient,
+    reservation_id: str, journal: HostedChunkJournal, *,
+    crypto_helper: str, chunk_size: int = 4 * 1024 * 1024,
+    window_bytes: int = 64 * 1024 * 1024, apply: bool = False,
+) -> StagedRemoteFile:
+    """Stage one transcript with bounded scratch and a recoverable retry path.
+
+    The source is planned before upload and rechecked after all windows. A
+    failed window retains its scratch ciphertext for an exact retry; a fully
+    staged window removes only ciphertext with durable remote receipts. This
+    does not assemble or publish a snapshot.
+    """
+    if apply is not True:
+        raise MigrationError("Hosted backup changes require explicit confirmation.")
+    if (not isinstance(journal, HostedChunkJournal) or
+            journal.reservation_id != reservation_id or journal.key_id != key_id):
+        raise MigrationError("The hosted chunk journal does not match this reservation.")
+    journal.ensure_open()
+    if (type(chunk_size) is not int or not 64 * 1024 <= chunk_size <= 64 * 1024 * 1024 or
+            type(window_bytes) is not int or not chunk_size <= window_bytes <= 256 * 1024 * 1024 or
+            window_bytes % chunk_size):
+        raise MigrationError("The hosted staging window is invalid.")
+    helper = _helper_path(crypto_helper)
+    source = _canonical_macos_path(Path(source))
+    if source == journal.directory or journal.directory in source.parents:
+        raise MigrationError("The hosted source cannot be its own scratch folder.")
+    scratch = _private_scratch(journal)
+    try:
+        source_info = source.lstat()
+        if (not stat.S_ISREG(source_info.st_mode) or source_info.st_nlink != 1 or
+                source_info.st_uid != os.getuid()):
+            raise MigrationError("The conversation is not a regular file.")
+        descriptor = os.open(source, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError as error:
+        raise MigrationError("The hosted conversation is unavailable.") from error
+    with os.fdopen(descriptor, "rb") as handle:
+        before = os.fstat(handle.fileno())
+        if _identity(before) != _identity(source_info):
+            raise MigrationError("The conversation changed before hosted backup.")
+        plan = _run_helper(helper, ["plan-chunks", "--key-id", key_id,
+                                    "--chunk-size", str(chunk_size)],
+                           input_file=handle)
+        _candidate_ids(plan, before.st_size, chunk_size)
+        if (_identity(os.fstat(handle.fileno())) != _identity(before) or
+                _identity(source.lstat()) != _identity(before)):
+            raise MigrationError("The conversation changed during hosted planning.")
+        handle.seek(0)
+        total = 0
+        whole_digest = hashlib.sha256()
+        rows = []
+        objects: dict[str, StagedObject] = {}
+        while total < before.st_size:
+            needed = min(window_bytes, before.st_size - total)
+            blocks = []
+            remaining = needed
+            while remaining:
+                block = handle.read(remaining)
+                if not block:
+                    raise MigrationError("The conversation changed during hosted staging.")
+                blocks.append(block)
+                remaining -= len(block)
+            window = b"".join(blocks)
+            whole_digest.update(window)
+            first = total // chunk_size
+            count = (needed + chunk_size - 1) // chunk_size
+            window_plan = {"sha256": hashlib.sha256(window).hexdigest(),
+                           "size": needed,
+                           "chunks": plan["chunks"][first:first + count]}
+            candidates = _candidate_ids(window_plan, needed, chunk_size)
+            reusable = _reusable_chunks(candidates, client, journal, reservation_id)
+            with tempfile.TemporaryDirectory(prefix="known-", dir=journal.directory) as tmp:
+                known_path = Path(tmp) / "known.json"
+                known_descriptor = os.open(known_path,
+                                           os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                with os.fdopen(known_descriptor, "w", encoding="utf-8") as known_file:
+                    json.dump({"version": 1, "ids": sorted(reusable)}, known_file)
+                stored = _run_helper(helper, [
+                    "store-chunks-with-known", "--key-id", key_id,
+                    "--object-dir", str(scratch), "--chunk-size", str(chunk_size),
+                    "--known-ids-file", str(known_path),
+                    "--expected-sha256", window_plan["sha256"],
+                    "--expected-size", str(needed),
+                ], input_data=window)
+            prepared = _validated_prepared(stored, window_plan, reusable)
+            staged = stage_prepared_file(prepared, scratch, client,
+                                         reservation_id, journal=journal, apply=True)
+            for item in staged:
+                existing = objects.get(item.key)
+                if existing is not None and existing != item:
+                    raise MigrationError("A hosted chunk has conflicting staged versions.")
+                objects[item.key] = item
+            _discard_journaled_scratch(scratch, prepared.local_ids, journal)
+            old_scratch = tuple(
+                identifier for identifier, facts in prepared.remote_objects.items()
+                if journal.fact(identifier) == facts)
+            _discard_journaled_scratch(scratch, old_scratch, journal,
+                                       allow_missing=True)
+            rows.extend(prepared.chunks)
+            total += needed
+        if (whole_digest.hexdigest() != plan["sha256"] or
+                _identity(os.fstat(handle.fileno())) != _identity(before) or
+                _identity(source.lstat()) != _identity(before)):
+            raise MigrationError("The conversation changed during hosted staging.")
+    return StagedRemoteFile(plan["sha256"], plan["size"], tuple(rows),
+                            tuple(objects[key] for key in sorted(objects)))
