@@ -1289,7 +1289,7 @@ class VaultBackupTests(unittest.TestCase):
                     broken = next(iter(published))
                     key = "objects/" + broken[:2] + "/" + broken[2:] + ".cvchunk"
                     original = store.objects[key]
-                    store.objects[key] = original[:-1] + b"X"
+                    store.objects[key] = original[:-1] + bytes([original[-1] ^ 1])
                     with self.assertRaisesRegex(MigrationError, "missing remotely"):
                         stage_prepared_file(prepared, scratch, client,
                                             reservation, journal=journal, apply=True)
