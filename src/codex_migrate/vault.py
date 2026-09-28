@@ -30,6 +30,9 @@ class VaultSummary:
     active_transcripts: int
     archived_transcripts: int
     transcript_bytes: int
+    paginated_threads: int = 0
+    paginated_database_bytes: int = 0
+    paginated_database_present: bool = False
 
     def as_dict(self) -> Dict[str, int]:
         return asdict(self)
@@ -270,7 +273,11 @@ def inspect(source_home: str) -> VaultSummary:
             active += 1
         else:
             archived += 1
-    return VaultSummary(active, archived, total)
+    from codex_migrate.vault_paginated import source_footprint
+
+    paginated_threads, paginated_bytes, paginated_present = source_footprint(source_home)
+    return VaultSummary(active, archived, total, paginated_threads,
+                        paginated_bytes, paginated_present)
 
 
 def _strings(value: object, key: str = "") -> Iterable[str]:

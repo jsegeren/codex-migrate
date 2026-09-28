@@ -335,6 +335,10 @@ def main(argv: Optional[List[str]] = None) -> int:
                     print("Active conversations: %d" % result.active_transcripts)
                     print("Archived conversations: %d" % result.archived_transcripts)
                     print("Transcript bytes: %d" % result.transcript_bytes)
+                    if result.paginated_database_present:
+                        print("Database-backed threads: %d" % result.paginated_threads)
+                        print("Paginated database storage bytes: %d" %
+                              result.paginated_database_bytes)
                 return 0
             if args.vault_command == "salvage-preview":
                 from codex_migrate.vault_salvage import preview_damaged_thread
@@ -404,6 +408,11 @@ def main(argv: Optional[List[str]] = None) -> int:
                     else:
                         print("Would back up %d conversation file(s), %d byte(s)." % (
                             result.transcript_files, result.transcript_bytes))
+                        if result.paginated_database_bytes:
+                            print("Also found %d database-backed thread(s), %d byte(s) of SQLite storage. "
+                                  "Snapshot bytes may differ." % (
+                                      result.paginated_threads,
+                                      result.paginated_database_bytes))
                         print("Destination: %s" % result.destination)
                         print("Client-side authenticated encryption: required")
                         print("Planning mode only; add --apply to create a verified snapshot.")

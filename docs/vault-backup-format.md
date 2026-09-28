@@ -24,8 +24,12 @@ Readers accept v1/v2 snapshots unchanged. Unknown SQLite schemas, malformed
 items, or incomplete streams abort before reference publication. The draft
 browser can search, read, and export a separately restored paginated source;
 one-thread copy-back and whole-history installation into Codex are refused for
-v3 snapshots containing it. Synthetic end-to-end recovery passes, but
-clean-account recovery and real installed-runtime scale are unproved. The
+v3 snapshots containing it. A disposable synthetic version-3 snapshot with a
+database-only turn was encrypted on one macOS CI runner and decrypted,
+searched, read, and exported after recovery-key import on a separate runner
+([CI receipt](https://github.com/jsegeren/codex-migrate/actions/runs/36416344496)).
+The packaged device-only Keychain helper, a clean customer account, and real
+installed-runtime backup scale are still unproved. The
 snapshot and schedule therefore remain `needs attention` when this source
 exists; no complete-history claim is authorized by v3 ciphertext alone.
 

@@ -8,6 +8,7 @@ from codex_migrate.errors import MigrationError
 from codex_migrate.vault import read_thread_page
 from codex_migrate.vault_paginated import (
     PaginatedItem, encoded_item, open_paginated_source, restored_items,
+    source_footprint,
 )
 
 
@@ -108,6 +109,24 @@ class PaginatedSourceTests(unittest.TestCase):
                 self.assertEqual(json.loads(items[0].item_json)["content"][0]["text"],
                                  "synthetic private")
             self.assertEqual(database.read_bytes(), before)
+            count, size, present = source_footprint(str(home))
+            self.assertTrue(present)
+            self.assertEqual(count, 1)
+            self.assertGreaterEqual(size, len(before))
+
+    def test_footprint_refuses_linked_wal(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary) / "home"
+            home.mkdir()
+            database = fixture(home)
+            outside = Path(temporary) / "outside-wal"
+            outside.write_bytes(b"not a database journal")
+            wal = database.parent / (database.name + "-wal")
+            if wal.exists():
+                wal.unlink()  # Disposable fixture only; test the linked-WAL guard.
+            wal.symlink_to(outside)
+            with self.assertRaises(MigrationError):
+                source_footprint(str(home))
 
     def test_read_transaction_does_not_mix_later_writes_into_a_thread(self):
         with tempfile.TemporaryDirectory() as temporary:

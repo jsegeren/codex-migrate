@@ -30,6 +30,8 @@ class SetupTests(unittest.TestCase):
         self.assertIn('data.snapshots.length>=1000?"at least ":""', VAULT_HTML)
         self.assertIn('saved ${data.snapshots.length===1?', VAULT_HTML)
         self.assertIn('fmt(data.transcript_bytes)', VAULT_HTML)
+        self.assertIn('database-backed ${data.paginated_threads===1?', VAULT_HTML)
+        self.assertIn('The encrypted backup size may differ', VAULT_HTML)
         self.assertIn('Vault compresses new backup data when useful', VAULT_HTML)
         self.assertIn('Keep space for the full source size plus overhead', VAULT_HTML)
 
@@ -229,6 +231,11 @@ class SetupTests(unittest.TestCase):
                                                 "type": "userMessage", "text": body}),
                                     "userMessage", ordinal))
         original = database.read_bytes()
+        code, summary = self.request("/api/vault/summary")
+        self.assertEqual(code, 200)
+        self.assertTrue(summary["paginated_database_present"])
+        self.assertEqual(summary["paginated_threads"], 1)
+        self.assertGreaterEqual(summary["paginated_database_bytes"], len(original))
         code, results = self.request("/api/vault/search?q=clerk")
         self.assertEqual(code, 200)
         self.assertEqual(len(results["results"]), 1)

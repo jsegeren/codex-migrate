@@ -167,9 +167,17 @@ class VaultBackupTests(unittest.TestCase):
                                    (thread_id, "turn-1", "item-1", 1, 100,
                                     json.dumps(item), "userMessage", 1))
             original = database.read_bytes()
+            planned = plan(str(source), str(destination))
+            self.assertEqual(planned.transcript_files, 0)
+            self.assertEqual(planned.paginated_threads, 1)
+            self.assertGreaterEqual(planned.paginated_database_bytes, len(original))
+            progress_states = []
             try:
                 first = backup(str(source), str(destination), crypto_helper=str(self.helper),
-                               chunk_size=64 * 1024)
+                               chunk_size=64 * 1024, progress=lambda *values: progress_states.append(values))
+                self.assertEqual(progress_states[0], (0, 1, 0, 0))
+                self.assertEqual(progress_states[-1][0:2], (1, 1))
+                self.assertEqual(progress_states[-1][3], 0)
                 self.assertTrue(first.paginated_history_unprotected)
                 self.assertTrue(first.needs_attention)
                 self.assertEqual(first.transcript_files, 1)
@@ -222,6 +230,41 @@ class VaultBackupTests(unittest.TestCase):
                            chunk_size=64 * 1024)
                 self.assertEqual(json.loads((destination / "latest.json").read_text())
                                  ["snapshot_id"], second.snapshot_id)
+            finally:
+                self.delete_key(destination)
+
+    def test_progress_counts_both_transcript_and_database_source(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            codex = source / ".codex"
+            transcript = codex / "sessions/fixture.jsonl"
+            transcript.parent.mkdir(parents=True)
+            transcript.write_text(json.dumps({"payload": {"text": "synthetic transcript"}}) + "\n")
+            database = codex / "thread_history_1.sqlite"
+            with sqlite3.connect(database) as connection:
+                connection.execute("CREATE TABLE thread_items (thread_id TEXT, turn_id TEXT, "
+                                   "item_id TEXT, rollout_ordinal INTEGER, created_at_ms INTEGER, "
+                                   "item_json TEXT, item_type TEXT, updated_at_ordinal INTEGER)")
+                connection.execute("CREATE TABLE thread_history_projection_state ("
+                                   "thread_id TEXT, next_rollout_byte_offset INTEGER, "
+                                   "next_rollout_ordinal INTEGER)")
+                connection.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                   ("44444444-4444-4444-8444-444444444444", "turn-1",
+                                    "item-1", 1, 100,
+                                    json.dumps({"id": "item-1", "type": "userMessage",
+                                                "text": "synthetic database turn"}),
+                                    "userMessage", 1))
+            destination = root / "vault"
+            updates = []
+            try:
+                result = backup(str(source), str(destination), crypto_helper=str(self.helper),
+                                progress=lambda *values: updates.append(values))
+                self.assertEqual(result.transcript_files, 2)
+                self.assertEqual(updates[0], (0, 2, 0, 0))
+                self.assertTrue(any(done == 1 and total == 2 for done, total, _, _ in updates))
+                self.assertEqual(updates[-1][:2], (2, 2))
+                self.assertEqual(updates[-1][3], 0)
             finally:
                 self.delete_key(destination)
 

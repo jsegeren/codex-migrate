@@ -719,7 +719,20 @@ let selectedRecoveryTimer=null;
 function selectedRecoveryView(data){selectedRecoveryRunning=data.status==="running";const attention=data.status==="needs_attention";$("restore-thread").disabled=selectedRecoveryRunning||installRunning||attention;$("thread-restore-error").textContent=(data.status==="failed"||attention)?(data.error||"Selected recovery stopped safely."):"";if(data.status==="running"){$("thread-restore-status").textContent="Verifying the backup again and recovering this conversation…"}else if(data.status==="installed"){$("thread-restore-status").textContent="Conversation restored and verified. Reopen Codex to use it."}else if(data.status==="already_present"){$("thread-restore-status").textContent="This exact conversation is already present. Nothing was changed."}else if(data.status==="failed"||attention){$("thread-restore-status").textContent=""}if(selectedRecoveryRunning&&!selectedRecoveryTimer)selectedRecoveryTimer=setInterval(refreshSelectedRecovery,1000);if(!selectedRecoveryRunning&&selectedRecoveryTimer){clearInterval(selectedRecoveryTimer);selectedRecoveryTimer=null}refreshRestoreButton()}
 async function refreshSelectedRecovery(){try{selectedRecoveryView(await api("/api/vault/thread-install-status"))}catch(error){$("thread-restore-error").textContent=error.message}}
 $("restore-thread").onclick=async()=>{if(!selected||selected.source!=="backup")return;if(!confirm("Restore only this verified conversation into Codex? Close Codex and its CLI sessions first. Existing conversations will not be overwritten or merged."))return;try{$("thread-restore-error").textContent="";selectedRecoveryView(await api("/api/vault/install-thread",{collection:selected.collection,transcript:selected.transcript,apply:true}))}catch(error){$("thread-restore-error").textContent=error.message}};
-api("/api/vault/summary").then(data=>{const files=data.active_transcripts+data.archived_transcripts;$("active").textContent=data.active_transcripts.toLocaleString();$("archived").textContent=data.archived_transcripts.toLocaleString();$("bytes").textContent=fmt(data.transcript_bytes);$("backup-footprint").textContent=files?`History to protect: ${fmt(data.transcript_bytes)} in ${files.toLocaleString()} conversation ${files===1?"file":"files"}. Vault compresses new backup data when useful, so the saved size may be smaller. Keep space for the full source size plus overhead until the first backup verifies.`:"No local Codex conversation files were found on this Mac.";$("status").textContent="Ready."}).catch(error=>{$("backup-footprint").textContent="Could not measure conversation history. Check free space before starting a backup.";fail(error)});
+api("/api/vault/summary").then(data=>{
+  const files=data.active_transcripts+data.archived_transcripts;
+  $("active").textContent=data.active_transcripts.toLocaleString();
+  $("archived").textContent=data.archived_transcripts.toLocaleString();
+  $("bytes").textContent=fmt(data.transcript_bytes);
+  if(data.paginated_database_present){
+    $("backup-footprint").textContent=`History found: ${files.toLocaleString()} transcript ${files===1?"file":"files"} (${fmt(data.transcript_bytes)}) plus ${data.paginated_threads.toLocaleString()} database-backed ${data.paginated_threads===1?"thread":"threads"} (${fmt(data.paginated_database_bytes)} of SQLite storage). These may be the same conversations. The encrypted backup size may differ; keep room for both sources plus overhead until verification finishes.`;
+  }else if(files){
+    $("backup-footprint").textContent=`History to protect: ${fmt(data.transcript_bytes)} in ${files.toLocaleString()} conversation ${files===1?"file":"files"}. Vault compresses new backup data when useful, so the saved size may be smaller. Keep space for the full source size plus overhead until the first backup verifies.`;
+  }else{
+    $("backup-footprint").textContent="No local Codex conversation files were found on this Mac.";
+  }
+  $("status").textContent="Ready.";
+}).catch(error=>{$("backup-footprint").textContent="Could not measure conversation history. Check free space before starting a backup.";fail(error)});
 refreshBackup();
 refreshSchedule();
 refreshRestore();

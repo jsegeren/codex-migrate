@@ -24,7 +24,7 @@ import uuid
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.source_availability import check_info, require_local
-from codex_migrate.vault import _transcripts
+from codex_migrate.vault import _transcripts, inspect as inspect_vault
 from codex_migrate.vault_identity import (
     TranscriptChanged, loss_warnings, mark_simultaneous_conflicts,
     scan_transcript, title_index,
@@ -45,6 +45,8 @@ class BackupPlan:
     destination: str
     transcript_files: int
     transcript_bytes: int
+    paginated_threads: int = 0
+    paginated_database_bytes: int = 0
     encrypted: bool = True
     applied: bool = False
 
@@ -392,9 +394,10 @@ def _paginated_history_unprotected(source_home: str) -> bool:
 
 def plan(source_home: str, destination: str) -> BackupPlan:
     root = _validate_destination(source_home, destination)
-    files = _source_files(source_home)
-    total = sum(check_info(path.lstat()).st_size for _, path, _ in files)
-    return BackupPlan(str(root), len(files), total)
+    summary = inspect_vault(source_home)
+    return BackupPlan(str(root), summary.active_transcripts + summary.archived_transcripts,
+                      summary.transcript_bytes, summary.paginated_threads,
+                      summary.paginated_database_bytes)
 
 
 def backup(
@@ -446,8 +449,18 @@ def _backup_unlocked(
         titles = {}
         title_index_unavailable = True
     expected_bytes = sum(check_info(path.lstat()).st_size for _, path, _ in files)
+    progress_total_files = len(files)
+    progress_total_bytes = expected_bytes
+    if progress is not None and paginated_history_unprotected:
+        from codex_migrate.vault_paginated import source_footprint
+
+        paginated_count, _, _ = source_footprint(source_home)
+        progress_total_files += paginated_count
+        # SQLite page bytes are not the encoded source length. Do not show a
+        # false percentage for this phase or imply that 100% means verified.
+        progress_total_bytes = 0
     if progress is not None:
-        progress(0, len(files), 0, expected_bytes)
+        progress(0, progress_total_files, 0, progress_total_bytes)
     with _repository_lock(root):
         if require_existing_key_id is not None and \
                 _metadata(_read_json(root / METADATA_NAME)) != require_existing_key_id:
@@ -543,7 +556,8 @@ def _backup_unlocked(
             total_bytes += stored_size
             total_chunks += len(chunks)
             if progress is not None:
-                progress(len(manifest_files), len(files), total_bytes, expected_bytes)
+                progress(len(manifest_files), progress_total_files,
+                         total_bytes, progress_total_bytes)
 
         mark_simultaneous_conflicts(manifest_files)
         at_risk = set(loss_warnings(
@@ -557,7 +571,11 @@ def _backup_unlocked(
         if paginated_history_unprotected:
             from codex_migrate.vault_paginated import open_paginated_source
             with open_paginated_source(source_home) as source:
-                for thread_id in source.thread_ids():
+                thread_ids = source.thread_ids()
+                progress_total_files = len(files) + len(thread_ids)
+                if progress is not None:
+                    progress(len(files), progress_total_files, total_bytes, 0)
+                for thread_id in thread_ids:
                     stored, records, users, assistants = _store_paginated_thread(
                         helper, objects, chunk_size, key_id, source, thread_id)
                     size = stored.get("size")
@@ -595,6 +613,9 @@ def _backup_unlocked(
                     })
                     total_bytes += size
                     total_chunks += len(chunks)
+                    if progress is not None:
+                        progress(len(manifest_files), progress_total_files,
+                                 total_bytes, 0)
         paginated_history_unprotected |= _paginated_history_unprotected(source_home)
         for item in manifest_files:
             if item["collection"] == "paginated":

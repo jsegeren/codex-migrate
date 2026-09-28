@@ -275,3 +275,35 @@ def open_paginated_source(source_home: str) -> Iterator[PaginatedSource]:
             raise MigrationError("Codex paginated history moved while reading it.")
     finally:
         connection.close()
+
+
+def source_footprint(source_home: str):
+    """Return thread count and on-disk database bytes for a preflight estimate.
+
+    This is not the size of a future encrypted snapshot: SQLite pages and WAL
+    framing are different from the validated JSONL records Vault stores.
+    """
+    database = _canonical_macos_path(Path(source_home) / ".codex/thread_history_1.sqlite")
+    try:
+        database.lstat()
+    except FileNotFoundError:
+        return 0, 0, False
+    except OSError as error:
+        raise MigrationError("Codex paginated history could not be measured safely.") from error
+    wal = Path(str(database) + "-wal")
+    try:
+        wal_info = wal.lstat()
+    except FileNotFoundError:
+        wal_info = None
+    except OSError as error:
+        raise MigrationError("Codex paginated history could not be measured safely.") from error
+    if wal_info is not None:
+        _require_unlinked_path(wal)
+        require_local(wal)
+        if (not stat.S_ISREG(wal_info.st_mode) or wal_info.st_uid != os.getuid()
+                or wal_info.st_nlink != 1):
+            raise MigrationError("Codex paginated history WAL is not a private regular file.")
+    with open_paginated_source(source_home) as source:
+        count = len(source.thread_ids())
+        size = database.lstat().st_size + (wal_info.st_size if wal_info else 0)
+    return count, size, True

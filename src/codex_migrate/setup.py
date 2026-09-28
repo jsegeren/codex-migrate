@@ -1204,9 +1204,10 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                 "destination": planned.destination,
                 "storage": storage,
                 "completed_files": 0,
-                "total_files": planned.transcript_files,
+                "total_files": planned.transcript_files + planned.paginated_threads,
                 "completed_bytes": 0,
-                "total_bytes": planned.transcript_bytes,
+                "total_bytes": (0 if planned.paginated_threads
+                                else planned.transcript_bytes),
             }
             self._vault_thread = worker
             worker.start()
