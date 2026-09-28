@@ -27,6 +27,13 @@ new backup guarantee. Per-thread loss flags remain reserved for thread-specific
 loss or identity evidence; this source-level warning is not silently inherited
 by every future thread version.
 
+A private read-only source adapter now checks the installed paginated schema,
+pins a SQLite read transaction, and streams one thread's raw item records at a
+time. Synthetic concurrent-write, unsupported-schema, malformed-item, and
+linked-source tests pass; a metadata-only check matched the installed schema.
+This adapter is **not connected to encryption, snapshots, search, or restore**.
+It does not make any customer backup more complete or change the release hold.
+
 ## September 27 integrated-source local package — not released
 
 Committed source `e644570` packaged as an arm64 **local-test-only** build-20 app.
