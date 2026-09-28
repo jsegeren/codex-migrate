@@ -14,6 +14,7 @@ from codex_migrate.dashboard import LoopbackHTTPServer
 from codex_migrate.errors import MigrationError
 from codex_migrate.setup import SetupDashboard, SETUP_HTML
 from codex_migrate.vault_backup import BackupPlan, BackupResult
+from codex_migrate.vault import read_thread
 from codex_migrate.vault_install import InstallResult, ThreadInstallResult
 from codex_migrate.vault_paginated import PaginatedItem, encoded_item
 from codex_migrate.vault_recovery import RestoreResult, SnapshotInfo
@@ -966,6 +967,44 @@ class SetupTests(unittest.TestCase):
         self.assertFalse({item["transcript"] for item in first["results"]}
                          & {item["transcript"] for item in second["results"]})
         self.assertEqual(self.request("/api/vault/search?q=clerk&offset=-1")[0], 400)
+
+    def test_ambiguous_paginated_thread_does_not_hide_other_search_results(self):
+        codex = self.home / ".codex"
+        active = codex / "sessions"
+        archived = codex / "archived_sessions"
+        active.mkdir(parents=True)
+        archived.mkdir()
+        ambiguous = "11111111-1111-4111-8111-111111111111"
+        searchable = "22222222-2222-4222-8222-222222222222"
+        for folder in (active, archived):
+            (folder / ("rollout-" + ambiguous + ".jsonl")).write_text(
+                json.dumps({"type": "session_meta", "payload": {
+                    "id": ambiguous, "source": folder.name}}) + "\n",
+                encoding="utf-8")
+        with sqlite3.connect(codex / "thread_history_1.sqlite") as database:
+            database.execute("CREATE TABLE thread_items (thread_id TEXT, turn_id TEXT, "
+                             "item_id TEXT, rollout_ordinal INTEGER, created_at_ms INTEGER, "
+                             "item_json TEXT, item_type TEXT, updated_at_ordinal INTEGER)")
+            database.execute("CREATE TABLE thread_history_projection_state ("
+                             "thread_id TEXT, next_rollout_byte_offset INTEGER, "
+                             "next_rollout_ordinal INTEGER)")
+            for thread_id, text, timestamp in (
+                    (ambiguous, "Ambiguous history", 200),
+                    (searchable, "Recoverable history needle", 100)):
+                database.execute("INSERT INTO thread_items VALUES (?,?,?,?,?,?,?,?)", (
+                    thread_id, "turn-1", "item-1", 1, timestamp,
+                    json.dumps({"id": "item-1", "type": "userMessage", "text": text}),
+                    "userMessage", 1))
+        code, result = self.request("/api/vault/search?q=needle")
+        self.assertEqual(code, 200)
+        self.assertEqual([(item["collection"], item["transcript"])
+                          for item in result["results"]],
+                         [("paginated", searchable + ".jsonl")])
+        self.assertTrue(result["partial_results"])
+        self.assertFalse(result["has_more"])
+        with self.assertRaisesRegex(MigrationError, "ambiguous"):
+            read_thread(str(self.home), "paginated", ambiguous + ".jsonl",
+                        live_paginated=True)
 
     def test_vault_search_local_titles_does_not_require_matching_content(self):
         codex = self.home / ".codex"

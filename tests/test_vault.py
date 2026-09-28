@@ -53,6 +53,33 @@ class VaultTests(unittest.TestCase):
             self.assertEqual(search(str(root), "private/customer", limit=10), [])
             self.assertEqual(search(str(root), "secret-id", limit=10), [])
 
+    def test_ambiguous_fork_parent_keeps_other_transcripts_searchable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            active = root / ".codex/sessions"
+            archived = root / ".codex/archived_sessions"
+            active.mkdir(parents=True)
+            archived.mkdir()
+            parent_id = "11111111-1111-4111-8111-111111111111"
+            child_id = "22222222-2222-4222-8222-222222222222"
+            for folder in (active, archived):
+                (folder / ("rollout-" + parent_id + ".jsonl")).write_text(
+                    json.dumps({"type": "session_meta", "payload": {
+                        "id": parent_id, "source": folder.name}}) + "\n")
+            child = active / ("rollout-" + child_id + ".jsonl")
+            child.write_text(json.dumps({"type": "session_meta", "payload": {
+                "id": child_id, "history_base": {"thread_id": parent_id,
+                    "end_ordinal_exclusive": 1,
+                    "end_byte_offset": 0}}}) + "\n")
+            (active / "good.jsonl").write_text(
+                json.dumps({"payload": {"message": {"content": "Find this needle"}}}) + "\n")
+            warnings = []
+            matches = search(str(root), "needle", warnings=warnings)
+            self.assertEqual([item.transcript for item in matches], ["good.jsonl"])
+            self.assertEqual(warnings, ["ambiguous_lineage"])
+            with self.assertRaisesRegex(MigrationError, "ambiguous"):
+                read_thread(str(root), "active", child.name)
+
     def test_common_word_returns_recent_distinct_threads_not_old_message_hits(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

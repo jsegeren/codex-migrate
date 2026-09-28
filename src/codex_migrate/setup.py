@@ -865,12 +865,13 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
             worker.start()
         return self.vault_browse_status()
 
-    def search_vault_backup(self, phrase, limit, offset=0):
+    def search_vault_backup(self, phrase, limit, offset=0, warnings=None):
         with self._browse_data_lock:
             if self._browse_home is None or self._browse_catalog is None:
                 raise MigrationError("Open a verified Vault backup before searching it")
             return search_vault(str(self._browse_home), phrase, limit,
-                                catalog=self._browse_catalog, offset=offset)
+                                catalog=self._browse_catalog, offset=offset,
+                                warnings=warnings)
 
     def read_vault_backup_thread(self, collection, transcript):
         with self._browse_data_lock:
@@ -1389,13 +1390,17 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                             if not 1 <= page_size <= 499:
                                 raise ValueError("invalid history search page size")
                             offset = int(raw_offset)
-                            results = (setup.search_vault_backup(phrase, page_size + 1, offset)
+                            warnings = []
+                            results = (setup.search_vault_backup(phrase, page_size + 1,
+                                                                 offset, warnings=warnings)
                                        if source == "backup" else
                                        search_vault(setup.source_home, phrase, page_size + 1,
                                                     offset=offset,
-                                                    titles_only=source == "local_titles"))
+                                                    titles_only=source == "local_titles",
+                                                    warnings=warnings))
                             self._json(200, {"results": [item.as_dict() for item in results[:page_size]],
-                                             "has_more": len(results) > page_size})
+                                             "has_more": len(results) > page_size,
+                                             "partial_results": bool(warnings)})
                             return
                         if (parsed.path == "/api/vault/salvage-candidates"
                                 and set(query) <= {"q", "offset"}

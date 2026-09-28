@@ -228,6 +228,18 @@ the new snapshot and scheduled health as needing attention without opening or
 modifying Codex's database. This conservative warning is not a substitute for
 capturing database-only durable content and proving off-device recovery.
 
+The September 28 read-only search check on one Mac found five thread IDs
+represented by 27 divergent rollout files. Previously, a full-text query that
+reached any such database-backed thread stopped the entire search with an
+ambiguous-lineage error. The draft now skips only that unresolved lineage,
+returns other search results, and explicitly marks the page as partial. Direct
+read/export of an ambiguous thread still refuses to guess which rollout is
+authoritative. A no-hit search without the optional local index did not finish
+within 20 seconds across roughly 58 GB of rollout files and 7 GB of SQLite
+storage; useful full-text search performance at this scale remains an open
+product acceptance concern. No private transcript content, paths, IDs, or
+hashes were recorded in this receipt.
+
 The current [official app-server contract](https://learn.chatgpt.com/docs/app-server)
 can list and summarize existing paginated threads, but its full-history read
 and item-pagination operations fail closed for them. It is not a supported
