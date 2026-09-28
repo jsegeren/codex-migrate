@@ -249,9 +249,22 @@ class HostedRecoveryClientTests(unittest.TestCase):
                 self.server.snapshot_id = staged.snapshot_id
                 receipt, read_store = self.client().prepare(max_bytes=5_000_000)
                 self.assertEqual(receipt["snapshot_id"], staged.snapshot_id)
+                manifest_key = f"manifests/{staged.snapshot_id}.cvmanifest"
+                manifest_bytes = len(staged_store.objects[manifest_key])
+                self.assertGreater(sum(map(len, staged_store.objects.values())),
+                                   manifest_bytes)
+                # Full restore remains bounded by total snapshot bytes, while
+                # an incremental backup needs only the prior sealed manifest.
+                with self.assertRaisesRegex(MigrationError, "exceeds its limit"):
+                    self.client().prepare(max_bytes=manifest_bytes)
+                self.server.requests.clear()
+                with self.assertRaisesRegex(MigrationError, "prior hosted manifest exceeds"):
+                    self.client().prior_catalog(key_id=key_id,
+                        crypto_helper=str(helper), max_bytes=manifest_bytes - 1)
+                self.assertNotIn("get", [request["action"] for request in self.server.requests])
                 self.server.requests.clear()
                 prior_id, files = self.client().prior_catalog(
-                    key_id=key_id, crypto_helper=str(helper), max_bytes=5_000_000)
+                    key_id=key_id, crypto_helper=str(helper), max_bytes=manifest_bytes)
                 self.assertEqual(prior_id, staged.snapshot_id)
                 self.assertEqual(len(files), 1)
                 self.assertEqual(files[0]["path"], "2026/09/27/fixture.jsonl")
