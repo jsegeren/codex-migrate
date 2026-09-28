@@ -36,6 +36,21 @@ def fixture(root: Path) -> Path:
 
 
 class PaginatedSourceTests(unittest.TestCase):
+    def test_search_order_uses_newest_item_not_thread_identity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            database = fixture(home)
+            newer = "55555555-5555-4555-8555-555555555555"
+            with sqlite3.connect(database) as connection:
+                connection.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                   (newer, "turn-new", "item-new", 1, 200,
+                                    json.dumps({"id": "item-new", "type": "userMessage",
+                                                "text": "newer synthetic work"}),
+                                    "userMessage", 1))
+            with open_paginated_source(str(home)) as source:
+                self.assertEqual(source.thread_ids(), [THREAD_ID, newer])
+                self.assertEqual(source.thread_ids_recent(), [newer, THREAD_ID])
+
     def test_large_paginated_record_excerpts_and_can_continue(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)

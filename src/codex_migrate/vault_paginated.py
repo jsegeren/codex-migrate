@@ -64,6 +64,23 @@ class PaginatedSource:
         except sqlite3.Error as error:
             raise MigrationError("Codex paginated history could not be listed safely.") from error
 
+    def thread_ids_recent(self) -> List[str]:
+        """List active database threads by newest persisted item, not UUID."""
+        try:
+            rows = self._connection.execute(
+                "SELECT thread_id FROM thread_items GROUP BY thread_id "
+                "ORDER BY MAX(created_at_ms) DESC, thread_id")
+            result = []
+            for (thread_id,) in rows:
+                if canonical_id(thread_id) != thread_id:
+                    raise MigrationError("Codex paginated history has an invalid thread identity.")
+                result.append(thread_id)
+                if len(result) > 100000:
+                    raise MigrationError("Codex paginated history has too many threads to search safely.")
+            return result
+        except sqlite3.Error as error:
+            raise MigrationError("Codex paginated history could not be listed safely.") from error
+
     def has_thread(self, thread_id: str) -> bool:
         if canonical_id(thread_id) != thread_id:
             raise ValueError("thread id must be a canonical UUID")

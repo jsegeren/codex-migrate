@@ -454,7 +454,7 @@ def search(
             from codex_migrate.vault_paginated import open_paginated_source
 
             with open_paginated_source(source_home) as source:
-                for thread_id in source.thread_ids():
+                for thread_id in source.thread_ids_recent():
                     transcript = thread_id + ".jsonl"
                     aliases = indexed.get(thread_id, [])
                     title = aliases[-1] if aliases else None
