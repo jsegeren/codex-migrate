@@ -85,7 +85,12 @@ Separately, 100,000 varied 8 KiB synthetic items across 200 threads occupied
 the unchanged second backup and verification took 21.3 seconds with all 400
 objects reused. The Vault occupied 469,896,622 bytes and peak resident memory
 was about 503 MB. The benchmark deletes its disposable key and data on exit.
-Neither run was made by the installed scheduler, used the real 6.6 GB item
+With one additional 8 KiB database item before the second capture, the same
+fixture retained all 400 previous ciphertext objects and added one 39,962-byte
+object. Total Vault storage grew by 154,766 bytes including the new manifest,
+reference, and metadata. This measures one synthetic append pattern, not the
+retained-byte growth of a real customer's daily history or a hosted-tier price.
+None of these runs used the installed scheduler or the real 6.6 GB item
 payload volume, proved off-device recovery, or clears the public-release hold.
 
 ## September 27 integrated-source local package — not released

@@ -24,11 +24,15 @@ def main():
     parser.add_argument("--items-per-thread", type=int, default=100)
     parser.add_argument("--text-bytes", type=int, default=200)
     parser.add_argument("--second-snapshot", action="store_true")
+    parser.add_argument("--append-one", action="store_true",
+                        help="append one synthetic item before the second snapshot")
     parser.add_argument("--varied-text", action="store_true",
                         help="generate distinct deterministic payloads per item")
     args = parser.parse_args()
     if platform.system() != "Darwin":
         parser.error("the CryptoKit helper requires macOS")
+    if args.append_one and not args.second_snapshot:
+        parser.error("--append-one requires --second-snapshot")
     if not (1 <= args.threads <= 2000 and 1 <= args.items_per_thread <= 1000
             and 1 <= args.text_bytes <= 8192
             and args.threads * args.items_per_thread * args.text_bytes <= 2_000_000_000):
@@ -83,17 +87,32 @@ def main():
                 raise AssertionError("draft history coverage warning was not retained")
             first_objects = {path.relative_to(vault).as_posix() for path in
                              (vault / "objects").rglob("*.cvchunk")}
+            first_vault_bytes = sum(path.stat().st_size for path in
+                                    vault.rglob("*") if path.is_file())
             metrics = {
                 "threads": args.threads,
                 "items": args.threads * args.items_per_thread,
                 "database_bytes": database.stat().st_size,
-                "vault_bytes": sum(path.stat().st_size for path in vault.rglob("*") if path.is_file()),
+                "vault_bytes": first_vault_bytes,
                 "seconds_populate": round(populated - started, 2),
                 "seconds_compile": round(compiled - populated, 2),
                 "seconds_backup": round(backed_up - compiled, 2),
                 "seconds_verify": round(time.monotonic() - backed_up, 2),
             }
             if args.second_snapshot:
+                if args.append_one:
+                    item_id = "appended-item"
+                    text = (hashlib.shake_256(item_id.encode()).hexdigest(
+                        (args.text_bytes + 1) // 2)[:args.text_bytes]
+                        if args.varied_text else shared_text)
+                    body = json.dumps({"id": item_id, "type": "userMessage",
+                                       "content": [{"type": "text", "text": text}]})
+                    with sqlite3.connect(database) as connection:
+                        connection.execute("INSERT INTO thread_items VALUES (?,?,?,?,?,?,?,?)",
+                                           ("00000000-0000-4000-8000-%012d" % 0,
+                                            "appended-turn", item_id, args.items_per_thread,
+                                            args.items_per_thread, body, "userMessage",
+                                            args.items_per_thread))
                 second_started = time.monotonic()
                 second = backup(str(source), str(vault), crypto_helper=str(helper))
                 if second.snapshot_id == result.snapshot_id or second.recovery_key is not None:
@@ -104,11 +123,20 @@ def main():
                     raise AssertionError("second snapshot did not verify exactly")
                 second_objects = {path.relative_to(vault).as_posix() for path in
                                   (vault / "objects").rglob("*.cvchunk")}
-                if second_objects != first_objects:
+                if args.append_one:
+                    if not first_objects < second_objects:
+                        raise AssertionError("changed snapshot did not retain old and new chunks")
+                elif second_objects != first_objects:
                     raise AssertionError("unchanged snapshot wrote new encrypted chunks")
                 metrics["seconds_second_backup_and_verify"] = round(
                     time.monotonic() - second_started, 2)
-                metrics["objects_reused"] = len(first_objects)
+                metrics["objects_retained"] = len(first_objects & second_objects)
+                metrics["objects_added"] = len(second_objects - first_objects)
+                metrics["new_ciphertext_bytes"] = sum(
+                    (vault / relative).stat().st_size for relative in
+                    second_objects - first_objects)
+                metrics["vault_bytes_after_second"] = sum(
+                    path.stat().st_size for path in vault.rglob("*") if path.is_file())
             print(json.dumps(metrics, sort_keys=True))
         finally:
             metadata = vault / "vault.json"
