@@ -31,6 +31,10 @@ _HEX = re.compile(r"[0-9a-f]{64}\Z")
 _MAX_RESPONSE = 2048
 
 
+class HostedPublicationStale(MigrationError):
+    """A different verified snapshot advanced this Vault after reservation."""
+
+
 class HostedUploadClient:
     """Pinned origins and a Keychain-sourced device bearer, never a bucket key.
 
@@ -88,7 +92,20 @@ class HostedUploadClient:
                 data = response.read(response_limit + 1)
                 if len(data) > response_limit:
                     raise MigrationError("The hosted upload service response is too large.")
-        except (HTTPError, URLError, OSError, ValueError):
+        except HTTPError as error:
+            if (error.code == 409 and (publication or checkpointed_publication)
+                    and error.headers.get("Content-Encoding", "identity") == "identity"
+                    and error.headers.get("Content-Type", "").split(";")[0] ==
+                    "application/json"):
+                try:
+                    if json.loads(error.read(129)) == {"error": "stale_snapshot"}:
+                        raise HostedPublicationStale(
+                            "Another verified backup advanced this Vault. "
+                            "Review and abandon this pending upload before starting a new backup.")
+                except (OSError, UnicodeError, ValueError):
+                    pass
+            raise MigrationError("The hosted upload service is unavailable.") from None
+        except (URLError, OSError, ValueError):
             # Never include the bearer, object path, response body or URL.
             raise MigrationError("The hosted upload service is unavailable.") from None
         try:

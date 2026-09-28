@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { makeHandler } = require('../api/hosted-publish-checkpointed');
+const { HostedPublicationStaleError } = require('../hosted/publication_conflict');
 const { mintSessionSecret } = require('./hosted-device-fixture');
 const { accountId, vaultId } = require('./hosted-subscriber-fixture');
 
@@ -12,7 +13,7 @@ function response() {
     end(value) { this.body = JSON.parse(value); } };
 }
 
-function fixture() {
+function fixture(publishError = null) {
   const session = mintSessionSecret();
   const env = { HOSTED_MODE: 'sandbox', HOSTED_SANDBOX_UPLOAD_OPEN: 'yes',
     HOSTED_SANDBOX_CHECKPOINT_PUBLISH_OPEN: 'yes' };
@@ -42,6 +43,7 @@ function fixture() {
   }, env, async ({ scope, reservationId: reservation,
     snapshotId: snapshot }) => {
     publishes++;
+    if (publishError) throw publishError;
     assert.equal(scope.accountId, accountId);
     assert.equal(reservation, reservationId);
     assert.equal(snapshot, snapshotId);
@@ -80,4 +82,12 @@ test('only a fresh paid device can request last-good publication', async () => {
   f.lapse();
   assert.equal((await f.send()).statusCode, 403);
   assert.equal(f.publishes(), 1);
+});
+
+test('an authenticated stale reservation gets a bounded conflict, not an outage', async () => {
+  const f = fixture(new HostedPublicationStaleError());
+  const result = await f.send();
+  assert.equal(result.statusCode, 409);
+  assert.deepEqual(result.body, { error: 'stale_snapshot' });
+  assert.equal(result.headers['Cache-Control'], 'no-store');
 });

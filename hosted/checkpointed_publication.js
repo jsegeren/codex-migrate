@@ -2,6 +2,8 @@
 // checkpointed. The SQL function rechecks completeness and freshness before
 // moving last-good; the client never supplies a verification receipt.
 const { consumeAuthorizedScope } = require('./access');
+const { HostedPublicationStaleError, isStalePublication } =
+  require('./publication_conflict');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const PUBLISH_SQL = `SELECT hosted.publish_checkpointed_staged_current(
@@ -36,7 +38,8 @@ async function publishCheckpointed({ scope, reservationId, snapshotId, query }) 
       throw new HostedCheckpointedPublicationError();
     }
     return Object.freeze({ snapshotId, verifiedObjectCount });
-  } catch {
+  } catch (error) {
+    if (isStalePublication(error)) throw new HostedPublicationStaleError();
     throw new HostedCheckpointedPublicationError();
   }
 }

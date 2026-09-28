@@ -31,6 +31,7 @@ function fixture() {
   let publications = 0;
   let status = 'active';
   let match = true;
+  let stale = false;
   const handler = makeHandler(async () => {
     loads++;
     return { live: false, priceCatalog, workerOrigin: 'https://r2.example.test',
@@ -55,6 +56,10 @@ function fixture() {
           prefix + `refs/${snapshotId}.json`,
         ]);
         publications++;
+        if (stale) {
+          throw Object.assign(new Error('hosted_publication_base_changed'),
+            { code: 'HV001' });
+        }
         return { rows: [{ published: true }] };
       },
       verifyPurchase: async () => ({ sessionId: 'cs_test_fixture',
@@ -87,6 +92,7 @@ function fixture() {
   return { env, req, loads: () => loads, verifies: () => verifies,
     publications: () => publications, lapse: () => { status = 'past_due'; },
     mismatch: () => { match = false; },
+    stale: () => { stale = true; },
     send: async () => { const res = response(); await handler(req, res); return res; } };
 }
 
@@ -130,4 +136,13 @@ test('lapsed subscription or failed provider check cannot publish', async () => 
   assert.equal((await mismatch.send()).statusCode, 503);
   assert.equal(mismatch.verifies(), 1);
   assert.equal(mismatch.publications(), 0);
+});
+
+test('an authenticated stale publication reports a retryable-by-new-reservation conflict', async () => {
+  const f = fixture();
+  f.stale();
+  const result = await f.send();
+  assert.equal(result.statusCode, 409);
+  assert.deepEqual(result.body, { error: 'stale_snapshot' });
+  assert.equal(result.headers['Cache-Control'], 'no-store');
 });

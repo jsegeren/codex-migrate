@@ -7,6 +7,7 @@ const { uploadRuntime } = require('../hosted/upload_runtime');
 const { authorizeUploadScope, HostedAccessError } = require('../hosted/access');
 const { createBatchVerifier } = require('../hosted/batch_verifier');
 const { publishStoredPages } = require('../hosted/stored_publication');
+const { HostedPublicationStaleError } = require('../hosted/publication_conflict');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const BEARER = /^Bearer (hv1_[A-Za-z0-9_-]{43})$/;
@@ -58,6 +59,9 @@ function makeHandler(load = uploadRuntime, env = process.env,
       return reply(res, 200, { snapshotId: result.snapshotId,
         verifiedObjectCount: result.verifiedObjectCount });
     } catch (error) {
+      if (error instanceof HostedPublicationStaleError) {
+        return reply(res, 409, { error: 'stale_snapshot' });
+      }
       return reply(res, error instanceof HostedAccessError ? 403 : 503,
         { error: error instanceof HostedAccessError ? 'access_denied' :
           'temporarily_unavailable' });

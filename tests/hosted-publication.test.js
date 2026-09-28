@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { publishStagedReceipt } = require('../hosted/publication');
+const { HostedPublicationStaleError } = require('../hosted/publication_conflict');
 const { validateReceipt } = require('../hosted/receipt');
 const { authorizeUploadScope } = require('../hosted/access');
 const { mintSessionSecret } = require('./hosted-device-fixture');
@@ -107,6 +108,17 @@ test('database errors do not expose private publication details', async () => {
     verifyBatch: async () => true,
     query: async () => { throw new Error('private database endpoint and account'); },
   }), error => error.message === 'hosted_publication_failed');
+});
+
+test('a stale-base database rejection is distinguishable without leaking SQL', async () => {
+  const databaseError = Object.assign(
+    new Error('hosted_publication_base_changed'), { code: 'HV001' });
+  await assert.rejects(publishStagedReceipt({ receipt: receipt(),
+    maxReceiptBytes: 1000, scope: await publicationScope(), reservationId,
+    verifyBatch: async () => true,
+    query: async () => { throw databaseError; },
+  }), error => error instanceof HostedPublicationStaleError &&
+    error.message === 'hosted_publication_stale');
 });
 
 test('a failed later batch never publishes a large receipt', async () => {

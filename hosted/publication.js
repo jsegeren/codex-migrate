@@ -3,6 +3,8 @@
 // database query method. Never accept those authorities from the client body.
 const { verifyStagedReceiptBatched } = require('./receipt');
 const { consumeAuthorizedScope } = require('./access');
+const { HostedPublicationStaleError, isStalePublication } =
+  require('./publication_conflict');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const PUBLISH_SQL = `SELECT hosted.publish_declared_verified_staged_current(
@@ -31,7 +33,8 @@ async function publishStagedReceipt({ receipt, maxReceiptBytes, scope,
     result = await query(PUBLISH_SQL, [scope.accountId, scope.vaultId,
       reservationId, proof.snapshotId, JSON.stringify(proof.verifiedObjects),
       scope.allowanceBytes]);
-  } catch {
+  } catch (error) {
+    if (isStalePublication(error)) throw new HostedPublicationStaleError();
     // Database errors can contain connection details or tenant metadata.
     // The HTTP layer must never receive those through this coordinator.
     throw new HostedPublicationError();

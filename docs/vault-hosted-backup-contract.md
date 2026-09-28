@@ -397,10 +397,13 @@ egress allowance. Do not claim that B2 restores are always free. See its
   adapter. A draft database guard now captures last-good when a reservation
   starts and rejects any later publication if another upload advanced that
   Vault in the meantime. Overlapping uploads can continue, but the stale one
-  cannot call itself protected or silently replace last-good. The installed
-  path still must reserve first, then fetch the prior catalog and distinguish
-  a stale-publication rejection for a safe retry. The
-  staged hosted-only object graph has also been recovered through the native
+  cannot call itself protected or silently replace last-good. The dark
+  publication endpoints now turn only that exact database conflict into an
+  authenticated `409 stale_snapshot`; the native client treats it as a
+  distinct failed upload that must be reviewed and abandoned before a new
+  reservation. Other or uncertain database failures remain generic failures.
+  The installed path still must reserve first and fetch the prior catalog.
+  The staged hosted-only object graph has also been recovered through the native
   download, key-import, verification, and restore path in a synthetic test
   without first creating a full ciphertext Vault on the source Mac. That test
   uses an in-memory object store and the same macOS login, not real R2 or a

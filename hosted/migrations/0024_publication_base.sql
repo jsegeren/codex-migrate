@@ -39,7 +39,7 @@ BEGIN
     RETURN NEW;
   END IF;
   IF NEW.last_good_snapshot_id IS NULL THEN
-    RAISE EXCEPTION 'hosted_publication_base_changed';
+    RAISE EXCEPTION 'hosted_publication_base_changed' USING ERRCODE = 'HV001';
   END IF;
   SELECT reservation.base_snapshot_id INTO v_base
     FROM hosted.snapshots AS snapshot
@@ -49,7 +49,7 @@ BEGIN
       AND snapshot.vault_id = NEW.vault_id
       AND snapshot.snapshot_id = NEW.last_good_snapshot_id;
   IF NOT FOUND OR v_base IS DISTINCT FROM OLD.last_good_snapshot_id THEN
-    RAISE EXCEPTION 'hosted_publication_base_changed';
+    RAISE EXCEPTION 'hosted_publication_base_changed' USING ERRCODE = 'HV001';
   END IF;
   RETURN NEW;
 END;

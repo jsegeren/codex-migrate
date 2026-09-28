@@ -14,7 +14,9 @@ from unittest.mock import patch
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_hosted_backup_run import HostedBackupRun
 from codex_migrate.vault_hosted_snapshot_stage import HostedSnapshotStage
-from codex_migrate.vault_hosted_upload_client import HostedUploadClient
+from codex_migrate.vault_hosted_upload_client import (
+    HostedPublicationStale, HostedUploadClient,
+)
 from codex_migrate.vault_remote_inventory import RemoteInventory, VaultTransferFile
 from codex_migrate.vault_remote_transfer import (
     StageResult, StagedObject, stage_encrypted_snapshot,
@@ -84,6 +86,9 @@ class _Handler(BaseHTTPRequestHandler):
                     request["snapshotId"] != SNAPSHOT or
                     not self.server.verified_ready):
                 return self._json(503, {"error": "temporarily_unavailable"})
+            if self.server.stale_next_checkpoint_publish:
+                self.server.stale_next_checkpoint_publish = False
+                return self._json(409, self.server.stale_body)
             if self.server.fail_next_checkpoint_publish:
                 self.server.fail_next_checkpoint_publish = False
                 return self._json(503, {"error": "temporarily_unavailable"})
@@ -93,6 +98,9 @@ class _Handler(BaseHTTPRequestHandler):
             if (action != "publish" or request["reservationId"] != RESERVATION or
                     request["snapshotId"] != SNAPSHOT):
                 return self._json(403, {"error": "access_denied"})
+            if self.server.stale_next_publish:
+                self.server.stale_next_publish = False
+                return self._json(409, self.server.stale_body)
             if self.server.fail_next_publish:
                 self.server.fail_next_publish = False
                 return self._json(503, {"error": "temporarily_unavailable"})
@@ -197,8 +205,11 @@ class HostedUploadClientTests(unittest.TestCase):
         self.server.fail_renew = False
         self.server.fail_next_page = False
         self.server.fail_next_publish = False
+        self.server.stale_next_publish = False
+        self.server.stale_body = {"error": "stale_snapshot"}
         self.server.fail_next_verify = False
         self.server.fail_next_checkpoint_publish = False
+        self.server.stale_next_checkpoint_publish = False
         self.server.verify_calls = 0
         self.server.verified_ready = False
         self.server.drop_next_put_response = False
@@ -400,6 +411,20 @@ class HostedUploadClientTests(unittest.TestCase):
             self.client.publish(RESERVATION, SNAPSHOT, apply=True)
         self.assertEqual(self.client.publish(RESERVATION, SNAPSHOT, apply=True), 3)
         self.assertEqual(self.server.actions.count("publish"), 2)
+
+    def test_stale_publication_is_not_an_ambiguous_service_failure(self):
+        self.server.stale_next_publish = True
+        with self.assertRaises(HostedPublicationStale):
+            self.client.publish(RESERVATION, SNAPSHOT, apply=True)
+        self.server.verified_ready = True
+        self.server.stale_next_checkpoint_publish = True
+        with self.assertRaises(HostedPublicationStale):
+            self.client.publish_checkpointed(RESERVATION, SNAPSHOT, apply=True)
+        self.server.stale_body = {"error": "other_conflict"}
+        self.server.stale_next_checkpoint_publish = True
+        with self.assertRaises(MigrationError) as failure:
+            self.client.publish_checkpointed(RESERVATION, SNAPSHOT, apply=True)
+        self.assertNotIsInstance(failure.exception, HostedPublicationStale)
 
     def test_verification_pages_resume_before_checkpointed_publication(self):
         with self.assertRaises(MigrationError):

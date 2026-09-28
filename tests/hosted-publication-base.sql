@@ -40,6 +40,7 @@ DECLARE
   v_last uuid;
   v_rejected boolean;
   v_error text;
+  v_sqlstate text;
 BEGIN
   IF NOT hosted.reserve_upload(v_account, v_vault, v_first_reservation,
       30, clock_timestamp() + interval '15 minutes') OR
@@ -63,7 +64,9 @@ BEGIN
       v_stale_reservation, v_stale, pg_temp.fixture_objects(v_vault, v_stale));
   EXCEPTION WHEN OTHERS THEN
     GET STACKED DIAGNOSTICS v_error = MESSAGE_TEXT;
-    IF v_error <> 'hosted_publication_base_changed' THEN RAISE; END IF;
+    GET STACKED DIAGNOSTICS v_sqlstate = RETURNED_SQLSTATE;
+    IF v_error <> 'hosted_publication_base_changed' OR
+        v_sqlstate <> 'HV001' THEN RAISE; END IF;
     v_rejected := true;
   END;
   IF NOT v_rejected OR EXISTS (SELECT 1 FROM hosted.snapshots

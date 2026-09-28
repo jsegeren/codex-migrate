@@ -3,6 +3,7 @@
 // against R2 before the staged-set-matching publication transaction runs.
 const { isAuthorizedScope } = require('./access');
 const { publishStagedReceipt } = require('./publication');
+const { HostedPublicationStaleError } = require('./publication_conflict');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const HEX = /^[0-9a-f]{64}$/;
@@ -77,7 +78,8 @@ async function publishStoredPages({ scope, reservationId, snapshotId,
     const receipt = receiptFromRows(result?.rows, scope, snapshotId);
     return await publishStagedReceipt({ receipt, maxReceiptBytes: scope.allowanceBytes,
       scope, reservationId, verifyBatch, query });
-  } catch {
+  } catch (error) {
+    if (error instanceof HostedPublicationStaleError) throw error;
     // Database or provider exceptions can include tenant and credential data.
     throw new HostedStoredPublicationError();
   }
