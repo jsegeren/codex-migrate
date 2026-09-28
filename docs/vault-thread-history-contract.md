@@ -187,6 +187,24 @@ diff. It is strong evidence of a JSONL-only coverage gap, not proof that every
 projected item is an otherwise lost user-visible turn. No conversation text,
 hashes, paths, or IDs were copied into this report.
 
+Source-authority finding, September 28: in upstream Codex at
+[`69f7140`](https://github.com/openai/codex/blob/69f7140559180269e2eb8f5be6e0c20eb37b0c85/codex-rs/app-server-protocol/src/protocol/thread_history_projection.rs),
+the paginated rollout is explicitly described as canonical and
+`ItemCompleted` lines are projected into the history item store. Its
+[materializer](https://github.com/openai/codex/blob/69f7140559180269e2eb8f5be6e0c20eb37b0c85/codex-rs/thread-store/src/local/thread_history_materialization.rs)
+reads the rollout from a persisted byte/ordinal cursor. Thus SQLite items
+are a **derived view** in the current upstream design, not an independent
+complete source of every durable turn. Yet the
+[reported destructive rewrite](https://github.com/openai/codex/issues/44363)
+occurred before migration, and
+[projection failures](https://github.com/openai/codex/issues/38792) can leave
+the database stale while rollout data survives. For recovery, neither source can be
+assumed to subsume the other on an affected installation. Vault's capture
+unit is both the JSONL bytes and the pinned SQLite item projection, with
+source labels and no silent semantic merge. This interpretation is specific
+to the cited upstream revision and observed installed schema; it does not
+prove that every Codex version or damaged history is covered.
+
 Vault v1/v2 currently encrypts the active and archived JSONL trees, not the
 paginated thread-history database. A verified JSONL snapshot therefore cannot
 by itself prove that all current Codex history is recoverable. Do not advertise
@@ -243,8 +261,10 @@ a real customer-history recovery, or recovery in a clean user account or
 second Mac. Missing or ambiguous lineage still requires review, and the
 paginated-history release hold remains open.
 
-- Establish whether the JSONL rollout or the projected database owns each
-  durable turn when their lengths disagree, including a post-rewrite case.
+- For a future installed version, revalidate upstream storage semantics and
+  the observed schema. A byte/ordinal cursor or item-count comparison alone
+  cannot prove semantic equivalence between rollout and projection, including
+  after a rewrite; preserve both independently and surface unresolved gaps.
 - Capture any database-only recoverable content with a consistent, encrypted
   snapshot or supported export, without reading or copying credentials or
   modifying Codex's live database. Preserve provenance; do not silently merge
