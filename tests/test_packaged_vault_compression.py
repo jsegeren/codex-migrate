@@ -7,6 +7,7 @@ is captured only in memory and never printed or written to a receipt.
 import hashlib
 import json
 import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import signal
 import sqlite3
@@ -93,8 +94,37 @@ class PackagedVaultCompressionTests(unittest.TestCase):
                     "--destination", str(vault), "--apply", "--json",
                 ], timeout=120))
                 self.assertTrue(saved["applied"])
+                first_snapshot = saved["snapshot_id"]
                 key_id = json.loads((vault / "vault.json").read_text())["key_id"]
                 self.assertEqual(database.read_bytes(), original_database)
+                run_packaged([str(engine), "vault", "verify", "--vault", str(vault),
+                              "--json"], timeout=120)
+                second_marker = "scheduled-database-only-marker-nyvk"
+                with sqlite3.connect(database) as connection:
+                    connection.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                       (thread_id, "turn-2", "item-2", 2, 200,
+                                        json.dumps({"id": "item-2", "type": "userMessage",
+                                                    "content": [{"type": "text", "text": second_marker}]}),
+                                        "userMessage", 2))
+                updated_database = database.read_bytes()
+                config_path = source / "Library/Application Support/Codex Vault/schedule.json"
+                config_path.parent.mkdir(parents=True)
+                configuration = {
+                    "format": "codex-vault-schedule", "version": 2,
+                    "source_home": str(source), "vault": str(vault),
+                    "vault_key_id": key_id, "crypto_helper": str(helper),
+                    "interval_seconds": 24 * 3600,
+                    "installed_at": (datetime.now(timezone.utc) - timedelta(days=2)).isoformat(),
+                }
+                descriptor = os.open(config_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                    json.dump(configuration, handle)
+                run_packaged([str(engine), "vault", "--source-home", str(source),
+                              "scheduled-run", "--config", str(config_path)], timeout=120)
+                receipt = json.loads((config_path.parent / "last-run.json").read_text())
+                self.assertEqual(receipt["status"], "needs_attention")
+                self.assertNotEqual(receipt["snapshot_id"], first_snapshot)
+                self.assertEqual(database.read_bytes(), updated_database)
                 run_packaged([str(engine), "vault", "verify", "--vault", str(vault),
                               "--json"], timeout=120)
                 run_packaged([str(engine), "vault", "--source-home", str(source),
@@ -104,11 +134,19 @@ class PackagedVaultCompressionTests(unittest.TestCase):
                 self.assertTrue(restored_items.is_file())
                 records = [json.loads(line) for line in
                            restored_items.read_text(encoding="utf-8").splitlines()]
-                self.assertEqual(len(records), 1)
+                self.assertEqual(len(records), 2)
                 self.assertEqual(records[0]["source"], "codex-paginated-thread-items-v1")
                 self.assertEqual(records[0]["thread_id"], thread_id)
                 self.assertEqual(json.loads(records[0]["item_json"])["content"][0]["text"],
                                  marker)
+                self.assertEqual(json.loads(records[1]["item_json"])["content"][0]["text"],
+                                 second_marker)
+                first_restored = root / "first-restored"
+                run_packaged([str(engine), "vault", "--source-home", str(source),
+                              "restore", "--vault", str(vault), "--snapshot", first_snapshot,
+                              "--output", str(first_restored), "--apply", "--json"], timeout=120)
+                first_items = (first_restored / "paginated_history" / (thread_id + ".jsonl"))
+                self.assertEqual(len(first_items.read_text(encoding="utf-8").splitlines()), 1)
             finally:
                 if key_id is None and (vault / "vault.json").is_file():
                     key_id = json.loads((vault / "vault.json").read_text())["key_id"]
