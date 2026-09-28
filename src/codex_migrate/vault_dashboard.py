@@ -287,6 +287,10 @@ $("choose-history-vault").onclick=async()=>{
 let selected=null;
 let threadExcerpted=false;
 function params(item){return new URLSearchParams({collection:item.collection,transcript:item.transcript,source:item.source||"local"})}
+function completeVisibleConversation(item,excerpted,nextCursor){
+  return !(Number.isSafeInteger(item.cursor)&&item.cursor>0&&item.line>0)&&
+    !excerpted&&(nextCursor===null||nextCursor===undefined||nextCursor==="");
+}
 function appendEntries(entries){$("entries").append(...entries.map((entry,index)=>{
   const article=document.createElement("article");article.className="entry";
   const h=document.createElement("h3");h.textContent=entry.role||`Entry ${$("entries").children.length+index+1}`;article.append(h);
@@ -311,8 +315,8 @@ async function openThread(item){
     $("entries").replaceChildren();appendEntries(thread.entries);
     $("load-more").dataset.cursor=thread.next_cursor===null||thread.next_cursor===undefined?"":String(thread.next_cursor);
     $("load-more").hidden=!$("load-more").dataset.cursor;
-    $("print").hidden=threadExcerpted||Boolean($("load-more").dataset.cursor);
-    $("share").hidden=threadExcerpted||Boolean($("load-more").dataset.cursor);
+    $("print").hidden=!completeVisibleConversation(item,threadExcerpted,thread.next_cursor);
+    $("share").hidden=$("print").hidden;
     $("thread-timeline").hidden=true;$("versions").replaceChildren();
     if(fromBackup&&item.key&&chosenVault()){
       const data=await api("/api/vault/thread-history?"+new URLSearchParams({vault:chosenVault(),key:item.key}));
@@ -355,8 +359,8 @@ $("load-more").onclick=async()=>{
     $("load-more").hidden=!$("load-more").dataset.cursor;
     const fromMatch=Number.isSafeInteger(selected.cursor)&&selected.cursor>=0&&selected.line>0;
     $("thread-meta").textContent=`${selected.source==="backup"?"Opened backup":"This Mac"} · ${page.collection} · ${fromMatch?"Starting at the search match · ":""}${$("entries").children.length} readable entries${threadExcerpted?". A long message is excerpted here; Download Markdown for full text.":page.next_cursor!==null?" so far. Download Markdown includes the full conversation.":""}`;
-    $("print").hidden=threadExcerpted||Boolean($("load-more").dataset.cursor);
-    $("share").hidden=threadExcerpted||Boolean($("load-more").dataset.cursor);
+    $("print").hidden=!completeVisibleConversation(selected,threadExcerpted,page.next_cursor);
+    $("share").hidden=$("print").hidden;
   }catch(error){fail(error)}finally{$("load-more").disabled=false}
 };
 async function openSavedResult(item){
@@ -572,7 +576,20 @@ $("index-remove").onclick=async()=>{
   try{indexView(await api("/api/vault/search-index-remove",{apply:true}))}
   catch(error){$("index-error").textContent=error.message}
 };
-async function markdownFile(){if(!selected)throw Error("Open a conversation first");const text=await api("/api/vault/export?"+params(selected));return new File([text],"codex-conversation.md",{type:"text/markdown"})}
+async function markdownFile(){
+  if(!selected)throw Error("Open a conversation first");
+  const grant=await api("/api/vault/export-ticket",{collection:selected.collection,transcript:selected.transcript,source:selected.source||"local"});
+  const response=await fetch(grant.url,{cache:"no-store"});
+  if(!response.ok)throw Error("This conversation changed before sharing. Open it again and retry.");
+  const size=Number(response.headers.get("Content-Length"));
+  if(!Number.isSafeInteger(size)||size<0||size>20*1024*1024){
+    await response.body?.cancel();
+    throw Error("This conversation is too large for the browser share sheet. Download Markdown, then share the saved file.");
+  }
+  const body=await response.blob();
+  if(body.size!==size)throw Error("The conversation changed while preparing it to share. Download Markdown instead.");
+  return new File([body],"codex-conversation.md",{type:"text/markdown"});
+}
 $("download").onclick=async()=>{try{
   if(!selected)throw Error("Open a conversation first");
   const link=document.createElement("a");link.download="codex-conversation.md";
@@ -580,7 +597,7 @@ $("download").onclick=async()=>{try{
   link.href=grant.url;link.click();$("status").textContent="Downloading the full conversation…";
 }catch(error){fail(error)}};
 $("print").onclick=()=>window.print();
-$("share").onclick=async()=>{try{const file=await markdownFile();if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}))){await navigator.share({title:"Codex conversation",files:[file]});$("status").textContent="Share sheet opened."}else{$("status").textContent="This browser cannot open the share sheet. Use Download Markdown, then share or email the file."}}catch(error){if(error.name!=="AbortError")fail(error)}};
+$("share").onclick=async()=>{try{if(!navigator.share){$("status").textContent="This browser cannot open the share sheet. Use Download Markdown, then share or email the file.";return}const file=await markdownFile();if(!navigator.canShare||navigator.canShare({files:[file]})){await navigator.share({title:"Codex conversation",files:[file]});$("status").textContent="Share sheet opened."}else{$("status").textContent="This browser cannot share files. Use Download Markdown, then share or email the file."}}catch(error){if(error.name!=="AbortError")fail(error)}};
 let backupTimer=null;
 let installRunning=false;
 let verifiedBackup=false;

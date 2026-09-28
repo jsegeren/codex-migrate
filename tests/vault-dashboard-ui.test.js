@@ -5,6 +5,43 @@ const vm = require('node:vm');
 
 const source = readFileSync(new URL('../src/codex_migrate/vault_dashboard.py', `file://${__filename}`), 'utf8');
 const runSearch = source.match(/async function runSearch\(append=false\)\{[\s\S]*?\n\}/)[0];
+const completeVisibleConversation = vm.runInNewContext(
+  '(' + source.match(/function completeVisibleConversation\([\s\S]*?\n\}/)[0] + ')');
+const markdownFile = source.match(/async function markdownFile\(\)\{[\s\S]*?\n\}/)[0];
+
+test('print and share require the whole non-excerpted conversation', () => {
+  assert.equal(completeVisibleConversation({ cursor: 100, line: 2 }, false, null), false);
+  assert.equal(completeVisibleConversation({ cursor: 0, line: 1 }, false, null), true);
+  assert.equal(completeVisibleConversation({ cursor: 0, line: 0 }, true, null), false);
+  assert.equal(completeVisibleConversation({ cursor: 0, line: 0 }, false, 200), false);
+  assert.equal(completeVisibleConversation({ cursor: 0, line: 0 }, false, null), true);
+});
+
+test('share uses the full one-use export but refuses an oversized browser file', async () => {
+  let cancelled = false;
+  const calls = [];
+  const context = {
+    selected: { collection: 'active', transcript: 'thread.jsonl', source: 'local' },
+    api: async (...args) => { calls.push(args); return { url: '/api/vault/download?ticket=fixture' }; },
+    fetch: async () => ({ ok: true, headers: { get: () => String(21 * 1024 * 1024) },
+      body: { cancel: async () => { cancelled = true; } } }),
+  };
+  vm.createContext(context);
+  vm.runInContext(markdownFile, context);
+  await assert.rejects(context.markdownFile(), /too large for the browser share sheet/);
+  assert.equal(cancelled, true);
+  assert.equal(calls[0][0], '/api/vault/export-ticket');
+  assert.equal(calls[0][1].transcript, 'thread.jsonl');
+
+  context.fetch = async () => ({ ok: true, headers: { get: () => '4' },
+    blob: async () => ({ size: 4 }) });
+  context.File = class { constructor(parts, name, options) {
+    this.parts = parts; this.name = name; this.type = options.type;
+  } };
+  const file = await context.markdownFile();
+  assert.equal(file.name, 'codex-conversation.md');
+  assert.equal(file.parts[0].size, 4);
+});
 
 test('a slow local search explains the wait without claiming it has finished', async () => {
   const elements = new Map([
