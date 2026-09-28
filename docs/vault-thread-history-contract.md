@@ -240,6 +240,15 @@ storage; useful full-text search performance at this scale remains an open
 product acceptance concern. No private transcript content, paths, IDs, or
 hashes were recorded in this receipt.
 
+The optional local FTS cache now also indexes rendered text from supported
+SQLite-backed items. Its database stamp includes the main file and write log;
+if either changes during or after indexing, live search scans the database
+directly rather than excluding an uncached thread. The cache remains opt-in,
+owner-only, unencrypted, disposable, and subject to a free-space floor. Forked
+threads consider indexed parent rollouts. Synthetic tests cover matching,
+changes during indexing, and fallback; this is not yet a measured search-speed
+receipt on a full customer-sized history.
+
 The current [official app-server contract](https://learn.chatgpt.com/docs/app-server)
 can list and summarize existing paginated threads, but its full-history read
 and item-pagination operations fail closed for them. It is not a supported

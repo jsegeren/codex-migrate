@@ -692,8 +692,9 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                 with self._vault_lock:
                     self._search_index_status = {
                         "status": "ready", "present": True,
-                        "total": result["transcripts"],
+                        "total": result["transcripts"] + result.get("paginated_threads", 0),
                         "skipped": result["skipped"],
+                        "paginated_skipped": result.get("paginated_skipped", False),
                         "index_bytes": result["index_bytes"],
                     }
             except IndexCancelled:

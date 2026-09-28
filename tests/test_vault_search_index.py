@@ -5,13 +5,14 @@ import random
 import sqlite3
 import tempfile
 import threading
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault import _transcripts, search
 from codex_migrate.vault_search_index import (
-    IndexCancelled, _path, build, candidates, remove, supported,
+    IndexCancelled, _path, build, candidates, paginated_candidates, remove, supported,
 )
 
 
@@ -21,7 +22,130 @@ def write_thread(path: Path, *texts: str) -> None:
                             for text in texts), encoding="utf-8")
 
 
+def write_paginated(home: Path, items) -> Path:
+    database = home / ".codex/thread_history_1.sqlite"
+    database.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(database) as connection:
+        connection.execute("CREATE TABLE thread_items (thread_id TEXT, turn_id TEXT, "
+                           "item_id TEXT, rollout_ordinal INTEGER, created_at_ms INTEGER, "
+                           "item_json TEXT, item_type TEXT, updated_at_ordinal INTEGER)")
+        connection.execute("CREATE TABLE thread_history_projection_state ("
+                           "thread_id TEXT, next_rollout_byte_offset INTEGER, "
+                           "next_rollout_ordinal INTEGER)")
+        for thread_id, ordinal, text in items:
+            item_id = "item-" + str(ordinal)
+            connection.execute("INSERT INTO thread_items VALUES (?,?,?,?,?,?,?,?)", (
+                thread_id, "turn-1", item_id, ordinal, ordinal,
+                json.dumps({"id": item_id, "type": "userMessage", "text": text}),
+                "userMessage", ordinal))
+    return database
+
+
 class SearchIndexTests(unittest.TestCase):
+    @unittest.skipUnless(supported(), "requires SQLite FTS5 contentless-delete")
+    def test_index_refuses_to_consume_the_last_five_gigabytes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / ".codex/sessions/one.jsonl"
+            write_thread(source, "Clerk history")
+            with patch("codex_migrate.vault_search_index.shutil.disk_usage",
+                       return_value=SimpleNamespace(free=4 * 1024**3)):
+                with self.assertRaisesRegex(MigrationError, "last 5 GB"):
+                    build(temporary, apply=True)
+            self.assertFalse(_path(temporary).exists())
+            self.assertEqual(len(search(temporary, "Clerk")), 1)
+
+    @unittest.skipUnless(supported(), "requires SQLite FTS5 contentless-delete")
+    def test_paginated_index_is_complete_only_for_unchanged_database(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            first = "11111111-1111-4111-8111-111111111111"
+            second = "22222222-2222-4222-8222-222222222222"
+            database = write_paginated(home, ((first, 1, "Clerk launch"),
+                                              (second, 2, "Straße planning")))
+            self.assertIsNone(paginated_candidates(temporary, "Clerk"))
+            result = build(temporary, apply=True)
+            self.assertTrue(result["paginated_indexed"])
+            self.assertEqual(result["paginated_threads"], 2)
+            self.assertEqual(paginated_candidates(temporary, "Clerk"), {first})
+            self.assertEqual(paginated_candidates(temporary, "STRASSE"), {second})
+            self.assertEqual([(item.collection, item.transcript)
+                              for item in search(temporary, "Clerk")],
+                             [("paginated", first + ".jsonl")])
+            with patch("codex_migrate.vault_paginated.PaginatedSource.items_range",
+                       side_effect=AssertionError("indexed no-hit scanned SQLite items")):
+                self.assertEqual(search(temporary, "not-present"), [])
+            with sqlite3.connect(database) as connection:
+                connection.execute("INSERT INTO thread_items VALUES (?,?,?,?,?,?,?,?)", (
+                    second, "turn-2", "item-3", 3, 3,
+                    json.dumps({"id": "item-3", "type": "userMessage",
+                                "text": "Clerk follow-up"}), "userMessage", 3))
+            self.assertIsNone(paginated_candidates(temporary, "Clerk"))
+            self.assertEqual({item.transcript for item in search(temporary, "Clerk")},
+                             {first + ".jsonl", second + ".jsonl"})
+            build(temporary, apply=True)
+            self.assertEqual(paginated_candidates(temporary, "Clerk"), {first, second})
+
+    @unittest.skipUnless(supported(), "requires SQLite FTS5 contentless-delete")
+    def test_database_change_during_index_build_cannot_publish_stale_candidates(self):
+        import codex_migrate.vault_search_index as index
+
+        with tempfile.TemporaryDirectory() as temporary:
+            thread_id = "11111111-1111-4111-8111-111111111111"
+            database = write_paginated(Path(temporary), ((thread_id, 1, "Earlier work"),))
+            with sqlite3.connect(database) as connection:
+                connection.execute("PRAGMA journal_mode=WAL")
+            original = index._add_paginated_thread
+            changed = False
+
+            def change_after_read(connection, source, current_id, cache_parent,
+                                  cancelled=None):
+                nonlocal changed
+                blocks = original(connection, source, current_id, cache_parent, cancelled)
+                if not changed:
+                    changed = True
+                    with sqlite3.connect(database) as writer:
+                        writer.execute("INSERT INTO thread_items VALUES (?,?,?,?,?,?,?,?)", (
+                            thread_id, "turn-2", "item-2", 2, 2,
+                            json.dumps({"id": "item-2", "type": "userMessage",
+                                        "text": "New Clerk detail"}), "userMessage", 2))
+                return blocks
+
+            with patch.object(index, "_add_paginated_thread", change_after_read):
+                result = build(temporary, apply=True)
+            self.assertTrue(result["paginated_skipped"])
+            self.assertIsNone(paginated_candidates(temporary, "Clerk"))
+            self.assertEqual([item.transcript for item in search(temporary, "Clerk")],
+                             [thread_id + ".jsonl"])
+
+    @unittest.skipUnless(supported(), "requires SQLite FTS5 contentless-delete")
+    def test_paginated_fork_search_uses_parent_rollout_candidates(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            parent_id = "11111111-1111-4111-8111-111111111111"
+            child_id = "22222222-2222-4222-8222-222222222222"
+            parent = home / ".codex/archived_sessions" / ("rollout-" + parent_id + ".jsonl")
+            child = home / ".codex/sessions" / ("rollout-" + child_id + ".jsonl")
+            parent.parent.mkdir(parents=True)
+            child.parent.mkdir(parents=True)
+            prefix = (json.dumps({"type": "session_meta", "ordinal": 0,
+                                  "payload": {"id": parent_id}}) + "\n"
+                      + json.dumps({"type": "event_msg", "ordinal": 1,
+                                    "payload": {"type": "note"}}) + "\n")
+            parent.write_text(prefix, encoding="utf-8")
+            child.write_text(json.dumps({"type": "session_meta", "ordinal": 2,
+                                         "payload": {"id": child_id, "history_base": {
+                                             "thread_id": parent_id,
+                                             "end_ordinal_exclusive": 2,
+                                             "end_byte_offset": len(prefix.encode())}}})
+                             + "\n", encoding="utf-8")
+            write_paginated(home, ((parent_id, 1, "Inherited Clerk plan"),
+                                   (child_id, 3, "Child-local work")))
+            build(temporary, apply=True)
+            self.assertEqual(paginated_candidates(temporary, "Clerk"), {parent_id})
+            self.assertEqual({item.transcript for item in search(temporary, "Clerk")
+                              if item.collection == "paginated"},
+                             {parent_id + ".jsonl", child_id + ".jsonl"})
+
     def test_plan_does_not_create_a_cache(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)

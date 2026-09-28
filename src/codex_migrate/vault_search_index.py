@@ -10,18 +10,21 @@ from contextlib import contextmanager
 import fcntl
 import json
 import os
+import shutil
 import sqlite3
 import stat
 from pathlib import Path
 from typing import Callable, Dict, Iterator, List, Optional, Set, Tuple
+from urllib.parse import quote
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_identity import MAX_RECORD_BYTES
 
 
-INDEX_VERSION = 1
+INDEX_VERSION = 2
 BLOCK_CHARS = 128 * 1024
 QUERY_CHARS = 500
+MIN_FREE_BYTES = 5 * 1024 * 1024 * 1024
 INDEX_FOLDER = ("Library", "Caches", "Codex Migrate")
 
 
@@ -66,6 +69,16 @@ def _cache_files(target: Path) -> Tuple[Path, ...]:
             Path(str(target) + "-shm"))
 
 
+def _require_index_space(parent: Path) -> None:
+    try:
+        free = shutil.disk_usage(parent).free
+    except OSError as error:
+        raise MigrationError("Free space for the local search cache could not be checked.") from error
+    if free < MIN_FREE_BYTES:
+        raise MigrationError("Fast search stopped before using the Mac's last 5 GB of space. "
+                             "Search still works without this cache.")
+
+
 def _owned_regular(path: Path) -> bool:
     try:
         info = path.lstat()
@@ -108,10 +121,37 @@ def _source_stamp(path: Path) -> Tuple[int, int, int, int, int]:
     return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
 
 
+def _database_stamp(source_home: str) -> Optional[str]:
+    """Conservatively identify a live SQLite source, including its write log."""
+    database = Path(source_home) / ".codex/thread_history_1.sqlite"
+    try:
+        database.lstat()
+    except FileNotFoundError:
+        return None
+    except OSError:
+        return None
+    stamps = []
+    for path in (database, Path(str(database) + "-wal"),
+                 Path(str(database) + "-journal")):
+        try:
+            info = path.lstat()
+        except FileNotFoundError:
+            stamps.append(None)
+            continue
+        except OSError:
+            return None
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid()
+                or info.st_nlink != 1):
+            return None
+        stamps.append((info.st_dev, info.st_ino, info.st_size,
+                       info.st_mtime_ns, info.st_ctime_ns))
+    return json.dumps(stamps, separators=(",", ":"))
+
+
 def _schema(connection: sqlite3.Connection) -> None:
     connection.execute("PRAGMA foreign_keys=ON")
     version = connection.execute("PRAGMA user_version").fetchone()[0]
-    if version not in (0, INDEX_VERSION):
+    if version not in (0, 1, INDEX_VERSION):
         raise MigrationError("This local search index has an unsupported format.")
     if version == 0 and connection.execute(
             "SELECT 1 FROM sqlite_master WHERE type IN ('table','view') LIMIT 1").fetchone():
@@ -125,6 +165,17 @@ def _schema(connection: sqlite3.Connection) -> None:
                        "id INTEGER PRIMARY KEY, file_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE)")
     connection.execute("CREATE INDEX IF NOT EXISTS blocks_file ON blocks(file_id)")
     connection.execute("CREATE VIRTUAL TABLE IF NOT EXISTS text_terms USING fts5("
+                       "body, content='', contentless_delete=1, tokenize='trigram', detail='none')")
+    connection.execute("CREATE TABLE IF NOT EXISTS paginated_stamp ("
+                       "id INTEGER PRIMARY KEY CHECK(id=1), source_stamp TEXT NOT NULL)")
+    connection.execute("CREATE TABLE IF NOT EXISTS paginated_threads ("
+                       "thread_id TEXT PRIMARY KEY)")
+    connection.execute("CREATE TABLE IF NOT EXISTS paginated_blocks ("
+                       "id INTEGER PRIMARY KEY, thread_id TEXT NOT NULL "
+                       "REFERENCES paginated_threads(thread_id) ON DELETE CASCADE)")
+    connection.execute("CREATE INDEX IF NOT EXISTS paginated_blocks_thread "
+                       "ON paginated_blocks(thread_id)")
+    connection.execute("CREATE VIRTUAL TABLE IF NOT EXISTS paginated_terms USING fts5("
                        "body, content='', contentless_delete=1, tokenize='trigram', detail='none')")
     connection.execute("PRAGMA user_version=%d" % INDEX_VERSION)
 
@@ -149,7 +200,7 @@ def _text_blocks(value: str) -> List[str]:
 
 
 def _add_file(connection: sqlite3.Connection, collection: str,
-              relative: str, path: Path, cancelled=None) -> int:
+              relative: str, path: Path, cache_parent: Path, cancelled=None) -> int:
     # Import lazily: vault.py also consults this module when searching.
     from codex_migrate.vault import _strings
 
@@ -173,6 +224,8 @@ def _add_file(connection: sqlite3.Connection, collection: str,
         nonlocal blocks, pending, pending_chars
         if not pending:
             return
+        if blocks % 128 == 0:
+            _require_index_space(cache_parent)
         block_id = connection.execute("INSERT INTO blocks(file_id) VALUES (?)", (file_id,)).lastrowid
         connection.execute("INSERT INTO text_terms(rowid,body) VALUES (?,?)",
                            (block_id, "\n".join(pending)))
@@ -219,6 +272,126 @@ def _add_file(connection: sqlite3.Connection, collection: str,
     return blocks
 
 
+def _add_paginated_thread(connection: sqlite3.Connection, source,
+                          thread_id: str, cache_parent: Path, cancelled=None) -> int:
+    """Index only rendered search text, never a retrievable item JSON body."""
+    from codex_migrate.vault import _strings
+
+    connection.execute("INSERT INTO paginated_threads(thread_id) VALUES (?)", (thread_id,))
+    pending: List[str] = []
+    pending_chars = 0
+    blocks = 0
+
+    def flush() -> None:
+        nonlocal blocks, pending, pending_chars
+        if not pending:
+            return
+        if blocks % 128 == 0:
+            _require_index_space(cache_parent)
+        block_id = connection.execute(
+            "INSERT INTO paginated_blocks(thread_id) VALUES (?)", (thread_id,)).lastrowid
+        connection.execute("INSERT INTO paginated_terms(rowid,body) VALUES (?,?)",
+                           (block_id, "\n".join(pending)))
+        blocks += 1
+        pending = []
+        pending_chars = 0
+
+    for item in source.items(thread_id):
+        if cancelled is not None and cancelled.is_set():
+            raise IndexCancelled()
+        record = json.loads(item.item_json)
+        for text in _strings(record):
+            for block in _text_blocks(text):
+                if pending and pending_chars + len(block) + 1 > BLOCK_CHARS:
+                    flush()
+                pending.append(block)
+                pending_chars += len(block) + 1
+                if pending_chars >= BLOCK_CHARS:
+                    flush()
+    flush()
+    return blocks
+
+
+def _refresh_paginated(target: Path, source_home: str, result: Dict[str, object],
+                       progress: Optional[Callable[[int, int], None]],
+                       transcript_total: int, cancelled) -> None:
+    """A partial or changed database index has no valid stamp and is ignored."""
+    from codex_migrate.vault_paginated import open_paginated_source
+
+    before = _database_stamp(source_home)
+    if before is None:
+        return
+    try:
+        connection = sqlite3.connect(str(target), timeout=5)
+        try:
+            connection.execute("PRAGMA foreign_keys=ON")
+            stored = connection.execute(
+                "SELECT source_stamp FROM paginated_stamp WHERE id=1").fetchone()
+            if stored == (before,):
+                result["paginated_threads"] = connection.execute(
+                    "SELECT COUNT(*) FROM paginated_threads").fetchone()[0]
+                result["paginated_indexed"] = True
+                if progress is not None:
+                    progress(transcript_total + result["paginated_threads"],
+                             transcript_total + result["paginated_threads"])
+                return
+            with connection:
+                connection.execute("DELETE FROM paginated_stamp")
+            with open_paginated_source(source_home) as source:
+                thread_ids = source.thread_ids()
+                result["paginated_threads"] = len(thread_ids)
+                total = transcript_total + len(thread_ids)
+                for completed, thread_id in enumerate(thread_ids, 1):
+                    if cancelled is not None and cancelled.is_set():
+                        raise IndexCancelled()
+                    with connection:
+                        old = connection.execute(
+                            "SELECT 1 FROM paginated_threads WHERE thread_id=?",
+                            (thread_id,)).fetchone()
+                        if old is not None:
+                            block_ids = connection.execute(
+                                "SELECT id FROM paginated_blocks WHERE thread_id=?",
+                                (thread_id,)).fetchall()
+                            for (block_id,) in block_ids:
+                                connection.execute(
+                                    "DELETE FROM paginated_terms WHERE rowid=?", (block_id,))
+                            connection.execute("DELETE FROM paginated_threads WHERE thread_id=?",
+                                               (thread_id,))
+                        result["paginated_blocks"] = result.get("paginated_blocks", 0) + \
+                            _add_paginated_thread(connection, source, thread_id,
+                                                  target.parent, cancelled)
+                    if progress is not None:
+                        progress(transcript_total + completed, total)
+                wanted = set(thread_ids)
+                stale = connection.execute("SELECT thread_id FROM paginated_threads").fetchall()
+                for (thread_id,) in stale:
+                    if thread_id in wanted:
+                        continue
+                    if cancelled is not None and cancelled.is_set():
+                        raise IndexCancelled()
+                    with connection:
+                        block_ids = connection.execute(
+                            "SELECT id FROM paginated_blocks WHERE thread_id=?",
+                            (thread_id,)).fetchall()
+                        for (block_id,) in block_ids:
+                            connection.execute(
+                                "DELETE FROM paginated_terms WHERE rowid=?", (block_id,))
+                        connection.execute("DELETE FROM paginated_threads WHERE thread_id=?",
+                                           (thread_id,))
+            after = _database_stamp(source_home)
+            if before != after or cancelled is not None and cancelled.is_set():
+                result["paginated_skipped"] = True
+                return
+            with connection:
+                connection.execute("INSERT INTO paginated_stamp(id,source_stamp) VALUES (1,?)",
+                                   (after,))
+            result["paginated_indexed"] = True
+        finally:
+            connection.close()
+    except sqlite3.Error as error:
+        raise MigrationError("Paginated conversation search could not be indexed safely.") from error
+
+
 def build(source_home: str, apply: bool = False,
           progress: Optional[Callable[[int, int], None]] = None,
           cancelled=None) -> Dict[str, object]:
@@ -237,16 +410,29 @@ def build(source_home: str, apply: bool = False,
                              "Regular conversation search still works.")
     if Path(source_home).stat().st_uid != os.geteuid():
         raise MigrationError("Fast search can only index the current account's home.")
+    paginated_count = 0
+    if _database_stamp(source_home) is not None:
+        from codex_migrate.vault_paginated import open_paginated_source
+        with open_paginated_source(source_home) as source:
+            paginated_count = len(source.thread_ids())
     target = _path(source_home)
     parent = target.parent
     parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     _safe_parent(parent)
+    _require_index_space(parent)
     with _cache_lock(parent):
         if not _owned_regular(target):
             descriptor = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW,
                                  0o600)
             os.close(descriptor)
-        return _refresh(target, discovered, result, progress, cancelled)
+        def combined_progress(completed: int, _: int) -> None:
+            if progress is not None:
+                progress(completed, len(discovered) + paginated_count)
+
+        _refresh(target, discovered, result, combined_progress, cancelled)
+        _refresh_paginated(target, source_home, result, progress, len(discovered), cancelled)
+        result["index_bytes"] = target.stat().st_size
+        return result
 
 
 def _refresh(target: Path, discovered: List[Tuple[str, Path, str]],
@@ -280,7 +466,8 @@ def _refresh(target: Path, discovered: List[Tuple[str, Path, str]],
                     continue
                 try:
                     with connection:
-                        blocks += _add_file(connection, collection, relative, path, cancelled)
+                        blocks += _add_file(connection, collection, relative, path,
+                                            target.parent, cancelled)
                 except SourceChanged:
                     skipped += 1
                     if progress is not None:
@@ -347,16 +534,12 @@ def candidates(source_home: str, query: str,
     if not available:
         return None
     try:
-        connection = sqlite3.connect("file:%s?mode=ro" % target, uri=True, timeout=2)
+        connection = sqlite3.connect("file:%s?mode=ro" % quote(str(target), safe="/"),
+                                     uri=True, timeout=2)
         try:
             if connection.execute("PRAGMA user_version").fetchone()[0] != INDEX_VERSION:
                 return None
-            positions = list(range(len(folded) - 2))
-            if len(positions) > 16:
-                positions = sorted({positions[(i * (len(positions) - 1)) // 15]
-                                    for i in range(16)})
-            grams = list(dict.fromkeys(folded[i:i + 3] for i in positions))
-            expression = " AND ".join('"%s"' % gram.replace('"', '""') for gram in grams)
+            expression = _matching_expression(folded)
             matches = set(connection.execute(
                 "SELECT DISTINCT f.collection,f.relative FROM text_terms "
                 "JOIN blocks b ON b.id=text_terms.rowid JOIN files f ON f.id=b.file_id "
@@ -377,3 +560,47 @@ def candidates(source_home: str, query: str,
     except SourceChanged:
         return None
     return result
+
+
+def _matching_expression(folded: str) -> str:
+    positions = list(range(len(folded) - 2))
+    if len(positions) > 16:
+        positions = sorted({positions[(i * (len(positions) - 1)) // 15]
+                            for i in range(16)})
+    grams = list(dict.fromkeys(folded[i:i + 3] for i in positions))
+    return " AND ".join('"%s"' % gram.replace('"', '""') for gram in grams)
+
+
+def paginated_candidates(source_home: str, query: str) -> Optional[Set[str]]:
+    """Return candidate physical rollout IDs only for a complete, current index."""
+    folded = query.casefold()
+    if "\x00" in folded or len(folded) < 3 or len(folded) > QUERY_CHARS:
+        return None
+    source_stamp = _database_stamp(source_home)
+    if source_stamp is None:
+        return None
+    target = _path(source_home)
+    try:
+        _safe_parent(target.parent)
+        if not _owned_regular(target):
+            return None
+        connection = sqlite3.connect("file:%s?mode=ro" % quote(str(target), safe="/"),
+                                     uri=True, timeout=2)
+        try:
+            if connection.execute("PRAGMA user_version").fetchone()[0] != INDEX_VERSION:
+                return None
+            stored = connection.execute(
+                "SELECT source_stamp FROM paginated_stamp WHERE id=1").fetchone()
+            if stored != (source_stamp,):
+                return None
+            matches = {thread_id for (thread_id,) in connection.execute(
+                "SELECT DISTINCT b.thread_id FROM paginated_terms "
+                "JOIN paginated_blocks b ON b.id=paginated_terms.rowid "
+                "WHERE paginated_terms MATCH ?", (_matching_expression(folded),))}
+        finally:
+            connection.close()
+    except (MigrationError, OSError, sqlite3.Error):
+        return None
+    if source_stamp != _database_stamp(source_home):
+        return None
+    return matches

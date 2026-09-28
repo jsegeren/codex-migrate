@@ -549,7 +549,9 @@ def search(
             raise MigrationError("Codex paginated history could not be inspected safely.") from error
         else:
             from codex_migrate.vault_paginated import open_paginated_source
+            from codex_migrate.vault_search_index import paginated_candidates
 
+            indexed_rollouts = paginated_candidates(source_home, query.strip())
             with open_paginated_source(source_home) as source:
                 for thread_id in source.thread_ids_recent():
                     transcript = thread_id + ".jsonl"
@@ -567,6 +569,10 @@ def search(
                                 source_home, thread_id, discovered, selected_rollouts, rollouts)
                         except AmbiguousLineage:
                             skipped_ambiguous()
+                            continue
+                        if (indexed_rollouts is not None
+                                and not any(rollout_id in indexed_rollouts
+                                            for rollout_id, _, _ in ranges)):
                             continue
                         items = (item for rollout_id, start, end in ranges
                                  for item in source.items_range(rollout_id, start, end))
