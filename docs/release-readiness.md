@@ -39,6 +39,18 @@ installed-runtime scale, and independent review are still missing. These snapsho
 `needs attention`. This work is **not released** and does not clear the
 paginated-history or next-build hold.
 
+## September 28 hosted/Vault integration checkpoint — not released
+
+The hosted draft now includes the paginated-history Vault integration at merge
+`2bc4b4a`. Its existing hosted-only stage still emits transcript files and a
+version-2 manifest. If the source has Codex's paginated-history database, it
+refuses staging before uploading anything; it cannot claim a complete hosted
+backup while omitting those items. The combined source passed 1,083 Python
+tests (27 expected skips), 495 JavaScript tests (one expected skip), and the
+native crypto-helper typecheck locally. These are source checks, not a signed
+customer build or real-R2 disaster-recovery receipt. Hosted database-history
+staging and its independent recovery proof remain release gates.
+
 ## September 27 integrated-source local package — not released
 
 Committed source `e644570` packaged as an arm64 **local-test-only** build-20 app.
