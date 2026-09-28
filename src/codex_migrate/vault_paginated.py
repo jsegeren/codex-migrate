@@ -239,6 +239,23 @@ def _check_schema(connection: sqlite3.Connection) -> None:
             raise MigrationError("Codex paginated history has an unsupported schema.")
 
 
+def _safe_sidecar_size(database: Path, suffix: str) -> int:
+    """Reject linked or foreign SQLite sidecars before SQLite opens their paths."""
+    sidecar = Path(str(database) + suffix)
+    _require_unlinked_path(sidecar, allow_missing_leaf=True)
+    try:
+        info = sidecar.lstat()
+    except FileNotFoundError:
+        return 0
+    except OSError as error:
+        raise MigrationError("Codex paginated history sidecar could not be inspected safely.") from error
+    require_local(sidecar)
+    if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+            or info.st_nlink != 1):
+        raise MigrationError("Codex paginated history sidecar is not a private regular file.")
+    return info.st_size
+
+
 @contextmanager
 def open_paginated_source(source_home: str) -> Iterator[PaginatedSource]:
     """Pin a read view of the known schema, or fail without modifying source data."""
@@ -261,6 +278,8 @@ def open_paginated_source(source_home: str) -> Iterator[PaginatedSource]:
             raise MigrationError("Codex paginated history is not a supported SQLite file.")
     finally:
         os.close(descriptor)
+    for suffix in ("-wal", "-shm", "-journal"):
+        _safe_sidecar_size(database, suffix)
     uri = "file:" + quote(str(database), safe="/") + "?mode=ro"
     connection = None
     try:
@@ -310,20 +329,7 @@ def source_footprint(source_home: str):
         return 0, 0, False
     except OSError as error:
         raise MigrationError("Codex paginated history could not be measured safely.") from error
-    wal = Path(str(database) + "-wal")
-    try:
-        wal_info = wal.lstat()
-    except FileNotFoundError:
-        wal_info = None
-    except OSError as error:
-        raise MigrationError("Codex paginated history could not be measured safely.") from error
-    if wal_info is not None:
-        _require_unlinked_path(wal)
-        require_local(wal)
-        if (not stat.S_ISREG(wal_info.st_mode) or wal_info.st_uid != os.getuid()
-                or wal_info.st_nlink != 1):
-            raise MigrationError("Codex paginated history WAL is not a private regular file.")
     with open_paginated_source(source_home) as source:
         count = len(source.thread_ids())
-        size = database.lstat().st_size + (wal_info.st_size if wal_info else 0)
+        size = database.lstat().st_size + _safe_sidecar_size(database, "-wal")
     return count, size, True

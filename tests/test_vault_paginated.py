@@ -242,6 +242,23 @@ class PaginatedSourceTests(unittest.TestCase):
             with self.assertRaises(MigrationError):
                 source_footprint(str(home))
 
+    def test_reader_refuses_linked_sqlite_sidecars(self):
+        for suffix in ("-wal", "-shm", "-journal"):
+            with self.subTest(suffix=suffix), tempfile.TemporaryDirectory() as temporary:
+                home = Path(temporary) / "home"
+                home.mkdir()
+                database = fixture(home)
+                outside = Path(temporary) / "outside-sidecar"
+                outside.write_bytes(b"unrelated private data")
+                sidecar = Path(str(database) + suffix)
+                if sidecar.exists():
+                    sidecar.unlink()  # Disposable fixture only.
+                sidecar.symlink_to(outside)
+                with self.assertRaises(MigrationError):
+                    with open_paginated_source(str(home)):
+                        pass
+                self.assertEqual(outside.read_bytes(), b"unrelated private data")
+
     def test_read_transaction_does_not_mix_later_writes_into_a_thread(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
