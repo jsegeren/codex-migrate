@@ -373,6 +373,88 @@ class VaultBackupTests(unittest.TestCase):
             finally:
                 self.delete_key(destination)
 
+    def test_restored_fork_skips_ancestor_with_no_database_rows(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            destination = root / "vault"
+            codex = source / ".codex"
+            parent_id = "11111111-1111-4111-8111-111111111111"
+            child_id = "22222222-2222-4222-8222-222222222222"
+            parent = codex / "archived_sessions" / ("rollout-" + parent_id + ".jsonl")
+            child = codex / "sessions" / ("rollout-" + child_id + ".jsonl")
+            parent.parent.mkdir(parents=True)
+            child.parent.mkdir()
+
+            def record(ordinal, kind, payload):
+                return json.dumps({"ordinal": ordinal, "type": kind,
+                                   "payload": payload}) + "\n"
+
+            parent_prefix = (record(0, "session_meta", {"id": parent_id})
+                             + record(1, "event_msg", {"event": "parent metadata"}))
+            parent.write_text(parent_prefix, encoding="utf-8")
+            child.write_text(record(2, "session_meta", {"id": child_id, "history_base": {
+                "thread_id": parent_id, "end_ordinal_exclusive": 2,
+                "end_byte_offset": len(parent_prefix.encode("utf-8")),
+            }}) + record(3, "event_msg", {"event": "child metadata"}), encoding="utf-8")
+            database = codex / "thread_history_1.sqlite"
+            with sqlite3.connect(database) as connection:
+                connection.execute("CREATE TABLE thread_items (thread_id TEXT, turn_id TEXT, "
+                                   "item_id TEXT, rollout_ordinal INTEGER, created_at_ms INTEGER, "
+                                   "item_json TEXT, item_type TEXT, updated_at_ordinal INTEGER)")
+                connection.execute("CREATE TABLE thread_history_projection_state ("
+                                   "thread_id TEXT, next_rollout_byte_offset INTEGER, "
+                                   "next_rollout_ordinal INTEGER)")
+                connection.execute(
+                    "INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (child_id, "turn-child", "item-child", 3, 103,
+                     json.dumps({"id": "item-child", "type": "userMessage",
+                                 "text": "Child-only database message"}), "userMessage", 3))
+            try:
+                backup(str(source), str(destination), crypto_helper=str(self.helper))
+                restored_home = root / "restored"
+                restored_home.mkdir()
+                restore_snapshot(str(source), str(destination),
+                                 str(restored_home / ".codex"),
+                                 crypto_helper=str(self.helper))
+                catalog = snapshot_catalog(str(destination), crypto_helper=str(self.helper))
+                self.assertEqual([item["path"] for item in catalog
+                                  if item["collection"] == "paginated"],
+                                 [child_id + ".jsonl"])
+                saved_parent = (restored_home / ".codex/paginated_history" /
+                                (parent_id + ".jsonl"))
+                self.assertFalse(saved_parent.exists())
+                child_name = child_id + ".jsonl"
+                matches = search(str(restored_home), "Child-only database message",
+                                 catalog=catalog)
+                self.assertEqual([(match.collection, match.transcript)
+                                  for match in matches if match.collection == "paginated"],
+                                 [("paginated", child_name)])
+                page, _ = read_thread_page(str(restored_home), "paginated", child_name,
+                                           catalog=catalog)
+                self.assertEqual([entry.text for entry in page.entries],
+                                 ["Child-only database message"])
+                exported = b"".join(markdown_chunks(
+                    str(restored_home), "paginated", child_name, catalog=catalog))
+                self.assertIn(b"Child-only database message", exported)
+                markdown_source_stamp(str(restored_home), "paginated", child_name,
+                                      catalog=catalog)
+                with self.assertRaisesRegex(MigrationError, "not in the selected backup"):
+                    read_thread_page(str(restored_home), "paginated",
+                                     parent_id + ".jsonl", catalog=catalog)
+
+                # A catalog-listed projection missing on disk is corruption, not a
+                # harmless zero-row ancestor. It must never be skipped.
+                (restored_home / ".codex/paginated_history" / child_name).unlink()
+                with self.assertRaises(MigrationError):
+                    read_thread_page(str(restored_home), "paginated", child_name,
+                                     catalog=catalog)
+                with self.assertRaises(MigrationError):
+                    markdown_source_stamp(str(restored_home), "paginated", child_name,
+                                          catalog=catalog)
+            finally:
+                self.delete_key(destination)
+
     def test_progress_counts_both_transcript_and_database_source(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

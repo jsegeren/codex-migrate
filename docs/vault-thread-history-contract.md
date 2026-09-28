@@ -219,6 +219,12 @@ snapshot restored into a separate folder passes the same search/read case;
 the export stamp includes ancestor files so a changed parent invalidates a
 prepared download. This follows the upstream paginated reader's use of
 rollout IDs and ordinal bounds, not Codex's incomplete global-search behavior.
+The saved reader uses the authenticated snapshot catalog to distinguish an
+ancestor with no database rows (no saved projection file, so skip that segment)
+from a catalog-listed projection that has gone missing (fail closed). A
+synthetic backup, restore, search, read, and browser Markdown-export test covers
+the no-row-parent case; removal of the catalog-listed child projection is
+rejected rather than silently omitted.
 An opt-in proof using installed Codex CLI 0.158.0-alpha.2 created a real
 paginated parent/fork in a disposable `CODEX_HOME` against a loopback-only
 synthetic model, with all API credentials removed from its process environment.

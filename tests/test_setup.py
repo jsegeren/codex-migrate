@@ -210,6 +210,58 @@ class SetupTests(unittest.TestCase):
             "source": "local",
         })[0], 400)
 
+    def test_opened_fork_exports_when_ancestor_has_no_saved_database_rows(self):
+        parent_id = "11111111-1111-4111-8111-111111111111"
+        child_id = "22222222-2222-4222-8222-222222222222"
+        browse = self.home / "browse"
+        archived = browse / ".codex/archived_sessions"
+        active = browse / ".codex/sessions"
+        saved = browse / ".codex/paginated_history"
+        for folder in (archived, active, saved):
+            folder.mkdir(parents=True)
+
+        def record(ordinal, kind, payload):
+            return json.dumps({"ordinal": ordinal, "type": kind,
+                               "payload": payload}) + "\n"
+
+        prefix = (record(0, "session_meta", {"id": parent_id})
+                  + record(1, "event_msg", {"event": "parent metadata"}))
+        (archived / ("rollout-" + parent_id + ".jsonl")).write_text(prefix)
+        (active / ("rollout-" + child_id + ".jsonl")).write_text(
+            record(2, "session_meta", {"id": child_id, "history_base": {
+                "thread_id": parent_id, "end_ordinal_exclusive": 2,
+                "end_byte_offset": len(prefix.encode("utf-8")),
+            }}) + record(3, "event_msg", {"event": "child metadata"}))
+        item = PaginatedItem(child_id, "turn-1", "item-1", 3, 100,
+                             "userMessage", json.dumps({
+                                 "id": "item-1", "type": "userMessage",
+                                 "text": "Saved child-only result"}))
+        (saved / (child_id + ".jsonl")).write_bytes(encoded_item(item))
+        with self.helper._browse_data_lock:
+            self.helper._browse_home = browse
+            self.helper._browse_catalog = [{
+                "collection": "paginated", "path": child_id + ".jsonl",
+                "thread_id": child_id, "titles": [],
+            }]
+        code, results = self.request("/api/vault/search?q=child-only&source=backup")
+        self.assertEqual(code, 200)
+        self.assertEqual([(match["collection"], match["transcript"])
+                          for match in results["results"] if match["collection"] == "paginated"],
+                         [("paginated", child_id + ".jsonl")])
+        code, page = self.request(
+            "/api/vault/thread?collection=paginated&transcript="
+            + quote(child_id + ".jsonl") + "&source=backup&cursor=0")
+        self.assertEqual(code, 200)
+        self.assertEqual(page["entries"][0]["text"], "Saved child-only result")
+        code, grant = self.request("/api/vault/export-ticket", {
+            "collection": "paginated", "transcript": child_id + ".jsonl",
+            "source": "backup",
+        })
+        self.assertEqual(code, 200)
+        code, exported = self.request(grant["url"], authorized=False)
+        self.assertEqual(code, 200)
+        self.assertIn("Saved child-only result", exported)
+
     def test_live_paginated_history_search_and_open_without_a_backup(self):
         thread_id = "55555555-5555-4555-8555-555555555555"
         codex = self.home / ".codex"

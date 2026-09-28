@@ -488,6 +488,7 @@ def search(
         return matches
     selected_rollouts = _selected_rollouts(discovered)
     rollouts = _rollout_map(discovered)
+    paginated_catalog_ids = _paginated_catalog_ids(catalog)
     # Backup v3 keeps database-derived items separate from rollouts. Search
     # their authenticated, restored files without claiming the two sources
     # are interchangeable or creating a plaintext persistent index.
@@ -505,7 +506,8 @@ def search(
         if found is None:
             for index, group in _paginated_entries(
                     source_home, transcript, discovered=discovered,
-                    selected=selected_rollouts, rollouts=rollouts):
+                    selected=selected_rollouts, rollouts=rollouts,
+                    available=paginated_catalog_ids):
                 for entry in group:
                     position = entry.text.casefold().find(needle)
                     if position >= 0:
@@ -642,8 +644,24 @@ def _paginated_item_entries(items):
         yield index, entries
 
 
+def _paginated_catalog_ids(catalog):
+    if catalog is None:
+        return None
+    ids = set()
+    for item in catalog:
+        if not isinstance(item, dict) or item.get("collection") != "paginated":
+            continue
+        path = item.get("path")
+        if isinstance(path, str) and path.endswith(".jsonl"):
+            thread_id = path[:-6]
+            if canonical_id(thread_id) == thread_id:
+                ids.add(thread_id)
+    return ids
+
+
 def _paginated_entries(source_home: str, transcript: str, live: bool = False,
-                       discovered=None, selected=None, rollouts=None):
+                       discovered=None, selected=None, rollouts=None, catalog=None,
+                       available=None):
     """Read either live SQLite or a separately restored database projection."""
     from codex_migrate.vault_paginated import open_paginated_source, restored_items
 
@@ -657,7 +675,12 @@ def _paginated_entries(source_home: str, transcript: str, live: bool = False,
                      for item in source.items_range(rollout_id, start, end))
             yield from _paginated_item_entries(items)
     else:
+        if available is None:
+            available = _paginated_catalog_ids(catalog)
+        if available is not None and thread_id not in available:
+            raise MigrationError("This paginated conversation is not in the selected backup.")
         items = (item for rollout_id, start, end in ranges
+                 if available is None or rollout_id in available
                  for item in restored_items(source_home, rollout_id, start, end))
         yield from _paginated_item_entries(items)
 
@@ -668,12 +691,14 @@ def read_thread(
     transcript: str,
     max_text_bytes: int = 25 * 1024 * 1024,
     live_paginated: bool = False,
+    catalog: Optional[List[Dict[str, object]]] = None,
 ) -> VaultThread:
     """Return message-like text from one exact discovered transcript."""
     if collection == "paginated":
         entries: List[ThreadEntry] = []
         total = 0
-        for _, group in _paginated_entries(source_home, transcript, live_paginated):
+        for _, group in _paginated_entries(source_home, transcript, live_paginated,
+                                           catalog=catalog):
             for entry in group:
                 total += len(entry.text.encode("utf-8"))
                 if total > max_text_bytes:
@@ -706,6 +731,7 @@ def read_thread_page(
     max_entries: int = 100, max_text_bytes: int = 1024 * 1024,
     expected_query: str = "",
     live_paginated: bool = False,
+    catalog: Optional[List[Dict[str, object]]] = None,
 ):
     """Read one bounded page of a live or verified Vault conversation."""
     if not isinstance(cursor, int) or cursor < 0 or cursor > 1 << 63:
@@ -720,7 +746,8 @@ def read_thread_page(
         next_cursor = None
         matched_cursor = False
         seen_count = 0
-        for index, group in _paginated_entries(source_home, transcript, live_paginated):
+        for index, group in _paginated_entries(source_home, transcript, live_paginated,
+                                                catalog=catalog):
             seen_count = index + 1
             if index < cursor:
                 continue
@@ -839,7 +866,7 @@ def markdown(thread: VaultThread) -> str:
 
 
 def markdown_chunks(source_home: str, collection: str, transcript: str,
-                    live_paginated_source=None):
+                    live_paginated_source=None, catalog=None):
     """Stream an exact transcript as Markdown without buffering its full body.
 
     For a saved source, the caller keeps the verified private browse copy alive.
@@ -858,7 +885,7 @@ def markdown_chunks(source_home: str, collection: str, transcript: str,
                      for item in live_paginated_source.items_range(rollout_id, start, end))
             groups = _paginated_item_entries(items)
         else:
-            groups = _paginated_entries(source_home, transcript)
+            groups = _paginated_entries(source_home, transcript, catalog=catalog)
         label = "live Codex paginated source" if live_paginated_source is not None else "saved paginated source"
         header = "# Codex conversation (%s)\n\n- Collection: paginated\n- Thread: `%s`\n\n" % (label,
             transcript.replace("`", "\\`"))
@@ -892,7 +919,8 @@ def markdown_chunks(source_home: str, collection: str, transcript: str,
             yield (prefix + body + "\n\n").encode("utf-8")
 
 
-def markdown_source_stamp(source_home: str, collection: str, transcript: str):
+def markdown_source_stamp(source_home: str, collection: str, transcript: str,
+                          catalog=None):
     """Bind a prepared export to the exact transcript lineage it measured."""
     if collection == "paginated":
         from codex_migrate.vault_paginated import restored_path
@@ -904,8 +932,13 @@ def markdown_source_stamp(source_home: str, collection: str, transcript: str):
         selected = _selected_rollouts(discovered)
         ranges = _paginated_ranges(source_home, thread_id, discovered, selected,
                                    _rollout_map(discovered))
+        available = _paginated_catalog_ids(catalog)
+        if available is not None and thread_id not in available:
+            raise MigrationError("This paginated conversation is not in the selected backup.")
         stamp = []
         for rollout_id, _, _ in ranges:
+            if available is not None and rollout_id not in available:
+                continue
             path = restored_path(source_home, rollout_id)
             info = check_info(path.lstat())
             stamp.append((str(path), info.st_dev, info.st_ino, info.st_size,
