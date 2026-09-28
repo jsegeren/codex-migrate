@@ -7,6 +7,18 @@ distribution decision; the dated entries below preserve their original status.
 
 ## September 28 paginated-history coverage hold
 
+An exact-source local-test build-20 package from `7408317` passed strict local
+code-signature verification and four packaged-engine checks (one optional
+legacy-package check skipped). A new packaged regression created a disposable
+paginated database containing a message absent from its JSONL rollout; the
+bundled engine found the message, encrypted and verified a snapshot, and
+restored the database-derived record with that text intact. The source
+paginated/history suites separately passed 24 tests. This proves a narrow
+database-only recovery path in an ad-hoc local package; it does **not** prove
+clean-account key import, production signing, a scheduled second capture,
+realistic-scale performance, or complete installed-Codex coverage. The public
+release hold remains in force.
+
 The installed Codex runtime uses a paginated thread-history database in
 addition to JSONL rollouts. A read-only check found cases where the database
 projection offset is beyond the current rollout length and its user/agent
@@ -39,6 +51,48 @@ installed-runtime scale, and independent review are still missing. These snapsho
 `needs attention`. This work is **not released** and does not clear the
 paginated-history or next-build hold.
 
+The draft compares database-derived versions separately from JSONL versions.
+A synthetic two-item paginated thread, followed by a one-item shrink, sets a
+per-thread `at_risk` flag that persists on later captures; the earlier two-item
+snapshot remains decryptable and readable. An unchanged second capture adds no
+new encrypted object. This is a conservative loss signal, not proof that every
+possible database rewrite or missing thread will be detected.
+
+On source `4d6be8a`, [independent macOS CI runners](https://github.com/jsegeren/codex-migrate/actions/runs/36441418314)
+successfully exported and imported a synthetic encrypted Vault with
+database-only and inherited fork items, then searched, read, and exported the
+restored content. Both Python jobs passed. The CI helper uses a disposable
+test Keychain configuration, not the final signed buyer app; a clean-account
+release-app recovery test and installed-runtime scale proof remain open.
+
+A September 28 low-priority, read-only pass over this Mac's installed Codex
+paginated database validated the known schema and all 799,860 item records
+across 1,615 thread IDs in 15.5 seconds. It reported only aggregate counts
+and bytes; it did not log message content, create a snapshot, or alter Codex.
+This is one installed-version source-read scale check, **not** an encrypted
+full-size backup, scheduled run, clean-account restore, or second-Mac proof.
+
+The opt-in, disposable `tests/bench_vault_paginated.py` exercised the draft
+encrypted backup path without reading customer data. A 1,615-thread,
+801,040-item synthetic SQLite source occupied 371,687,424 bytes; its first
+backup and verification took 26.5 seconds, the unchanged second backup and
+verification took 25.1 seconds, and all 1,615 encrypted objects were reused.
+`/usr/bin/time -l` measured about 215 MB peak resident memory. Those short,
+identical payloads compressed to only 9.7 MB of Vault files, so they are a
+record-count test, **not** a realistic storage-size or cost estimate.
+Separately, 100,000 varied 8 KiB synthetic items across 200 threads occupied
+875,958,272 SQLite bytes. First backup and verification took 22.1 seconds;
+the unchanged second backup and verification took 21.3 seconds with all 400
+objects reused. The Vault occupied 469,896,622 bytes and peak resident memory
+was about 503 MB. The benchmark deletes its disposable key and data on exit.
+With one additional 8 KiB database item before the second capture, the same
+fixture retained all 400 previous ciphertext objects and added one 39,962-byte
+object. Total Vault storage grew by 154,766 bytes including the new manifest,
+reference, and metadata. This measures one synthetic append pattern, not the
+retained-byte growth of a real customer's daily history or a hosted-tier price.
+None of these runs used the installed scheduler or the real 6.6 GB item
+payload volume, proved off-device recovery, or clears the public-release hold.
+
 ## September 28 hosted/Vault integration checkpoint — not released
 
 The hosted draft includes the paginated-history Vault integration at merge
@@ -51,7 +105,7 @@ receipts before discarding scratch chunks. A synthetic database-only snapshot
 was staged, retried without new uploads, downloaded, verified, and restored
 without a plaintext history file on disk. This remains dark source work: real
 R2 publication, independent clean-account/key-import recovery, installed-app
-wiring, and realistic-scale tests are still release gates.
+wiring, and realistic-scale hosted transport tests are still release gates.
 The dark live-runner test also stages and publishes a mixed transcript/database
 snapshot through its synthetic in-memory service, reuses unchanged database
 ciphertext on a second run, and restores the database item after recovery-key

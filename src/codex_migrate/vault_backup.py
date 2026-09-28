@@ -616,6 +616,13 @@ def _backup_unlocked(
                     if progress is not None:
                         progress(len(manifest_files), progress_total_files,
                                  total_bytes, 0)
+        paginated_at_risk = set(loss_warnings(
+            (item for item in previous_files if item.get("collection") == "paginated"),
+            (item for item in manifest_files if item.get("collection") == "paginated"),
+        ))
+        for item in manifest_files:
+            if item["collection"] == "paginated":
+                item["at_risk"] = item["thread_id"] in paginated_at_risk
         paginated_history_unprotected |= _paginated_history_unprotected(source_home)
         for item in manifest_files:
             if item["collection"] == "paginated":
@@ -677,8 +684,8 @@ def _backup_unlocked(
             chunks=total_chunks,
             key_id=key_id,
             recovery_key=recovery_key,
-            needs_attention=bool(at_risk) or paginated_history_unprotected,
-            at_risk_threads=len(at_risk),
+            needs_attention=bool(at_risk or paginated_at_risk) or paginated_history_unprotected,
+            at_risk_threads=len(at_risk | paginated_at_risk),
             paginated_history_unprotected=paginated_history_unprotected,
             title_index_unavailable=title_index_unavailable,
         )
