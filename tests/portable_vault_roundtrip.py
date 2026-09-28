@@ -14,6 +14,7 @@ import sys
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault import markdown_chunks, read_thread_page, search
 from codex_migrate.vault_backup import backup
+from codex_migrate.vault_history import search_titles
 from codex_migrate.vault_recovery import (
     import_recovery_key, restore_snapshot, snapshot_catalog, verify_snapshot,
 )
@@ -23,6 +24,8 @@ TRANSCRIPT = b'{"type":"response_item","payload":{"content":"portable synthetic 
 RELATIVE = Path("sessions/2026/09/24/portable.jsonl")
 DATABASE_THREAD = "44444444-4444-4444-8444-444444444444"
 DATABASE_TEXT = "portable synthetic database-only turn"
+DATABASE_TITLE = "portable state-only original title"
+DATABASE_NAME = "portable state-only current name"
 PARENT_THREAD = "11111111-1111-4111-8111-111111111111"
 CHILD_THREAD = "22222222-2222-4222-8222-222222222222"
 INHERITED_TEXT = "portable inherited database-only turn"
@@ -86,6 +89,13 @@ def write_paginated_fixture(database: Path) -> None:
                                             "text": text}), "userMessage", ordinal))
 
 
+def write_state_title_fixture(database: Path) -> None:
+    with sqlite3.connect(database) as connection:
+        connection.execute("CREATE TABLE threads (id TEXT, title TEXT, name TEXT)")
+        connection.execute("INSERT INTO threads VALUES (?, ?, ?)",
+                           (DATABASE_THREAD, DATABASE_TITLE, DATABASE_NAME))
+
+
 def delete_test_key(helper: Path, key_id: str) -> None:
     result = subprocess.run(
         [str(helper), "delete-key", "--key-id", key_id],
@@ -104,6 +114,7 @@ def produce(bundle: Path, helper: Path) -> None:
     transcript.write_bytes(TRANSCRIPT)
     write_fork_rollouts(source / ".codex")
     write_paginated_fixture(source / ".codex/thread_history_1.sqlite")
+    write_state_title_fixture(source / ".codex/state_5.sqlite")
     bundle.mkdir(mode=0o700)
     vault = bundle / "vault"
     key_id = None
@@ -157,6 +168,10 @@ def consume(bundle: Path, helper: Path) -> None:
         if not (restored / "paginated_history" / (DATABASE_THREAD + ".jsonl")).is_file():
             raise AssertionError("Cross-Mac paginated source was not restored")
         catalog = snapshot_catalog(str(vault), crypto_helper=str(helper))
+        for title in (DATABASE_TITLE, DATABASE_NAME):
+            hits = search_titles(str(vault), title, crypto_helper=str(helper))
+            if (len(hits) != 1 or hits[0]["thread_id"] != DATABASE_THREAD):
+                raise AssertionError("Cross-Mac state-only title search failed")
         matches = search(str(restored_home), DATABASE_TEXT, catalog=catalog)
         if (len(matches) != 1 or matches[0].collection != "paginated"
                 or matches[0].transcript != DATABASE_THREAD + ".jsonl"):
