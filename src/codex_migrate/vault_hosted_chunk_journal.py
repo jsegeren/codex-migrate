@@ -45,11 +45,13 @@ class HostedChunkJournal:
                         "snapshotId": snapshot_id, "keyId": key_id}
         self._metadata = self.directory / "journal.json"
         self._log = self.directory / "chunks.jsonl"
+        self._manifest = self.directory / "manifest-binding.json"
         self._lock = self.directory / "journal.lock"
         self._directory_identity: Optional[Tuple[int, int]] = None
         self._lock_descriptor: Optional[int] = None
         self._descriptor: Optional[int] = None
         self.records: Dict[str, Tuple[int, str]] = {}
+        self.manifest_binding: Optional[dict] = None
 
     @property
     def reservation_id(self) -> str:
@@ -58,6 +60,10 @@ class HostedChunkJournal:
     @property
     def key_id(self) -> str:
         return self._header["keyId"]
+
+    @property
+    def snapshot_id(self) -> str:
+        return self._header["snapshotId"]
 
     def ensure_open(self) -> None:
         if self._descriptor is None or self._lock_descriptor is None:
@@ -141,6 +147,7 @@ class HostedChunkJournal:
         # after a crash before any caller may discard its scratch ciphertext.
         _fsync_directory(self.directory)
         self.records = self._read_records()
+        self.manifest_binding = self._read_manifest_binding()
 
     def __exit__(self, *_: object) -> None:
         if self._descriptor is not None:
@@ -193,6 +200,58 @@ class HostedChunkJournal:
                 raise MigrationError("The hosted chunk journal has conflicting ciphertext.")
             records[identifier] = facts
         return records
+
+    def _read_manifest_binding(self) -> Optional[dict]:
+        _require_unlinked_path(self._manifest, allow_missing_leaf=True)
+        try:
+            descriptor = os.open(self._manifest,
+                                 os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        except FileNotFoundError:
+            return None
+        except OSError as error:
+            raise MigrationError("The hosted manifest binding is unavailable.") from error
+        try:
+            with os.fdopen(descriptor, "rb") as stream:
+                info = os.fstat(stream.fileno())
+                if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or
+                        info.st_nlink != 1 or info.st_mode & 0o077 or
+                        info.st_size > 1024):
+                    raise MigrationError("The hosted manifest binding is unsafe.")
+                value = json.load(stream)
+        except (OSError, UnicodeError, ValueError) as error:
+            raise MigrationError("The hosted manifest binding is invalid.") from error
+        if (not isinstance(value, dict) or
+                set(value) != {"format", "version", "snapshotId", "plaintextSha256",
+                               "ciphertextSha256", "bytes"} or
+                value["format"] != "codex-vault-hosted-manifest-binding" or
+                value["version"] != 1 or
+                value["snapshotId"] != self._header["snapshotId"] or
+                type(value["bytes"]) is not int or
+                not 1 <= value["bytes"] <= 100_000_000 or
+                any(not isinstance(value[key], str) or not _HEX.fullmatch(value[key])
+                    for key in ("plaintextSha256", "ciphertextSha256"))):
+            raise MigrationError("The hosted manifest binding is invalid.")
+        return value
+
+    def bind_manifest(self, plaintext_sha256: str, ciphertext_sha256: str,
+                      size: int) -> None:
+        """Persist exact authenticated manifest bytes before remote staging."""
+        self.ensure_private_directory()
+        if (type(size) is not int or not 1 <= size <= 100_000_000 or
+                any(not isinstance(value, str) or not _HEX.fullmatch(value)
+                    for value in (plaintext_sha256, ciphertext_sha256))):
+            raise MigrationError("The hosted manifest facts are invalid.")
+        value = {"format": "codex-vault-hosted-manifest-binding", "version": 1,
+                 "snapshotId": self._header["snapshotId"],
+                 "plaintextSha256": plaintext_sha256,
+                 "ciphertextSha256": ciphertext_sha256, "bytes": size}
+        if self.manifest_binding is not None:
+            if self.manifest_binding != value:
+                raise MigrationError("The hosted manifest conflicts with its saved binding.")
+            return
+        _require_unlinked_path(self._manifest, allow_missing_leaf=True)
+        _atomic_json(self._manifest, value)
+        self.manifest_binding = value
 
     def record(self, identifier: str, size: int, digest: str) -> None:
         if self._descriptor is None:

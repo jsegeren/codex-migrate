@@ -373,8 +373,12 @@ egress allowance. Do not claim that B2 restores are always free. See its
   behavior remains unchanged.
   A separate draft graph check now rejects missing, extra, or contradictory
   staged objects relative to a version-2 manifest before receipt-page
-  submission. It is not yet connected to manifest sealing or publication;
-  passing that client-side check would not replace the server's R2 proof.
+  submission. A separate dark manifest stage now durably binds the exact
+  encrypted bytes and an authenticated plaintext fingerprint to one snapshot;
+  retry reuses those bytes and refuses a changed or missing bound manifest
+  rather than resealing under an immutable remote key. It is not yet connected
+  to whole-snapshot publication; passing client-side checks would not replace
+  the server's R2 proof.
 - Keep each local Vault in its own random, account-scoped remote namespace.
   Two Macs may each back up to separate Vaults under one subscription; this is
   not synchronization or a silent merge. Object names and snapshot times are

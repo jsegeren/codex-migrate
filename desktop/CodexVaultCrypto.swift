@@ -146,6 +146,12 @@ private struct SealResult: Codable {
     let sealed: Bool
 }
 
+private struct ManifestFingerprint: Codable {
+    let snapshot_id: String
+    let plaintext_sha256: String
+    let ciphertext_sha256: String
+}
+
 private enum VaultError: Error, CustomStringConvertible {
     case message(String)
 
@@ -962,7 +968,7 @@ private func sealManifestCommand(_ arguments: [String]) throws {
 }
 
 private func openedManifest(_ arguments: [String]) throws ->
-    (Manifest, SymmetricKey, SymmetricKey, String) {
+    (Manifest, SymmetricKey, SymmetricKey, String, String) {
     let keyID = try canonicalKeyID(argument("--key-id", in: arguments))
     let manifestURL = URL(fileURLWithPath: try argument("--manifest", in: arguments))
     let snapshotID = try argument("--snapshot-id", in: arguments).lowercased()
@@ -981,12 +987,20 @@ private func openedManifest(_ arguments: [String]) throws ->
           manifest.snapshot_id.lowercased() == snapshotID else {
         throw VaultError.message("the decrypted manifest has an unsupported identity or format")
     }
-    return (manifest, encryption, identifiers, hex(SHA256.hash(data: ciphertext)))
+    return (manifest, encryption, identifiers,
+            hex(SHA256.hash(data: ciphertext)), hex(SHA256.hash(data: manifestData)))
+}
+
+private func manifestFingerprintCommand(_ arguments: [String]) throws {
+    let (manifest, _, _, ciphertextSHA256, plaintextSHA256) = try openedManifest(arguments)
+    try printJSON(ManifestFingerprint(snapshot_id: manifest.snapshot_id,
+                                      plaintext_sha256: plaintextSHA256,
+                                      ciphertext_sha256: ciphertextSHA256))
 }
 
 private func validatedSnapshot(_ arguments: [String]) throws ->
     (Manifest, SymmetricKey, SymmetricKey, Verification, [String: String], String) {
-    let (manifest, encryption, identifiers, manifestSHA256) = try openedManifest(arguments)
+    let (manifest, encryption, identifiers, manifestSHA256, _) = try openedManifest(arguments)
     let root = URL(fileURLWithPath: try argument("--object-dir", in: arguments), isDirectory: true)
     let snapshotID = manifest.snapshot_id
     var totalBytes = 0
@@ -1079,7 +1093,7 @@ private func encryptedInventoryCommand(_ arguments: [String]) throws {
 }
 
 private func catalogCommand(_ arguments: [String]) throws {
-    let (manifest, _, _, _) = try openedManifest(arguments)
+    let (manifest, _, _, _, _) = try openedManifest(arguments)
     let files = manifest.files.map { file in
         CatalogFile(collection: file.collection, path: file.path, size: file.size,
                     sha256: file.sha256, thread_id: file.thread_id,
@@ -1191,6 +1205,7 @@ private func run() throws {
     case "store-chunks-with-known": try storeChunksWithKnownCommand(arguments)
     case "plan-chunks": try planChunksCommand(arguments)
     case "seal-manifest": try sealManifestCommand(arguments)
+    case "manifest-fingerprint": try manifestFingerprintCommand(arguments)
     case "verify": try verifyCommand(arguments)
     case "encrypted-inventory": try encryptedInventoryCommand(arguments)
     case "catalog": try catalogCommand(arguments)

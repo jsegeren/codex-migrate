@@ -14,6 +14,7 @@ from unittest.mock import patch
 from codex_migrate.errors import MigrationError
 from codex_migrate import vault_backup
 from codex_migrate.vault_hosted_chunk_journal import HostedChunkJournal
+from codex_migrate.vault_hosted_manifest import stage_hosted_manifest
 from codex_migrate.vault_backup import backup, plan
 from codex_migrate.vault_identity import TranscriptChanged
 from codex_migrate.vault_recovery import (
@@ -121,6 +122,117 @@ class VaultBackupTests(unittest.TestCase):
             self.assertTrue(result.encrypted)
             self.assertEqual(result.transcript_files, 2)
             self.assertFalse(destination.exists())
+
+    def test_manifest_fingerprint_authenticates_exact_sealed_bytes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            created = subprocess.run(
+                [str(self.helper), "create-key"], check=True,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            )
+            key_id = json.loads(created.stdout)["key_id"]
+            snapshot_id = str(uuid.uuid4())
+            manifest = json.dumps({
+                "format": "codex-vault-snapshot", "version": 2,
+                "snapshot_id": snapshot_id,
+                "created_at": "2026-09-27T00:00:00+00:00", "files": [],
+            }, sort_keys=True).encode("utf-8")
+            sealed = root / "snapshot.cvmanifest"
+            try:
+                subprocess.run([
+                    str(self.helper), "seal-manifest", "--key-id", key_id,
+                    "--snapshot-id", snapshot_id, "--output", str(sealed),
+                ], input=manifest, check=True, stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE)
+                fingerprint = subprocess.run([
+                    str(self.helper), "manifest-fingerprint", "--key-id", key_id,
+                    "--snapshot-id", snapshot_id, "--manifest", str(sealed),
+                ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                facts = json.loads(fingerprint.stdout)
+                self.assertEqual(facts, {
+                    "snapshot_id": snapshot_id,
+                    "plaintext_sha256": hashlib.sha256(manifest).hexdigest(),
+                    "ciphertext_sha256": hashlib.sha256(sealed.read_bytes()).hexdigest(),
+                })
+                damaged = root / "damaged.cvmanifest"
+                ciphertext = bytearray(sealed.read_bytes())
+                ciphertext[-1] ^= 1
+                damaged.write_bytes(ciphertext)
+                rejected = subprocess.run([
+                    str(self.helper), "manifest-fingerprint", "--key-id", key_id,
+                    "--snapshot-id", snapshot_id, "--manifest", str(damaged),
+                ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                self.assertNotEqual(rejected.returncode, 0)
+            finally:
+                subprocess.run([str(self.helper), "delete-key", "--key-id", key_id],
+                               check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    def test_hosted_manifest_retry_reuses_exact_ciphertext_and_refuses_reseal(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            created = subprocess.run(
+                [str(self.helper), "create-key"], check=True,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            )
+            key_id = json.loads(created.stdout)["key_id"]
+            snapshot_id = str(uuid.uuid4())
+            manifest = {
+                "format": "codex-vault-snapshot", "version": 2,
+                "snapshot_id": snapshot_id,
+                "created_at": "2026-09-27T00:00:00+00:00", "files": [],
+            }
+            directory = root / "journal"
+            directory.mkdir(mode=0o700)
+            identity = {
+                "account_id": str(uuid.uuid4()), "vault_id": str(uuid.uuid4()),
+                "reservation_id": str(uuid.uuid4()), "snapshot_id": snapshot_id,
+                "key_id": key_id,
+            }
+
+            class Client:
+                def __init__(self):
+                    self.store = MetadataObjectStore()
+
+                def object_store(self, reservation_id, expected, *, apply=False):
+                    self.assertion(reservation_id == identity["reservation_id"] and apply)
+                    return self.store
+
+                @staticmethod
+                def assertion(condition):
+                    if not condition:
+                        raise AssertionError("wrong hosted reservation")
+
+            client = Client()
+            sealed = directory / "manifests" / (snapshot_id + ".cvmanifest")
+            try:
+                with HostedChunkJournal(directory, **identity) as journal:
+                    first = stage_hosted_manifest(manifest, journal, client,
+                                                  crypto_helper=str(self.helper), apply=True)
+                    self.assertEqual(first.key, "manifests/" + snapshot_id + ".cvmanifest")
+                    ciphertext = sealed.read_bytes()
+                    self.assertEqual(client.store.writes, 1)
+                with HostedChunkJournal(directory, **identity) as journal:
+                    second = stage_hosted_manifest(manifest, journal, client,
+                                                   crypto_helper=str(self.helper), apply=True)
+                    self.assertEqual(second, first)
+                    self.assertEqual(sealed.read_bytes(), ciphertext)
+                    self.assertEqual(client.store.writes, 1)
+                    client.store.objects[first.key] = b"damaged ciphertext"
+                    with self.assertRaisesRegex(MigrationError, "differs"):
+                        stage_hosted_manifest(manifest, journal, client,
+                                              crypto_helper=str(self.helper), apply=True)
+                    client.store.objects[first.key] = ciphertext
+                    changed = {**manifest, "created_at": "2026-09-28T00:00:00+00:00"}
+                    with self.assertRaisesRegex(MigrationError, "does not match"):
+                        stage_hosted_manifest(changed, journal, client,
+                                              crypto_helper=str(self.helper), apply=True)
+                    sealed.unlink()
+                    with self.assertRaisesRegex(MigrationError, "missing"):
+                        stage_hosted_manifest(manifest, journal, client,
+                                              crypto_helper=str(self.helper), apply=True)
+            finally:
+                subprocess.run([str(self.helper), "delete-key", "--key-id", key_id],
+                               check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     def test_backup_is_encrypted_versioned_verified_and_incremental(self):
         with tempfile.TemporaryDirectory() as temporary:

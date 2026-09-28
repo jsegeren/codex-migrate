@@ -142,6 +142,36 @@ class HostedChunkJournalTests(unittest.TestCase):
                     journal.record(identifier, size, digest)
             self.assertEqual(journal.records, {})
 
+    def test_manifest_binding_is_private_stable_and_recoverable(self):
+        with self.journal() as journal:
+            journal.bind_manifest("a" * 64, "b" * 64, 123)
+            journal.bind_manifest("a" * 64, "b" * 64, 123)
+            with self.assertRaisesRegex(MigrationError, "conflicts"):
+                journal.bind_manifest("c" * 64, "b" * 64, 123)
+        binding = self.directory / "manifest-binding.json"
+        self.assertEqual(binding.stat().st_mode & 0o077, 0)
+        self.assertEqual(json.loads(binding.read_text())["snapshotId"],
+                         IDENTITY["snapshot_id"])
+        with self.journal() as reopened:
+            self.assertEqual(reopened.manifest_binding["ciphertextSha256"], "b" * 64)
+            reopened.bind_manifest("a" * 64, "b" * 64, 123)
+            with self.assertRaisesRegex(MigrationError, "conflicts"):
+                reopened.bind_manifest("a" * 64, "c" * 64, 123)
+
+    def test_unsafe_or_corrupt_manifest_binding_refuses_open(self):
+        with self.journal() as journal:
+            journal.bind_manifest("a" * 64, "b" * 64, 123)
+        binding = self.directory / "manifest-binding.json"
+        binding.chmod(0o644)
+        with self.assertRaisesRegex(MigrationError, "unsafe"):
+            with self.journal():
+                pass
+        binding.chmod(0o600)
+        binding.write_text("not-json")
+        with self.assertRaisesRegex(MigrationError, "invalid"):
+            with self.journal():
+                pass
+
     def test_remote_stage_records_only_after_exact_readback(self):
         scratch = self.directory.parent / "scratch"
         item = scratch / CHUNK[:2] / (CHUNK[2:] + ".cvchunk")
