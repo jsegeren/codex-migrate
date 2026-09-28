@@ -551,8 +551,11 @@ def search(
             from codex_migrate.vault_paginated import open_paginated_source
             from codex_migrate.vault_search_index import paginated_candidates
 
-            indexed_rollouts = paginated_candidates(source_home, query.strip())
             with open_paginated_source(source_home) as source:
+                # Decide whether the index is current only after pinning the
+                # SQLite read view. A write between an earlier index check and
+                # this BEGIN could otherwise hide a newly added message.
+                indexed_rollouts = paginated_candidates(source_home, query.strip())
                 for thread_id in source.thread_ids_recent():
                     transcript = thread_id + ".jsonl"
                     aliases = indexed.get(thread_id, [])
