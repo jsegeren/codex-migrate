@@ -7,6 +7,18 @@ distribution decision; the dated entries below preserve their original status.
 
 ## September 28 paginated-history coverage hold
 
+An exact-source local-test build-20 package from `7408317` passed strict local
+code-signature verification and four packaged-engine checks (one optional
+legacy-package check skipped). A new packaged regression created a disposable
+paginated database containing a message absent from its JSONL rollout; the
+bundled engine found the message, encrypted and verified a snapshot, and
+restored the database-derived record with that text intact. The source
+paginated/history suites separately passed 24 tests. This proves a narrow
+database-only recovery path in an ad-hoc local package; it does **not** prove
+clean-account key import, production signing, a scheduled second capture,
+realistic-scale performance, or complete installed-Codex coverage. The public
+release hold remains in force.
+
 The installed Codex runtime uses a paginated thread-history database in
 addition to JSONL rollouts. A read-only check found cases where the database
 projection offset is beyond the current rollout length and its user/agent

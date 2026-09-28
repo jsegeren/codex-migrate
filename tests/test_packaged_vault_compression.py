@@ -43,6 +43,78 @@ def run_packaged(command, timeout=30):
 @unittest.skipUnless(os.environ.get("CODEX_MIGRATE_PACKAGED_APP"),
                      "requires an explicit packaged app path")
 class PackagedVaultCompressionTests(unittest.TestCase):
+    def test_bundled_engine_recovers_database_only_paginated_item(self):
+        app = Path(os.environ["CODEX_MIGRATE_PACKAGED_APP"])
+        resources = app / "Contents/Resources"
+        engine = resources / "engine/codex-migrate-engine"
+        helper = resources / "CodexVaultCrypto"
+        if not helper.is_file():
+            helper = app / "Contents/Helpers/CodexVaultCrypto.app/Contents/MacOS/CodexVaultCrypto"
+        self.assertTrue(engine.is_file() and helper.is_file())
+        thread_id = "44444444-4444-4444-8444-444444444444"
+        marker = "packaged-database-only-marker-qzmx"
+        with tempfile.TemporaryDirectory(prefix="vault-package-paginated-test-") as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            codex = source / ".codex"
+            rollout = codex / "sessions" / ("rollout-" + thread_id + ".jsonl")
+            rollout.parent.mkdir(parents=True)
+            rollout.write_text(json.dumps({"type": "session_meta", "payload": {
+                "id": thread_id,
+            }}) + "\n", encoding="utf-8")
+            database = codex / "thread_history_1.sqlite"
+            with sqlite3.connect(database) as connection:
+                connection.execute("CREATE TABLE thread_items ("
+                                   "thread_id TEXT, turn_id TEXT, item_id TEXT, "
+                                   "rollout_ordinal INTEGER, created_at_ms INTEGER, "
+                                   "item_json TEXT, item_type TEXT, updated_at_ordinal INTEGER)")
+                connection.execute("CREATE TABLE thread_history_projection_state ("
+                                   "thread_id TEXT, next_rollout_byte_offset INTEGER, "
+                                   "next_rollout_ordinal INTEGER)")
+                connection.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                   (thread_id, "turn-1", "item-1", 1, 100,
+                                    json.dumps({"id": "item-1", "type": "userMessage",
+                                                "content": [{"type": "text", "text": marker}]}),
+                                    "userMessage", 1))
+            original_database = database.read_bytes()
+            vault = root / "vault"
+            restored_home = root / "restored-home"
+            restored_home.mkdir()
+            restored = restored_home / ".codex"
+            key_id = None
+            try:
+                live = json.loads(run_packaged([
+                    str(engine), "vault", "--source-home", str(source),
+                    "search", marker, "--json",
+                ]))
+                self.assertTrue(any(result["collection"] == "paginated" for result in live))
+                saved = json.loads(run_packaged([
+                    str(engine), "vault", "--source-home", str(source), "backup",
+                    "--destination", str(vault), "--apply", "--json",
+                ], timeout=120))
+                self.assertTrue(saved["applied"])
+                key_id = json.loads((vault / "vault.json").read_text())["key_id"]
+                self.assertEqual(database.read_bytes(), original_database)
+                run_packaged([str(engine), "vault", "verify", "--vault", str(vault),
+                              "--json"], timeout=120)
+                run_packaged([str(engine), "vault", "--source-home", str(source),
+                              "restore", "--vault", str(vault), "--output", str(restored),
+                              "--apply", "--json"], timeout=120)
+                restored_items = restored / "paginated_history" / (thread_id + ".jsonl")
+                self.assertTrue(restored_items.is_file())
+                records = [json.loads(line) for line in
+                           restored_items.read_text(encoding="utf-8").splitlines()]
+                self.assertEqual(len(records), 1)
+                self.assertEqual(records[0]["source"], "codex-paginated-thread-items-v1")
+                self.assertEqual(records[0]["thread_id"], thread_id)
+                self.assertEqual(json.loads(records[0]["item_json"])["content"][0]["text"],
+                                 marker)
+            finally:
+                if key_id is None and (vault / "vault.json").is_file():
+                    key_id = json.loads((vault / "vault.json").read_text())["key_id"]
+                if key_id is not None:
+                    run_packaged([str(helper), "delete-key", "--key-id", key_id])
+
     def test_bundled_engine_search_index_preserves_live_search(self):
         app = Path(os.environ["CODEX_MIGRATE_PACKAGED_APP"])
         engine = app / "Contents/Resources/engine/codex-migrate-engine"
