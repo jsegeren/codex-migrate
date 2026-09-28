@@ -138,6 +138,83 @@ class VaultTests(unittest.TestCase):
             self.assertEqual(old_name[0].title, "Current sign-in title")
             self.assertEqual(search(str(root), "clerk", limit=10, titles_only=True), [])
 
+    def test_search_finds_state_database_title_absent_from_session_index(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            codex = root / ".codex"
+            folder = codex / "sessions"
+            folder.mkdir(parents=True)
+            thread_id = "11111111-1111-4111-8111-111111111111"
+            (folder / ("rollout-" + thread_id + ".jsonl")).write_text(
+                json.dumps({"type": "session_meta", "payload": {"id": thread_id}}) + "\n",
+                encoding="utf-8",
+            )
+            database = codex / "state_5.sqlite"
+            with sqlite3.connect(database) as connection:
+                connection.execute("CREATE TABLE threads (id TEXT, title TEXT, name TEXT)")
+                connection.execute("INSERT INTO threads VALUES (?, ?, ?)",
+                                   (thread_id, "Original project title", "Current renamed project"))
+            old = search(str(root), "Original project", titles_only=True)
+            current = search(str(root), "Current renamed", titles_only=True)
+            self.assertEqual(len(old), 1)
+            self.assertEqual(len(current), 1)
+            self.assertEqual(old[0].title, "Current renamed project")
+            self.assertEqual(current[0].title, "Current renamed project")
+
+    def test_state_title_prefix_is_bounded_when_codex_saved_a_long_prompt(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            codex = root / ".codex"
+            folder = codex / "sessions"
+            folder.mkdir(parents=True)
+            thread_id = "11111111-1111-4111-8111-111111111111"
+            (folder / ("rollout-" + thread_id + ".jsonl")).write_text(
+                json.dumps({"type": "session_meta", "payload": {"id": thread_id}}) + "\n",
+                encoding="utf-8",
+            )
+            with sqlite3.connect(codex / "state_5.sqlite") as connection:
+                connection.execute("CREATE TABLE threads (id TEXT, title TEXT, name TEXT)")
+                connection.execute("INSERT INTO threads VALUES (?, ?, NULL)",
+                                   (thread_id, "Find this launch note " + "x" * 2000))
+            matches = search(str(root), "Find this launch", titles_only=True)
+            self.assertEqual(len(matches), 1)
+            self.assertEqual(len(matches[0].title), 500)
+
+    def test_state_title_source_rejects_linked_database_and_sidecar(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            codex = root / ".codex"
+            codex.mkdir()
+            outside = root / "outside.sqlite"
+            with sqlite3.connect(outside) as connection:
+                connection.execute("CREATE TABLE threads (id TEXT, title TEXT, name TEXT)")
+            database = codex / "state_5.sqlite"
+            database.symlink_to(outside)
+            with self.assertRaises(MigrationError):
+                search(str(root), "title", titles_only=True)
+            database.unlink()
+            with sqlite3.connect(database) as connection:
+                connection.execute("CREATE TABLE threads (id TEXT, title TEXT, name TEXT)")
+            sidecar = Path(str(database) + "-wal")
+            sidecar.symlink_to(outside)
+            with self.assertRaises(MigrationError):
+                search(str(root), "title", titles_only=True)
+
+    def test_unsupported_state_title_schema_keeps_body_search_available(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            codex = root / ".codex"
+            codex.mkdir()
+            with sqlite3.connect(codex / "state_5.sqlite") as connection:
+                connection.execute("CREATE TABLE threads (id TEXT, title TEXT)")
+            thread = codex / "sessions/one.jsonl"
+            thread.parent.mkdir()
+            thread.write_text(json.dumps({"payload": {"message": {
+                "content": "Synthetic launch note"}}}) + "\n")
+            with self.assertRaisesRegex(MigrationError, "unsupported schema"):
+                search(str(root), "launch", titles_only=True)
+            self.assertEqual(len(search(str(root), "launch")), 1)
+
     def test_old_title_surfaces_before_newer_body_without_scanning_it(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

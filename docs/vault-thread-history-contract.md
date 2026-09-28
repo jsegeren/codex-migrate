@@ -211,6 +211,17 @@ by itself prove that all current Codex history is recoverable. Do not advertise
 complete paginated-history protection or call the next release certified until
 the following are proved on synthetic data and the current installed runtime:
 
+Current-title coverage is a separate findability gate. On one installed Mac,
+the legacy `session_index.jsonl` supplied aliases for 1,677 thread IDs; the
+state database held 323 additional named threads with no legacy alias. The
+draft now combines bounded `state_5.sqlite` `threads.title`/`threads.name`
+metadata with the legacy title history, without reading message bodies from
+that database. Codex can put an entire first prompt in `title`, so Vault keeps
+only a 500-character searchable prefix. A metadata-only recheck found aliases
+for all 2,000 state threads with a nonempty name or title on that Mac. This
+proves title-index coverage there, not complete content recovery or support
+for every Codex schema; unknown state schemas remain an explicit warning.
+
 The draft interim guard treats the presence of `thread_history_1.sqlite` as
 unverified source coverage, even if a rollout file appears complete. It marks
 the new snapshot and scheduled health as needing attention without opening or

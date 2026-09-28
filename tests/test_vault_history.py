@@ -161,6 +161,43 @@ class EncryptedHistoryTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.build.cleanup()
 
+    def test_state_database_titles_are_searchable_in_encrypted_snapshot(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            codex = source / ".codex"
+            transcript = codex / "sessions" / ("rollout-" + THREAD_ID + ".jsonl")
+            transcript.parent.mkdir(parents=True)
+            transcript.write_text(record("session_meta", {"id": THREAD_ID}))
+            (codex / "session_index.jsonl").write_text(
+                json.dumps({"id": THREAD_ID, "thread_name": "Earlier title"}) + "\n")
+            with sqlite3.connect(codex / "state_5.sqlite") as connection:
+                connection.execute("CREATE TABLE threads (id TEXT, title TEXT, name TEXT)")
+                connection.execute("INSERT INTO threads VALUES (?, ?, ?)",
+                                   (THREAD_ID, "State original title", "State current title"))
+            vault = root / "vault"
+            try:
+                result = backup(str(source), str(vault), crypto_helper=str(self.helper))
+                self.assertFalse(result.title_index_unavailable)
+                catalog = snapshot_catalog(str(vault), crypto_helper=str(self.helper))
+                self.assertEqual(catalog[0]["titles"], [
+                    "Earlier title", "State original title", "State current title"])
+                self.assertEqual(len(search_titles(str(vault), "Earlier title",
+                                                   crypto_helper=str(self.helper))), 1)
+                self.assertEqual(len(search_titles(str(vault), "State original",
+                                                   crypto_helper=str(self.helper))), 1)
+                self.assertEqual(len(search_titles(str(vault), "State current",
+                                                   crypto_helper=str(self.helper))), 1)
+                ciphertext = b"".join(path.read_bytes() for path in vault.rglob("*")
+                                      if path.is_file())
+                self.assertNotIn(b"State current title", ciphertext)
+            finally:
+                if (vault / "vault.json").exists():
+                    key_id = json.loads((vault / "vault.json").read_text())["key_id"]
+                    subprocess.run([str(self.helper), "delete-key", "--key-id", key_id],
+                                   check=True, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE)
+
     def test_paginated_history_marks_verified_jsonl_snapshot_incomplete(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
