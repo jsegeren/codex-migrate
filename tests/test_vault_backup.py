@@ -447,13 +447,23 @@ class VaultBackupTests(unittest.TestCase):
                                      account_id, vault_id, allow_loopback_http=True)
                     self.store = MetadataObjectStore()
                     self.staged = None
+                    self.published_id = None
 
                 def reserve_with_base(self, *, reservation_id=None, apply=False):
                     assert apply is True and reservation_id is not None
-                    return reservation_id, None
+                    return reservation_id, self.published_id
 
                 def published_chunks(self, ids):
-                    return {}
+                    if self.published_id is None:
+                        return {}
+                    facts = {}
+                    for identifier in ids:
+                        key = ("objects/" + identifier[:2] + "/" +
+                               identifier[2:] + ".cvchunk")
+                        value = self.store.objects.get(key)
+                        if value is not None:
+                            facts[identifier] = (len(value), hashlib.sha256(value).hexdigest())
+                    return facts
 
                 def object_store(self, reservation_id, expected, *, apply=False):
                     assert apply is True and reservation_id is not None
@@ -466,18 +476,23 @@ class VaultBackupTests(unittest.TestCase):
                         assert len(data) == item.bytes
                         assert hashlib.sha256(data).hexdigest() == item.sha256
                     self.staged = staged
+                    self.published_id = staged.snapshot_id
                     return {"snapshotId": staged.snapshot_id,
                             "verifiedObjectCount": len(staged.objects)}
 
             class Recovery(HostedRecoveryClient):
+                def __init__(self):
+                    super().__init__(origin, token, vault_id, allow_loopback_http=True)
+                    self.base_id = None
+
                 def prior_catalog(self, *, key_id, crypto_helper, max_bytes,
                                   expected_snapshot_id, expected_account_id):
-                    assert expected_snapshot_id is None
+                    assert expected_snapshot_id == self.base_id
                     assert expected_account_id == account_id
-                    return None, []
+                    return self.base_id, []
 
             upload = Upload()
-            recovery = Recovery(origin, token, vault_id, allow_loopback_http=True)
+            recovery = Recovery()
             metadata = {"format": "codex-vault", "version": 1,
                         "key_id": key_id,
                         "created_at": "2026-09-27T00:00:00+00:00"}
@@ -495,6 +510,21 @@ class VaultBackupTests(unittest.TestCase):
                 self.assertNotIn(b"PRIVATE-ACTIVE-CONTENT", combined)
                 self.assertNotIn(b"PRIVATE-ARCHIVED-CONTENT", combined)
                 self.assertNotIn(b"NEVER-COPY-AUTH", combined)
+
+                # A later snapshot pins the prior published base, reuses the
+                # unchanged archived chunk, and never overwrites ciphertext.
+                recovery.base_id = published["snapshotId"]
+                active_path = source / ".codex/sessions/2026/09/17/active.jsonl"
+                with active_path.open("ab") as handle:
+                    handle.write(b'{"type":"response_item","payload":{"role":"user",'
+                                 b'"content":"NEW-SYNTHETIC-CONTENT"}}\n')
+                active = active_path.read_bytes()
+                second = runner.back_up_live_history(
+                    metadata, crypto_helper=str(self.helper),
+                    max_prior_bytes=5_000_000, apply=True)
+                self.assertNotEqual(second["snapshotId"], published["snapshotId"])
+                self.assertEqual(upload.store.writes, 9)
+                self.assertIsNone(runner.pending())
 
                 remote = MemoryObjectStore()
                 remote.objects = dict(upload.store.objects)
