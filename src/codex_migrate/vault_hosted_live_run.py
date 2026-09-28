@@ -13,6 +13,7 @@ import fcntl
 import json
 import os
 from pathlib import Path
+import re
 import stat
 from typing import Iterator, Optional
 import uuid
@@ -20,7 +21,7 @@ import uuid
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_backup import (
     _atomic_json, _fsync_directory, _helper_path, _metadata,
-    _require_unlinked_path,
+    _read_json, _require_unlinked_path,
 )
 from codex_migrate.vault_hosted_chunk_journal import HostedChunkJournal
 from codex_migrate.vault_hosted_live_stage import stage_reserved_hosted_snapshot
@@ -164,7 +165,7 @@ class HostedLiveBackupRun:
                     if status["snapshotId"] != snapshot_id:
                         raise MigrationError(
                             "The hosted publication does not match the pending snapshot.")
-                    self._finish()
+                    self._finish(snapshot_id)
                     return {"snapshotId": snapshot_id,
                             "verifiedObjectCount": status["verifiedObjectCount"]}
                 if status["state"] != "active":
@@ -189,10 +190,94 @@ class HostedLiveBackupRun:
                     reservation_id, staged, apply=True)
             if result.get("snapshotId") != snapshot_id:
                 raise MigrationError("The hosted publication did not match the pending snapshot.")
-            self._finish()
+            self._finish(snapshot_id)
             return result
 
-    def _finish(self) -> None:
+    @staticmethod
+    def _private_directory(path: Path) -> None:
+        info = path.lstat()
+        if (not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or
+                info.st_mode & 0o077):
+            raise MigrationError("The published hosted journal folder is unsafe.")
+
+    @staticmethod
+    def _private_file(path: Path) -> None:
+        info = path.lstat()
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or
+                info.st_nlink != 1 or info.st_mode & 0o077):
+            raise MigrationError("The published hosted journal file is unsafe.")
+
+    def _retire_published_journal(self, snapshot_id: str) -> None:
+        """Remove only recognized scratch after exact server publication.
+
+        An unexpected file, especially an unreceipted ciphertext chunk, is
+        retained for review rather than guessed to be disposable. A partial
+        cleanup is retryable because the run marker is removed last.
+        """
+        state = self._pending()
+        if (state is None or state["phase"] != "active" or
+                state["snapshotId"] != snapshot_id):
+            raise MigrationError("The published hosted run identity changed.")
+        root = self._directory / ("snapshot-" + snapshot_id)
+        _require_unlinked_path(root, allow_missing_leaf=True)
+        try:
+            self._private_directory(root)
+        except FileNotFoundError:
+            return  # A prior post-publication cleanup may have reached this point.
+        header = root / "journal.json"
+        if os.path.lexists(header):
+            self._private_file(header)
+            expected = {
+                "format": "codex-vault-hosted-chunk-journal", "version": 2,
+                "accountId": state["accountId"], "vaultId": state["vaultId"],
+                "reservationId": state["reservationId"],
+                "snapshotId": snapshot_id, "keyId": state["keyId"],
+                "baseSnapshotId": state["baseSnapshotId"],
+            }
+            if _read_json(header) != expected:
+                raise MigrationError("The published hosted journal belongs to another run.")
+        allowed_files = {"journal.json", "journal.lock", "chunks.jsonl",
+                         "manifest-binding.json", "snapshot-time.json", "vault.json"}
+        file_paths = []
+        directory_paths = []
+        for child in root.iterdir():
+            if child.name in allowed_files:
+                self._private_file(child)
+                file_paths.append(child)
+            elif child.name in ("manifests", "refs"):
+                self._private_directory(child)
+                expected = (snapshot_id + ".cvmanifest" if child.name == "manifests"
+                            else snapshot_id + ".json")
+                for nested in child.iterdir():
+                    if nested.name != expected:
+                        raise MigrationError("The published hosted journal has unknown files.")
+                    self._private_file(nested)
+                    file_paths.append(nested)
+                directory_paths.append(child)
+            elif child.name == "scratch":
+                self._private_directory(child)
+                for prefix in child.iterdir():
+                    if not re.fullmatch(r"[0-9a-f]{2}", prefix.name):
+                        raise MigrationError("The published hosted scratch is not empty.")
+                    self._private_directory(prefix)
+                    if any(prefix.iterdir()):
+                        raise MigrationError("The published hosted scratch is not empty.")
+                    directory_paths.append(prefix)
+                directory_paths.append(child)
+            else:
+                raise MigrationError("The published hosted journal has unknown files.")
+        try:
+            for path in file_paths:
+                path.unlink()
+            for path in directory_paths:
+                path.rmdir()
+            root.rmdir()
+            _fsync_directory(self._directory)
+        except OSError as error:
+            raise MigrationError("The published hosted journal needs local cleanup.") from error
+
+    def _finish(self, snapshot_id: str) -> None:
+        self._retire_published_journal(snapshot_id)
         try:
             self._state.unlink()
             _fsync_directory(self._directory)

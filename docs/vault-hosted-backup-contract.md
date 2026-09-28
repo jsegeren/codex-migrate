@@ -270,9 +270,11 @@ The separate dark hosted-only runner now records that ID before its first
 reserve request, pins the returned last-good base, and retries the same
 snapshot after interruption. It accepts a lost publication response only when
 the service reports that exact snapshot as published. It does not yet run on a
-schedule or in the installed app, and its completed local chunk-journal
-cleanup is still a release gate. None of this makes hosted backup available
-to customers yet.
+schedule or in the installed app. After publication it removes only recognized,
+owner-only generated journal files; an unexpected file or unreceipted scratch
+chunk keeps the run marker and requires review rather than being deleted.
+Customer-facing cleanup and failure guidance remain release gates. None of
+this makes hosted backup available to customers yet.
 A synthetic end-to-end runner test now encrypts two disposable Codex transcripts,
 stages the whole object graph without a full local ciphertext Vault, checks
 every staged object's bytes and digest before simulating publication, deletes

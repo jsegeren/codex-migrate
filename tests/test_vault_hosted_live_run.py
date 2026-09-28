@@ -87,9 +87,8 @@ class HostedLiveRunTests(unittest.TestCase):
             self.assertEqual(self.back_up()["snapshotId"], pending["snapshotId"])
             self.assertEqual(ids, [pending["reservationId"]] * 2)
             self.assertIsNone(self.run.pending())
-            self.assertIsNone(json.loads((self.run._directory /
-                ("snapshot-" + pending["snapshotId"]) / "journal.json")
-                .read_text())["baseSnapshotId"])
+            self.assertFalse((self.run._directory /
+                ("snapshot-" + pending["snapshotId"])).exists())
 
     def test_interrupted_stage_keeps_exact_base_snapshot_and_key(self):
         ids = []
@@ -191,6 +190,89 @@ class HostedLiveRunTests(unittest.TestCase):
         self.run._directory.symlink_to(self.root / "missing")
         with self.assertRaisesRegex(MigrationError, "linked path"):
             self.run.pending()
+
+    def test_published_run_keeps_unverified_scratch_until_review(self):
+        def stage(*args, **kwargs):
+            journal = args[2]
+            scratch_root = journal.directory / "scratch"
+            scratch_root.mkdir(mode=0o700)
+            scratch = scratch_root / "aa"
+            scratch.mkdir(mode=0o700)
+            (scratch / "orphan.cvchunk").write_bytes(b"unverified ciphertext")
+            return "staged"
+
+        with patch.object(self.upload, "reserve_with_base",
+                          side_effect=lambda *, reservation_id, apply:
+                          (reservation_id, None)), patch(
+                "codex_migrate.vault_hosted_live_run.stage_reserved_hosted_snapshot",
+                side_effect=stage) as staged, patch.object(
+                self.upload, "publish_hosted_stage") as publish:
+            publish.side_effect = lambda reservation_id, value, *, apply: {
+                "snapshotId": self.run.pending()["snapshotId"],
+                "verifiedObjectCount": 3}
+            with self.assertRaisesRegex(MigrationError, "scratch is not empty"):
+                self.back_up()
+            pending = self.run.pending()
+            journal = self.run._directory / ("snapshot-" + pending["snapshotId"])
+            orphan = journal / "scratch/aa/orphan.cvchunk"
+            self.assertTrue(orphan.is_file())
+            orphan.unlink()  # Disposable test fixture, not customer data.
+            with patch.object(self.upload, "reservation_receipt", return_value={
+                    "state": "published", "snapshotId": pending["snapshotId"],
+                    "verifiedObjectCount": 3}):
+                self.assertEqual(self.back_up()["snapshotId"], pending["snapshotId"])
+            staged.assert_called_once()
+            publish.assert_called_once()
+            self.assertIsNone(self.run.pending())
+            self.assertFalse(journal.exists())
+
+    def test_published_run_refuses_a_foreign_journal_identity(self):
+        with patch.object(self.upload, "reserve_with_base",
+                          side_effect=lambda *, reservation_id, apply:
+                          (reservation_id, BASE)), patch(
+                "codex_migrate.vault_hosted_live_run.stage_reserved_hosted_snapshot",
+                side_effect=MigrationError("interrupted")):
+            with self.assertRaisesRegex(MigrationError, "interrupted"):
+                self.back_up()
+        pending = self.run.pending()
+        journal = self.run._directory / ("snapshot-" + pending["snapshotId"])
+        header = journal / "journal.json"
+        changed = json.loads(header.read_text())
+        changed["reservationId"] = OTHER
+        header.write_text(json.dumps(changed))
+        header.chmod(0o600)
+        with patch.object(self.upload, "reservation_receipt", return_value={
+                "state": "published", "snapshotId": pending["snapshotId"],
+                "verifiedObjectCount": 3}):
+            with self.assertRaisesRegex(MigrationError, "belongs to another run"):
+                self.back_up()
+        self.assertEqual(self.run.pending(), pending)
+        self.assertTrue(header.exists())
+
+    def test_cleanup_interruption_reconciles_published_run_without_restaging(self):
+        with patch.object(self.upload, "reserve_with_base",
+                          side_effect=lambda *, reservation_id, apply:
+                          (reservation_id, None)), patch(
+                "codex_migrate.vault_hosted_live_run.stage_reserved_hosted_snapshot",
+                return_value="staged") as stage, patch.object(
+                self.upload, "publish_hosted_stage") as publish:
+            publish.side_effect = lambda reservation_id, value, *, apply: {
+                "snapshotId": self.run.pending()["snapshotId"],
+                "verifiedObjectCount": 3}
+            with patch("codex_migrate.vault_hosted_live_run._fsync_directory",
+                       side_effect=OSError("interrupted cleanup")):
+                with self.assertRaisesRegex(MigrationError, "needs local cleanup"):
+                    self.back_up()
+            pending = self.run.pending()
+            self.assertFalse((self.run._directory /
+                              ("snapshot-" + pending["snapshotId"])).exists())
+            with patch.object(self.upload, "reservation_receipt", return_value={
+                    "state": "published", "snapshotId": pending["snapshotId"],
+                    "verifiedObjectCount": 3}):
+                self.assertEqual(self.back_up()["snapshotId"], pending["snapshotId"])
+            stage.assert_called_once()
+            publish.assert_called_once()
+            self.assertIsNone(self.run.pending())
 
 
 if __name__ == "__main__":
