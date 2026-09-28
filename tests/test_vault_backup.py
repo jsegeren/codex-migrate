@@ -224,12 +224,92 @@ class VaultBackupTests(unittest.TestCase):
                 self.assertTrue(second.needs_attention)
                 self.assertEqual(len(list((destination / "objects").rglob("*.cvchunk"))), 1)
                 with sqlite3.connect(database) as connection:
+                    connection.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                       (thread_id, "turn-2", "item-2", 2, 101,
+                                        json.dumps({"id": "item-2", "type": "agentMessage",
+                                                    "text": "SYNTHETIC-APPENDED-ANSWER"}),
+                                        "agentMessage", 2))
+                appended = backup(str(source), str(destination), crypto_helper=str(self.helper),
+                                  chunk_size=64 * 1024)
+                appended_catalog = snapshot_catalog(str(destination),
+                                                    crypto_helper=str(self.helper))
+                self.assertFalse(appended_catalog[0]["at_risk"])
+                self.assertGreater(len(list((destination / "objects").rglob("*.cvchunk"))), 1)
+                with sqlite3.connect(database) as connection:
+                    connection.execute("DELETE FROM thread_items WHERE item_id='item-2'")
+                shortened = backup(str(source), str(destination), crypto_helper=str(self.helper),
+                                   chunk_size=64 * 1024)
+                self.assertTrue(shortened.needs_attention)
+                self.assertEqual(shortened.at_risk_threads, 1)
+                shortened_catalog = snapshot_catalog(str(destination),
+                                                     crypto_helper=str(self.helper))
+                self.assertTrue(shortened_catalog[0]["at_risk"])
+                old_catalog = snapshot_catalog(str(destination), snapshot=appended.snapshot_id,
+                                               crypto_helper=str(self.helper))
+                self.assertEqual(old_catalog[0]["assistant_messages"], 1)
+                older_home = root / "before-shrink"
+                older_home.mkdir()
+                restore_snapshot(str(source), str(destination), str(older_home / ".codex"),
+                                 snapshot=appended.snapshot_id, crypto_helper=str(self.helper))
+                older_items = list(restored_items(str(older_home), thread_id))
+                self.assertEqual(len(older_items), 2)
+                self.assertEqual(json.loads(older_items[1].item_json)["text"],
+                                 "SYNTHETIC-APPENDED-ANSWER")
+                repeated = backup(str(source), str(destination), crypto_helper=str(self.helper),
+                                  chunk_size=64 * 1024)
+                self.assertEqual(repeated.at_risk_threads, 1)
+                repeated_catalog = snapshot_catalog(str(destination),
+                                                    crypto_helper=str(self.helper))
+                self.assertTrue(repeated_catalog[0]["at_risk"])
+                with sqlite3.connect(database) as connection:
                     connection.execute("UPDATE thread_items SET item_json='not JSON'")
                 with self.assertRaises(MigrationError):
                     backup(str(source), str(destination), crypto_helper=str(self.helper),
                            chunk_size=64 * 1024)
                 self.assertEqual(json.loads((destination / "latest.json").read_text())
-                                 ["snapshot_id"], second.snapshot_id)
+                                 ["snapshot_id"], repeated.snapshot_id)
+            finally:
+                self.delete_key(destination)
+
+    def test_paginated_shrink_does_not_mark_same_id_rollout_at_risk(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            destination = root / "vault"
+            codex = source / ".codex"
+            thread_id = "44444444-4444-4444-8444-444444444444"
+            transcript = codex / "sessions" / ("rollout-" + thread_id + ".jsonl")
+            transcript.parent.mkdir(parents=True)
+            transcript.write_text(json.dumps({"type": "session_meta", "payload": {
+                "id": thread_id,
+            }}) + "\n", encoding="utf-8")
+            database = codex / "thread_history_1.sqlite"
+            with sqlite3.connect(database) as connection:
+                connection.execute("CREATE TABLE thread_items (thread_id TEXT, turn_id TEXT, "
+                                   "item_id TEXT, rollout_ordinal INTEGER, created_at_ms INTEGER, "
+                                   "item_json TEXT, item_type TEXT, updated_at_ordinal INTEGER)")
+                connection.execute("CREATE TABLE thread_history_projection_state ("
+                                   "thread_id TEXT, next_rollout_byte_offset INTEGER, "
+                                   "next_rollout_ordinal INTEGER)")
+                for ordinal, item_type in ((1, "userMessage"), (2, "agentMessage")):
+                    item_id = "item-" + str(ordinal)
+                    connection.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                       (thread_id, "turn-" + item_id, item_id, ordinal,
+                                        100 + ordinal,
+                                        json.dumps({"id": item_id, "type": item_type,
+                                                    "text": "synthetic " + item_type}),
+                                        item_type, ordinal))
+            try:
+                backup(str(source), str(destination), crypto_helper=str(self.helper))
+                with sqlite3.connect(database) as connection:
+                    connection.execute("DELETE FROM thread_items WHERE item_id='item-2'")
+                result = backup(str(source), str(destination), crypto_helper=str(self.helper))
+                catalog = snapshot_catalog(str(destination), crypto_helper=str(self.helper))
+                by_collection = {item["collection"]: item for item in catalog}
+                self.assertEqual(set(by_collection), {"active", "paginated"})
+                self.assertFalse(by_collection["active"]["at_risk"])
+                self.assertTrue(by_collection["paginated"]["at_risk"])
+                self.assertEqual(result.at_risk_threads, 1)
             finally:
                 self.delete_key(destination)
 

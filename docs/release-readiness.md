@@ -51,6 +51,20 @@ installed-runtime scale, and independent review are still missing. These snapsho
 `needs attention`. This work is **not released** and does not clear the
 paginated-history or next-build hold.
 
+The draft compares database-derived versions separately from JSONL versions.
+A synthetic two-item paginated thread, followed by a one-item shrink, sets a
+per-thread `at_risk` flag that persists on later captures; the earlier two-item
+snapshot remains decryptable and readable. An unchanged second capture adds no
+new encrypted object. This is a conservative loss signal, not proof that every
+possible database rewrite or missing thread will be detected.
+
+On source `4d6be8a`, [independent macOS CI runners](https://github.com/jsegeren/codex-migrate/actions/runs/36441418314)
+successfully exported and imported a synthetic encrypted Vault with
+database-only and inherited fork items, then searched, read, and exported the
+restored content. Both Python jobs passed. The CI helper uses a disposable
+test Keychain configuration, not the final signed buyer app; a clean-account
+release-app recovery test and installed-runtime scale proof remain open.
+
 ## September 27 integrated-source local package — not released
 
 Committed source `e644570` packaged as an arm64 **local-test-only** build-20 app.
