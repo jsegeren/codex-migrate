@@ -376,9 +376,11 @@ egress allowance. Do not claim that B2 restores are always free. See its
   submission. A separate dark manifest stage now durably binds the exact
   encrypted bytes and an authenticated plaintext fingerprint to one snapshot;
   retry reuses those bytes and refuses a changed or missing bound manifest
-  rather than resealing under an immutable remote key. It is not yet connected
-  to whole-snapshot publication; passing client-side checks would not replace
-  the server's R2 proof.
+  rather than resealing under an immutable remote key. The same dark tail stage
+  now checks and stages the small Vault metadata and immutable reference,
+  then checks their exact object graph against the staged transcripts. It is
+  not yet connected to whole-snapshot publication; passing client-side checks
+  would not replace the server's R2 proof.
 - Keep each local Vault in its own random, account-scoped remote namespace.
   Two Macs may each back up to separate Vaults under one subscription; this is
   not synchronization or a silent merge. Object names and snapshot times are

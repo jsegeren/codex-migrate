@@ -15,6 +15,7 @@ from codex_migrate.errors import MigrationError
 from codex_migrate import vault_backup
 from codex_migrate.vault_hosted_chunk_journal import HostedChunkJournal
 from codex_migrate.vault_hosted_manifest import stage_hosted_manifest
+from codex_migrate.vault_hosted_snapshot_tail import stage_hosted_snapshot_tail
 from codex_migrate.vault_backup import backup, plan
 from codex_migrate.vault_identity import TranscriptChanged
 from codex_migrate.vault_recovery import (
@@ -230,6 +231,69 @@ class VaultBackupTests(unittest.TestCase):
                     with self.assertRaisesRegex(MigrationError, "missing"):
                         stage_hosted_manifest(manifest, journal, client,
                                               crypto_helper=str(self.helper), apply=True)
+            finally:
+                subprocess.run([str(self.helper), "delete-key", "--key-id", key_id],
+                               check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    def test_hosted_snapshot_tail_stages_exact_three_object_graph(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            created = subprocess.run(
+                [str(self.helper), "create-key"], check=True,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            )
+            key_id = json.loads(created.stdout)["key_id"]
+            snapshot_id = str(uuid.uuid4())
+            created_at = "2026-09-27T00:00:00+00:00"
+            metadata = {"format": "codex-vault", "version": 1,
+                        "key_id": key_id, "created_at": created_at}
+            manifest = {"format": "codex-vault-snapshot", "version": 2,
+                        "snapshot_id": snapshot_id, "created_at": created_at,
+                        "files": []}
+            directory = root / "journal"
+            directory.mkdir(mode=0o700)
+            identity = {
+                "account_id": str(uuid.uuid4()), "vault_id": str(uuid.uuid4()),
+                "reservation_id": str(uuid.uuid4()), "snapshot_id": snapshot_id,
+                "key_id": key_id,
+            }
+
+            class Client:
+                def __init__(self):
+                    self.store = MetadataObjectStore()
+
+                def object_store(self, reservation_id, expected, *, apply=False):
+                    if reservation_id != identity["reservation_id"] or apply is not True:
+                        raise AssertionError("wrong hosted reservation")
+                    return self.store
+
+            client = Client()
+            try:
+                with HostedChunkJournal(directory, **identity) as journal:
+                    objects = stage_hosted_snapshot_tail(
+                        metadata, manifest, {}, journal, client,
+                        crypto_helper=str(self.helper), apply=True)
+                    self.assertEqual([item.key for item in objects], [
+                        "metadata/" + snapshot_id + ".json",
+                        "manifests/" + snapshot_id + ".cvmanifest",
+                        "refs/" + snapshot_id + ".json",
+                    ])
+                    self.assertEqual(client.store.writes, 3)
+                with HostedChunkJournal(directory, **identity) as journal:
+                    self.assertEqual(stage_hosted_snapshot_tail(
+                        metadata, manifest, {}, journal, client,
+                        crypto_helper=str(self.helper), apply=True), objects)
+                    self.assertEqual(client.store.writes, 3)
+                    changed = {**metadata, "created_at": "2026-09-28T00:00:00+00:00"}
+                    with self.assertRaisesRegex(MigrationError, "changed on retry"):
+                        stage_hosted_snapshot_tail(
+                            changed, manifest, {}, journal, client,
+                            crypto_helper=str(self.helper), apply=True)
+                    client.store.objects[objects[-1].key] = b"damaged reference"
+                    with self.assertRaisesRegex(MigrationError, "differs"):
+                        stage_hosted_snapshot_tail(
+                            metadata, manifest, {}, journal, client,
+                            crypto_helper=str(self.helper), apply=True)
             finally:
                 subprocess.run([str(self.helper), "delete-key", "--key-id", key_id],
                                check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
