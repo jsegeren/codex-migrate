@@ -380,7 +380,17 @@ egress allowance. Do not claim that B2 restores are always free. See its
   now checks and stages the small Vault metadata and immutable reference,
   then checks their exact object graph against the staged transcripts. It is
   not yet connected to whole-snapshot publication; passing client-side checks
-  would not replace the server's R2 proof.
+  would not replace the server's R2 proof. A dark whole-snapshot stage now
+  enumerates active and archived transcripts, reuses or stages their ciphertext
+  in bounded windows, rechecks the complete file set and file identities,
+  pins the snapshot time across retries, and assembles the same v2 manifest
+  and loss warnings as local Vault. A synthetic two-transcript run needed no
+  full local ciphertext Vault, retried without extra uploads, excluded auth
+  and installation identity, and refused a transcript changed after staging.
+  Its previous catalog is an explicit authenticated input; fetching and
+  verifying that prior catalog from hosted last-good remains open. The builder
+  does not submit receipt pages or publish, and it has not passed real R2 or
+  clean-Mac restore acceptance.
 - Keep each local Vault in its own random, account-scoped remote namespace.
   Two Macs may each back up to separate Vaults under one subscription; this is
   not synchronization or a silent merge. Object names and snapshot times are

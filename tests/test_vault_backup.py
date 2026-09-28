@@ -16,6 +16,7 @@ from codex_migrate import vault_backup
 from codex_migrate.vault_hosted_chunk_journal import HostedChunkJournal
 from codex_migrate.vault_hosted_manifest import stage_hosted_manifest
 from codex_migrate.vault_hosted_snapshot_tail import stage_hosted_snapshot_tail
+from codex_migrate.vault_hosted_snapshot_stage import stage_hosted_snapshot
 from codex_migrate.vault_backup import backup, plan
 from codex_migrate.vault_identity import TranscriptChanged
 from codex_migrate.vault_recovery import (
@@ -25,6 +26,7 @@ from codex_migrate.vault_recovery import (
 from codex_migrate import vault_remote_inventory
 from codex_migrate import vault_remote_recovery
 from codex_migrate import vault_remote_transfer
+from codex_migrate import vault_hosted_snapshot_stage
 from codex_migrate.vault_remote_writer import (
     prepare_remote_aware_file, stage_prepared_file,
     stage_remote_aware_file_windowed,
@@ -294,6 +296,92 @@ class VaultBackupTests(unittest.TestCase):
                         stage_hosted_snapshot_tail(
                             metadata, manifest, {}, journal, client,
                             crypto_helper=str(self.helper), apply=True)
+            finally:
+                subprocess.run([str(self.helper), "delete-key", "--key-id", key_id],
+                               check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    def test_hosted_whole_snapshot_stages_without_full_local_vault(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            source.mkdir(mode=0o700)
+            self.fixture(source)
+            created = subprocess.run(
+                [str(self.helper), "create-key"], check=True,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            )
+            key_id = json.loads(created.stdout)["key_id"]
+            snapshot_id = str(uuid.uuid4())
+            metadata = {"format": "codex-vault", "version": 1,
+                        "key_id": key_id,
+                        "created_at": "2026-09-27T00:00:00+00:00"}
+            directory = root / "journal"
+            directory.mkdir(mode=0o700)
+            identity = {
+                "account_id": str(uuid.uuid4()), "vault_id": str(uuid.uuid4()),
+                "reservation_id": str(uuid.uuid4()), "snapshot_id": snapshot_id,
+                "key_id": key_id,
+            }
+
+            class Client:
+                def __init__(self):
+                    self.store = MetadataObjectStore()
+
+                def published_chunks(self, ids):
+                    return {}
+
+                def object_store(self, reservation_id, expected, *, apply=False):
+                    if reservation_id != identity["reservation_id"] or apply is not True:
+                        raise AssertionError("wrong hosted reservation")
+                    return self.store
+
+            client = Client()
+            try:
+                with HostedChunkJournal(directory, **identity) as journal:
+                    first = stage_hosted_snapshot(
+                        str(source), metadata, [], journal, client,
+                        crypto_helper=str(self.helper), chunk_size=64 * 1024,
+                        window_bytes=64 * 1024, apply=True)
+                    self.assertEqual(first.snapshot_id, snapshot_id)
+                    self.assertEqual(first.transcript_files, 2)
+                    self.assertEqual(len(first.objects), 5)
+                    self.assertEqual(client.store.writes, 5)
+                    self.assertFalse(list((directory / "scratch").rglob("*.cvchunk")))
+                    combined = b"".join(client.store.objects.values())
+                    self.assertNotIn(b"PRIVATE-ACTIVE-CONTENT", combined)
+                    self.assertNotIn(b"PRIVATE-ARCHIVED-CONTENT", combined)
+                    self.assertNotIn(b"NEVER-COPY-AUTH", combined)
+                    self.assertNotIn(b"NEVER-COPY-ID", combined)
+                with HostedChunkJournal(directory, **identity) as journal:
+                    second = stage_hosted_snapshot(
+                        str(source), metadata, [], journal, client,
+                        crypto_helper=str(self.helper), chunk_size=64 * 1024,
+                        window_bytes=64 * 1024, apply=True)
+                    self.assertEqual(second, first)
+                    self.assertEqual(client.store.writes, 5)
+                    original_stage = vault_hosted_snapshot_stage.stage_remote_aware_file_windowed
+                    staged_count = 0
+
+                    def mutate_prior_transcript(*args, **kwargs):
+                        nonlocal staged_count
+                        result = original_stage(*args, **kwargs)
+                        staged_count += 1
+                        if staged_count == 2:
+                            prior = source / ".codex/archived_sessions/archived.jsonl"
+                            with prior.open("a", encoding="utf-8") as handle:
+                                handle.write(json.dumps({"type": "response_item",
+                                                         "payload": {"role": "user"}}) + "\n")
+                        return result
+
+                    with patch.object(vault_hosted_snapshot_stage,
+                                      "stage_remote_aware_file_windowed",
+                                      side_effect=mutate_prior_transcript):
+                        with self.assertRaisesRegex(MigrationError,
+                                                    "changed after hosted staging"):
+                            stage_hosted_snapshot(
+                                str(source), metadata, [], journal, client,
+                                crypto_helper=str(self.helper), chunk_size=64 * 1024,
+                                window_bytes=64 * 1024, apply=True)
             finally:
                 subprocess.run([str(self.helper), "delete-key", "--key-id", key_id],
                                check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)

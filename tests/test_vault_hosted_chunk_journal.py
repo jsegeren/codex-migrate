@@ -158,6 +158,19 @@ class HostedChunkJournalTests(unittest.TestCase):
             with self.assertRaisesRegex(MigrationError, "conflicts"):
                 reopened.bind_manifest("a" * 64, "c" * 64, 123)
 
+    def test_snapshot_time_is_pinned_across_interruption(self):
+        with self.journal() as journal:
+            first = journal.snapshot_time()
+            self.assertEqual(journal.snapshot_time(), first)
+        capture = self.directory / "snapshot-time.json"
+        self.assertEqual(capture.stat().st_mode & 0o077, 0)
+        with self.journal() as reopened:
+            self.assertEqual(reopened.snapshot_time(), first)
+        capture.write_text("not-json")
+        with self.assertRaisesRegex(MigrationError, "time is invalid"):
+            with self.journal():
+                pass
+
     def test_unsafe_or_corrupt_manifest_binding_refuses_open(self):
         with self.journal() as journal:
             journal.bind_manifest("a" * 64, "b" * 64, 123)

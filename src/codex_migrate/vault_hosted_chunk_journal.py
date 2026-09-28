@@ -9,6 +9,7 @@ the service still must independently verify and publish a whole snapshot.
 from __future__ import annotations
 
 import fcntl
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -46,12 +47,14 @@ class HostedChunkJournal:
         self._metadata = self.directory / "journal.json"
         self._log = self.directory / "chunks.jsonl"
         self._manifest = self.directory / "manifest-binding.json"
+        self._capture = self.directory / "snapshot-time.json"
         self._lock = self.directory / "journal.lock"
         self._directory_identity: Optional[Tuple[int, int]] = None
         self._lock_descriptor: Optional[int] = None
         self._descriptor: Optional[int] = None
         self.records: Dict[str, Tuple[int, str]] = {}
         self.manifest_binding: Optional[dict] = None
+        self._created_at: Optional[str] = None
 
     @property
     def reservation_id(self) -> str:
@@ -148,6 +151,7 @@ class HostedChunkJournal:
         _fsync_directory(self.directory)
         self.records = self._read_records()
         self.manifest_binding = self._read_manifest_binding()
+        self._created_at = self._read_snapshot_time()
 
     def __exit__(self, *_: object) -> None:
         if self._descriptor is not None:
@@ -232,6 +236,54 @@ class HostedChunkJournal:
                     for key in ("plaintextSha256", "ciphertextSha256"))):
             raise MigrationError("The hosted manifest binding is invalid.")
         return value
+
+    def _read_snapshot_time(self) -> Optional[str]:
+        _require_unlinked_path(self._capture, allow_missing_leaf=True)
+        try:
+            descriptor = os.open(self._capture,
+                                 os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        except FileNotFoundError:
+            return None
+        except OSError as error:
+            raise MigrationError("The hosted snapshot time is unavailable.") from error
+        try:
+            with os.fdopen(descriptor, "rb") as stream:
+                info = os.fstat(stream.fileno())
+                if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or
+                        info.st_nlink != 1 or info.st_mode & 0o077 or
+                        info.st_size > 1024):
+                    raise MigrationError("The hosted snapshot time is unsafe.")
+                value = json.load(stream)
+        except (OSError, UnicodeError, ValueError) as error:
+            raise MigrationError("The hosted snapshot time is invalid.") from error
+        if (not isinstance(value, dict) or
+                set(value) != {"format", "version", "snapshotId", "createdAt"} or
+                value["format"] != "codex-vault-hosted-snapshot-time" or
+                value["version"] != 1 or
+                value["snapshotId"] != self.snapshot_id or
+                not isinstance(value["createdAt"], str)):
+            raise MigrationError("The hosted snapshot time is invalid.")
+        try:
+            parsed = datetime.fromisoformat(value["createdAt"])
+        except ValueError:
+            raise MigrationError("The hosted snapshot time is invalid.") from None
+        if parsed.tzinfo is None or parsed.utcoffset() != timezone.utc.utcoffset(parsed):
+            raise MigrationError("The hosted snapshot time is invalid.")
+        return value["createdAt"]
+
+    def snapshot_time(self) -> str:
+        """Pin one UTC creation time before transcript staging begins."""
+        self.ensure_private_directory()
+        if self._created_at is not None:
+            return self._created_at
+        created_at = datetime.now(timezone.utc).isoformat()
+        _require_unlinked_path(self._capture, allow_missing_leaf=True)
+        _atomic_json(self._capture, {
+            "format": "codex-vault-hosted-snapshot-time", "version": 1,
+            "snapshotId": self.snapshot_id, "createdAt": created_at,
+        })
+        self._created_at = created_at
+        return created_at
 
     def bind_manifest(self, plaintext_sha256: str, ciphertext_sha256: str,
                       size: int) -> None:

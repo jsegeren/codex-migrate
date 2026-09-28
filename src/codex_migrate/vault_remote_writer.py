@@ -83,23 +83,24 @@ def _candidate_ids(plan: dict, expected_size: int, chunk_size: int) -> list[str]
     summed = 0
     for row in rows:
         if (not isinstance(row, dict) or
-                set(row) != {"raw_id", "compressed_id", "size", "compressed_bytes"} or
+                set(row) not in ({"raw_id", "size"},
+                                 {"raw_id", "compressed_id", "size", "compressed_bytes"}) or
                 type(row["size"]) is not int or
                 not 1 <= row["size"] <= chunk_size or
                 not isinstance(row["raw_id"], str) or
                 not _HEX.fullmatch(row["raw_id"]) or
-                (row["compressed_id"] is not None and
+                (row.get("compressed_id") is not None and
                  (not isinstance(row["compressed_id"], str) or
                   not _HEX.fullmatch(row["compressed_id"]))) or
-                (row["compressed_bytes"] is None) !=
-                (row["compressed_id"] is None) or
-                (row["compressed_bytes"] is not None and
+                (row.get("compressed_bytes") is None) !=
+                (row.get("compressed_id") is None) or
+                (row.get("compressed_bytes") is not None and
                  (type(row["compressed_bytes"]) is not int or
                   not 1 <= row["compressed_bytes"] < row["size"]))):
             raise MigrationError("The hosted chunk plan is invalid.")
         summed += row["size"]
         ids.append(row["raw_id"])
-        if row["compressed_id"] is not None:
+        if row.get("compressed_id") is not None:
             ids.append(row["compressed_id"])
     if summed != expected_size:
         raise MigrationError("The hosted chunk plan is incomplete.")
@@ -167,8 +168,8 @@ def _validated_prepared(stored: dict, plan: dict,
         if (not isinstance(row, dict) or
                 set(row) not in ({"id", "size"}, {"id", "size", "encoding"}) or
                 row.get("size") != candidate["size"] or
-                row.get("id") not in (candidate["raw_id"], candidate["compressed_id"]) or
-                ("encoding" in row) != (row["id"] == candidate["compressed_id"]) or
+                row.get("id") not in (candidate["raw_id"], candidate.get("compressed_id")) or
+                ("encoding" in row) != (row["id"] == candidate.get("compressed_id")) or
                 ("encoding" in row and row["encoding"] != "lzfse")):
             raise MigrationError("The hosted chunk writer returned an invalid result.")
     if (set(local) | set(remote) != {row["id"] for row in rows} or
