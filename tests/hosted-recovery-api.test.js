@@ -123,6 +123,34 @@ test('GET grant is for only the published object, not a staged or foreign key', 
   assert.equal((await f.send()).statusCode, 503);
 });
 
+test('manifest action grants only the current last-good sealed manifest', async () => {
+  const manifestKey = `accounts/${accountId}/vaults/${vaultId}/` +
+    `manifests/${snapshotId}.cvmanifest`;
+  const f = fixture(async (sql, values) => {
+    assert.match(sql, /v\.last_good_snapshot_id = \$3::uuid/);
+    assert.deepEqual(values, [accountId, vaultId, snapshotId, manifestKey]);
+    return { rows: [{ bytes: '12', sha256: 'c'.repeat(64) }] };
+  });
+  f.req.body = { action: 'manifest', vaultId, snapshotId };
+  const answer = await f.send();
+  assert.equal(answer.statusCode, 200);
+  assert.deepEqual(Object.keys(answer.body).sort(),
+    ['accountId', 'bytes', 'grant', 'sha256', 'snapshotId', 'workerOrigin']);
+  assert.equal(answer.body.accountId, accountId);
+  assert.equal(answer.body.workerOrigin, 'https://fixture.example');
+  assert.equal(answer.body.snapshotId, snapshotId);
+  assert.deepEqual(await verifyObjectCapability(answer.body.grant, 'GET',
+    manifestKey, secret), { key: manifestKey, bytes: 12, sha256: 'c'.repeat(64) });
+  f.req.body.unexpected = true;
+  assert.equal((await f.send()).statusCode, 400);
+});
+
+test('manifest action refuses a snapshot that is not last-good', async () => {
+  const f = fixture(async () => ({ rows: [] }));
+  f.req.body = { action: 'manifest', vaultId, snapshotId };
+  assert.equal((await f.send()).statusCode, 503);
+});
+
 test('sandbox runtime refuses live and unexpected database or Worker origins', () => {
   const env = { HOSTED_MODE: 'sandbox', HOSTED_SANDBOX_RECOVERY_OPEN: 'yes',
     COMMERCE_DATABASE_URL: 'postgresql://fixture:fixture@ep-square-queen-av5us6bx.c-11.us-east-1.aws.neon.tech/neondb?sslmode=require',

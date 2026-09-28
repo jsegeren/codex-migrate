@@ -19,7 +19,7 @@ from urllib.request import Request, build_opener
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_backup import _helper_path, _run_helper
 from codex_migrate.vault_http_store import CapabilityHttpStore, _NoRedirect
-from codex_migrate.vault_remote_inventory import MAX_CHUNKS
+from codex_migrate.vault_remote_inventory import MAX_CHUNKS, MAX_ENCRYPTED_MANIFEST_BYTES
 from codex_migrate.vault_remote_recovery import _Object, _copy_to_file, _objects
 
 
@@ -125,21 +125,10 @@ class HostedRecoveryClient:
         """Return a validated receipt and exact-object read store, without writes."""
         if type(max_bytes) is not int or max_bytes <= 0:
             raise MigrationError("The hosted recovery size limit is invalid.")
-        return self._verified_inventory(max_total_bytes=max_bytes,
-                                        expected_pointer=expected_pointer)
-
-    def _verified_inventory(self, *, max_total_bytes: Optional[int],
-                            expected_pointer: Optional[Tuple[str, str, dict]] = None
-                            ) -> Tuple[dict, CapabilityHttpStore]:
-        """Verify the full object graph; only full recovery caps total bytes.
-
-        The prior-catalog path downloads the manifest alone, so its caller
-        separately caps that object's bytes instead of rejecting a large Vault.
-        """
         account_id, worker_origin, latest = self._latest()
         if latest is None:
             raise MigrationError("This Vault has no verified hosted backup yet.")
-        if ((max_total_bytes is not None and latest["totalBytes"] > max_total_bytes) or
+        if (latest["totalBytes"] > max_bytes or
                 (expected_pointer is not None and
                  (account_id, worker_origin, latest) != expected_pointer)):
             raise MigrationError("The hosted recovery pointer changed or exceeds its limit.")
@@ -199,8 +188,7 @@ class HostedRecoveryClient:
                    "remote_bytes_checked": latest["totalBytes"],
                    "objects": [{"key": key, "bytes": expected[key][0],
                                 "sha256": expected[key][1]} for key in order]}
-        _objects(receipt, latest["totalBytes"] if max_total_bytes is None
-                 else max_total_bytes)
+        _objects(receipt, max_bytes)
 
         def grant(method: str, scoped_key: str, size: int, digest: str) -> str:
             if (method != "GET" or not scoped_key.startswith(prefix)
@@ -254,12 +242,38 @@ class HostedRecoveryClient:
             return None, []
         helper = _helper_path(crypto_helper)
         snapshot_id = latest["snapshotId"]
-        receipt, store = self._verified_inventory(max_total_bytes=None,
-                                                  expected_pointer=pointer)
         key = f"manifests/{snapshot_id}.cvmanifest"
-        entry = next(item for item in receipt["objects"] if item["key"] == key)
-        if entry["bytes"] > max_bytes:
+        manifest = self._post({"action": "manifest", "vaultId": self._vault_id,
+                               "snapshotId": snapshot_id})
+        size = manifest.get("bytes")
+        digest = manifest.get("sha256")
+        token = manifest.get("grant")
+        if (set(manifest) != {"accountId", "workerOrigin", "snapshotId",
+                              "bytes", "sha256", "grant"} or
+                manifest["accountId"] != pointer[0] or
+                manifest["workerOrigin"] != pointer[1] or
+                manifest["snapshotId"] != snapshot_id or
+                type(size) is not int or not 0 < size <= MAX_ENCRYPTED_MANIFEST_BYTES or
+                not isinstance(digest, str) or
+                not re.fullmatch(r"[0-9a-f]{64}", digest) or
+                not isinstance(token, str) or not _GRANT.fullmatch(token) or
+                len(token) > 2048):
+            raise MigrationError("The prior hosted manifest grant is invalid.")
+        if size > max_bytes:
             raise MigrationError("The prior hosted manifest exceeds its selected size limit.")
+        expected = {key: (size, digest)}
+        scoped = f"accounts/{pointer[0]}/vaults/{self._vault_id}/{key}"
+
+        def grant(method: str, scoped_key: str, object_size: int,
+                  object_digest: str) -> str:
+            if (method != "GET" or scoped_key != scoped or
+                    (object_size, object_digest) != (size, digest)):
+                raise MigrationError("The prior hosted manifest grant is out of scope.")
+            return token
+
+        store = CapabilityHttpStore(pointer[1], pointer[0], self._vault_id,
+                                    expected, grant, timeout=self._timeout,
+                                    allow_loopback_http=self._allow_loopback_http)
         stream = store.open_read(key)
         if stream is None:
             raise MigrationError("The prior hosted manifest is missing.")
@@ -268,8 +282,7 @@ class HostedRecoveryClient:
             descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
                                  os.O_NOFOLLOW, 0o600)
             with stream:
-                _copy_to_file(stream, descriptor, _Object(key, entry["bytes"],
-                                                      entry["sha256"]))
+                _copy_to_file(stream, descriptor, _Object(key, size, digest))
             catalog = _run_helper(helper, [
                 "catalog", "--key-id", key_id, "--snapshot-id", snapshot_id,
                 "--manifest", path,

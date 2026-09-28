@@ -421,9 +421,13 @@ egress allowance. Do not claim that B2 restores are always free. See its
   full local ciphertext Vault, retried without extra uploads, excluded auth
   and installation identity, and refused a transcript changed after staging.
   Its previous catalog remains an explicit input. A dark recovery adapter can
-  now authenticate the hosted last-good pointer, reconcile its complete
-  published inventory, fetch only the sealed manifest with exact size and
-  SHA-256 checks, and decrypt its prior thread catalog locally. An empty
+  now authenticate the hosted last-good pointer and request an exact-object
+  read grant for only that pointer's published sealed manifest. The service
+  checks that the manifest is recorded under the current last-good snapshot;
+  the client checks its size and SHA-256 before decrypting the prior thread
+  catalog locally. This avoids paging the complete object inventory for every
+  incremental backup; full disaster recovery still validates that inventory.
+  An empty
   catalog is accepted as a first backup only when the service explicitly
   reports no published snapshot. A changed last-good pointer or altered
   manifest fails closed. The prior-catalog size limit applies to that sealed

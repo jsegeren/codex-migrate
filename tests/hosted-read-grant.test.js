@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { randomBytes } = require('node:crypto');
 const { authorizeReadScope } = require('../hosted/access');
-const { issuePublishedGet } = require('../hosted/read_grant');
+const { issuePublishedGet, issueLastGoodManifest } = require('../hosted/read_grant');
 const { verifyObjectCapability } = require('../hosted/object_capability');
 const { mintSessionSecret } = require('./hosted-device-fixture');
 
@@ -75,4 +75,41 @@ test('read scope is single-use, even if its object lookup fails', async () => {
   await assert.rejects(issuePublishedGet({ scope, snapshotId,
     relativeKey, secret, query }), /hosted_read_grant_denied/);
   assert.equal(queries, 1);
+});
+
+test('last-good manifest grant is limited to the current published pointer', async () => {
+  const manifestKey = `accounts/${accountId}/vaults/${vaultId}/` +
+    `manifests/${snapshotId}.cvmanifest`;
+  const answer = await issueLastGoodManifest({ scope: await readScope(),
+    snapshotId, secret, query: async (sql, values) => {
+      assert.match(sql, /v\.last_good_snapshot_id = \$3::uuid/);
+      assert.match(sql, /hosted\.snapshot_objects/);
+      assert.deepEqual(values, [accountId, vaultId, snapshotId, manifestKey]);
+      return { rows: [{ bytes: '2048', sha256: 'b'.repeat(64) }] };
+    } });
+  assert.equal(answer.bytes, 2048);
+  assert.equal(answer.sha256, 'b'.repeat(64));
+  assert.deepEqual(await verifyObjectCapability(answer.grant, 'GET', manifestKey,
+    secret), { key: manifestKey, bytes: 2048, sha256: 'b'.repeat(64) });
+  await assert.rejects(verifyObjectCapability(answer.grant, 'GET', scopedKey,
+    secret), /hosted_object_access_denied/);
+});
+
+test('last-good manifest refuses missing, conflicting, or untrusted rows and scope', async () => {
+  const cases = [[], [{ bytes: '0', sha256: 'b'.repeat(64) }],
+    [{ bytes: '12', sha256: 'bad' }],
+    [{ bytes: '12', sha256: 'b'.repeat(64) },
+      { bytes: '12', sha256: 'b'.repeat(64) }]];
+  for (const rows of cases) {
+    await assert.rejects(issueLastGoodManifest({ scope: await readScope(),
+      snapshotId, secret, query: async () => ({ rows }) }),
+    /hosted_read_grant_denied/);
+  }
+  let queries = 0;
+  const query = async () => { queries++; return { rows: [] }; };
+  await assert.rejects(issueLastGoodManifest({ scope: { accountId, vaultId },
+    snapshotId, secret, query }), /hosted_read_grant_denied/);
+  await assert.rejects(issueLastGoodManifest({ scope: await readScope(),
+    snapshotId: 'invalid', secret, query }), /hosted_read_grant_denied/);
+  assert.equal(queries, 0);
 });

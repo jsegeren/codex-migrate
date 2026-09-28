@@ -76,6 +76,22 @@ class _Handler(BaseHTTPRequestHandler):
             if self.server.mutate_page:
                 self.server.mutate_page(result)
             return self._reply(200, result)
+        if claim["action"] == "manifest":
+            snapshot_id = (self.server.latest_sequence.pop(0)
+                           if self.server.latest_sequence else self.server.snapshot_id)
+            if claim["snapshotId"] != snapshot_id:
+                return self._reply(503, {"error": "unavailable"})
+            key = f"manifests/{snapshot_id}.cvmanifest"
+            value = self.server.objects.get(key)
+            if value is None:
+                return self._reply(503, {"error": "unavailable"})
+            result = {"accountId": ACCOUNT, "workerOrigin": self.server.origin,
+                      "snapshotId": snapshot_id, "bytes": len(value),
+                      "sha256": hashlib.sha256(value).hexdigest(),
+                      "grant": "synthetic.valid"}
+            if self.server.mutate_manifest:
+                self.server.mutate_manifest(result)
+            return self._reply(200, result)
         if claim["action"] == "get":
             return self._reply(200, {"workerOrigin": self.server.origin,
                                      "grant": "synthetic.valid"})
@@ -83,6 +99,7 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         key = self.path.removeprefix("/v1/object/")
+        self.server.get_requests.append(key)
         if (not self.path.startswith("/v1/object/") or
                 self.headers.get("Authorization") != "Bearer synthetic.valid" or
                 not key.startswith(PREFIX) or key[len(PREFIX):] not in self.server.objects):
@@ -105,7 +122,9 @@ class HostedRecoveryClientTests(unittest.TestCase):
         self.server.snapshot_id = SNAPSHOT
         self.server.objects = inventory()
         self.server.requests = []
+        self.server.get_requests = []
         self.server.mutate_page = None
+        self.server.mutate_manifest = None
         self.server.mutate_get = None
         self.server.latest_sequence = []
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
@@ -196,7 +215,7 @@ class HostedRecoveryClientTests(unittest.TestCase):
         self.assertEqual([item["action"] for item in self.server.requests],
                          ["latest"])
 
-    def test_latest_change_refuses_prior_inventory(self):
+    def test_latest_change_refuses_prior_manifest_grant(self):
         self.server.latest_sequence = [SNAPSHOT, "22222222-2222-4222-8222-222222222222"]
         with tempfile.TemporaryDirectory() as temporary:
             helper = Path(temporary) / "helper"
@@ -206,7 +225,33 @@ class HostedRecoveryClientTests(unittest.TestCase):
                 self.client().prior_catalog(key_id=SNAPSHOT,
                     crypto_helper=str(helper), max_bytes=1_000_000)
         self.assertEqual([item["action"] for item in self.server.requests],
-                         ["latest", "latest"])
+                         ["latest", "manifest"])
+        self.assertEqual(self.server.get_requests, [])
+
+    def test_prior_manifest_grant_refuses_changed_authority_and_size(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            helper = Path(temporary) / "helper"
+            helper.write_text("#!/bin/sh\nexit 0\n")
+            helper.chmod(0o700)
+            for mutate in [
+                lambda manifest: manifest.update(accountId="cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
+                lambda manifest: manifest.update(workerOrigin="https://other.example"),
+                lambda manifest: manifest.update(snapshotId="22222222-2222-4222-8222-222222222222"),
+                lambda manifest: manifest.update(sha256="bad"),
+                lambda manifest: manifest.update(bytes=100_000_001),
+                lambda manifest: manifest.update(grant="bad"),
+            ]:
+                with self.subTest(mutate=mutate):
+                    self.server.requests.clear()
+                    self.server.get_requests.clear()
+                    self.server.mutate_manifest = mutate
+                    with self.assertRaises(MigrationError):
+                        self.client().prior_catalog(key_id=SNAPSHOT,
+                            crypto_helper=str(helper), max_bytes=200_000_000)
+                    self.assertEqual([request["action"] for request in self.server.requests],
+                                     ["latest", "manifest"])
+                    self.assertEqual(self.server.get_requests, [])
+            self.server.mutate_manifest = None
 
     @unittest.skipUnless(platform.system() == "Darwin", "CryptoKit helper requires macOS")
     def test_synthetic_encrypted_backup_recovers_through_service_pages(self):
@@ -261,18 +306,20 @@ class HostedRecoveryClientTests(unittest.TestCase):
                 with self.assertRaisesRegex(MigrationError, "prior hosted manifest exceeds"):
                     self.client().prior_catalog(key_id=key_id,
                         crypto_helper=str(helper), max_bytes=manifest_bytes - 1)
-                self.assertNotIn("get", [request["action"] for request in self.server.requests])
+                self.assertEqual([request["action"] for request in self.server.requests],
+                                 ["latest", "manifest"])
+                self.assertEqual(self.server.get_requests, [])
                 self.server.requests.clear()
+                self.server.get_requests.clear()
                 prior_id, files = self.client().prior_catalog(
                     key_id=key_id, crypto_helper=str(helper), max_bytes=manifest_bytes)
                 self.assertEqual(prior_id, staged.snapshot_id)
                 self.assertEqual(len(files), 1)
                 self.assertEqual(files[0]["path"], "2026/09/27/fixture.jsonl")
-                self.assertEqual([request["action"] for request in self.server.requests
-                                  if request["action"] == "get"], ["get"])
-                self.assertEqual([request["relativeKey"] for request in self.server.requests
-                                  if request["action"] == "get"],
-                                 [f"manifests/{staged.snapshot_id}.cvmanifest"])
+                self.assertEqual([request["action"] for request in self.server.requests],
+                                 ["latest", "manifest"])
+                self.assertEqual(self.server.get_requests,
+                                 [PREFIX + f"manifests/{staged.snapshot_id}.cvmanifest"])
                 self.server.mutate_get = lambda key, body: (
                     bytes([body[0] ^ 1]) + body[1:]
                     if key.startswith("manifests/") else body)

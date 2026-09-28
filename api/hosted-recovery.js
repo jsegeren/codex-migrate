@@ -5,7 +5,7 @@ const { reply } = require('../commerce/http');
 const { recoveryRuntime } = require('../hosted/recovery_runtime');
 const { authorizeReadScope, HostedAccessError } = require('../hosted/access');
 const { getLastGoodSnapshot, listPublishedObjects } = require('../hosted/read_inventory');
-const { issuePublishedGet } = require('../hosted/read_grant');
+const { issuePublishedGet, issueLastGoodManifest } = require('../hosted/read_grant');
 
 const BEARER = /^Bearer (hv1_[A-Za-z0-9_-]{43})$/;
 const MAX_BODY = 600;
@@ -24,6 +24,7 @@ function requestBody(req) {
   const { action } = req.body;
   const allowed = action === 'latest' ? ['action', 'vaultId'] :
     action === 'objects' ? ['action', 'vaultId', 'snapshotId', 'afterKey'] :
+    action === 'manifest' ? ['action', 'vaultId', 'snapshotId'] :
     action === 'get' ? ['action', 'vaultId', 'snapshotId', 'relativeKey'] : [];
   if (!allowed.length || Object.keys(req.body).some(key => !allowed.includes(key)) ||
       typeof req.body.vaultId !== 'string') throw Error('invalid_request');
@@ -67,6 +68,12 @@ function makeHandler(load = recoveryRuntime, env = process.env) {
         const page = await listPublishedObjects({ scope,
           snapshotId: data.snapshotId, afterKey: data.afterKey || null, query });
         return reply(res, 200, page);
+      }
+      if (data.action === 'manifest') {
+        const manifest = await issueLastGoodManifest({ scope,
+          snapshotId: data.snapshotId, secret, query });
+        return reply(res, 200, { accountId: scope.accountId, workerOrigin,
+          snapshotId: data.snapshotId, ...manifest });
       }
       const grant = await issuePublishedGet({ scope, snapshotId: data.snapshotId,
         relativeKey: data.relativeKey, secret, query });
