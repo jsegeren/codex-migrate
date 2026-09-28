@@ -233,6 +233,56 @@ class VaultBackupTests(unittest.TestCase):
             finally:
                 self.delete_key(destination)
 
+    def test_restored_fork_search_preserves_inherited_prefix(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            destination = root / "vault"
+            parent_id = "11111111-1111-4111-8111-111111111111"
+            child_id = "22222222-2222-4222-8222-222222222222"
+            parent = (source / ".codex/archived_sessions" /
+                      ("rollout-" + parent_id + ".jsonl"))
+            child = (source / ".codex/sessions/2026/09/28" /
+                     ("rollout-" + child_id + ".jsonl"))
+            child_transcript = "2026/09/28/" + child.name
+            parent.parent.mkdir(parents=True)
+            child.parent.mkdir(parents=True)
+
+            def record(ordinal, kind, payload):
+                return json.dumps({"ordinal": ordinal, "type": kind,
+                                   "payload": payload}) + "\n"
+
+            inherited = (record(0, "session_meta", {"id": parent_id})
+                         + record(1, "response_item", {"text": "Inherited Clerk plan"}))
+            parent.write_text(inherited + record(
+                2, "response_item", {"text": "Parent-only later plan"}), encoding="utf-8")
+            child.write_text(record(2, "session_meta", {"id": child_id, "history_base": {
+                "thread_id": parent_id, "end_ordinal_exclusive": 2,
+                "end_byte_offset": len(inherited.encode("utf-8")),
+            }}) + record(3, "response_item", {"text": "Child-local implementation"}),
+                encoding="utf-8")
+
+            try:
+                result = backup(str(source), str(destination), crypto_helper=str(self.helper))
+                self.assertEqual(result.transcript_files, 2)
+                restored_home = root / "restored"
+                restored = restored_home / ".codex"
+                restored_home.mkdir()
+                restore_snapshot(str(source), str(destination), str(restored),
+                                 crypto_helper=str(self.helper))
+                matches = search(str(restored_home), "Inherited Clerk plan")
+                self.assertEqual({(match.collection, match.transcript) for match in matches},
+                                 {("active", child_transcript), ("archived", parent.name)})
+                later = search(str(restored_home), "Parent-only later plan")
+                self.assertEqual({(match.collection, match.transcript) for match in later},
+                                 {("archived", parent.name)})
+                child_match = next(match for match in matches if match.collection == "active")
+                page, _ = read_thread_page(str(restored_home), "active", child_transcript,
+                                           child_match.cursor, expected_query="Inherited Clerk")
+                self.assertEqual(page.entries[0].text, "Inherited Clerk plan")
+            finally:
+                self.delete_key(destination)
+
     def test_progress_counts_both_transcript_and_database_source(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
