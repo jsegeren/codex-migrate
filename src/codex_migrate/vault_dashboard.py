@@ -552,12 +552,13 @@ function indexView(data){
   $("index-error").textContent=data.status==="failed"&&data.available?(data.error||"Fast search needs attention."):"";
   if(!data.available)$("index-status").textContent="Fast search is unavailable on this Mac. Regular conversation search still works.";
   else if(data.status==="running")$("index-status").textContent=data.total?
-    `Indexing ${data.completed||0} of ${data.total} conversations. Search remains available.`:
+    `Indexing ${data.completed||0} of ${data.total} conversation sources. Search remains available.`:
     "Preparing local conversation index…";
   else if(data.status==="stopping")$("index-status").textContent="Stopping safely after the current record…";
   else if(data.status==="ready")$("index-status").textContent=
-    `Fast search is ready · ${data.total} conversations · ${fmt(data.index_bytes)} on this Mac.`+
-    (data.skipped?` ${data.skipped} changed during indexing and will be searched directly; refresh later.`:"");
+    `Fast search cache ready · ${data.total} conversation sources · ${fmt(data.index_bytes)} on this Mac.`+
+    (data.skipped?` ${data.skipped} transcripts changed during indexing and will be searched directly; refresh later.`:"")+
+    (data.paginated_skipped?" Database history changed during indexing and will be searched directly; refresh when idle.":"");
   else if(data.status==="stopped")$("index-status").textContent="Indexing stopped. Search still works; refresh to continue.";
   else if(data.status==="failed")$("index-status").textContent="Search still works without this cache.";
   else $("index-status").textContent=data.present?
@@ -568,7 +569,7 @@ function indexView(data){
 }
 async function refreshIndex(){try{indexView(await api("/api/vault/search-index-status"))}catch(error){$("index-error").textContent=error.message}}
 $("index-build").onclick=async()=>{
-  if(!confirm("Build a local search cache? It stores unencrypted three-character text fragments, may use several GB, and is not a backup. You can delete it later."))return;
+  if(!confirm("Build a local search cache for transcripts and database-backed history? It stores unencrypted three-character text fragments, may use substantial disk space, and is not a backup. You can delete it later."))return;
   try{$("index-error").textContent="";indexView(await api("/api/vault/search-index",{apply:true}))}
   catch(error){$("index-error").textContent=error.message;await refreshIndex()}
 };

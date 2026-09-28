@@ -95,14 +95,15 @@ codex-migrate vault search-index-remove --apply
 The cache is not a Vault backup and is never required for search or recovery.
 It is an owner-only, rebuildable SQLite file under
 `~/Library/Caches/Codex Migrate`. It stores searchable three-character terms,
-not full transcript bodies, but those terms can reveal short fragments to
+not full conversation bodies, but those terms can reveal short fragments to
 someone who can read the Mac account; **the cache itself is not encrypted**.
 It is not included in encrypted Vault snapshots. Building it can take minutes
 and several gigabytes of local disk on a very large history. Once built, Vault
-still verifies candidate matches against the original conversations. New or
-changed transcripts that have not been refreshed are searched directly, so a
-stale cache cannot silently hide a matching thread. Short or unsupported
-queries use the normal full scan. Removing the cache does not change Codex or
+still verifies candidate matches against the original conversations. It covers
+both transcript files and supported database-backed threads. New or changed
+transcripts, and database history changed since its last complete index, are
+searched directly so a stale cache cannot silently hide a matching thread.
+Short or unsupported queries use the normal full scan. Removing the cache does not change Codex or
 any Vault snapshot. This development branch also adds an opt-in setup, progress,
 stop, and delete flow to the local Vault browser. The current signed paid build
 does not yet include indexed search; release acceptance is still required.

@@ -1,4 +1,5 @@
 import json
+from contextlib import closing
 from pathlib import Path
 import sqlite3
 import tempfile
@@ -19,20 +20,21 @@ def fixture(root: Path) -> Path:
     codex = root / ".codex"
     codex.mkdir()
     database = codex / "thread_history_1.sqlite"
-    with sqlite3.connect(database) as connection:
-        connection.execute("PRAGMA journal_mode=WAL")
-        connection.execute("CREATE TABLE thread_items ("
-                           "thread_id TEXT, turn_id TEXT, item_id TEXT, "
-                           "rollout_ordinal INTEGER, created_at_ms INTEGER, "
-                           "item_json TEXT, item_type TEXT, updated_at_ordinal INTEGER)")
-        connection.execute("CREATE TABLE thread_history_projection_state ("
-                           "thread_id TEXT, next_rollout_byte_offset INTEGER, "
-                           "next_rollout_ordinal INTEGER)")
-        connection.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                           (THREAD_ID, "turn-1", "item-1", 1, 100,
-                            json.dumps({"id": "item-1", "type": "userMessage",
-                                        "content": [{"type": "text", "text": "synthetic private"}]}),
-                            "userMessage", 1))
+    with closing(sqlite3.connect(database)) as connection:
+        with connection:
+            connection.execute("PRAGMA journal_mode=WAL")
+            connection.execute("CREATE TABLE thread_items ("
+                               "thread_id TEXT, turn_id TEXT, item_id TEXT, "
+                               "rollout_ordinal INTEGER, created_at_ms INTEGER, "
+                               "item_json TEXT, item_type TEXT, updated_at_ordinal INTEGER)")
+            connection.execute("CREATE TABLE thread_history_projection_state ("
+                               "thread_id TEXT, next_rollout_byte_offset INTEGER, "
+                               "next_rollout_ordinal INTEGER)")
+            connection.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                               (THREAD_ID, "turn-1", "item-1", 1, 100,
+                                json.dumps({"id": "item-1", "type": "userMessage",
+                                            "content": [{"type": "text", "text": "synthetic private"}]}),
+                                "userMessage", 1))
     return database
 
 
