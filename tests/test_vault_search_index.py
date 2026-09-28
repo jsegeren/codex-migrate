@@ -1,4 +1,6 @@
 import json
+from contextlib import redirect_stderr, redirect_stdout
+import io
 import os
 from pathlib import Path
 import random
@@ -42,6 +44,41 @@ def write_paginated(home: Path, items) -> Path:
 
 
 class SearchIndexTests(unittest.TestCase):
+    @unittest.skipUnless(supported(), "requires SQLite FTS5 contentless-delete")
+    def test_cli_reports_database_index_coverage(self):
+        from codex_migrate.cli import main
+
+        with tempfile.TemporaryDirectory() as temporary:
+            thread_id = "11111111-1111-4111-8111-111111111111"
+            write_paginated(Path(temporary), ((thread_id, 1, "Clerk history"),))
+            output = io.StringIO()
+            with redirect_stdout(output):
+                self.assertEqual(main(["vault", "--source-home", temporary,
+                                       "search-index", "--apply"]), 0)
+            self.assertIn("Database-backed threads: 1 (indexed)", output.getvalue())
+
+    def test_cli_discloses_partial_search_without_breaking_json_output(self):
+        from codex_migrate.cli import main
+
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            ambiguous = "11111111-1111-4111-8111-111111111111"
+            clear = "22222222-2222-4222-8222-222222222222"
+            for folder in ("sessions", "archived_sessions"):
+                path = home / ".codex" / folder / ("rollout-" + ambiguous + ".jsonl")
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps({"type": "session_meta", "payload": {
+                    "id": ambiguous, "source": folder}}) + "\n", encoding="utf-8")
+            write_paginated(home, ((ambiguous, 1, "Ambiguous work"),
+                                   (clear, 2, "Clerk source")))
+            output, errors = io.StringIO(), io.StringIO()
+            with redirect_stdout(output), redirect_stderr(errors):
+                self.assertEqual(main(["vault", "--source-home", temporary,
+                                       "search", "Clerk", "--json"]), 0)
+            self.assertEqual([item["transcript"] for item in json.loads(output.getvalue())],
+                             [clear + ".jsonl"])
+            self.assertIn("Results may be incomplete", errors.getvalue())
+
     @unittest.skipUnless(supported(), "requires SQLite FTS5 contentless-delete")
     def test_index_refuses_to_consume_the_last_five_gigabytes(self):
         with tempfile.TemporaryDirectory() as temporary:

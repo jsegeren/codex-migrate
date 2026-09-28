@@ -367,6 +367,11 @@ def main(argv: Optional[List[str]] = None) -> int:
                     print("Conversation files: %d" % result["transcripts"])
                     if result["applied"]:
                         print("Indexed or refreshed: %d" % result["indexed"])
+                        if result.get("paginated_threads") is not None:
+                            print("Database-backed threads: %d (%s)" % (
+                                result["paginated_threads"],
+                                "indexed" if result.get("paginated_indexed") else
+                                "changed during indexing; searched directly"))
                         if result["skipped"]:
                             print("Changing conversations left for direct search: %d"
                                   % result["skipped"])
@@ -535,7 +540,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                     else:
                         print("Encrypted chunks: %d" % result.chunks)
                 return 0
-            results = search_vault(args.source_home, args.query, args.limit)
+            warnings = []
+            results = search_vault(args.source_home, args.query, args.limit,
+                                   warnings=warnings)
             if args.json:
                 print(json.dumps([item.as_dict() for item in results], indent=2, sort_keys=True))
             else:
@@ -546,6 +553,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                     print("  %s" % item.snippet)
                 if not results:
                     print("No matching conversation text found.")
+            if warnings:
+                print("Some conversations have ambiguous history copies and could not be "
+                      "searched. Results may be incomplete.", file=sys.stderr)
             return 0
 
         config = _config(args)
