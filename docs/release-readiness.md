@@ -52,6 +52,10 @@ was staged, retried without new uploads, downloaded, verified, and restored
 without a plaintext history file on disk. This remains dark source work: real
 R2 publication, independent clean-account/key-import recovery, installed-app
 wiring, and realistic-scale tests are still release gates.
+The dark live-runner test also stages and publishes a mixed transcript/database
+snapshot through its synthetic in-memory service, reuses unchanged database
+ciphertext on a second run, and restores the database item after recovery-key
+import. It does not exercise deployed customer authority or real R2.
 
 The combined source before the streaming addition passed 1,083 Python tests
 (27 expected skips), 495 JavaScript tests (one expected skip), and the native

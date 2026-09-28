@@ -560,6 +560,20 @@ class VaultBackupTests(unittest.TestCase):
             self.fixture(source)
             active = (source / ".codex/sessions/2026/09/17/active.jsonl").read_bytes()
             archived = (source / ".codex/archived_sessions/archived.jsonl").read_bytes()
+            database = source / ".codex/thread_history_1.sqlite"
+            paginated_id = "44444444-4444-4444-8444-444444444444"
+            paginated_item = {"id": "item-1", "type": "userMessage",
+                              "text": "SYNTHETIC-LIVE-RUN-DATABASE-TURN"}
+            with sqlite3.connect(database) as connection:
+                connection.execute("CREATE TABLE thread_items (thread_id TEXT, turn_id TEXT, "
+                                   "item_id TEXT, rollout_ordinal INTEGER, created_at_ms INTEGER, "
+                                   "item_json TEXT, item_type TEXT, updated_at_ordinal INTEGER)")
+                connection.execute("CREATE TABLE thread_history_projection_state ("
+                                   "thread_id TEXT, next_rollout_byte_offset INTEGER, "
+                                   "next_rollout_ordinal INTEGER)")
+                connection.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                   (paginated_id, "turn-1", "item-1", 1, 100,
+                                    json.dumps(paginated_item), "userMessage", 1))
             key_result = json.loads(subprocess.run(
                 [str(self.helper), "create-key"], check=True,
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout)
@@ -633,7 +647,7 @@ class VaultBackupTests(unittest.TestCase):
                     metadata, crypto_helper=str(self.helper),
                     max_prior_bytes=5_000_000, apply=True)
                 self.assertIsNone(runner.pending())
-                self.assertEqual(published["verifiedObjectCount"], 5)
+                self.assertEqual(published["verifiedObjectCount"], 6)
                 self.assertEqual(upload.staged.snapshot_id,
                                  published["snapshotId"])
                 self.assertFalse((root / "vault").exists())
@@ -641,6 +655,7 @@ class VaultBackupTests(unittest.TestCase):
                 self.assertNotIn(b"PRIVATE-ACTIVE-CONTENT", combined)
                 self.assertNotIn(b"PRIVATE-ARCHIVED-CONTENT", combined)
                 self.assertNotIn(b"NEVER-COPY-AUTH", combined)
+                self.assertNotIn(b"SYNTHETIC-LIVE-RUN-DATABASE-TURN", combined)
 
                 # A later snapshot pins the prior published base, reuses the
                 # unchanged archived chunk, and never overwrites ciphertext.
@@ -654,7 +669,7 @@ class VaultBackupTests(unittest.TestCase):
                     metadata, crypto_helper=str(self.helper),
                     max_prior_bytes=5_000_000, apply=True)
                 self.assertNotEqual(second["snapshotId"], published["snapshotId"])
-                self.assertEqual(upload.store.writes, 9)
+                self.assertEqual(upload.store.writes, 10)
                 self.assertIsNone(runner.pending())
 
                 # Opt-in local scale probe: exercise the real hosted-only
@@ -684,7 +699,7 @@ class VaultBackupTests(unittest.TestCase):
                         metadata, crypto_helper=str(self.helper),
                         max_prior_bytes=5_000_000, apply=True)
                     self.assertEqual(third["snapshotId"], upload.staged.snapshot_id)
-                    self.assertEqual(upload.staged.transcript_files, 2051)
+                    self.assertEqual(upload.staged.transcript_files, 2052)
                     self.assertGreaterEqual(upload.store.writes - before_writes, 2051)
                     self.assertIsNone(runner.pending())
                     self.assertFalse((root / "vault").exists())
@@ -717,6 +732,11 @@ class VaultBackupTests(unittest.TestCase):
                                  active)
                 self.assertEqual((restored / "archived_sessions/archived.jsonl").read_bytes(),
                                  archived)
+                paginated_lines = (restored / "paginated_history" /
+                                   (paginated_id + ".jsonl")).read_text().splitlines()
+                self.assertEqual(len(paginated_lines), 1)
+                self.assertEqual(json.loads(json.loads(paginated_lines[0])["item_json"]),
+                                 paginated_item)
                 if scale_digest is not None:
                     self.assertEqual(len(list((restored / "sessions/2026/09/17/scale")
                                               .glob("thread-*.jsonl"))), 2048)
