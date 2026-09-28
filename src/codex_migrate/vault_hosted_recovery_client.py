@@ -8,16 +8,19 @@ disk. It is not wired to the buyer UI until hosted release gates pass.
 from __future__ import annotations
 
 import json
+import os
 import re
-from typing import Dict, Tuple
+from tempfile import TemporaryDirectory
+from typing import Dict, List, Optional, Tuple
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, build_opener
 
 from codex_migrate.errors import MigrationError
+from codex_migrate.vault_backup import _helper_path, _run_helper
 from codex_migrate.vault_http_store import CapabilityHttpStore, _NoRedirect
 from codex_migrate.vault_remote_inventory import MAX_CHUNKS
-from codex_migrate.vault_remote_recovery import _objects
+from codex_migrate.vault_remote_recovery import _Object, _copy_to_file, _objects
 
 
 _UUID = r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
@@ -90,28 +93,44 @@ class HostedRecoveryClient:
             raise MigrationError("The hosted recovery service response is invalid.")
         return result
 
-    def prepare(self, *, max_bytes: int) -> Tuple[dict, CapabilityHttpStore]:
-        """Return a validated receipt and exact-object read store, without writes."""
-        if type(max_bytes) is not int or max_bytes <= 0:
-            raise MigrationError("The hosted recovery size limit is invalid.")
+    def _latest(self) -> Tuple[str, str, Optional[dict]]:
+        """Distinguish an authenticated empty Vault from a failed lookup."""
         latest_reply = self._post({"action": "latest", "vaultId": self._vault_id})
         if set(latest_reply) != {"accountId", "workerOrigin", "latest"}:
             raise MigrationError("The hosted recovery pointer is invalid.")
         account_id = latest_reply["accountId"]
         worker_origin = latest_reply["workerOrigin"]
         latest = latest_reply["latest"]
-        if latest is None:
-            raise MigrationError("This Vault has no verified hosted backup yet.")
         if (not isinstance(account_id, str) or not re.fullmatch(_UUID, account_id)
-                or not isinstance(latest, dict)
+                or not isinstance(worker_origin, str)):
+            raise MigrationError("The hosted recovery pointer is invalid.")
+        _origin(worker_origin, self._allow_loopback_http)
+        if latest is None:
+            return account_id, worker_origin, None
+        if (not isinstance(latest, dict)
                 or set(latest) != {"snapshotId", "totalObjects", "totalBytes"}
                 or not isinstance(latest["snapshotId"], str)
                 or not re.fullmatch(_UUID, latest["snapshotId"])
                 or type(latest["totalObjects"]) is not int
                 or not 3 <= latest["totalObjects"] <= MAX_CHUNKS + 3
                 or type(latest["totalBytes"]) is not int
-                or not latest["totalObjects"] <= latest["totalBytes"] <= max_bytes):
+                or latest["totalBytes"] < latest["totalObjects"]):
             raise MigrationError("The hosted recovery pointer is invalid.")
+        return account_id, worker_origin, latest
+
+    def prepare(self, *, max_bytes: int,
+                expected_pointer: Optional[Tuple[str, str, dict]] = None
+                ) -> Tuple[dict, CapabilityHttpStore]:
+        """Return a validated receipt and exact-object read store, without writes."""
+        if type(max_bytes) is not int or max_bytes <= 0:
+            raise MigrationError("The hosted recovery size limit is invalid.")
+        account_id, worker_origin, latest = self._latest()
+        if latest is None:
+            raise MigrationError("This Vault has no verified hosted backup yet.")
+        if (latest["totalBytes"] > max_bytes or
+                (expected_pointer is not None and
+                 (account_id, worker_origin, latest) != expected_pointer)):
+            raise MigrationError("The hosted recovery pointer changed or exceeds its limit.")
         snapshot_id = latest["snapshotId"]
         prefix = f"accounts/{account_id}/vaults/{self._vault_id}/"
         expected: Dict[str, Tuple[int, str]] = {}
@@ -189,3 +208,44 @@ class HostedRecoveryClient:
                                     expected, grant, timeout=self._timeout,
                                     allow_loopback_http=self._allow_loopback_http)
         return receipt, store
+
+    def prior_catalog(self, *, key_id: str, crypto_helper: str, max_bytes: int
+                      ) -> Tuple[Optional[str], List[dict]]:
+        """Read only the authenticated prior manifest for hosted loss warnings.
+
+        No prior pointer is a genuine first backup, not a transport error. A
+        caller must retain the returned snapshot identity through publication;
+        this read alone does not provide compare-and-swap protection.
+        """
+        if type(max_bytes) is not int or max_bytes <= 0:
+            raise MigrationError("The hosted recovery size limit is invalid.")
+        pointer = self._latest()
+        latest = pointer[2]
+        if latest is None:
+            return None, []
+        helper = _helper_path(crypto_helper)
+        snapshot_id = latest["snapshotId"]
+        receipt, store = self.prepare(max_bytes=max_bytes,
+                                      expected_pointer=pointer)
+        key = f"manifests/{snapshot_id}.cvmanifest"
+        entry = next(item for item in receipt["objects"] if item["key"] == key)
+        stream = store.open_read(key)
+        if stream is None:
+            raise MigrationError("The prior hosted manifest is missing.")
+        with TemporaryDirectory(prefix="codex-vault-prior-") as temporary:
+            path = os.path.join(temporary, "prior.cvmanifest")
+            descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
+                                 os.O_NOFOLLOW, 0o600)
+            with stream:
+                _copy_to_file(stream, descriptor, _Object(key, entry["bytes"],
+                                                      entry["sha256"]))
+            catalog = _run_helper(helper, [
+                "catalog", "--key-id", key_id, "--snapshot-id", snapshot_id,
+                "--manifest", path,
+            ])
+        files = catalog.get("files")
+        if (catalog.get("snapshot_id") != snapshot_id or
+                not isinstance(files, list) or len(files) > 100_000 or
+                not all(isinstance(item, dict) for item in files)):
+            raise MigrationError("The prior hosted catalog is invalid.")
+        return snapshot_id, files

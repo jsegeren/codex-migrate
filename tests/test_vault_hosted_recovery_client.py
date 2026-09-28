@@ -58,10 +58,13 @@ class _Handler(BaseHTTPRequestHandler):
                 for key, value in sorted(self.server.objects.items())]
         total = sum(item["bytes"] for item in rows)
         if claim["action"] == "latest":
+            snapshot_id = (self.server.latest_sequence.pop(0)
+                           if self.server.latest_sequence else self.server.snapshot_id)
             return self._reply(200, {"accountId": ACCOUNT,
                 "workerOrigin": self.server.origin,
-                "latest": {"snapshotId": self.server.snapshot_id,
-                           "totalObjects": len(rows), "totalBytes": total}})
+                "latest": None if snapshot_id is None else
+                {"snapshotId": snapshot_id,
+                 "totalObjects": len(rows), "totalBytes": total}})
         if claim["action"] == "objects":
             after = claim.get("afterKey", "")
             page = [item for item in rows if PREFIX + item["key"] > after][:257]
@@ -87,6 +90,8 @@ class _Handler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         body = self.server.objects[key[len(PREFIX):]]
+        if self.server.mutate_get:
+            body = self.server.mutate_get(key[len(PREFIX):], body)
         self.send_response(200)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -101,6 +106,8 @@ class HostedRecoveryClientTests(unittest.TestCase):
         self.server.objects = inventory()
         self.server.requests = []
         self.server.mutate_page = None
+        self.server.mutate_get = None
+        self.server.latest_sequence = []
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
 
@@ -157,6 +164,26 @@ class HostedRecoveryClientTests(unittest.TestCase):
             HostedRecoveryClient(self.server.origin, "bad", VAULT,
                                  allow_loopback_http=True)
 
+    def test_authenticated_empty_vault_is_not_a_catalog_error(self):
+        self.server.snapshot_id = None
+        snapshot_id, files = self.client().prior_catalog(
+            key_id="unused", crypto_helper="/missing-helper", max_bytes=1_000_000)
+        self.assertIsNone(snapshot_id)
+        self.assertEqual(files, [])
+        self.assertEqual([item["action"] for item in self.server.requests], ["latest"])
+
+    def test_latest_change_refuses_prior_inventory(self):
+        self.server.latest_sequence = [SNAPSHOT, "22222222-2222-4222-8222-222222222222"]
+        with tempfile.TemporaryDirectory() as temporary:
+            helper = Path(temporary) / "helper"
+            helper.write_text("#!/bin/sh\nexit 0\n")
+            helper.chmod(0o700)
+            with self.assertRaises(MigrationError):
+                self.client().prior_catalog(key_id=SNAPSHOT,
+                    crypto_helper=str(helper), max_bytes=1_000_000)
+        self.assertEqual([item["action"] for item in self.server.requests],
+                         ["latest", "latest"])
+
     @unittest.skipUnless(platform.system() == "Darwin", "CryptoKit helper requires macOS")
     def test_synthetic_encrypted_backup_recovers_through_service_pages(self):
         class MemoryStore:
@@ -198,6 +225,24 @@ class HostedRecoveryClientTests(unittest.TestCase):
                 self.server.snapshot_id = staged.snapshot_id
                 receipt, read_store = self.client().prepare(max_bytes=5_000_000)
                 self.assertEqual(receipt["snapshot_id"], staged.snapshot_id)
+                self.server.requests.clear()
+                prior_id, files = self.client().prior_catalog(
+                    key_id=key_id, crypto_helper=str(helper), max_bytes=5_000_000)
+                self.assertEqual(prior_id, staged.snapshot_id)
+                self.assertEqual(len(files), 1)
+                self.assertEqual(files[0]["path"], "2026/09/27/fixture.jsonl")
+                self.assertEqual([request["action"] for request in self.server.requests
+                                  if request["action"] == "get"], ["get"])
+                self.assertEqual([request["relativeKey"] for request in self.server.requests
+                                  if request["action"] == "get"],
+                                 [f"manifests/{staged.snapshot_id}.cvmanifest"])
+                self.server.mutate_get = lambda key, body: (
+                    bytes([body[0] ^ 1]) + body[1:]
+                    if key.startswith("manifests/") else body)
+                with self.assertRaises(MigrationError):
+                    self.client().prior_catalog(key_id=key_id,
+                        crypto_helper=str(helper), max_bytes=5_000_000)
+                self.server.mutate_get = None
                 empty_home = root / "empty-home"
                 empty_home.mkdir(mode=0o700)
                 recovered = root / "recovered-vault"

@@ -387,9 +387,16 @@ egress allowance. Do not claim that B2 restores are always free. See its
   and loss warnings as local Vault. A synthetic two-transcript run needed no
   full local ciphertext Vault, retried without extra uploads, excluded auth
   and installation identity, and refused a transcript changed after staging.
-  Its previous catalog is an explicit authenticated input; fetching and
-  verifying that prior catalog from hosted last-good remains open. The builder
-  does not submit receipt pages or publish, and it has not passed real R2 or
+  Its previous catalog remains an explicit input. A dark recovery adapter can
+  now authenticate the hosted last-good pointer, reconcile its complete
+  published inventory, fetch only the sealed manifest with exact size and
+  SHA-256 checks, and decrypt its prior thread catalog locally. An empty
+  catalog is accepted as a first backup only when the service explicitly
+  reports no published snapshot. A changed last-good pointer or altered
+  manifest fails closed. The installed backup path still must call this
+  adapter and pin the prior snapshot through publication; the adapter alone
+  does not prevent another writer from advancing last-good meanwhile. The
+  builder does not submit receipt pages or publish, and it has not passed real R2 or
   clean-Mac restore acceptance. A separate dark client method can now submit
   this exact staged graph through the existing bounded receipt-page and
   independent server verification path, returning only the server publication
