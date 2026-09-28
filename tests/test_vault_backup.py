@@ -300,17 +300,20 @@ class VaultBackupTests(unittest.TestCase):
                 subprocess.run([str(self.helper), "delete-key", "--key-id", key_id],
                                check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-    def test_hosted_whole_snapshot_stages_without_full_local_vault(self):
+    def test_hosted_whole_snapshot_stages_and_recovers_without_full_local_vault(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             source = root / "source"
             source.mkdir(mode=0o700)
             self.fixture(source)
+            active_bytes = (source / ".codex/sessions/2026/09/17/active.jsonl").read_bytes()
+            archived_bytes = (source / ".codex/archived_sessions/archived.jsonl").read_bytes()
             created = subprocess.run(
                 [str(self.helper), "create-key"], check=True,
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             )
-            key_id = json.loads(created.stdout)["key_id"]
+            key_result = json.loads(created.stdout)
+            key_id = key_result["key_id"]
             snapshot_id = str(uuid.uuid4())
             metadata = {"format": "codex-vault", "version": 1,
                         "key_id": key_id,
@@ -382,9 +385,42 @@ class VaultBackupTests(unittest.TestCase):
                                 str(source), metadata, [], journal, client,
                                 crypto_helper=str(self.helper), chunk_size=64 * 1024,
                                 window_bytes=64 * 1024, apply=True)
-            finally:
+
+                # The hosted-only stage must be restorable without ever
+                # creating a full ciphertext Vault on the source Mac.
+                remote = MemoryObjectStore()
+                remote.objects = dict(client.store.objects)
+                empty_home = root / "empty-home"
+                empty_home.mkdir(mode=0o700)
+                recovered = root / "recovered-vault"
+                self.assertFalse((root / "vault").exists())
                 subprocess.run([str(self.helper), "delete-key", "--key-id", key_id],
                                check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                key_id = None
+                with self.assertRaises(MigrationError):
+                    vault_remote_recovery.download_encrypted_snapshot(
+                        str(empty_home), str(recovered), remote,
+                        first.upload_claim().receipt(), max_bytes=5_000_000,
+                        crypto_helper=str(self.helper))
+                key_id = import_recovery_key(
+                    str(recovered), key_result["recovery_key"],
+                    crypto_helper=str(self.helper))
+                result = vault_remote_recovery.download_encrypted_snapshot(
+                    str(empty_home), str(recovered), remote,
+                    first.upload_claim().receipt(), max_bytes=5_000_000,
+                    crypto_helper=str(self.helper))
+                self.assertEqual(result.transcript_files, 2)
+                restored = root / "restored"
+                restore_snapshot(str(empty_home), str(recovered), str(restored),
+                                 crypto_helper=str(self.helper))
+                self.assertEqual((restored / "sessions/2026/09/17/active.jsonl").read_bytes(),
+                                 active_bytes)
+                self.assertEqual((restored / "archived_sessions/archived.jsonl").read_bytes(),
+                                 archived_bytes)
+            finally:
+                if key_id is not None:
+                    subprocess.run([str(self.helper), "delete-key", "--key-id", key_id],
+                                   check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     def test_backup_is_encrypted_versioned_verified_and_incremental(self):
         with tempfile.TemporaryDirectory() as temporary:

@@ -396,8 +396,13 @@ egress allowance. Do not claim that B2 restores are always free. See its
   manifest fails closed. The installed backup path still must call this
   adapter and pin the prior snapshot through publication; the adapter alone
   does not prevent another writer from advancing last-good meanwhile. The
-  builder does not submit receipt pages or publish, and it has not passed real R2 or
-  clean-Mac restore acceptance. A separate dark client method can now submit
+  staged hosted-only object graph has also been recovered through the native
+  download, key-import, verification, and restore path in a synthetic test
+  without first creating a full ciphertext Vault on the source Mac. That test
+  uses an in-memory object store and the same macOS login, not real R2 or a
+  separate clean Mac account. The builder does not submit receipt pages or
+  publish, and it has not passed real R2 or clean-Mac restore acceptance. A
+  separate dark client method can now submit
   this exact staged graph through the existing bounded receipt-page and
   independent server verification path, returning only the server publication
   count. Synthetic lost-page and lost-publication-response retries pass. The
