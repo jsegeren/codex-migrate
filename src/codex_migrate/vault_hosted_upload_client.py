@@ -16,6 +16,7 @@ from urllib.request import Request, build_opener
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_hosted_recovery_client import _origin
+from codex_migrate.vault_hosted_snapshot_stage import HostedSnapshotStage
 from codex_migrate.vault_http_store import CapabilityHttpStore, _NoRedirect
 from codex_migrate.vault_remote_inventory import encrypted_snapshot_inventory
 from codex_migrate.vault_remote_transfer import (
@@ -340,6 +341,30 @@ class HostedUploadClient:
                 return self.publish_checkpointed(reservation_id, snapshot_id,
                                                   apply=True)
         raise MigrationError("Hosted verification did not complete safely.")
+
+    def publish_hosted_stage(self, reservation_id: str,
+                             staged: HostedSnapshotStage, *,
+                             apply: bool = False) -> dict:
+        """Publish a bounded hosted-only stage only after server-side proof."""
+        if apply is not True:
+            raise MigrationError("Hosted backup changes require explicit confirmation.")
+        self._require_reservation(reservation_id)
+        if (not isinstance(staged, HostedSnapshotStage) or
+                staged.reservation_id != reservation_id):
+            raise MigrationError("The hosted stage belongs to another reservation.")
+        claim = staged.upload_claim()
+        if self.submit_pages(reservation_id, claim, apply=True) != len(claim.objects):
+            raise MigrationError("The hosted snapshot receipt is incomplete.")
+        verified = self.verify_and_publish(reservation_id, claim.snapshot_id,
+                                           apply=True)
+        if verified != len(claim.objects):
+            raise MigrationError("The hosted publication receipt is incomplete.")
+        return {"snapshotId": claim.snapshot_id,
+                "verifiedObjectCount": verified,
+                "encryptedBytes": claim.remote_bytes_checked,
+                "transcriptFiles": staged.transcript_files,
+                "transcriptBytes": staged.transcript_bytes,
+                "atRiskThreads": staged.at_risk_threads}
 
     def back_up_snapshot(self, vault: str, *, reservation_id: str,
                          snapshot: str = "latest",

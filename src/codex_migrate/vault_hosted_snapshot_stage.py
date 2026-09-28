@@ -24,7 +24,7 @@ from codex_migrate.vault_identity import (
     scan_transcript, title_index,
 )
 from codex_migrate.vault_local_lock import local_history_lock
-from codex_migrate.vault_remote_transfer import StagedObject
+from codex_migrate.vault_remote_transfer import StageResult, StagedObject
 from codex_migrate.vault_remote_writer import (
     RemoteAwareClient, StagedRemoteFile, stage_remote_aware_file_windowed,
 )
@@ -35,10 +35,16 @@ class HostedSnapshotStage:
     """Client-side ciphertext facts; not a server publication receipt."""
 
     snapshot_id: str
+    reservation_id: str
     objects: Tuple[StagedObject, ...]
     transcript_files: int
     transcript_bytes: int
     at_risk_threads: int
+
+    def upload_claim(self) -> StageResult:
+        """Counts are unknown for the mixed incremental path, never zeroed."""
+        return StageResult(self.snapshot_id, None, None,
+                           sum(item.bytes for item in self.objects), self.objects)
 
 
 def _identity(info: os.stat_result) -> tuple[int, int, int, int, int]:
@@ -130,5 +136,5 @@ def stage_hosted_snapshot(
         objects = stage_hosted_snapshot_tail(
             metadata, manifest, stages, journal, client,
             crypto_helper=crypto_helper, apply=True)
-        return HostedSnapshotStage(journal.snapshot_id, objects,
+        return HostedSnapshotStage(journal.snapshot_id, journal.reservation_id, objects,
                                    len(manifest_files), total_bytes, len(at_risk))

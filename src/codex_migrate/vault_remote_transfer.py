@@ -54,8 +54,8 @@ class StagedObject:
 @dataclass(frozen=True)
 class StageResult:
     snapshot_id: str
-    uploaded_files: int
-    reused_files: int
+    uploaded_files: Optional[int]
+    reused_files: Optional[int]
     remote_bytes_checked: int
     objects: Tuple[StagedObject, ...]
 

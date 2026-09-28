@@ -390,7 +390,12 @@ egress allowance. Do not claim that B2 restores are always free. See its
   Its previous catalog is an explicit authenticated input; fetching and
   verifying that prior catalog from hosted last-good remains open. The builder
   does not submit receipt pages or publish, and it has not passed real R2 or
-  clean-Mac restore acceptance.
+  clean-Mac restore acceptance. A separate dark client method can now submit
+  this exact staged graph through the existing bounded receipt-page and
+  independent server verification path, returning only the server publication
+  count. Synthetic lost-page and lost-publication-response retries pass. The
+  full builder-to-real-R2 publication and clean-Mac restore chain is still a
+  release gate, not a customer feature.
 - Keep each local Vault in its own random, account-scoped remote namespace.
   Two Macs may each back up to separate Vaults under one subscription; this is
   not synchronization or a silent merge. Object names and snapshot times are

@@ -13,6 +13,7 @@ from unittest.mock import patch
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_hosted_backup_run import HostedBackupRun
+from codex_migrate.vault_hosted_snapshot_stage import HostedSnapshotStage
 from codex_migrate.vault_hosted_upload_client import HostedUploadClient
 from codex_migrate.vault_remote_inventory import RemoteInventory, VaultTransferFile
 from codex_migrate.vault_remote_transfer import (
@@ -356,6 +357,37 @@ class HostedUploadClientTests(unittest.TestCase):
         self.assertEqual(self.client.submit_pages(RESERVATION, staged, apply=True), 3)
         self.assertEqual([len(page) for page in self.server.pages], [3])
         self.assertNotIn("publish", self.server.actions)
+
+    def test_bounded_hosted_stage_requires_exact_server_publication(self):
+        manifest_key = f"manifests/{SNAPSHOT}.cvmanifest"
+        objects = (
+            StagedObject(FIRST_KEY, len(FIRST), self.server.expected[FIRST_KEY][1]),
+            StagedObject(manifest_key, 5, hashlib.sha256(b"third").hexdigest()),
+            StagedObject(SECOND_KEY, len(SECOND), self.server.expected[SECOND_KEY][1]),
+        )
+        staged = HostedSnapshotStage(SNAPSHOT, RESERVATION, objects, 2, 123, 0)
+        self.assertIsNone(staged.upload_claim().uploaded_files)
+        with self.assertRaisesRegex(MigrationError, "explicit confirmation"):
+            self.client.publish_hosted_stage(RESERVATION, staged)
+        with self.assertRaisesRegex(MigrationError, "another reservation"):
+            self.client.publish_hosted_stage(
+                RESERVATION,
+                HostedSnapshotStage(SNAPSHOT, ACCOUNT, objects, 2, 123, 0),
+                apply=True)
+        self.server.fail_next_page = True
+        with self.assertRaises(MigrationError):
+            self.client.publish_hosted_stage(RESERVATION, staged, apply=True)
+        self.assertNotIn("publish_checkpointed", self.server.actions)
+        self.server.fail_next_checkpoint_publish = True
+        with self.assertRaises(MigrationError):
+            self.client.publish_hosted_stage(RESERVATION, staged, apply=True)
+        self.assertEqual(self.client.publish_hosted_stage(
+            RESERVATION, staged, apply=True), {
+            "snapshotId": SNAPSHOT, "verifiedObjectCount": 3,
+            "encryptedBytes": len(FIRST) + len(SECOND) + 5,
+            "transcriptFiles": 2, "transcriptBytes": 123,
+            "atRiskThreads": 0,
+        })
 
     def test_publication_requires_apply_and_exact_server_receipt(self):
         with self.assertRaises(MigrationError):
