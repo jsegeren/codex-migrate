@@ -371,6 +371,10 @@ egress allowance. Do not claim that B2 restores are always free. See its
   assembly, independently verified publication, clean-Mac recovery, installed
   schedule, or buyer UI is wired to it. The existing local `store-chunks`
   behavior remains unchanged.
+  A separate draft graph check now rejects missing, extra, or contradictory
+  staged objects relative to a version-2 manifest before receipt-page
+  submission. It is not yet connected to manifest sealing or publication;
+  passing that client-side check would not replace the server's R2 proof.
 - Keep each local Vault in its own random, account-scoped remote namespace.
   Two Macs may each back up to separate Vaults under one subscription; this is
   not synchronization or a silent merge. Object names and snapshot times are
