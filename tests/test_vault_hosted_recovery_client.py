@@ -186,6 +186,16 @@ class HostedRecoveryClientTests(unittest.TestCase):
         self.assertEqual([item["action"] for item in self.server.requests],
                          ["latest", "latest"])
 
+    def test_reserved_account_must_match_before_any_manifest_download(self):
+        other_account = "22222222-2222-4222-8222-222222222222"
+        with self.assertRaisesRegex(MigrationError, "account changed"):
+            self.client().prior_catalog(
+                key_id="unused", crypto_helper="/missing-helper",
+                max_bytes=1_000_000, expected_snapshot_id=SNAPSHOT,
+                expected_account_id=other_account)
+        self.assertEqual([item["action"] for item in self.server.requests],
+                         ["latest"])
+
     def test_latest_change_refuses_prior_inventory(self):
         self.server.latest_sequence = [SNAPSHOT, "22222222-2222-4222-8222-222222222222"]
         with tempfile.TemporaryDirectory() as temporary:

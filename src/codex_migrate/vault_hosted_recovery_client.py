@@ -211,7 +211,8 @@ class HostedRecoveryClient:
         return receipt, store
 
     def prior_catalog(self, *, key_id: str, crypto_helper: str, max_bytes: int,
-                      expected_snapshot_id: object = _UNSPECIFIED
+                      expected_snapshot_id: object = _UNSPECIFIED,
+                      expected_account_id: Optional[str] = None
                       ) -> Tuple[Optional[str], List[dict]]:
         """Read only the authenticated prior manifest for hosted loss warnings.
 
@@ -226,7 +227,13 @@ class HostedRecoveryClient:
                 (not isinstance(expected_snapshot_id, str) or
                  not re.fullmatch(_UUID, expected_snapshot_id))):
             raise MigrationError("The reserved hosted snapshot base is invalid.")
+        if (expected_account_id is not None and
+                (not isinstance(expected_account_id, str) or
+                 not re.fullmatch(_UUID, expected_account_id))):
+            raise MigrationError("The hosted recovery account is invalid.")
         pointer = self._latest()
+        if expected_account_id is not None and pointer[0] != expected_account_id:
+            raise MigrationError("The hosted recovery account changed.")
         latest = pointer[2]
         observed = None if latest is None else latest["snapshotId"]
         if expected_snapshot_id is not _UNSPECIFIED and observed != expected_snapshot_id:

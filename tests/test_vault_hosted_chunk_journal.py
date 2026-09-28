@@ -68,6 +68,27 @@ class HostedChunkJournalTests(unittest.TestCase):
                 with self.journal(**changed):
                     pass
 
+    def test_reserved_base_is_durable_and_cannot_change_on_retry(self):
+        base = "66666666-6666-4666-8666-666666666666"
+        with self.journal(base_snapshot_id=base) as journal:
+            self.assertEqual(journal.base_snapshot_id, base)
+        with self.journal(base_snapshot_id=base) as reopened:
+            self.assertEqual(reopened.base_snapshot_id, base)
+        for changed in (None, "77777777-7777-4777-8777-777777777777"):
+            with self.subTest(changed=changed), self.assertRaisesRegex(
+                    MigrationError, "another run"):
+                with self.journal(base_snapshot_id=changed):
+                    pass
+
+    def test_explicit_empty_base_is_distinct_from_unbound_journal(self):
+        with self.journal(base_snapshot_id=None) as journal:
+            self.assertIsNone(journal.base_snapshot_id)
+        with self.assertRaisesRegex(MigrationError, "reservation base was not recorded"):
+            _ = self.journal().base_snapshot_id
+        with self.assertRaisesRegex(MigrationError, "another run"):
+            with self.journal():
+                pass
+
     def test_second_open_fails_while_first_has_lock(self):
         with self.journal():
             with self.assertRaisesRegex(MigrationError, "busy or unavailable"):

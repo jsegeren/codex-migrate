@@ -406,9 +406,14 @@ egress allowance. Do not claim that B2 restores are always free. See its
   same database statement as the quota reservation, or `null` for a first
   backup. The native client can require its authenticated prior-catalog read
   to match that ID before staging transcript bytes; a changed pointer fails
-  closed. The installed path still must wire these calls in that order and
-  retain the reservation identity through publication. Neither the receipt nor
-  the prior-catalog method alone is an installed backup workflow.
+  closed. A versioned owner-only chunk journal now persists that base through
+  retry; an older unbound journal cannot be mistaken for first-backup history.
+  A dark staging entry point checks the account, Vault, service and device
+  identity, then requires the authenticated prior catalog to match the journal
+  before staging any transcript. The installed path still must reserve, persist
+  this journal, call the staging entry point, and retain the reservation
+  identity through publication. These primitives are not an installed backup
+  workflow or a customer protection receipt.
   The staged hosted-only object graph has also been recovered through the native
   download, key-import, verification, and restore path in a synthetic test
   without first creating a full ciphertext Vault on the source Mac. That test

@@ -28,22 +28,31 @@ _UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9
 _HEX = re.compile(r"[0-9a-f]{64}\Z")
 _FORMAT = "codex-vault-hosted-chunk-journal"
 _MAX_LOG_BYTES = 32 * 1024 * 1024
+_UNSPECIFIED = object()
 
 
 class HostedChunkJournal:
     """One reservation's owner-only receipts, held under an exclusive lock."""
 
     def __init__(self, directory: Path, *, account_id: str, vault_id: str,
-                 reservation_id: str, snapshot_id: str, key_id: str):
+                 reservation_id: str, snapshot_id: str, key_id: str,
+                 base_snapshot_id: object = _UNSPECIFIED):
         ids = (account_id, vault_id, reservation_id, snapshot_id, key_id)
         if any(not isinstance(value, str) or not _UUID.fullmatch(value)
                for value in ids):
             raise MigrationError("The hosted chunk journal identity is invalid.")
+        if (base_snapshot_id is not _UNSPECIFIED and base_snapshot_id is not None and
+                (not isinstance(base_snapshot_id, str) or
+                 not _UUID.fullmatch(base_snapshot_id))):
+            raise MigrationError("The hosted reservation base is invalid.")
         self.directory = _canonical_macos_path(Path(directory))
         self._header = {"format": _FORMAT, "version": 1,
                         "accountId": account_id, "vaultId": vault_id,
                         "reservationId": reservation_id,
                         "snapshotId": snapshot_id, "keyId": key_id}
+        if base_snapshot_id is not _UNSPECIFIED:
+            self._header["version"] = 2
+            self._header["baseSnapshotId"] = base_snapshot_id
         self._metadata = self.directory / "journal.json"
         self._log = self.directory / "chunks.jsonl"
         self._manifest = self.directory / "manifest-binding.json"
@@ -59,6 +68,20 @@ class HostedChunkJournal:
     @property
     def reservation_id(self) -> str:
         return self._header["reservationId"]
+
+    @property
+    def account_id(self) -> str:
+        return self._header["accountId"]
+
+    @property
+    def vault_id(self) -> str:
+        return self._header["vaultId"]
+
+    @property
+    def base_snapshot_id(self) -> Optional[str]:
+        if self._header["version"] != 2:
+            raise MigrationError("The hosted reservation base was not recorded.")
+        return self._header["baseSnapshotId"]
 
     @property
     def key_id(self) -> str:
