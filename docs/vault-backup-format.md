@@ -21,10 +21,12 @@ chunk before advancing `latest.json`. Recovery stages these entries under
 `paginated_history/`, never into Codex's live database.
 
 Readers accept v1/v2 snapshots unchanged. Unknown SQLite schemas, malformed
-items, or incomplete streams abort before reference publication. This is only
-the encrypted capture foundation: the customer browser does not yet find,
-read, or export these staged records, and clean-account recovery is unproved.
-The snapshot and schedule therefore remain `needs attention` when this source
+items, or incomplete streams abort before reference publication. The draft
+browser can search, read, and export a separately restored paginated source;
+one-thread copy-back and whole-history installation into Codex are refused for
+v3 snapshots containing it. Synthetic end-to-end recovery passes, but
+clean-account recovery and real installed-runtime scale are unproved. The
+snapshot and schedule therefore remain `needs attention` when this source
 exists; no complete-history claim is authorized by v3 ciphertext alone.
 
 ## Security boundary

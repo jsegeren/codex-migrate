@@ -8,6 +8,7 @@ identity files. Search is streaming and creates no derived copy or index.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -408,6 +409,39 @@ def search(
         matched_threads += 1
     if titles_only:
         return matches
+    # Backup v3 keeps database-derived items separate from rollouts. Search
+    # their authenticated, restored files without claiming the two sources
+    # are interchangeable or creating a plaintext persistent index.
+    for metadata in (item for item in (catalog or [])
+                     if item.get("collection") == "paginated"):
+        transcript = metadata["path"]
+        aliases = metadata.get("titles") or []
+        title = aliases[-1] if aliases else None
+        title_match = next((alias for alias in reversed(aliases)
+                            if needle in alias.casefold()), None)
+        found = (VaultMatch(collection="paginated", transcript=transcript,
+                            line=0, timestamp=None, title=title,
+                            snippet="Title: " + title_match)
+                 if title_match else None)
+        if found is None:
+            for index, group in _paginated_entries(source_home, transcript):
+                for entry in group:
+                    position = entry.text.casefold().find(needle)
+                    if position >= 0:
+                        found = VaultMatch(
+                            collection="paginated", transcript=transcript,
+                            line=index + 1, timestamp=entry.timestamp, title=title,
+                            snippet=_snippet(entry.text, position, len(query.strip())),
+                            cursor=index)
+                        break
+                if found is not None:
+                    break
+        if found is not None:
+            if matched_threads >= offset:
+                matches.append(found)
+                if len(matches) >= limit:
+                    return matches
+            matched_threads += 1
     rollouts = _rollout_map(discovered)
     from codex_migrate.vault_search_index import candidates
     indexed_candidates = candidates(source_home, query.strip(), discovered)
@@ -461,6 +495,32 @@ def _find_transcript(source_home: str, collection: str, transcript: str) -> Path
     raise ValueError("conversation was not found")
 
 
+def _paginated_entries(source_home: str, transcript: str):
+    """Read message-like text from a separately restored database projection."""
+    from codex_migrate.vault_paginated import restored_items
+
+    if not isinstance(transcript, str) or not transcript.endswith(".jsonl"):
+        raise ValueError("invalid paginated conversation identifier")
+    thread_id = transcript[:-6]
+    for index, item in enumerate(restored_items(source_home, thread_id)):
+        record = json.loads(item.item_json)
+        try:
+            timestamp = datetime.fromtimestamp(
+                item.created_at_ms / 1000, timezone.utc).isoformat()
+        except (OverflowError, OSError, ValueError):
+            timestamp = None
+        role = {"userMessage": "User", "agentMessage": "Assistant"}.get(
+            item.item_type, item.item_type)
+        seen = set()
+        entries = []
+        for body in _strings(record):
+            if body in seen:
+                continue
+            seen.add(body)
+            entries.append(ThreadEntry(timestamp=timestamp, role=role, text=body))
+        yield index, entries
+
+
 def read_thread(
     source_home: str,
     collection: str,
@@ -468,6 +528,16 @@ def read_thread(
     max_text_bytes: int = 25 * 1024 * 1024,
 ) -> VaultThread:
     """Return message-like text from one exact discovered transcript."""
+    if collection == "paginated":
+        entries: List[ThreadEntry] = []
+        total = 0
+        for _, group in _paginated_entries(source_home, transcript):
+            for entry in group:
+                total += len(entry.text.encode("utf-8"))
+                if total > max_text_bytes:
+                    raise MigrationError("This paginated conversation is too large for browser export.")
+                entries.append(entry)
+        return VaultThread(collection, transcript, entries)
     path = _find_transcript(source_home, collection, transcript)
     entries: List[ThreadEntry] = []
     total = 0
@@ -501,6 +571,48 @@ def read_thread_page(
         raise ValueError("invalid conversation page budget")
     if not isinstance(expected_query, str) or len(expected_query) > 500:
         raise ValueError("invalid conversation search match")
+    if collection == "paginated":
+        entries: List[ThreadEntry] = []
+        total = 0
+        next_cursor = None
+        matched_cursor = False
+        seen_count = 0
+        for index, group in _paginated_entries(source_home, transcript):
+            seen_count = index + 1
+            if index < cursor:
+                continue
+            if index == cursor:
+                matched_cursor = True
+                if expected_query and not any(expected_query.casefold() in entry.text.casefold()
+                                              for entry in group):
+                    raise MigrationError("This conversation changed since the search. Search again.")
+            group_bytes = sum(len(entry.text.encode("utf-8")) for entry in group)
+            if len(entries) + len(group) > max_entries or total + group_bytes > max_text_bytes:
+                if not entries:
+                    if not group:
+                        raise MigrationError("This paginated record is too large to preview safely.")
+                    matching = (next(entry for entry in group
+                                     if expected_query.casefold() in entry.text.casefold())
+                                if expected_query else next((entry for entry in group
+                                                             if entry.text), group[0]))
+                    position = (matching.text.casefold().find(expected_query.casefold())
+                                if expected_query else 0)
+                    excerpt = _snippet(matching.text, position, len(expected_query), width=1000)
+                    excerpt = excerpt.encode("utf-8")[:max_text_bytes].decode(
+                        "utf-8", errors="ignore")
+                    entries.append(ThreadEntry(
+                        timestamp=matching.timestamp, role=matching.role,
+                        text=excerpt,
+                        excerpted=True))
+                    next_cursor = index + 1
+                else:
+                    next_cursor = index
+                break
+            entries.extend(group)
+            total += group_bytes
+        if (cursor > seen_count or (expected_query and not matched_cursor)):
+            raise MigrationError("The saved paginated conversation changed while opening it.")
+        return VaultThread(collection, transcript, entries), next_cursor
     path = _find_transcript(source_home, collection, transcript)
     entries: List[ThreadEntry] = []
     total = 0
@@ -589,6 +701,17 @@ def markdown_chunks(source_home: str, collection: str, transcript: str):
     Intended for an already verified, private Vault browse copy. The caller
     must keep that copy alive until the iterator is exhausted.
     """
+    if collection == "paginated":
+        header = "# Codex conversation (saved paginated source)\n\n- Collection: paginated\n- Thread: `%s`\n\n" % (
+            transcript.replace("`", "\\`"))
+        yield header.encode("utf-8")
+        for _, group in _paginated_entries(source_home, transcript):
+            for entry in group:
+                prefix = "## %s\n\n" % (entry.role or "Entry")
+                if entry.timestamp:
+                    prefix += "_%s_\n\n" % entry.timestamp
+                yield (prefix + entry.text + "\n\n").encode("utf-8")
+        return
     path = _find_transcript(source_home, collection, transcript)
     segments = _lineage_segments(source_home, path)
     header = "# Codex conversation\n\n- Collection: %s\n- Transcript: `%s`\n\n" % (
@@ -613,6 +736,15 @@ def markdown_chunks(source_home: str, collection: str, transcript: str):
 
 def markdown_source_stamp(source_home: str, collection: str, transcript: str):
     """Bind a prepared export to the exact transcript lineage it measured."""
+    if collection == "paginated":
+        from codex_migrate.vault_paginated import restored_path
+
+        if not isinstance(transcript, str) or not transcript.endswith(".jsonl"):
+            raise ValueError("invalid paginated conversation identifier")
+        path = restored_path(source_home, transcript[:-6])
+        info = check_info(path.lstat())
+        return ((str(path), info.st_dev, info.st_ino, info.st_size,
+                 info.st_mtime_ns, info.st_ctime_ns),)
     path = _find_transcript(source_home, collection, transcript)
     stamp = []
     for segment, length in _lineage_segments(source_home, path):

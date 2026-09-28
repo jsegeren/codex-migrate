@@ -14,6 +14,7 @@ from codex_migrate.errors import MigrationError
 from codex_migrate.setup import SetupDashboard, SETUP_HTML
 from codex_migrate.vault_backup import BackupPlan, BackupResult
 from codex_migrate.vault_install import InstallResult, ThreadInstallResult
+from codex_migrate.vault_paginated import PaginatedItem, encoded_item
 from codex_migrate.vault_recovery import RestoreResult, SnapshotInfo
 from codex_migrate.vault_schedule import SchedulePlan
 from codex_migrate.vault_dashboard import VAULT_HTML
@@ -165,6 +166,46 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertEqual([entry["text"] for entry in page["entries"]], ["Set up Clerk now"])
         self.assertEqual(self.request(path.replace("match=clerk", "match=missing"))[0], 400)
+
+    def test_opened_paginated_backup_search_read_export_never_offers_local_copyback(self):
+        thread_id = "44444444-4444-4444-8444-444444444444"
+        browse = self.home / "browse"
+        folder = browse / ".codex/paginated_history"
+        folder.mkdir(parents=True)
+        item = PaginatedItem(
+            thread_id, "turn-1", "item-1", 1, 100, "userMessage",
+            json.dumps({"id": "item-1", "type": "userMessage",
+                        "content": [{"type": "text", "text": "Saved Clerk setup"}]}))
+        (folder / (thread_id + ".jsonl")).write_bytes(encoded_item(item))
+        with self.helper._browse_data_lock:
+            self.helper._browse_home = browse
+            self.helper._browse_catalog = [{
+                "collection": "paginated", "path": thread_id + ".jsonl",
+                "thread_id": thread_id, "titles": ["Old setup title"],
+            }]
+        code, results = self.request("/api/vault/search?q=clerk&source=backup")
+        self.assertEqual(code, 200)
+        self.assertEqual(results["results"][0]["collection"], "paginated")
+        transcript = quote(thread_id + ".jsonl")
+        path = ("/api/vault/thread?collection=paginated&transcript=" + transcript
+                + "&source=backup&cursor=0&match=Clerk")
+        code, page = self.request(path)
+        self.assertEqual(code, 200)
+        self.assertEqual(page["entries"][0]["text"], "Saved Clerk setup")
+        self.assertEqual(self.request(path.replace("source=backup", "source=local"))[0], 400)
+        code, grant = self.request("/api/vault/export-ticket", {
+            "collection": "paginated", "transcript": thread_id + ".jsonl",
+            "source": "backup",
+        })
+        self.assertEqual(code, 200)
+        code, exported = self.request(grant["url"], authorized=False)
+        self.assertEqual(code, 200)
+        self.assertIn("Saved Clerk setup", exported)
+        self.assertIn("saved paginated source", exported)
+        self.assertEqual(self.request("/api/vault/export-ticket", {
+            "collection": "paginated", "transcript": thread_id + ".jsonl",
+            "source": "local",
+        })[0], 400)
 
     def test_export_ticket_refuses_thread_changed_before_download(self):
         transcript = self.home / ".codex/sessions/2026/09/changing.jsonl"

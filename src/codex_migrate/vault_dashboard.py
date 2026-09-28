@@ -306,9 +306,11 @@ async function openThread(item){
     if(fromMatch){query.set("cursor",String(item.cursor));query.set("match",item.match_query||"")}
     const thread=await api("/api/vault/thread?"+query);selected=item;
     const fromBackup=item.source==="backup";
-    $("restore-thread").hidden=!fromBackup;
-    $("thread-restore-note").hidden=!fromBackup;
-    $("thread-restore-status").textContent="";$("thread-restore-error").textContent="";
+    $("restore-thread").hidden=!fromBackup||item.collection==="paginated";
+    $("thread-restore-note").hidden=!fromBackup||item.collection==="paginated";
+    $("thread-restore-status").textContent=item.collection==="paginated"
+      ?"Saved paginated history can be read and exported here. Copying it into Codex is not supported.":"";
+    $("thread-restore-error").textContent="";
     threadExcerpted=thread.entries.some(entry=>entry.excerpted);
     $("thread-meta").textContent=`${fromBackup?"Opened backup":"This Mac"} · ${thread.collection} · ${fromMatch?"Starting at the search match · ":""}${thread.entries.length} readable entries${threadExcerpted?". A long message is excerpted here; Download Markdown for full text.":thread.next_cursor!==null&&thread.next_cursor!==undefined?" so far. Download Markdown includes the full conversation.":""}`;
     $("read-from-start").hidden=!fromMatch||item.cursor===0;
@@ -338,7 +340,7 @@ async function openThread(item){
   }catch(error){
     if(item.source==="backup"||item.source==="local"){
       selected=item;$("entries").replaceChildren();$("load-more").hidden=true;
-      $("print").hidden=true;$("share").hidden=true;$("read-from-start").hidden=true;$("restore-thread").hidden=item.source!=="backup";
+      $("print").hidden=true;$("share").hidden=true;$("read-from-start").hidden=true;$("restore-thread").hidden=item.source!=="backup"||item.collection==="paginated";
       $("thread-meta").textContent=item.source==="local"?
         "This conversation could not be read normally. Try a saved version, or inspect its physical file in the damaged-conversation panel above. Markdown export may fail too.":
         "This saved conversation could not be read normally. Try another verified backup version.";

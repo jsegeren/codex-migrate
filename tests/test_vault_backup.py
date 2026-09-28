@@ -13,8 +13,11 @@ from unittest.mock import patch
 
 from codex_migrate.errors import MigrationError
 from codex_migrate import vault_backup
+from codex_migrate.vault import markdown_chunks, read_thread_page, search
 from codex_migrate.vault_backup import backup, plan
 from codex_migrate.vault_identity import TranscriptChanged
+from codex_migrate.vault_install import plan_install
+from codex_migrate.vault_paginated import restored_items
 from codex_migrate.vault_recovery import (
     export_recovery_key, import_recovery_key, list_snapshots, restore_snapshot,
     snapshot_catalog, vault_storage_usage, verify_snapshot,
@@ -177,13 +180,37 @@ class VaultBackupTests(unittest.TestCase):
                 encrypted = b"".join(path.read_bytes() for path in
                                      destination.rglob("*") if path.is_file())
                 self.assertNotIn(b"SYNTHETIC-DATABASE-ONLY-TURN", encrypted)
-                restored = root / "restored"
+                (root / "browse").mkdir()
+                restored = root / "browse/.codex"
                 restore_snapshot(str(source), str(destination), str(restored),
                                  crypto_helper=str(self.helper))
                 rows = (restored / "paginated_history" /
                         (thread_id + ".jsonl")).read_text().splitlines()
                 self.assertEqual(len(rows), 1)
                 self.assertEqual(json.loads(json.loads(rows[0])["item_json"]), item)
+                self.assertEqual(json.loads(next(restored_items(
+                    str(root / "browse"), thread_id)).item_json), item)
+                found = search(str(root / "browse"), "SYNTHETIC-DATABASE-ONLY-TURN",
+                               catalog=catalog)
+                self.assertEqual([(match.collection, match.transcript, match.cursor)
+                                  for match in found], [("paginated", thread_id + ".jsonl", 0)])
+                titled_catalog = [{**catalog[0], "titles": ["An older synthetic title"]}]
+                by_title = search(str(root / "browse"), "older synthetic",
+                                  catalog=titled_catalog)
+                self.assertEqual([(match.collection, match.line) for match in by_title],
+                                 [("paginated", 0)])
+                page, next_cursor = read_thread_page(
+                    str(root / "browse"), "paginated", thread_id + ".jsonl",
+                    expected_query="SYNTHETIC-DATABASE-ONLY-TURN")
+                self.assertIsNone(next_cursor)
+                self.assertEqual([(entry.role, entry.text) for entry in page.entries],
+                                 [("User", "SYNTHETIC-DATABASE-ONLY-TURN")])
+                exported = b"".join(markdown_chunks(
+                    str(root / "browse"), "paginated", thread_id + ".jsonl"))
+                self.assertIn(b"SYNTHETIC-DATABASE-ONLY-TURN", exported)
+                self.assertIn(b"saved paginated source", exported)
+                with self.assertRaisesRegex(MigrationError, "whole-history install is refused"):
+                    plan_install(str(source), str(destination), crypto_helper=str(self.helper))
                 second = backup(str(source), str(destination), crypto_helper=str(self.helper),
                                 chunk_size=64 * 1024)
                 self.assertTrue(second.needs_attention)

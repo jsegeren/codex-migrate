@@ -885,14 +885,16 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                             expected_query=expected_query)
 
     def issue_vault_export_ticket(self, collection, transcript, source="backup"):
-        if collection not in ("active", "archived") or not isinstance(transcript, str) \
+        if (collection not in (("active", "archived", "paginated") if source == "backup"
+                              else ("active", "archived")) or not isinstance(transcript, str)) \
                 or not transcript or len(transcript) > 4096 or source not in ("backup", "local"):
             raise MigrationError("Choose an opened conversation to export")
         with self._browse_data_lock if source == "backup" else nullcontext():
             if source == "backup" and self._browse_home is None:
                 raise MigrationError("Open a verified Vault backup before exporting it")
             export_home = str(self._browse_home) if source == "backup" else str(self.source_home)
-            _find_transcript(export_home, collection, transcript)
+            if collection != "paginated":
+                _find_transcript(export_home, collection, transcript)
             source_stamp = markdown_source_stamp(export_home, collection, transcript)
             expected_bytes = sum(len(chunk) for chunk in markdown_chunks(
                 export_home, collection, transcript))
@@ -1402,6 +1404,7 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                             source = query.get("source", ["local"])[0]
                             if (len(collection) > 16 or len(transcript) > 4096
                                 or source not in ("local", "backup")
+                                or (collection == "paginated" and source != "backup")
                                 or ("cursor" in query and (parsed.path != "/api/vault/thread"
                                         or len(query["cursor"]) != 1
                                         or len(query["cursor"][0]) > 20))

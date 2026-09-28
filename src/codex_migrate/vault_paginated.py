@@ -110,6 +110,76 @@ def encoded_item(item: PaginatedItem) -> bytes:
     }, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
 
 
+def restored_path(source_home: str, thread_id: str) -> Path:
+    if not Path(source_home).is_absolute():
+        raise ValueError("restored source home must be absolute")
+    if canonical_id(thread_id) != thread_id:
+        raise ValueError("thread id must be a canonical UUID")
+    path = _canonical_macos_path(Path(source_home) / ".codex/paginated_history" /
+                                 (thread_id + ".jsonl"))
+    _require_unlinked_path(path)
+    require_local(path)
+    try:
+        info = path.lstat()
+    except OSError as error:
+        raise MigrationError("The recovered paginated thread could not be inspected safely.") from error
+    if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+            or info.st_nlink != 1):
+        raise MigrationError("The recovered paginated thread is not a private regular file.")
+    return path
+
+
+def restored_items(source_home: str, thread_id: str) -> Iterator[PaginatedItem]:
+    """Read a separately restored, authenticated v3 source without Codex writes."""
+    path = restored_path(source_home, thread_id)
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError as error:
+        raise MigrationError("The recovered paginated thread could not be opened safely.") from error
+    with os.fdopen(descriptor, "rb") as stream:
+        info = os.fstat(stream.fileno())
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                or info.st_nlink != 1):
+            raise MigrationError("The recovered paginated thread is not a private regular file.")
+        previous_ordinal = -1
+        while True:
+            line = stream.readline(MAX_RECORD_BYTES * 2 + 4096)
+            if not line:
+                break
+            if len(line) > MAX_RECORD_BYTES * 2 or not line.endswith(b"\n"):
+                raise MigrationError("The recovered paginated thread has an invalid record length.")
+            try:
+                record = json.loads(line)
+            except (UnicodeError, json.JSONDecodeError) as error:
+                raise MigrationError("The recovered paginated thread has unreadable JSON.") from error
+            if (not isinstance(record, dict) or set(record) != {
+                    "source", "thread_id", "turn_id", "item_id", "rollout_ordinal",
+                    "created_at_ms", "item_type", "item_json"}
+                    or record["source"] != "codex-paginated-thread-items-v1"
+                    or record["thread_id"] != thread_id
+                    or not isinstance(record["turn_id"], str) or not record["turn_id"]
+                    or not isinstance(record["item_id"], str) or not record["item_id"]
+                    or type(record["rollout_ordinal"]) is not int
+                    or record["rollout_ordinal"] <= previous_ordinal
+                    or type(record["created_at_ms"]) is not int
+                    or record["created_at_ms"] < 0
+                    or not isinstance(record["item_type"], str) or not record["item_type"]
+                    or not isinstance(record["item_json"], str)
+                    or len(record["item_json"].encode("utf-8")) > MAX_RECORD_BYTES):
+                raise MigrationError("The recovered paginated thread has invalid item metadata.")
+            try:
+                item = json.loads(record["item_json"])
+            except (UnicodeError, json.JSONDecodeError) as error:
+                raise MigrationError("The recovered paginated thread has unreadable item JSON.") from error
+            if (not isinstance(item, dict) or item.get("id") != record["item_id"]
+                    or item.get("type") != record["item_type"]):
+                raise MigrationError("The recovered paginated item identity needs review.")
+            previous_ordinal = record["rollout_ordinal"]
+            yield PaginatedItem(thread_id, record["turn_id"], record["item_id"],
+                                record["rollout_ordinal"], record["created_at_ms"],
+                                record["item_type"], record["item_json"])
+
+
 def _check_schema(connection: sqlite3.Connection) -> None:
     for table, required in (("thread_items", REQUIRED_ITEMS),
                             ("thread_history_projection_state", REQUIRED_PROJECTION)):

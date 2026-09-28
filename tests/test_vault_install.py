@@ -74,6 +74,7 @@ class VaultInstallTests(unittest.TestCase):
     def install(self, process_states=(False, False, False)):
         with patch("codex_migrate.vault_install.verify_snapshot",
                    return_value=self.verified()), \
+                patch("codex_migrate.vault_install.snapshot_catalog", return_value=[]), \
                 patch("codex_migrate.vault_install.restore_snapshot",
                       side_effect=self.restored), \
                 patch("codex_migrate.vault_install.codex_running",
@@ -85,6 +86,7 @@ class VaultInstallTests(unittest.TestCase):
                          process_states=(False, False, False)):
         with patch("codex_migrate.vault_install.verify_snapshot",
                    return_value=self.verified()), \
+                patch("codex_migrate.vault_install.snapshot_catalog", return_value=[]), \
                 patch("codex_migrate.vault_install.restore_snapshot",
                       side_effect=self.restored), \
                 patch("codex_migrate.vault_install.codex_running",
@@ -139,6 +141,7 @@ class VaultInstallTests(unittest.TestCase):
 
         with patch("codex_migrate.vault_install.verify_snapshot",
                    return_value=self.verified()), \
+                patch("codex_migrate.vault_install.snapshot_catalog", return_value=[]), \
                 patch("codex_migrate.vault_install.restore_snapshot",
                       side_effect=self.restored), \
                 patch("codex_migrate.vault_install.codex_running",
@@ -178,6 +181,7 @@ class VaultInstallTests(unittest.TestCase):
 
         with patch("codex_migrate.vault_install.verify_snapshot",
                    return_value=self.verified()), \
+                patch("codex_migrate.vault_install.snapshot_catalog", return_value=[]), \
                 patch("codex_migrate.vault_install.restore_snapshot",
                       side_effect=unsafe_restore), \
                 patch("codex_migrate.vault_install.codex_running",
