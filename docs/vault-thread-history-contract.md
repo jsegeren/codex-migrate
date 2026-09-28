@@ -290,6 +290,16 @@ installed-Codex proof re-imported on the same login. Neither proves recovery
 of a naturally damaged real history, installed buyer-app behavior on a clean
 account, or a live hosted R2 disaster restore. Keep those release holds open.
 
+A separate September 28 physical two-Mac attempt produced and verified a
+disposable encrypted v3 snapshot on the older Mac, then transferred only its
+synthetic ciphertext and test recovery key over SSH to the newer Mac. The
+second Mac's non-interactive SSH session could not import the key through its
+login Keychain, so the test stopped before read/export; it did not touch either
+Mac's real Codex history. This is an environment/Keychain-context limit of that
+attempt, not evidence that installed-app recovery succeeds or fails in a
+signed-in GUI account. The disposable bundles were removed. The clean-account
+installed-app recovery gate remains open.
+
 - For a future installed version, revalidate upstream storage semantics and
   the observed schema. A byte/ordinal cursor or item-count comparison alone
   cannot prove semantic equivalence between rollout and projection, including
