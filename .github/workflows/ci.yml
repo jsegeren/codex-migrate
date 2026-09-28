@@ -211,6 +211,8 @@ jobs:
             ${{ runner.temp }}/hosted-portability/staged-receipt.json
             ${{ runner.temp }}/hosted-portability/newer-receipt.json
             ${{ runner.temp }}/hosted-portability/recovery-key.txt
+            ${{ runner.temp }}/hosted-portability/live-receipt.json
+            ${{ runner.temp }}/hosted-portability/live-recovery-key.txt
           retention-days: 1
           if-no-files-found: error
 

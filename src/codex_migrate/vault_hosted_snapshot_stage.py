@@ -27,6 +27,7 @@ from codex_migrate.vault_local_lock import local_history_lock
 from codex_migrate.vault_remote_transfer import StageResult, StagedObject
 from codex_migrate.vault_remote_writer import (
     RemoteAwareClient, StagedRemoteFile, stage_remote_aware_file_windowed,
+    stage_remote_aware_records,
 )
 
 
@@ -58,7 +59,7 @@ def stage_hosted_snapshot(
     crypto_helper: str, chunk_size: int = DEFAULT_CHUNK_SIZE,
     window_bytes: int = 64 * 1024 * 1024, apply: bool = False,
 ) -> HostedSnapshotStage:
-    """Stage every transcript and its sealed v2 manifest under one reservation.
+    """Stage every supported history source under one sealed reservation.
 
     `previous_catalog` must come from the authenticated prior last-good
     manifest, or be empty only after the service proves this Vault has none.
@@ -78,11 +79,7 @@ def stage_hosted_snapshot(
     if journal.directory == codex_root or codex_root in journal.directory.parents:
         raise MigrationError("Hosted backup state cannot be inside Codex history.")
     with local_history_lock(source_home):
-        # This dark staging path emits transcript files only. Do not publish a
-        # partial hosted backup when Codex also keeps items in its database.
-        if _paginated_history_unprotected(source_home):
-            raise MigrationError(
-                "Hosted backup cannot yet protect Codex paginated history.")
+        has_paginated = _paginated_history_unprotected(source_home)
         files = _source_files(source_home)
         if len(files) > 100_000:
             raise MigrationError("The hosted snapshot has too many transcripts.")
@@ -126,15 +123,72 @@ def stage_hosted_snapshot(
                 raise MigrationError("A conversation changed after hosted staging.")
             require_local(path)
         mark_simultaneous_conflicts(manifest_files)
-        at_risk = set(loss_warnings(previous_catalog, manifest_files))
+        at_risk = set(loss_warnings(
+            (item for item in previous_catalog
+             if item.get("collection") in ("active", "archived")),
+            manifest_files))
         for item in manifest_files:
             if item["identity_state"] == "needs_review":
                 at_risk.add(item["collection"] + "/" + item["path"])
         for item in manifest_files:
             item["at_risk"] = (item.get("thread_id") in at_risk or
                                item["collection"] + "/" + item["path"] in at_risk)
+        if has_paginated:
+            from codex_migrate.vault_paginated import encoded_item, open_paginated_source
+            with open_paginated_source(source_home) as paginated:
+                thread_ids = paginated.thread_ids()
+                if len(manifest_files) + len(thread_ids) > 100_000:
+                    raise MigrationError("The hosted snapshot has too many history entries.")
+                for thread_id in thread_ids:
+                    counts = [0, 0, 0]
+
+                    def records():
+                        for item in paginated.items(thread_id):
+                            counts[0] += 1
+                            counts[1] += item.item_type == "userMessage"
+                            counts[2] += item.item_type == "agentMessage"
+                            yield encoded_item(item)
+
+                    staged = stage_remote_aware_records(
+                        records(), journal.key_id, client, journal.reservation_id,
+                        journal, crypto_helper=crypto_helper,
+                        chunk_size=chunk_size, window_bytes=window_bytes,
+                        apply=True)
+                    if not counts[0]:
+                        raise MigrationError("Codex paginated history changed during hosted backup.")
+                    relative = thread_id + ".jsonl"
+                    stages[("paginated", relative)] = staged
+                    manifest_files.append({
+                        "collection": "paginated", "path": relative,
+                        "size": staged.size, "mtime_ns": 0,
+                        "sha256": staged.sha256, "chunks": list(staged.chunks),
+                        "thread_id": thread_id, "identity_state": "verified",
+                        "titles": list(titles.get(thread_id, [])),
+                        "records": counts[0], "user_messages": counts[1],
+                        "assistant_messages": counts[2], "at_risk": False,
+                    })
+                    total_bytes += staged.size
+        paginated_risk = set(loss_warnings(
+            (item for item in previous_catalog
+             if item.get("collection") == "paginated"),
+            (item for item in manifest_files
+             if item["collection"] == "paginated")))
+        for item in manifest_files:
+            if item["collection"] == "paginated":
+                item["at_risk"] = item["thread_id"] in paginated_risk
+        at_risk.update(paginated_risk)
+        # A long database read must not hide a concurrent transcript change.
+        current = _source_files(source_home)
+        if {(folder, relative) for folder, _, relative in current} != set(source_facts):
+            raise MigrationError("Codex conversations changed during hosted backup.")
+        for folder, path, relative in current:
+            if _identity(check_info(path.lstat())) != source_facts[(folder, relative)]:
+                raise MigrationError("A conversation changed after hosted staging.")
+            require_local(path)
         manifest = {
-            "format": "codex-vault-snapshot", "version": 2,
+            "format": "codex-vault-snapshot",
+            "version": 3 if any(item["collection"] == "paginated"
+                                for item in manifest_files) else 2,
             "snapshot_id": journal.snapshot_id, "created_at": created_at,
             "files": manifest_files,
         }

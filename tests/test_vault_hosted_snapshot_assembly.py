@@ -131,6 +131,28 @@ class HostedSnapshotAssemblyTests(unittest.TestCase):
         with self.assertRaisesRegex(MigrationError, "conflicting plaintext metadata"):
             self.assemble(manifest=manifest, stages=stages)
 
+    def test_paginated_history_requires_v3_and_exact_verified_thread_identity(self):
+        stage = StagedRemoteFile("5" * 64, 10, (chunk(A),), (object_for(A),))
+        entry = file_record(THREAD + ".jsonl", stage)
+        entry.update(collection="paginated", mtime_ns=0)
+        manifest = {**self.manifest, "version": 3, "files": [entry]}
+        stages = {("paginated", THREAD + ".jsonl"): stage}
+        self.assertEqual(self.assemble(manifest=manifest, stages=stages),
+                         (self.metadata, object_for(A),
+                          self.sealed_manifest, self.reference))
+        for change in (
+            lambda m: m.update(version=2),
+            lambda m: m["files"][0].update(path="renamed.jsonl"),
+            lambda m: m["files"][0].update(identity_state="unverified"),
+            lambda m: m["files"][0].update(mtime_ns=1),
+            lambda m: m["files"][0].update(records=0),
+        ):
+            invalid = deepcopy(manifest)
+            change(invalid)
+            with self.subTest(invalid=invalid), self.assertRaisesRegex(
+                    MigrationError, "invalid paginated history"):
+                self.assemble(manifest=invalid, stages=stages)
+
 
 if __name__ == "__main__":
     unittest.main()

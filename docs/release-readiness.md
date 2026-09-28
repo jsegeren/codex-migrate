@@ -41,15 +41,22 @@ paginated-history or next-build hold.
 
 ## September 28 hosted/Vault integration checkpoint — not released
 
-The hosted draft now includes the paginated-history Vault integration at merge
-`2bc4b4a`. Its existing hosted-only stage still emits transcript files and a
-version-2 manifest. If the source has Codex's paginated-history database, it
-refuses staging before uploading anything; it cannot claim a complete hosted
-backup while omitting those items. The combined source passed 1,083 Python
-tests (27 expected skips), 495 JavaScript tests (one expected skip), and the
-native crypto-helper typecheck locally. These are source checks, not a signed
-customer build or real-R2 disaster-recovery receipt. Hosted database-history
-staging and its independent recovery proof remain release gates.
+The hosted draft includes the paginated-history Vault integration at merge
+`2bc4b4a`. That merge first made the transcript-only stage refuse a source with
+Codex's paginated-history database, rather than falsely claiming complete
+protection. The subsequent draft now streams the database's validated items in
+bounded memory windows directly to the native encryption helper. It stages a
+version-3 manifest when those items exist and requires exact remote ciphertext
+receipts before discarding scratch chunks. A synthetic database-only snapshot
+was staged, retried without new uploads, downloaded, verified, and restored
+without a plaintext history file on disk. This remains dark source work: real
+R2 publication, independent clean-account/key-import recovery, installed-app
+wiring, and realistic-scale tests are still release gates.
+
+The combined source before the streaming addition passed 1,083 Python tests
+(27 expected skips), 495 JavaScript tests (one expected skip), and the native
+crypto-helper typecheck locally. Those checks are not a signed customer build
+or real-R2 disaster-recovery receipt.
 
 ## September 27 integrated-source local package — not released
 

@@ -17,13 +17,13 @@ from pathlib import Path
 import re
 import stat
 import tempfile
-from typing import Mapping, Optional, Protocol, Tuple
+from typing import Iterable, Mapping, Optional, Protocol, Tuple
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_backup import _canonical_macos_path, _helper_path, _run_helper
 from codex_migrate.vault_hosted_chunk_journal import HostedChunkJournal
 from codex_migrate.vault_remote_inventory import (
-    MAX_ENCRYPTED_CHUNK_BYTES, _regular_file,
+    MAX_CHUNKS, MAX_ENCRYPTED_CHUNK_BYTES, _regular_file,
 )
 from codex_migrate.vault_remote_transfer import StagedObject, stage_encrypted_object
 
@@ -449,4 +449,94 @@ def stage_remote_aware_file_windowed(
                 _identity(source.lstat()) != _identity(before)):
             raise MigrationError("The conversation changed during hosted staging.")
     return StagedRemoteFile(plan["sha256"], plan["size"], tuple(rows),
+                            tuple(objects[key] for key in sorted(objects)))
+
+
+def stage_remote_aware_records(
+    records: Iterable[bytes], key_id: str, client: RemoteAwareClient,
+    reservation_id: str, journal: HostedChunkJournal, *,
+    crypto_helper: str, chunk_size: int = 4 * 1024 * 1024,
+    window_bytes: int = 64 * 1024 * 1024, apply: bool = False,
+) -> StagedRemoteFile:
+    """Encrypt a generated history stream in bounded windows, with no plaintext file.
+
+    The caller pins the source read transaction. Each ciphertext window is
+    verified remotely and journaled before its temporary local chunks are
+    discarded; the complete manifest is still required for publication.
+    """
+    if apply is not True:
+        raise MigrationError("Hosted backup changes require explicit confirmation.")
+    if (not isinstance(journal, HostedChunkJournal) or
+            journal.reservation_id != reservation_id or journal.key_id != key_id):
+        raise MigrationError("The hosted chunk journal does not match this reservation.")
+    journal.ensure_open()
+    if (type(chunk_size) is not int or not 64 * 1024 <= chunk_size <= 64 * 1024 * 1024 or
+            type(window_bytes) is not int or not chunk_size <= window_bytes <= 256 * 1024 * 1024 or
+            window_bytes % chunk_size):
+        raise MigrationError("The hosted staging window is invalid.")
+    helper = _helper_path(crypto_helper)
+    scratch = _private_scratch(journal)
+    pending = bytearray()
+    whole_digest = hashlib.sha256()
+    total = 0
+    rows: list[dict] = []
+    objects: dict[str, StagedObject] = {}
+
+    def stage_window() -> None:
+        window = bytes(pending)
+        plan = _run_helper(helper, ["plan-chunks", "--key-id", key_id,
+                                    "--chunk-size", str(chunk_size)],
+                           input_data=window)
+        candidates = _candidate_ids(plan, len(window), chunk_size)
+        reusable = _reusable_chunks(candidates, client, journal, reservation_id)
+        with tempfile.TemporaryDirectory(prefix="known-", dir=journal.directory) as tmp:
+            known_path = Path(tmp) / "known.json"
+            known_descriptor = os.open(known_path,
+                                       os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(known_descriptor, "w", encoding="utf-8") as known_file:
+                json.dump({"version": 1, "ids": sorted(reusable)}, known_file)
+            stored = _run_helper(helper, [
+                "store-chunks-with-known", "--key-id", key_id,
+                "--object-dir", str(scratch), "--chunk-size", str(chunk_size),
+                "--known-ids-file", str(known_path),
+                "--expected-sha256", plan["sha256"],
+                "--expected-size", str(plan["size"]),
+            ], input_data=window)
+        prepared = _validated_prepared(stored, plan, reusable)
+        staged = stage_prepared_file(prepared, scratch, client,
+                                     reservation_id, journal=journal, apply=True)
+        for item in staged:
+            existing = objects.get(item.key)
+            if existing is not None and existing != item:
+                raise MigrationError("A hosted chunk has conflicting staged versions.")
+            objects[item.key] = item
+        _discard_journaled_scratch(scratch, prepared.local_ids, journal)
+        old_scratch = tuple(
+            identifier for identifier, facts in prepared.remote_objects.items()
+            if journal.fact(identifier) == facts)
+        _discard_journaled_scratch(scratch, old_scratch, journal,
+                                   allow_missing=True)
+        rows.extend(prepared.chunks)
+        if len(rows) > MAX_CHUNKS:
+            raise MigrationError("The hosted stream has too many chunks.")
+        pending.clear()
+
+    for record in records:
+        if not isinstance(record, bytes) or not record:
+            raise MigrationError("The hosted history stream has an invalid record.")
+        remaining = memoryview(record)
+        while remaining:
+            count = min(window_bytes - len(pending), len(remaining))
+            fragment = remaining[:count]
+            pending.extend(fragment)
+            whole_digest.update(fragment)
+            total += count
+            remaining = remaining[count:]
+            if len(pending) == window_bytes:
+                stage_window()
+    if pending:
+        stage_window()
+    if total == 0:
+        raise MigrationError("The hosted history stream is empty.")
+    return StagedRemoteFile(whole_digest.hexdigest(), total, tuple(rows),
                             tuple(objects[key] for key in sorted(objects)))

@@ -369,16 +369,6 @@ class VaultBackupTests(unittest.TestCase):
                         window_bytes=64 * 1024, apply=True)
                     self.assertEqual(second, first)
                     self.assertEqual(client.store.writes, 5)
-                    (source / ".codex/thread_history_1.sqlite").write_bytes(
-                        b"synthetic paginated history")
-                    with self.assertRaisesRegex(MigrationError,
-                                                "cannot yet protect Codex paginated history"):
-                        stage_hosted_snapshot(
-                            str(source), metadata, [], journal, client,
-                            crypto_helper=str(self.helper), chunk_size=64 * 1024,
-                            window_bytes=64 * 1024, apply=True)
-                    self.assertEqual(client.store.writes, 5)
-                    (source / ".codex/thread_history_1.sqlite").unlink()
                     original_stage = vault_hosted_snapshot_stage.stage_remote_aware_file_windowed
                     staged_count = 0
 
@@ -438,6 +428,129 @@ class VaultBackupTests(unittest.TestCase):
                 if key_id is not None:
                     subprocess.run([str(self.helper), "delete-key", "--key-id", key_id],
                                    check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    def test_hosted_snapshot_encrypts_paginated_items_without_plaintext_staging(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            codex = source / ".codex"
+            codex.mkdir(parents=True)
+            database = codex / "thread_history_1.sqlite"
+            thread_id = "44444444-4444-4444-8444-444444444444"
+            item = {"id": "item-1", "type": "userMessage",
+                    "text": "SYNTHETIC-HOSTED-DATABASE-TURN-" + "X" * 130000}
+            later_item = {"id": "item-2", "type": "userMessage",
+                          "text": "SYNTHETIC-HOSTED-SECOND-TURN"}
+            with sqlite3.connect(database) as connection:
+                connection.execute("CREATE TABLE thread_items (thread_id TEXT, turn_id TEXT, "
+                                   "item_id TEXT, rollout_ordinal INTEGER, created_at_ms INTEGER, "
+                                   "item_json TEXT, item_type TEXT, updated_at_ordinal INTEGER)")
+                connection.execute("CREATE TABLE thread_history_projection_state ("
+                                   "thread_id TEXT, next_rollout_byte_offset INTEGER, "
+                                   "next_rollout_ordinal INTEGER)")
+                connection.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                   (thread_id, "turn-1", "item-1", 1, 100,
+                                    json.dumps(item), "userMessage", 1))
+                connection.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                   (thread_id, "turn-2", "item-2", 2, 200,
+                                    json.dumps(later_item), "userMessage", 2))
+            original = database.read_bytes()
+            key_result = json.loads(subprocess.run(
+                [str(self.helper), "create-key"], check=True,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout)
+            key_id = key_result["key_id"]
+            snapshot_id = str(uuid.uuid4())
+            metadata = {"format": "codex-vault", "version": 1,
+                        "key_id": key_id,
+                        "created_at": "2026-09-28T00:00:00+00:00"}
+            directory = root / "journal"
+            directory.mkdir(mode=0o700)
+            identity = {
+                "account_id": str(uuid.uuid4()), "vault_id": str(uuid.uuid4()),
+                "reservation_id": str(uuid.uuid4()), "snapshot_id": snapshot_id,
+                "key_id": key_id,
+            }
+
+            class Client:
+                def __init__(self):
+                    self.store = MetadataObjectStore()
+
+                def published_chunks(self, ids):
+                    result = {}
+                    for identifier in ids:
+                        key = ("objects/" + identifier[:2] + "/" +
+                               identifier[2:] + ".cvchunk")
+                        stored = self.store.objects.get(key)
+                        if stored is not None:
+                            result[identifier] = (len(stored), hashlib.sha256(stored).hexdigest())
+                    return result
+
+                def object_store(self, reservation_id, expected, *, apply=False):
+                    if reservation_id != identity["reservation_id"] or apply is not True:
+                        raise AssertionError("wrong hosted reservation")
+                    return self.store
+
+            client = Client()
+            try:
+                with HostedChunkJournal(directory, **identity) as journal:
+                    staged = stage_hosted_snapshot(
+                        str(source), metadata, [], journal, client,
+                        crypto_helper=str(self.helper), chunk_size=64 * 1024,
+                        window_bytes=64 * 1024, apply=True)
+                    self.assertEqual(staged.transcript_files, 1)
+                    self.assertEqual(database.read_bytes(), original)
+                    self.assertFalse(list((directory / "scratch").rglob("*.cvchunk")))
+                    ciphertext = b"".join(client.store.objects.values())
+                    self.assertNotIn(b"SYNTHETIC-HOSTED-DATABASE-TURN", ciphertext)
+                    journal_bytes = b"".join(path.read_bytes() for path in
+                                             directory.rglob("*") if path.is_file())
+                    self.assertNotIn(b"SYNTHETIC-HOSTED-DATABASE-TURN", journal_bytes)
+                    self.assertGreater(staged.transcript_bytes, 130000)
+                    writes = client.store.writes
+                    retried = stage_hosted_snapshot(
+                        str(source), metadata, [], journal, client,
+                        crypto_helper=str(self.helper), chunk_size=64 * 1024,
+                        window_bytes=64 * 1024, apply=True)
+                    self.assertEqual(retried, staged)
+                    self.assertEqual(client.store.writes, writes)
+                remote = MemoryObjectStore()
+                remote.objects = dict(client.store.objects)
+                empty_home = root / "empty-home"
+                empty_home.mkdir(mode=0o700)
+                recovered = root / "recovered-vault"
+                vault_remote_recovery.download_encrypted_snapshot(
+                    str(empty_home), str(recovered), remote,
+                    staged.upload_claim().receipt(), max_bytes=5_000_000,
+                    crypto_helper=str(self.helper))
+                (root / "browse").mkdir()
+                restored = root / "browse/.codex"
+                restore_snapshot(str(empty_home), str(recovered), str(restored),
+                                 crypto_helper=str(self.helper))
+                lines = (restored / "paginated_history" /
+                         (thread_id + ".jsonl")).read_text().splitlines()
+                self.assertEqual(len(lines), 2)
+                self.assertEqual(json.loads(json.loads(lines[0])["item_json"]), item)
+                self.assertEqual(json.loads(json.loads(lines[1])["item_json"]), later_item)
+                catalog = snapshot_catalog(str(recovered), crypto_helper=str(self.helper))
+                found = search(str(root / "browse"), "SYNTHETIC-HOSTED-DATABASE-TURN",
+                               catalog=catalog)
+                self.assertEqual([(match.collection, match.transcript) for match in found],
+                                 [("paginated", thread_id + ".jsonl")])
+                with sqlite3.connect(database) as connection:
+                    connection.execute("DELETE FROM thread_items WHERE item_id='item-2'")
+                identity = {**identity, "reservation_id": str(uuid.uuid4()),
+                            "snapshot_id": str(uuid.uuid4())}
+                next_directory = root / "next-journal"
+                next_directory.mkdir(mode=0o700)
+                with HostedChunkJournal(next_directory, **identity) as journal:
+                    smaller = stage_hosted_snapshot(
+                        str(source), metadata, catalog, journal, client,
+                        crypto_helper=str(self.helper), chunk_size=64 * 1024,
+                        window_bytes=64 * 1024, apply=True)
+                    self.assertEqual(smaller.at_risk_threads, 1)
+            finally:
+                subprocess.run([str(self.helper), "delete-key", "--key-id", key_id],
+                               check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     def test_hosted_live_runner_stages_publishes_and_restores_synthetic_history(self):
         with tempfile.TemporaryDirectory() as temporary:
