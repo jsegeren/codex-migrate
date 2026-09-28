@@ -7,6 +7,21 @@ distribution decision; the dated entries below preserve their original status.
 
 ## September 28 paginated-history coverage hold
 
+Exact committed source `8db1976` was built as a clean, ad-hoc-signed local-test
+build 20. Its ZIP SHA-256 is
+`5fa80d7f480e7b7b17b62e2e51b8c6e63bd84371d803e7d536f8b945ac15ce14`.
+The packaged engine captured a synthetic database-only message, then a second
+database-only message through its `scheduled-run` path using an owner-only,
+disposable schedule configuration. Both the original one-item snapshot and the
+new two-item snapshot verified and restored separately; the Codex-owned source
+database remained byte-for-byte unchanged by each capture. Four of five
+packaged Vault tests passed, with one optional legacy-package test skipped.
+This manually invoked scheduled runner did **not** install or wake a LaunchAgent,
+use a clean macOS account, exercise a production-signed buyer app, or prove
+full installed-Codex coverage. The scheduled receipt correctly remained
+`needs_attention` while paginated protection is not release-certified. The
+public release hold remains in force.
+
 An exact-source local-test build-20 package from `7408317` passed strict local
 code-signature verification and four packaged-engine checks (one optional
 legacy-package check skipped). A new packaged regression created a disposable
