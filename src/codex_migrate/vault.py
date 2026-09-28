@@ -597,3 +597,19 @@ def markdown_chunks(source_home: str, collection: str, transcript: str):
             if timestamp:
                 prefix += "_%s_\n\n" % timestamp
             yield (prefix + body + "\n\n").encode("utf-8")
+
+
+def markdown_source_stamp(source_home: str, collection: str, transcript: str):
+    """Bind a prepared export to the exact transcript lineage it measured."""
+    path = _find_transcript(source_home, collection, transcript)
+    stamp = []
+    for segment, length in _lineage_segments(source_home, path):
+        try:
+            info = check_info(segment.lstat())
+        except OSError as error:
+            raise MigrationError("A conversation changed before export.") from error
+        if not stat.S_ISREG(info.st_mode) or info.st_size < length:
+            raise MigrationError("A conversation changed before export.")
+        stamp.append((str(segment), length, info.st_dev, info.st_ino,
+                      info.st_size, info.st_mtime_ns, info.st_ctime_ns))
+    return tuple(stamp)

@@ -27,7 +27,7 @@ from codex_migrate.support import with_support, SUPPORT_HTML
 from codex_migrate.pairing import Pairing
 from codex_migrate.vault import inspect as inspect_vault
 from codex_migrate.vault import markdown as vault_markdown
-from codex_migrate.vault import _find_transcript, markdown_chunks, read_thread, read_thread_page, search as search_vault
+from codex_migrate.vault import _find_transcript, markdown_chunks, markdown_source_stamp, read_thread, read_thread_page, search as search_vault
 from codex_migrate.vault_salvage import (
     find_transcripts as find_salvage_transcripts,
     incomplete_markdown as salvage_markdown,
@@ -889,8 +889,11 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                 raise MigrationError("Open a verified Vault backup before exporting it")
             export_home = str(self._browse_home) if source == "backup" else str(self.source_home)
             _find_transcript(export_home, collection, transcript)
+            source_stamp = markdown_source_stamp(export_home, collection, transcript)
             expected_bytes = sum(len(chunk) for chunk in markdown_chunks(
                 export_home, collection, transcript))
+            if markdown_source_stamp(export_home, collection, transcript) != source_stamp:
+                raise MigrationError("The conversation changed while preparing export.")
         ticket = secrets.token_urlsafe(32)
         with self._export_ticket_lock:
             now = time.monotonic()
@@ -899,7 +902,8 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
             if len(self._export_tickets) >= 16:
                 raise MigrationError("Too many pending exports. Retry in one minute.")
             self._export_tickets[ticket] = (now + 60, source, export_home,
-                                            collection, transcript, expected_bytes)
+                                            collection, transcript, expected_bytes,
+                                            source_stamp)
         return ticket
 
     def consume_vault_export_ticket(self, ticket):
@@ -1234,7 +1238,7 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                         return
                     stream_started = False
                     try:
-                        source, export_home, collection, transcript, expected_bytes = setup.consume_vault_export_ticket(
+                        source, export_home, collection, transcript, expected_bytes, source_stamp = setup.consume_vault_export_ticket(
                             query["ticket"][0])
                         with setup._browse_data_lock if source == "backup" else nullcontext():
                             if source == "backup" and (setup._browse_home is None or
@@ -1242,6 +1246,8 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                                 raise MigrationError("The opened backup changed before export")
                             if source == "local" and export_home != str(setup.source_home):
                                 raise MigrationError("The local source changed before export")
+                            if markdown_source_stamp(export_home, collection, transcript) != source_stamp:
+                                raise MigrationError("The conversation changed before export")
                             chunks = markdown_chunks(export_home, collection, transcript)
                             first = next(chunks)
                             self.send_response(200)

@@ -166,6 +166,41 @@ class SetupTests(unittest.TestCase):
         self.assertEqual([entry["text"] for entry in page["entries"]], ["Set up Clerk now"])
         self.assertEqual(self.request(path.replace("match=clerk", "match=missing"))[0], 400)
 
+    def test_export_ticket_refuses_thread_changed_before_download(self):
+        transcript = self.home / ".codex/sessions/2026/09/changing.jsonl"
+        transcript.parent.mkdir(parents=True)
+        transcript.write_text(json.dumps({"payload": {"text": "original"}}) + "\n")
+        code, grant = self.request("/api/vault/export-ticket", {
+            "collection": "active", "transcript": "2026/09/changing.jsonl",
+            "source": "local",
+        })
+        self.assertEqual(code, 200)
+        with transcript.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps({"payload": {"text": "new work"}}) + "\n")
+        code, body = self.request(grant["url"], authorized=False)
+        self.assertEqual(code, 409)
+        self.assertNotIn("original", body)
+        self.assertNotIn("new work", body)
+        self.assertEqual(self.request(grant["url"], authorized=False)[0], 409)
+
+    def test_export_ticket_refuses_thread_changed_while_counting(self):
+        transcript = self.home / ".codex/sessions/changing.jsonl"
+        transcript.parent.mkdir(parents=True)
+        transcript.write_text(json.dumps({"payload": {"text": "original"}}) + "\n")
+
+        def changed_during_count(*args):
+            yield b"first pass"
+            with transcript.open("a", encoding="utf-8") as stream:
+                stream.write(json.dumps({"payload": {"text": "new work"}}) + "\n")
+
+        with patch("codex_migrate.setup.markdown_chunks", side_effect=changed_during_count):
+            code, body = self.request("/api/vault/export-ticket", {
+                "collection": "active", "transcript": "changing.jsonl", "source": "local",
+            })
+        self.assertEqual(code, 400)
+        self.assertNotIn("original", body)
+        self.assertNotIn("new work", body)
+
     @unittest.skipUnless(search_index_supported(), "requires SQLite FTS5 contentless-delete")
     def test_fast_search_requires_confirmation_and_can_be_deleted_without_source_changes(self):
         transcript = self.home / ".codex/sessions/thread.jsonl"
