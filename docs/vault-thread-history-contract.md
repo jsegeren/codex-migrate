@@ -226,11 +226,16 @@ Vault found the inherited message under the child through the installed
 database schema. After Codex exited, the test replaced that marker only in
 the disposable JSONL rollouts with equal-length bytes, preserving the actual
 Codex-generated lineage offsets; the database retained the message and Vault
-still found and opened it under the child. This proves the draft reader against
-the installed fork format and a controlled database-only case. It does **not**
-prove Codex naturally performs that rewrite, a real customer-history recovery,
-or clean-account recovery. Missing or ambiguous lineage still requires review,
-and the paginated-history release hold remains open.
+still found and opened it under the child. The same isolated source was then
+encrypted into a temporary Vault, its test Keychain key deleted, its recovery
+key re-imported, and its snapshot restored into a separate folder. Saved Vault
+search and read found that database-only message under the child. The test
+deletes its temporary key on exit. This proves the draft reader and recovery
+path against the installed fork format and a controlled database-only case on
+one macOS login. It does **not** prove Codex naturally performs that rewrite,
+a real customer-history recovery, or recovery in a clean user account or
+second Mac. Missing or ambiguous lineage still requires review, and the
+paginated-history release hold remains open.
 
 - Establish whether the JSONL rollout or the projected database owns each
   durable turn when their lengths disagree, including a post-rewrite case.

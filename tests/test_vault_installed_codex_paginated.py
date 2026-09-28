@@ -8,6 +8,7 @@ import http.server
 import json
 import os
 from pathlib import Path
+import platform
 import queue
 import shutil
 import sqlite3
@@ -19,6 +20,10 @@ import unittest
 import uuid
 
 from codex_migrate.vault import read_thread_page, search
+from codex_migrate.vault_backup import backup
+from codex_migrate.vault_recovery import (
+    import_recovery_key, restore_snapshot, snapshot_catalog,
+)
 
 
 class _SyntheticModel(http.server.BaseHTTPRequestHandler):
@@ -137,10 +142,11 @@ class _AppServer:
         self.process.stdout.close()
 
 
+@unittest.skipUnless(platform.system() == "Darwin", "installed Mac proof requires macOS")
 @unittest.skipUnless(os.environ.get("CODEX_MIGRATE_TEST_INSTALLED_CODEX") == "1",
                      "explicit installed Codex opt-in required")
 class InstalledCodexPaginatedTests(unittest.TestCase):
-    def test_database_only_inherited_content_is_visible_in_live_vault_search(self):
+    def test_database_only_inherited_content_survives_backup_and_restore(self):
         binary = os.environ.get("CODEX_MIGRATE_TEST_CODEX_BINARY") or shutil.which("codex")
         if not binary:
             self.skipTest("Codex CLI is not installed")
@@ -220,3 +226,46 @@ class InstalledCodexPaginatedTests(unittest.TestCase):
                                        live_paginated=True)
             self.assertTrue(any("inherited-vault-marker-qzmx" in entry.text
                                 for entry in page.entries))
+
+            original_database = database.read_bytes()
+            helper = os.environ.get("CODEX_MIGRATE_TEST_VAULT_HELPER")
+            if not helper:
+                helper = str(home / "CodexVaultCrypto")
+                subprocess.run([
+                    "xcrun", "swiftc", "-parse-as-library", "-O", "-D",
+                    "CODEX_VAULT_TEST_LEGACY_KEYCHAIN", "-target",
+                    platform.machine() + "-apple-macos13.0",
+                    "desktop/CodexVaultCrypto.swift", "-o", helper,
+                ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            vault = home / "vault"
+            try:
+                saved = backup(str(source), str(vault), crypto_helper=helper)
+                self.assertIsNotNone(saved.recovery_key)
+                self.assertEqual(database.read_bytes(), original_database)
+                self.assertFalse(any(marker in path.read_bytes()
+                                     for path in vault.rglob("*") if path.is_file()))
+                key_id = json.loads((vault / "vault.json").read_text())["key_id"]
+                subprocess.run([helper, "delete-key", "--key-id", key_id],
+                               check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                import_recovery_key(str(vault), saved.recovery_key, crypto_helper=helper)
+                restored_home = home / "restored"
+                restored_home.mkdir()
+                restore_snapshot(str(source), str(vault), str(restored_home / ".codex"),
+                                 crypto_helper=helper)
+                catalog = snapshot_catalog(str(vault), crypto_helper=helper)
+                recovered = search(str(restored_home), marker.decode(), catalog=catalog)
+                recovered_child = [match for match in recovered if
+                                   match.collection == "paginated" and
+                                   match.transcript == child_id + ".jsonl"]
+                self.assertEqual(len(recovered_child), 1)
+                recovered_page, _ = read_thread_page(
+                    str(restored_home), "paginated", child_id + ".jsonl",
+                    cursor=recovered_child[0].cursor, expected_query=marker.decode())
+                self.assertTrue(any(marker.decode() in entry.text
+                                    for entry in recovered_page.entries))
+            finally:
+                if (vault / "vault.json").exists():
+                    key_id = json.loads((vault / "vault.json").read_text())["key_id"]
+                    subprocess.run([helper, "delete-key", "--key-id", key_id],
+                                   check=True, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE)
