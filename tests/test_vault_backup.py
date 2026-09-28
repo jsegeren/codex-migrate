@@ -678,9 +678,13 @@ class VaultBackupTests(unittest.TestCase):
                 # is not a real-R2 or clean-account recovery receipt.
                 scale_digest = None
                 if os.environ.get("CODEX_MIGRATE_HOSTED_SCALE_PROBE") == "1":
+                    scale_files = int(os.environ.get(
+                        "CODEX_MIGRATE_HOSTED_SCALE_FILES", "2048"))
+                    if not 1 <= scale_files <= 25_000:
+                        raise ValueError("Hosted scale file count must be 1–25,000")
                     bulk = source / ".codex/sessions/2026/09/17/scale"
                     bulk.mkdir(mode=0o700)
-                    for index in range(2048):
+                    for index in range(scale_files):
                         (bulk / f"thread-{index:04d}.jsonl").write_bytes(
                             json.dumps({"thread": index, "text": f"synthetic-{index:04d}"})
                             .encode("utf-8") + b"\n")
@@ -699,8 +703,9 @@ class VaultBackupTests(unittest.TestCase):
                         metadata, crypto_helper=str(self.helper),
                         max_prior_bytes=5_000_000, apply=True)
                     self.assertEqual(third["snapshotId"], upload.staged.snapshot_id)
-                    self.assertEqual(upload.staged.transcript_files, 2052)
-                    self.assertGreaterEqual(upload.store.writes - before_writes, 2051)
+                    self.assertEqual(upload.staged.transcript_files, scale_files + 4)
+                    self.assertGreaterEqual(upload.store.writes - before_writes,
+                                            scale_files + 3)
                     self.assertIsNone(runner.pending())
                     self.assertFalse((root / "vault").exists())
 
@@ -713,18 +718,19 @@ class VaultBackupTests(unittest.TestCase):
                                check=True, stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE)
                 key_id = None
+                recovery_limit = 256_000_000 if scale_digest is not None else 5_000_000
                 with self.assertRaises(MigrationError):
                     vault_remote_recovery.download_encrypted_snapshot(
                         str(empty_home), str(recovered), remote,
                         upload.staged.upload_claim().receipt(),
-                        max_bytes=5_000_000, crypto_helper=str(self.helper))
+                        max_bytes=recovery_limit, crypto_helper=str(self.helper))
                 key_id = import_recovery_key(
                     str(recovered), key_result["recovery_key"],
                     crypto_helper=str(self.helper))
                 vault_remote_recovery.download_encrypted_snapshot(
                     str(empty_home), str(recovered), remote,
                     upload.staged.upload_claim().receipt(),
-                    max_bytes=5_000_000, crypto_helper=str(self.helper))
+                    max_bytes=recovery_limit, crypto_helper=str(self.helper))
                 restored = root / "restored"
                 restore_snapshot(str(empty_home), str(recovered), str(restored),
                                  crypto_helper=str(self.helper))
@@ -739,7 +745,7 @@ class VaultBackupTests(unittest.TestCase):
                                  paginated_item)
                 if scale_digest is not None:
                     self.assertEqual(len(list((restored / "sessions/2026/09/17/scale")
-                                              .glob("thread-*.jsonl"))), 2048)
+                                              .glob("thread-*.jsonl"))), scale_files)
                     self.assertEqual(hashlib.sha256(
                         (restored / "sessions/2026/09/17/scale/long-thread.jsonl")
                         .read_bytes()).hexdigest(), scale_digest.hexdigest())
