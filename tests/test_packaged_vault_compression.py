@@ -7,11 +7,14 @@ is captured only in memory and never printed or written to a receipt.
 import hashlib
 import json
 import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import signal
 import sqlite3
 import subprocess
+import sys
 import tempfile
+import time
 import unittest
 
 
@@ -93,8 +96,37 @@ class PackagedVaultCompressionTests(unittest.TestCase):
                     "--destination", str(vault), "--apply", "--json",
                 ], timeout=120))
                 self.assertTrue(saved["applied"])
+                first_snapshot = saved["snapshot_id"]
                 key_id = json.loads((vault / "vault.json").read_text())["key_id"]
                 self.assertEqual(database.read_bytes(), original_database)
+                run_packaged([str(engine), "vault", "verify", "--vault", str(vault),
+                              "--json"], timeout=120)
+                second_marker = "scheduled-database-only-marker-nyvk"
+                with sqlite3.connect(database) as connection:
+                    connection.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                       (thread_id, "turn-2", "item-2", 2, 200,
+                                        json.dumps({"id": "item-2", "type": "userMessage",
+                                                    "content": [{"type": "text", "text": second_marker}]}),
+                                        "userMessage", 2))
+                updated_database = database.read_bytes()
+                config_path = source / "Library/Application Support/Codex Vault/schedule.json"
+                config_path.parent.mkdir(parents=True)
+                configuration = {
+                    "format": "codex-vault-schedule", "version": 2,
+                    "source_home": str(source), "vault": str(vault),
+                    "vault_key_id": key_id, "crypto_helper": str(helper),
+                    "interval_seconds": 24 * 3600,
+                    "installed_at": (datetime.now(timezone.utc) - timedelta(days=2)).isoformat(),
+                }
+                descriptor = os.open(config_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                    json.dump(configuration, handle)
+                run_packaged([str(engine), "vault", "--source-home", str(source),
+                              "scheduled-run", "--config", str(config_path)], timeout=120)
+                receipt = json.loads((config_path.parent / "last-run.json").read_text())
+                self.assertEqual(receipt["status"], "needs_attention")
+                self.assertNotEqual(receipt["snapshot_id"], first_snapshot)
+                self.assertEqual(database.read_bytes(), updated_database)
                 run_packaged([str(engine), "vault", "verify", "--vault", str(vault),
                               "--json"], timeout=120)
                 run_packaged([str(engine), "vault", "--source-home", str(source),
@@ -104,16 +136,132 @@ class PackagedVaultCompressionTests(unittest.TestCase):
                 self.assertTrue(restored_items.is_file())
                 records = [json.loads(line) for line in
                            restored_items.read_text(encoding="utf-8").splitlines()]
-                self.assertEqual(len(records), 1)
+                self.assertEqual(len(records), 2)
                 self.assertEqual(records[0]["source"], "codex-paginated-thread-items-v1")
                 self.assertEqual(records[0]["thread_id"], thread_id)
                 self.assertEqual(json.loads(records[0]["item_json"])["content"][0]["text"],
                                  marker)
+                self.assertEqual(json.loads(records[1]["item_json"])["content"][0]["text"],
+                                 second_marker)
+                first_restored = root / "first-restored"
+                run_packaged([str(engine), "vault", "--source-home", str(source),
+                              "restore", "--vault", str(vault), "--snapshot", first_snapshot,
+                              "--output", str(first_restored), "--apply", "--json"], timeout=120)
+                first_items = (first_restored / "paginated_history" / (thread_id + ".jsonl"))
+                self.assertEqual(len(first_items.read_text(encoding="utf-8").splitlines()), 1)
             finally:
                 if key_id is None and (vault / "vault.json").is_file():
                     key_id = json.loads((vault / "vault.json").read_text())["key_id"]
                 if key_id is not None:
                     run_packaged([str(helper), "delete-key", "--key-id", key_id])
+
+    @unittest.skipUnless(sys.platform == "darwin" and
+                         os.environ.get("CODEX_MIGRATE_LAUNCHAGENT_PAGINATED_TEST") == "yes",
+                         "opt in to a disposable real macOS LaunchAgent test")
+    def test_real_launch_agent_captures_appended_paginated_history(self):
+        app = Path(os.environ["CODEX_MIGRATE_PACKAGED_APP"])
+        engine = app / "Contents/Resources/engine/codex-migrate-engine"
+        helper = app / "Contents/Helpers/CodexVaultCrypto.app/Contents/MacOS/CodexVaultCrypto"
+        self.assertTrue(engine.is_file() and helper.is_file())
+        label = "com.segeren.codex-vault.backup"
+        service = "gui/%d/%s" % (os.getuid(), label)
+        if subprocess.run(["/bin/launchctl", "print", service],
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+            self.skipTest("the account already has a Vault backup agent")
+        if (Path.home() / "Library/LaunchAgents" / (label + ".plist")).exists():
+            self.skipTest("the account already has a Vault backup configuration")
+        thread_id = "77777777-7777-4777-8777-777777777777"
+        with tempfile.TemporaryDirectory(prefix="vault-package-launchagent-paginated-") as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            codex = source / ".codex"
+            rollout = codex / "sessions" / ("rollout-" + thread_id + ".jsonl")
+            rollout.parent.mkdir(parents=True)
+            rollout.write_text(json.dumps({"type": "session_meta", "payload": {
+                "id": thread_id,
+            }}) + "\n", encoding="utf-8")
+            database = codex / "thread_history_1.sqlite"
+            with sqlite3.connect(database) as connection:
+                connection.execute("CREATE TABLE thread_items ("
+                                   "thread_id TEXT, turn_id TEXT, item_id TEXT, "
+                                   "rollout_ordinal INTEGER, created_at_ms INTEGER, "
+                                   "item_json TEXT, item_type TEXT, updated_at_ordinal INTEGER)")
+                connection.execute("CREATE TABLE thread_history_projection_state ("
+                                   "thread_id TEXT, next_rollout_byte_offset INTEGER, "
+                                   "next_rollout_ordinal INTEGER)")
+                connection.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                   (thread_id, "turn-1", "item-1", 1, 100,
+                                    json.dumps({"id": "item-1", "type": "userMessage",
+                                                "content": [{"type": "text", "text": "before-wake"}]}),
+                                    "userMessage", 1))
+            vault = root / "vault"
+            key_id = None
+            installed = False
+            try:
+                first = json.loads(run_packaged([
+                    str(engine), "vault", "--source-home", str(source), "backup",
+                    "--destination", str(vault), "--apply", "--json",
+                ], timeout=120))
+                key_id = json.loads((vault / "vault.json").read_text())["key_id"]
+                run_packaged([
+                    str(engine), "vault", "--source-home", str(source), "schedule",
+                    "--vault", str(vault), "--crypto-helper", str(helper), "--apply", "--json",
+                ], timeout=60)
+                installed = True
+                config_path = source / "Library/Application Support/Codex Vault/schedule.json"
+                config = json.loads(config_path.read_text(encoding="utf-8"))
+                config["installed_at"] = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+                config_path.write_text(json.dumps(config), encoding="utf-8")
+                with sqlite3.connect(database) as connection:
+                    connection.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                       (thread_id, "turn-2", "item-2", 2, 200,
+                                        json.dumps({"id": "item-2", "type": "userMessage",
+                                                    "content": [{"type": "text", "text": "after-wake"}]}),
+                                        "userMessage", 2))
+                source_bytes = database.read_bytes()
+                started = subprocess.run(["/bin/launchctl", "kickstart", "-k", service],
+                                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                         timeout=60)
+                self.assertEqual(started.returncode, 0, "disposable LaunchAgent did not start")
+                receipt_path = config_path.parent / "last-run.json"
+                deadline = time.monotonic() + 30
+                while time.monotonic() < deadline:
+                    if receipt_path.exists():
+                        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+                        if receipt.get("status") in ("completed", "needs_attention", "failed"):
+                            break
+                    time.sleep(0.05)
+                else:
+                    self.fail("disposable LaunchAgent produced no final backup receipt")
+                self.assertEqual(receipt["status"], "needs_attention")
+                self.assertTrue(receipt["paginated_history_unprotected"])
+                self.assertNotEqual(receipt["snapshot_id"], first["snapshot_id"])
+                self.assertEqual(database.read_bytes(), source_bytes)
+                for snapshot, expected in ((first["snapshot_id"], 1),
+                                           (receipt["snapshot_id"], 2)):
+                    output = root / ("recovered-" + str(expected))
+                    run_packaged([str(engine), "vault", "--source-home", str(source),
+                                  "restore", "--vault", str(vault), "--snapshot", snapshot,
+                                  "--output", str(output), "--apply", "--json"], timeout=120)
+                    items = output / "paginated_history" / (thread_id + ".jsonl")
+                    records = [json.loads(line) for line in
+                               items.read_text(encoding="utf-8").splitlines()]
+                    self.assertEqual(len(records), expected)
+                    self.assertEqual(json.loads(records[-1]["item_json"])["content"][0]["text"],
+                                     "before-wake" if expected == 1 else "after-wake")
+            finally:
+                try:
+                    if installed:
+                        run_packaged([str(engine), "vault", "--source-home", str(source),
+                                      "schedule-remove", "--apply", "--json"], timeout=30)
+                        self.assertNotEqual(subprocess.run(
+                            ["/bin/launchctl", "print", service], stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL).returncode, 0)
+                finally:
+                    if key_id is None and (vault / "vault.json").is_file():
+                        key_id = json.loads((vault / "vault.json").read_text())["key_id"]
+                    if key_id is not None:
+                        run_packaged([str(helper), "delete-key", "--key-id", key_id])
 
     def test_bundled_engine_search_index_preserves_live_search(self):
         app = Path(os.environ["CODEX_MIGRATE_PACKAGED_APP"])

@@ -7,6 +7,38 @@ distribution decision; the dated entries below preserve their original status.
 
 ## September 28 paginated-history coverage hold
 
+Exact committed source `ffb096b` produced an ad-hoc-signed local-test build 20
+with ZIP SHA-256
+`5cf44ff9a58455544ffe1a32240fa29c081a718ce464983231fc2c592c1577d1`.
+An opt-in test used only a disposable synthetic Codex home: it made a first
+encrypted snapshot with one database-only item, installed a temporary macOS
+LaunchAgent, added a second item, made the schedule due, and invoked the real
+service with `launchctl kickstart`. The agent published a second snapshot with
+a `needs_attention` receipt. Both versions independently restored with their
+expected one and two items, and the source database stayed byte-for-byte
+unchanged by the scheduled capture. The test unloaded the LaunchAgent and
+deleted its test Keychain key; a follow-up check found neither the service nor
+the account-level plist. This proves the packaged engine can run that capture
+under this logged-in account after a forced wake. It does **not** prove a
+natural 24-hour wake, clean-account key import, production signing, a paid
+update, two-Mac recovery, or complete installed-Codex coverage. No personal
+Codex history or backup schedule was used. The public release hold remains.
+
+Exact committed source `8db1976` was built as a clean, ad-hoc-signed local-test
+build 20. Its ZIP SHA-256 is
+`5fa80d7f480e7b7b17b62e2e51b8c6e63bd84371d803e7d536f8b945ac15ce14`.
+The packaged engine captured a synthetic database-only message, then a second
+database-only message through its `scheduled-run` path using an owner-only,
+disposable schedule configuration. Both the original one-item snapshot and the
+new two-item snapshot verified and restored separately; the Codex-owned source
+database remained byte-for-byte unchanged by each capture. Four of five
+packaged Vault tests passed, with one optional legacy-package test skipped.
+This manually invoked scheduled runner did **not** install or wake a LaunchAgent,
+use a clean macOS account, exercise a production-signed buyer app, or prove
+full installed-Codex coverage. The scheduled receipt correctly remained
+`needs_attention` while paginated protection is not release-certified. The
+public release hold remains in force.
+
 An exact-source local-test build-20 package from `7408317` passed strict local
 code-signature verification and four packaged-engine checks (one optional
 legacy-package check skipped). A new packaged regression created a disposable
