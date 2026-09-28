@@ -43,6 +43,60 @@ def run_packaged(command, timeout=30):
 @unittest.skipUnless(os.environ.get("CODEX_MIGRATE_PACKAGED_APP"),
                      "requires an explicit packaged app path")
 class PackagedVaultCompressionTests(unittest.TestCase):
+    def test_bundled_engine_search_index_preserves_live_search(self):
+        app = Path(os.environ["CODEX_MIGRATE_PACKAGED_APP"])
+        engine = app / "Contents/Resources/engine/codex-migrate-engine"
+        self.assertTrue(engine.is_file())
+        with tempfile.TemporaryDirectory(prefix="vault-package-index-test-") as temporary:
+            source = Path(temporary) / "source"
+            transcript = source / ".codex/sessions/fixture.jsonl"
+            transcript.parent.mkdir(parents=True)
+            transcript.write_text(json.dumps({"payload": {"message": {
+                "content": "Unification Foundation"
+            }}}) + "\n", encoding="utf-8")
+
+            def search_for(phrase):
+                output = run_packaged([
+                    str(engine), "vault", "--source-home", str(source),
+                    "search", phrase, "--json",
+                ])
+                return json.loads(output)
+
+            self.assertEqual(len(search_for("Unification Foundation")), 1)
+            built = json.loads(run_packaged([
+                str(engine), "vault", "--source-home", str(source),
+                "search-index", "--apply", "--json",
+            ]))
+            self.assertTrue(built["applied"])
+            self.assertEqual(built["indexed"], 1)
+            index = source / "Library/Caches/Codex Migrate/search-index-v1.sqlite"
+            self.assertTrue(index.is_file())
+            self.assertEqual(index.stat().st_mode & 0o077, 0)
+            self.assertEqual(len(search_for("Unification Foundation")), 1)
+
+            with transcript.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps({"payload": {"message": {
+                    "content": "Clerk follow-up"
+                }}}) + "\n")
+            self.assertEqual(len(search_for("Clerk follow-up")), 1)
+            archived = source / ".codex/archived_sessions/fixture.jsonl"
+            archived.parent.mkdir(parents=True)
+            transcript.replace(archived)
+            self.assertEqual(search_for("Clerk follow-up")[0]["collection"], "archived")
+            refreshed = json.loads(run_packaged([
+                str(engine), "vault", "--source-home", str(source),
+                "search-index", "--apply", "--json",
+            ]))
+            self.assertTrue(refreshed["applied"])
+            self.assertEqual(search_for("Clerk follow-up")[0]["collection"], "archived")
+            removed = json.loads(run_packaged([
+                str(engine), "vault", "--source-home", str(source),
+                "search-index-remove", "--apply", "--json",
+            ]))
+            self.assertTrue(removed["applied"])
+            self.assertFalse(index.exists())
+            self.assertEqual(len(search_for("Clerk follow-up")), 1)
+
     def test_bundled_engine_search_ignores_missing_thread_store_table(self):
         app = Path(os.environ["CODEX_MIGRATE_PACKAGED_APP"])
         engine = app / "Contents/Resources/engine/codex-migrate-engine"

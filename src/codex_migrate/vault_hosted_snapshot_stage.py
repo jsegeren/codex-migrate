@@ -14,8 +14,8 @@ from typing import Dict, List, Sequence, Tuple
 from codex_migrate.errors import MigrationError
 from codex_migrate.source_availability import check_info, require_local
 from codex_migrate.vault_backup import (
-    DEFAULT_CHUNK_SIZE, SNAPSHOT_FORMAT_VERSION, _canonical_macos_path,
-    _metadata, _source_files,
+    DEFAULT_CHUNK_SIZE, _canonical_macos_path, _metadata,
+    _paginated_history_unprotected, _source_files,
 )
 from codex_migrate.vault_hosted_chunk_journal import HostedChunkJournal
 from codex_migrate.vault_hosted_snapshot_tail import stage_hosted_snapshot_tail
@@ -78,6 +78,11 @@ def stage_hosted_snapshot(
     if journal.directory == codex_root or codex_root in journal.directory.parents:
         raise MigrationError("Hosted backup state cannot be inside Codex history.")
     with local_history_lock(source_home):
+        # This dark staging path emits transcript files only. Do not publish a
+        # partial hosted backup when Codex also keeps items in its database.
+        if _paginated_history_unprotected(source_home):
+            raise MigrationError(
+                "Hosted backup cannot yet protect Codex paginated history.")
         files = _source_files(source_home)
         if len(files) > 100_000:
             raise MigrationError("The hosted snapshot has too many transcripts.")
@@ -129,7 +134,7 @@ def stage_hosted_snapshot(
             item["at_risk"] = (item.get("thread_id") in at_risk or
                                item["collection"] + "/" + item["path"] in at_risk)
         manifest = {
-            "format": "codex-vault-snapshot", "version": SNAPSHOT_FORMAT_VERSION,
+            "format": "codex-vault-snapshot", "version": 2,
             "snapshot_id": journal.snapshot_id, "created_at": created_at,
             "files": manifest_files,
         }

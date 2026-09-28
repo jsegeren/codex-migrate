@@ -61,9 +61,10 @@ first verified snapshot or to turns written since the latest verified capture.
   cloud-sync folder does not prove that its provider completed off-device
   upload; report sync state as unverified until independently verified.
 - New captures preserve older immutable versions, including when a rollout
-  shrinks or is rewritten. Detect conspicuous loss of records or assistant
-  turns and surface the last intact version. Risk is carried forward in the
-  encrypted manifest on later captures; a cryptographically valid capture of
+  shrinks or is rewritten. Flag any drop in counted user or assistant turns,
+  or a large byte-size shrink, for review; this is a conservative warning,
+  not proof that Codex lost content. Surface the last intact version. Risk is
+  carried forward in the encrypted manifest on later captures; a cryptographically valid capture of
   a truncated rollout must not turn an at-risk thread green.
 
 ## Pre-compaction proof gate
@@ -169,6 +170,64 @@ No PreCompact protection is installed or advertised in the customer build.
 The release guarantee remains the last successfully verified scheduled
 snapshot, with at-risk detection on a later shrink. The upstream durable
 record must not be destructively rewritten as a substitute for compaction.
+
+## Paginated-history coverage gate (September 28)
+
+The installed Codex runtime now records paginated threads in
+`state_5.sqlite` and projects thread items into `thread_history_1.sqlite`.
+The [official app-server documentation](https://learn.chatgpt.com/docs/app-server)
+describes paginated records as a distinct history mode. A read-only inspection
+on an affected Mac found rollout files
+still present, but also projection byte offsets beyond the current length of
+more than one rollout. The corresponding database retains substantially more
+user and agent message items than the current rollout contains. A private,
+in-memory comparison found no exact text matches in those affected examples;
+representation differences mean this is not by itself a complete semantic
+diff. It is strong evidence of a JSONL-only coverage gap, not proof that every
+projected item is an otherwise lost user-visible turn. No conversation text,
+hashes, paths, or IDs were copied into this report.
+
+Vault v1/v2 currently encrypts the active and archived JSONL trees, not the
+paginated thread-history database. A verified JSONL snapshot therefore cannot
+by itself prove that all current Codex history is recoverable. Do not advertise
+complete paginated-history protection or call the next release certified until
+the following are proved on synthetic data and the current installed runtime:
+
+The draft interim guard treats the presence of `thread_history_1.sqlite` as
+unverified source coverage, even if a rollout file appears complete. It marks
+the new snapshot and scheduled health as needing attention without opening or
+modifying Codex's database. This conservative warning is not a substitute for
+capturing database-only durable content and proving off-device recovery.
+
+The current [official app-server contract](https://learn.chatgpt.com/docs/app-server)
+can list and summarize existing paginated threads, but its full-history read
+and item-pagination operations fail closed for them. It is not a supported
+complete export path today. Metadata-only inspection of the installed schema
+found durable `thread_items.item_json` rows and a separate projection cursor;
+no private item content was copied into this document. The capture adapter must
+pin a consistent read view, version-check the schema, encrypt the needed item
+records without creating a plaintext full-history staging copy, and fail closed
+on an unknown schema. It must keep database-derived records distinguishable
+from the JSONL rollout so divergent copies cannot be silently merged.
+
+- Establish whether the JSONL rollout or the projected database owns each
+  durable turn when their lengths disagree, including a post-rewrite case.
+- Capture any database-only recoverable content with a consistent, encrypted
+  snapshot or supported export, without reading or copying credentials or
+  modifying Codex's live database. Preserve provenance; do not silently merge
+  a database projection with a divergent rollout.
+- Detect a partial capture and show `needs attention`, not a green scheduled
+  protection state. A successful ciphertext checksum is not source coverage.
+- On a clean account or second Mac, import the separately held recovery key,
+  find, read, and export a known database-only turn from the captured version.
+  Do not promise in-Codex resume or write the database back as part of this
+  read/export guarantee.
+- Measure the extra encrypted bytes and changed bytes across two scheduled
+  runs before setting a hosted capacity tier or default retention policy.
+
+The current public beta remains a transcript-tree backup with the disclosed
+testing boundary. Its claim and Help copy need an independent product-truth
+review against this finding before the next public release.
 
 ## Acceptance and boundaries
 

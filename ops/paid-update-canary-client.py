@@ -1,4 +1,4 @@
-"""Prepare a disposable build-16 client for the private paid build-19 canary.
+"""Prepare a disposable build-16 client for the private paid build-20 canary.
 
 This never edits the shipped archive, live appcast, or release catalog. It
 contains no purchase credential. Use only with the bounded Production canary
@@ -21,14 +21,15 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 OLD_SOURCE = "c6d2bdf81e7093a044886dd35e1b97ed8ce40ea3"
-CURRENT_SOURCE = "ac0bfa37a3498a7cf0f6d820e7ea9c07dbabeb31"
+CURRENT_SOURCE = "d65cb7f0c46b56eb43e83a6dd36940808482aa3b"
+CURRENT_BUILD = "20"
 OLD_SHA256 = "60eff4dcb07088d01c966587e808f21d5fa74b8afb4eba45ed326543f07241f7"
 OLD_PUBLIC_KEY = "xm7MLPjJBQcWcm2t8rXSoOoPk5ENifmVZPI52GwUoHs="
-CANARY_ID = "codex-migrate-build19-vault-integrated-arm64"
-CANARY_SHA256 = "5f5c30f960cbca0a75a72d882c4a391ce4a5ad35cdd5ec15c4abe87562f36e85"
-CANARY_SIGNATURE = "HBpeR7n7SOf2M+bzJTOIqJWIcynQb2COYbFPhvoVfKDAk4OUBta+uBr4glSIpQsUjxUXQ1KM+tcTds3XcovXBQ=="
+CANARY_ID = "codex-migrate-build20-vault-integrated-arm64"
+CANARY_SHA256 = "3f98ae4edbb479e1429e5c309c78eeda3448e4c4b6a01613a49041d1faf78a1a"
+CANARY_SIGNATURE = "OMAFR0uulGy2nMZq0fli6hzZmZkCO3ThZnfnZN60Gj5lwMSU406bbyMydgpMr4/kAtJTiSlaGzE09F9hkMfrDQ=="
 ARCHIVE = ROOT / "build/live-build16/Codex-Migrate-0.1.0-build16-arm64.zip"
-CANDIDATE_DMG = ROOT / "build/desktop-rotation-qcej_6v5/Codex-Migrate-0.1.0-build19-arm64.dmg"
+CANDIDATE_DMG = ROOT / "build/desktop-rotation-j8h4jpmm/Codex-Migrate-0.1.0-build20-arm64.dmg"
 HEADER_HOOK = 'request.setValue("Bearer \\(token)", forHTTPHeaderField: "Authorization")'
 TOKEN_LOOKUP = '    static func savedToken() -> String? {\n'
 HELPER_START = '        _ = updaterController\n        startHelper()\n'
@@ -58,11 +59,11 @@ def canary():
         raise ValueError("candidate source changed")
     if selected.get("sha256") != CANARY_SHA256:
         raise ValueError("candidate artifact changed")
-    if (selected.get("size") != 11226440 or
+    if (selected.get("size") != 11227700 or
             selected.get("sparkleSignature") != CANARY_SIGNATURE or
-            selected.get("pathname") != f"sandbox/{CANARY_SHA256}/Codex-Migrate-0.1.0-build19-arm64.dmg" or
+            selected.get("pathname") != f"sandbox/{CANARY_SHA256}/Codex-Migrate-0.1.0-build20-arm64.dmg" or
             selected.get("diskImageNotarization") != {
-                "status": "Accepted", "id": "8225c4d2-233b-40bd-960e-08f7dea6330a"}):
+                "status": "Accepted", "id": "347833ad-2cf5-46ec-8797-6d2db55c25a3"}):
         raise ValueError("candidate signature or size changed")
     return selected
 
@@ -72,8 +73,8 @@ def appcast_xml(selected, archive_url="https://migrate.segeren.com/api/update-ar
     return (f'<?xml version="1.0" encoding="UTF-8"?>\n'
             '<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">'
             '<channel><title>Codex Migrate private canary</title>'
-            '<item><title>Codex Migrate 0.1.0 (build 19)</title>'
-            '<sparkle:version>19</sparkle:version>'
+            f'<item><title>Codex Migrate 0.1.0 (build {CURRENT_BUILD})</title>'
+            f'<sparkle:version>{CURRENT_BUILD}</sparkle:version>'
             '<sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>'
             '<sparkle:minimumSystemVersion>13.0.0</sparkle:minimumSystemVersion>'
             '<sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>'
@@ -166,9 +167,9 @@ def prepare(output, port, identity, local_archive=False, current_app=None,
         with (current_app / "Contents/Info.plist").open("rb") as stream:
             current_info = plistlib.load(stream)
         if (receipt.get("source_revision") != CURRENT_SOURCE or
-                receipt.get("bundle_version") != "19" or
-                current_info.get("CFBundleVersion") != "19"):
-            raise ValueError("current-source base app does not match exact build 19")
+                receipt.get("bundle_version") != CURRENT_BUILD or
+                current_info.get("CFBundleVersion") != CURRENT_BUILD):
+            raise ValueError("current-source base app does not match exact build 20")
         run("codesign", "--verify", "--deep", "--strict", current_app)
     output.mkdir(mode=0o700)
     app = output / "Codex Migrate.app"
@@ -182,13 +183,13 @@ def prepare(output, port, identity, local_archive=False, current_app=None,
     info_path = app / "Contents/Info.plist"
     with info_path.open("rb") as stream:
         info = plistlib.load(stream)
-    if (info.get("CFBundleVersion") != ("19" if current_app else "16") or
+    if (info.get("CFBundleVersion") != (CURRENT_BUILD if current_app else "16") or
             (current_app is None and info.get("SUPublicEDKey") != OLD_PUBLIC_KEY) or
             info.get("SUFeedURL") != "https://migrate.segeren.com/api/appcast"):
         raise ValueError("base app identity/feed does not match the selected build")
     if current_app is not None:
         # A disposable current-code client must appear older to exercise
-        # build 19's own automatic-idle path against the exact signed DMG.
+        # build 20's own automatic-idle path against the exact signed DMG.
         # It is never notarized or delivered to buyers.
         info["CFBundleVersion"] = "16"
         info["SUPublicEDKey"] = OLD_PUBLIC_KEY
@@ -305,7 +306,7 @@ def main():
     parser.add_argument("--local-archive", action="store_true",
                         help="serve exact local DMG without any Production canary or paid credential")
     parser.add_argument("--current-app", type=Path,
-                        help="with --local-archive, use exact signed build-19 app code in a disposable build-16 wrapper")
+                        help="with --local-archive, use exact signed build-20 app code in a disposable build-16 wrapper")
     parser.add_argument("--test-source-home", type=Path,
                         help="pre-update helper only; the installed app relaunches into the macOS account home")
     parser.add_argument("--fault", choices=("none", "archive-404", "corrupt-archive", "bad-signature"),

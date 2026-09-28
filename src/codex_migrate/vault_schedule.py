@@ -28,6 +28,7 @@ from codex_migrate.vault_backup import (
     _fsync_directory,
     _helper_path,
     _metadata,
+    _paginated_history_unprotected,
     _read_json,
     _require_unlinked_path,
     backup,
@@ -39,6 +40,7 @@ LABEL = "com.segeren.codex-vault.backup"
 CONFIG_FORMAT = "codex-vault-schedule"
 CONFIG_VERSION = 2
 ALLOWED_INTERVAL_HOURS = (6, 12, 24, 168)
+RETRY_INTERVAL_SECONDS = 6 * 60 * 60
 UPDATE_GUARD_VERSION = 2
 UPDATE_GUARD_DURATION = timedelta(hours=2)
 
@@ -336,18 +338,27 @@ def _last_run(path: Path) -> Dict[str, object]:
         valid = set(value) == {"status", "started_at"} \
             and isinstance(value.get("started_at"), str)
     elif status == "completed":
-        valid = set(value) == {
+        valid = set(value) in ({
             "status", "completed_at", "snapshot_id",
             "transcript_files", "transcript_bytes",
-        } and isinstance(value.get("completed_at"), str) \
+        }, {
+            "status", "completed_at", "snapshot_id",
+            "transcript_files", "transcript_bytes", "title_index_unavailable",
+        }) and isinstance(value.get("title_index_unavailable", False), bool) \
+            and isinstance(value.get("completed_at"), str) \
             and isinstance(value.get("snapshot_id"), str) \
             and all(isinstance(value.get(key), int) and value[key] >= 0
                     for key in ("transcript_files", "transcript_bytes"))
     elif status == "needs_attention":
-        valid = set(value) == {
+        required = {
             "status", "completed_at", "snapshot_id", "transcript_files",
             "transcript_bytes", "at_risk_threads",
-        } and isinstance(value.get("completed_at"), str) \
+        }
+        valid = required <= set(value) <= required | {
+            "title_index_unavailable", "paginated_history_unprotected",
+        } and isinstance(value.get("title_index_unavailable", False), bool) \
+            and isinstance(value.get("paginated_history_unprotected", False), bool) \
+            and isinstance(value.get("completed_at"), str) \
             and isinstance(value.get("snapshot_id"), str) \
             and all(isinstance(value.get(key), int) and value[key] >= 0
                     for key in ("transcript_files", "transcript_bytes", "at_risk_threads"))
@@ -362,6 +373,21 @@ def _last_run(path: Path) -> Dict[str, object]:
     if not valid or any(len(str(value[key])) > 256 for key in value):
         raise MigrationError("The automatic backup status is invalid.")
     return value
+
+
+def _backup_due(configuration: Dict[str, object], status_path: Path) -> bool:
+    """Keep the chosen cadence after success; retry a failed run at the next wake."""
+    installed = _timestamp(configuration["installed_at"])
+    now = datetime.now(timezone.utc)
+    if not status_path.exists():
+        age = (now - installed).total_seconds()
+        return age < -3600 or age >= configuration["interval_seconds"]
+    status = _last_run(status_path)
+    if status["status"] not in ("completed", "needs_attention"):
+        return True
+    completed = _timestamp(status["completed_at"])
+    age = (now - completed).total_seconds()
+    return completed < installed or age < -3600 or age >= configuration["interval_seconds"]
 
 
 def plan_schedule(
@@ -420,7 +446,10 @@ def install_schedule(
     plist = plistlib.dumps({
         "Label": LABEL,
         "ProgramArguments": program,
-        "StartInterval": interval_seconds,
+        # Wake more often than the chosen cadence so a transient failed run
+        # can retry without waiting another full day (or week). The runner
+        # skips a wake when the latest verified capture is not due yet.
+        "StartInterval": min(interval_seconds, RETRY_INTERVAL_SECONDS),
         "RunAtLoad": False,
         "ProcessType": "Background",
         "LowPriorityIO": True,
@@ -519,6 +548,10 @@ def schedule_status(source_home: str) -> Dict[str, object]:
         if status.get("status") in ("needs_attention", "failed", "unknown"):
             result["healthy"] = False
             result["error"] = "The latest automatic backup needs attention. Earlier snapshots remain available."
+    if _paginated_history_unprotected(source_home):
+        result["healthy"] = False
+        result["paginated_history_unprotected"] = True
+        result["error"] = "Codex's paginated history is not yet fully recoverable in Vault."
     if result["healthy"]:
         if status and status["status"] == "completed":
             last_activity = status["completed_at"]
@@ -555,6 +588,8 @@ def run_scheduled_backup(config_path: str) -> int:
         if configuration["version"] != CONFIG_VERSION:
             raise MigrationError("The automatic backup must be set up again to verify its Vault destination.")
         with _update_lock(source_home) as marker_path:
+            if not _backup_due(configuration, status_path):
+                return 0
             marker = _pending_update(marker_path)
             if marker is not None:
                 _atomic_json(marker_path, {**marker, "deferred": True}, replace=True)
@@ -581,6 +616,9 @@ def run_scheduled_backup(config_path: str) -> int:
                 "transcript_files": result.transcript_files,
                 "transcript_bytes": result.transcript_bytes,
                 **({"at_risk_threads": result.at_risk_threads} if result.needs_attention else {}),
+                **({"paginated_history_unprotected": True}
+                   if result.paginated_history_unprotected else {}),
+                **({"title_index_unavailable": True} if result.title_index_unavailable else {}),
             }, replace=True)
             return 0
     except Exception:

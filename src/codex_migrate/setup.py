@@ -27,7 +27,13 @@ from codex_migrate.support import with_support, SUPPORT_HTML
 from codex_migrate.pairing import Pairing
 from codex_migrate.vault import inspect as inspect_vault
 from codex_migrate.vault import markdown as vault_markdown
-from codex_migrate.vault import _find_transcript, markdown_chunks, read_thread, read_thread_page, search as search_vault
+from codex_migrate.vault import _find_transcript, markdown_chunks, markdown_source_stamp, read_thread, read_thread_page, search as search_vault
+from codex_migrate.vault_paginated import open_paginated_source
+from codex_migrate.vault_salvage import (
+    find_transcripts as find_salvage_transcripts,
+    incomplete_markdown as salvage_markdown,
+    preview_damaged_thread,
+)
 from codex_migrate.vault_backup import backup as backup_vault
 from codex_migrate.vault_backup import plan as plan_vault_backup
 from codex_migrate.vault_dashboard import VAULT_HTML
@@ -315,15 +321,31 @@ async function loadOverview(){
     const conversations=(summary.active_transcripts||0)+(summary.archived_transcripts||0);
     const label=`${conversations.toLocaleString()} ${conversations===1?"conversation":"conversations"}`;
     const verifiedScheduled=schedule.enabled&&schedule.healthy&&schedule.last_run?.status==="completed";
-    const attention=schedule.last_run?.status==="needs_attention"||backup.status==="needs_attention";
+    const paginatedRisk=Boolean(schedule.paginated_history_unprotected||schedule.last_run?.paginated_history_unprotected||backup.paginated_history_unprotected);
+    const contentRisk=schedule.last_run?.status==="needs_attention"||backup.status==="needs_attention";
+    const failedRun=["failed","unknown"].includes(schedule.last_run?.status);
+    const scheduleProblem=Boolean(schedule.error)||failedRun||(schedule.enabled&&!schedule.healthy);
+    const attention=contentRisk||scheduleProblem||backup.status==="failed";
     $("overview-health-card").classList.toggle("attention",!verifiedScheduled||attention);
     $("overview-health-icon").textContent=verifiedScheduled&&!attention?"✓":"!";
-    if(attention){
+    if(paginatedRisk){
+      $("overview-health").textContent="Conversation coverage needs review";
+      $("overview-health-detail").textContent="Codex's paginated history is not yet fully recoverable in Vault. Keep an independent full backup; this snapshot may not contain every message.";
+    }else if(contentRisk){
       $("overview-health").textContent="Conversation backup needs review";
       $("overview-health-detail").textContent="An earlier verified version may hold missing content.";
+    }else if(scheduleProblem){
+      $("overview-health").textContent="Automatic backup needs attention";
+      $("overview-health-detail").textContent=schedule.error||"Open Backups to check the schedule and last good snapshot.";
+    }else if(backup.status==="failed"){
+      $("overview-health").textContent="Backup attempt failed";
+      $("overview-health-detail").textContent="Open Backups to retry. Earlier verified snapshots may still be available.";
     }else if(verifiedScheduled){
       $("overview-health").textContent="Automatic backup verified";
       $("overview-health-detail").textContent=`${label} · Daily encrypted backup`;
+    }else if(schedule.enabled&&schedule.last_run?.status==="running"){
+      $("overview-health").textContent="Scheduled backup running";
+      $("overview-health-detail").textContent=`${label} · Open Backups to see its progress`;
     }else if(schedule.enabled){
       $("overview-health").textContent="First scheduled backup pending";
       $("overview-health-detail").textContent=`${label} · Initial snapshot alone is not scheduled protection`;
@@ -331,8 +353,8 @@ async function loadOverview(){
       $("overview-health").textContent="Snapshot verified";
       $("overview-health-detail").textContent=`${label} · Automatic backup is off`;
     }else{
-      $("overview-health").textContent="Backup protection is not set up";
-      $("overview-health-detail").textContent=`${label} found on this Mac`;
+      $("overview-health").textContent="Backup status not checked";
+      $("overview-health-detail").textContent=`${label} found · Open Backups to choose or verify a Vault`;
     }
   }catch(error){
     $("overview-health-card").classList.add("attention");
@@ -864,16 +886,31 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                             expected_query=expected_query)
 
     def issue_vault_export_ticket(self, collection, transcript, source="backup"):
-        if collection not in ("active", "archived") or not isinstance(transcript, str) \
+        if (collection not in ("active", "archived", "paginated")
+                or not isinstance(transcript, str)) \
                 or not transcript or len(transcript) > 4096 or source not in ("backup", "local"):
             raise MigrationError("Choose an opened conversation to export")
         with self._browse_data_lock if source == "backup" else nullcontext():
             if source == "backup" and self._browse_home is None:
                 raise MigrationError("Open a verified Vault backup before exporting it")
             export_home = str(self._browse_home) if source == "backup" else str(self.source_home)
-            _find_transcript(export_home, collection, transcript)
-            expected_bytes = sum(len(chunk) for chunk in markdown_chunks(
-                export_home, collection, transcript))
+            if source == "local" and collection == "paginated":
+                with open_paginated_source(export_home) as live_source:
+                    digest = hashlib.sha256()
+                    expected_bytes = 0
+                    for chunk in markdown_chunks(export_home, collection, transcript,
+                                                 live_paginated_source=live_source):
+                        digest.update(chunk)
+                        expected_bytes += len(chunk)
+                    source_stamp = digest.hexdigest()
+            else:
+                if collection != "paginated":
+                    _find_transcript(export_home, collection, transcript)
+                source_stamp = markdown_source_stamp(export_home, collection, transcript)
+                expected_bytes = sum(len(chunk) for chunk in markdown_chunks(
+                    export_home, collection, transcript))
+                if markdown_source_stamp(export_home, collection, transcript) != source_stamp:
+                    raise MigrationError("The conversation changed while preparing export.")
         ticket = secrets.token_urlsafe(32)
         with self._export_ticket_lock:
             now = time.monotonic()
@@ -882,7 +919,8 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
             if len(self._export_tickets) >= 16:
                 raise MigrationError("Too many pending exports. Retry in one minute.")
             self._export_tickets[ticket] = (now + 60, source, export_home,
-                                            collection, transcript, expected_bytes)
+                                            collection, transcript, expected_bytes,
+                                            source_stamp)
         return ticket
 
     def consume_vault_export_ticket(self, ticket):
@@ -1166,9 +1204,10 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                 "destination": planned.destination,
                 "storage": storage,
                 "completed_files": 0,
-                "total_files": planned.transcript_files,
+                "total_files": planned.transcript_files + planned.paginated_threads,
                 "completed_bytes": 0,
-                "total_bytes": planned.transcript_bytes,
+                "total_bytes": (0 if planned.paginated_threads
+                                else planned.transcript_bytes),
             }
             self._vault_thread = worker
             worker.start()
@@ -1217,7 +1256,7 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                         return
                     stream_started = False
                     try:
-                        source, export_home, collection, transcript, expected_bytes = setup.consume_vault_export_ticket(
+                        source, export_home, collection, transcript, expected_bytes, source_stamp = setup.consume_vault_export_ticket(
                             query["ticket"][0])
                         with setup._browse_data_lock if source == "backup" else nullcontext():
                             if source == "backup" and (setup._browse_home is None or
@@ -1225,28 +1264,45 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                                 raise MigrationError("The opened backup changed before export")
                             if source == "local" and export_home != str(setup.source_home):
                                 raise MigrationError("The local source changed before export")
-                            chunks = markdown_chunks(export_home, collection, transcript)
-                            first = next(chunks)
-                            self.send_response(200)
-                            self.send_header("Content-Type", "text/markdown; charset=utf-8")
-                            self.send_header("Content-Disposition", 'attachment; filename="codex-conversation.md"')
-                            self.send_header("Content-Length", str(expected_bytes))
-                            self.send_header("Cache-Control", "no-store")
-                            self.send_header("X-Content-Type-Options", "nosniff")
-                            self.send_header("Referrer-Policy", "no-referrer")
-                            self.send_header("Connection", "close")
-                            self.end_headers()
-                            stream_started = True
-                            written = len(first)
-                            self.wfile.write(first)
-                            for chunk in chunks:
-                                written += len(chunk)
-                                if written > expected_bytes:
+                            live_paginated = source == "local" and collection == "paginated"
+                            with (open_paginated_source(export_home) if live_paginated
+                                  else nullcontext(None)) as live_source:
+                                if live_paginated:
+                                    digest = hashlib.sha256()
+                                    actual_bytes = 0
+                                    for chunk in markdown_chunks(export_home, collection, transcript,
+                                                                 live_paginated_source=live_source):
+                                        digest.update(chunk)
+                                        actual_bytes += len(chunk)
+                                    if actual_bytes != expected_bytes or digest.hexdigest() != source_stamp:
+                                        raise MigrationError("The conversation changed before export")
+                                    chunks = markdown_chunks(export_home, collection, transcript,
+                                                             live_paginated_source=live_source)
+                                else:
+                                    if markdown_source_stamp(export_home, collection, transcript) != source_stamp:
+                                        raise MigrationError("The conversation changed before export")
+                                    chunks = markdown_chunks(export_home, collection, transcript)
+                                first = next(chunks)
+                                self.send_response(200)
+                                self.send_header("Content-Type", "text/markdown; charset=utf-8")
+                                self.send_header("Content-Disposition", 'attachment; filename="codex-conversation.md"')
+                                self.send_header("Content-Length", str(expected_bytes))
+                                self.send_header("Cache-Control", "no-store")
+                                self.send_header("X-Content-Type-Options", "nosniff")
+                                self.send_header("Referrer-Policy", "no-referrer")
+                                self.send_header("Connection", "close")
+                                self.end_headers()
+                                stream_started = True
+                                written = len(first)
+                                self.wfile.write(first)
+                                for chunk in chunks:
+                                    written += len(chunk)
+                                    if written > expected_bytes:
+                                        raise MigrationError("The saved conversation changed during export")
+                                    self.wfile.write(chunk)
+                                if written != expected_bytes:
                                     raise MigrationError("The saved conversation changed during export")
-                                self.wfile.write(chunk)
-                            if written != expected_bytes:
-                                raise MigrationError("The saved conversation changed during export")
-                            self.close_connection = True
+                                self.close_connection = True
                     except MigrationError:
                         if stream_started:
                             self.close_connection = True
@@ -1331,6 +1387,43 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                             self._json(200, {"results": [item.as_dict() for item in results[:page_size]],
                                              "has_more": len(results) > page_size})
                             return
+                        if (parsed.path == "/api/vault/salvage-candidates"
+                                and set(query) <= {"q", "offset"}
+                                and all(len(value) == 1 for value in query.values())):
+                            phrase = query.get("q", [""])[0]
+                            raw_offset = query.get("offset", ["0"])[0]
+                            if len(raw_offset) > 6:
+                                raise ValueError("invalid salvage discovery offset")
+                            self._json(200, find_salvage_transcripts(
+                                setup.source_home, phrase, offset=int(raw_offset)))
+                            return
+                        if (parsed.path in ("/api/vault/salvage-preview",
+                                            "/api/vault/salvage-export")
+                                and set(query) == {"collection", "transcript"}
+                                and all(len(value) == 1 for value in query.values())):
+                            collection = query["collection"][0]
+                            transcript = query["transcript"][0]
+                            if len(collection) > 16 or len(transcript) > 4096:
+                                raise ValueError("invalid salvage transcript")
+                            if parsed.path == "/api/vault/salvage-preview":
+                                self._json(200, preview_damaged_thread(
+                                    setup.source_home, collection, transcript).as_dict())
+                            else:
+                                result = preview_damaged_thread(
+                                    setup.source_home, collection, transcript,
+                                    max_entries=20000, max_text_bytes=25 * 1024 * 1024)
+                                encoded = salvage_markdown(result).encode("utf-8")
+                                self.send_response(200)
+                                self.send_header("Content-Type", "text/markdown; charset=utf-8")
+                                self.send_header("Content-Disposition",
+                                                 'attachment; filename="codex-salvage-incomplete.md"')
+                                self.send_header("Cache-Control", "no-store")
+                                self.send_header("X-Content-Type-Options", "nosniff")
+                                self.send_header("Referrer-Policy", "no-referrer")
+                                self.send_header("Content-Length", str(len(encoded)))
+                                self.end_headers()
+                                self.wfile.write(encoded)
+                            return
                         if (parsed.path in ("/api/vault/thread", "/api/vault/export")
                                 and set(query) <= {"collection", "transcript", "source", "cursor", "match"}):
                             collection = query.get("collection", [""])[0]
@@ -1353,13 +1446,15 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                                         collection, transcript, cursor, expected_query)
                                     if source == "backup" else
                                     read_thread_page(setup.source_home, collection, transcript,
-                                                     cursor, expected_query=expected_query))
+                                                     cursor, expected_query=expected_query,
+                                                     live_paginated=collection == "paginated"))
                                 self._json(200, {**thread.as_dict(),
                                                  "next_cursor": next_cursor})
                                 return
                             thread = (setup.read_vault_backup_thread(collection, transcript)
                                       if source == "backup" else
-                                      read_thread(setup.source_home, collection, transcript))
+                                      read_thread(setup.source_home, collection, transcript,
+                                                  live_paginated=collection == "paginated"))
                             if parsed.path == "/api/vault/thread":
                                 self._json(200, thread.as_dict())
                             else:

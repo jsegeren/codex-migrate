@@ -30,7 +30,7 @@ from codex_migrate.vault_backup import (
     _require_unlinked_path,
 )
 from codex_migrate.vault_local_lock import local_history_lock
-from codex_migrate.vault_recovery import restore_snapshot, verify_snapshot
+from codex_migrate.vault_recovery import restore_snapshot, snapshot_catalog, verify_snapshot
 
 
 JOURNAL_NAME = ".codex-vault-install.json"
@@ -171,7 +171,7 @@ def _tree_records(
     _require_unlinked_path(root)
     require_local(root)
     if strict_root:
-        allowed = set(TRANSCRIPT_FOLDERS) | {"restore-receipt.json"}
+        allowed = set(TRANSCRIPT_FOLDERS) | {"restore-receipt.json", "paginated_history"}
         try:
             if any(item.name not in allowed for item in root.iterdir()):
                 raise MigrationError("The recovered snapshot contains an unexpected item.")
@@ -787,6 +787,15 @@ def recover_interrupted_install(source_home: str, *, apply: bool = False) -> Dic
         }
 
 
+def _require_installable_snapshot(vault: str, snapshot_id: str,
+                                  crypto_helper: Optional[str]) -> None:
+    if any(item["collection"] == "paginated" for item in snapshot_catalog(
+            vault, snapshot=snapshot_id, crypto_helper=crypto_helper)):
+        raise MigrationError(
+            "This backup includes paginated history that cannot be installed into Codex. "
+            "Open or export its saved conversations instead; whole-history install is refused.")
+
+
 def plan_install(
     source_home: str,
     vault: str,
@@ -800,6 +809,7 @@ def plan_install(
             raise MigrationError("An interrupted Vault installation must be rolled back first.")
         verified = verify_snapshot(
             vault, snapshot=_snapshot_id(snapshot), crypto_helper=crypto_helper)
+        _require_installable_snapshot(vault, verified.snapshot_id, crypto_helper)
         return InstallPlan(
             vault=verified.vault, snapshot_id=verified.snapshot_id,
             transcript_files=verified.transcript_files,
@@ -823,6 +833,7 @@ def install_snapshot(
                 raise MigrationError("Close Codex and its CLI sessions before installing a backup.")
             verified = verify_snapshot(
                 vault, snapshot=_snapshot_id(snapshot), crypto_helper=crypto_helper)
+            _require_installable_snapshot(vault, verified.snapshot_id, crypto_helper)
             stage = Path(tempfile.mkdtemp(prefix=".codex-vault-stage-", dir=str(home)))
             os.chmod(stage, 0o700)
             backup = home / (

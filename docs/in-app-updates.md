@@ -649,3 +649,36 @@ This is **not** an isolated native retry or customer-data acceptance test. The
 test harness now refuses this mode when the account has existing `.codex`
 history; the remaining native update gates require a dedicated macOS test
 account, not only a temporary source path.
+
+### Build 19 packaged search-index check — September 27, 2026
+
+The local build-19 app copy records clean source
+`ac0bfa37a3498a7cf0f6d820e7ea9c07dbabeb31` and passed strict code-signature
+verification and Notarized Developer ID Gatekeeper assessment. Its bundled
+engine, not the source interpreter, passed an isolated synthetic-home test:
+ordinary search found a conversation, the opt-in index was created with
+owner-only permissions, indexed search returned the same result, an appended
+message was found before refreshing the index, moving that conversation from
+active to archived kept it searchable before and after refresh, and removing
+the index left ordinary search working. No real Codex history or Keychain item was used.
+This proves the packaged SQLite/index path for a small fixture, not search
+latency on a large history, a paid buyer update, or clean-account recovery.
+
+A separate source-interpreter synthetic scale check used 1,000 active JSONL
+threads with approximately 128 MiB of total transcript text and one exact
+phrase present in one thread. On this Mac, the first full search took 0.314 s;
+building the optional index took 1.642 s; the indexed hit and miss took 0.149 s
+and 0.143 s respectively. This is a useful bounded performance smoke test,
+not a packaged-app or real-history latency acceptance: actual thread shapes,
+storage pressure, forks, and concurrent Codex writes still need their own
+measurement before making a performance promise.
+
+The same 1,000-thread, approximately 128 MiB synthetic corpus was then
+searched through the **bundled build-19 engine mounted from the exact
+notarized DMG**, not the source interpreter. The phrase was found before and
+after index creation; the missing phrase returned no results. Measured
+wall-clock times on this Mac were 1.015 s for the initial full search,
+1.628 s to build the index, 0.209 s for the indexed hit, and 0.205 s for the
+indexed miss. The DMG was mounted read-only and detached; the fixture lived
+in a temporary home and was removed. This closes a packaged synthetic
+large-history smoke test, but not real-history or concurrent-write acceptance.

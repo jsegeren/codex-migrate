@@ -5,6 +5,96 @@ remaining acceptance checks continue. This is not full release certification.
 The [paid-beta launch record](paid-beta-launch-2026-09-07.md) controls the current
 distribution decision; the dated entries below preserve their original status.
 
+## September 28 paginated-history coverage hold
+
+The installed Codex runtime uses a paginated thread-history database in
+addition to JSONL rollouts. A read-only check found cases where the database
+projection offset is beyond the current rollout length and its user/agent
+message counts materially exceed the current file's counts. Vault's current encrypted snapshot
+contains JSONL transcript trees, not that database. This does not establish
+which items are unique, but it prevents us from claiming full paginated-thread
+coverage from a green JSONL verification alone. The next public release is
+held until the [paginated-history coverage gate](vault-thread-history-contract.md#paginated-history-coverage-gate-september-28)
+is resolved and independently reviewed. Build 16 remains the public beta under
+its existing testing disclosure; no customer data was changed by this check.
+
+The draft next-build source now marks a JSONL snapshot `needs_attention`
+whenever Codex's separate paginated-history database exists. Scheduled status
+stays unhealthy, and the browser says that message coverage is unverified. This
+check never opens the database and does **not** capture its content or clear the
+release hold. It is an interim guard against a misleading green status, not a
+new backup guarantee. Per-thread loss flags remain reserved for thread-specific
+loss or identity evidence; this source-level warning is not silently inherited
+by every future thread version.
+
+A private read-only source adapter checks the installed paginated schema and
+pins a SQLite read transaction. Draft v3 snapshots now stream each thread's
+provenance-labelled item records directly to the encryption helper, verify the
+sealed chunks, and stage recovery in a separate `paginated_history` folder.
+Synthetic concurrency, unknown-schema, malformed-item, linked-source, and
+encrypted recovery tests exercise this foundation. The draft browser can now
+search, read, and export separately restored items. One-thread copy-back and
+whole-history installation are refused for this source. Clean-account recovery,
+installed-runtime scale, and independent review are still missing. These snapshots deliberately remain
+`needs attention`. This work is **not released** and does not clear the
+paginated-history or next-build hold.
+
+## September 27 integrated-source local package — not released
+
+Committed source `e644570` packaged as an arm64 **local-test-only** build-20 app.
+The actual bundled engine passed 23 desktop and Vault-compression checks with
+two expected environment skips. An opt-in packaged restore-contention test
+created only disposable synthetic Codex history, verified its encrypted restore,
+and proved that both updater idle and shutdown were refused while restoration
+ran; shutdown succeeded after the restore completed. The disposable Vault key
+was removed by the test. The full source suite separately passed 942 Python
+tests (27 skipped) and 341 JavaScript tests (one skipped). This local package
+is ad-hoc signed, not notarized or distributable. It does not satisfy paid
+buyer installation, automatic update/relaunch, clean-account recovery, or
+hosted-backup acceptance. Build 16 remains public.
+
+## September 26 private build-20 candidate — not released
+
+Clean, pushed source `d65cb7f0c46b56eb43e83a6dd36940808482aa3b` produced a
+Developer ID signed, Apple-notarized build-20 app. Apple's app submission
+`c54daf95-ccd3-4954-8946-760a195cc6fa` is Accepted; stapling and Gatekeeper
+assessment passed. The intermediate ZIP is 10,429,416 bytes with SHA-256
+`96c4e09fffa1798e1e3fdac17166d7fa6ae1642f756570cf582fdd5c85c590c1`.
+Its bundled engine passed 18 of 19 focused desktop tests, with the one
+case-sensitive-filesystem fixture skipped.
+
+The same app was packaged into the required one-time Sparkle key-rotation DMG.
+Apple accepted the separately signed disk-image submission
+`347833ad-2cf5-46ec-8797-6d2db55c25a3`; stapling and Gatekeeper assessment
+passed. The final DMG is 11,227,700 bytes with SHA-256
+`3f98ae4edbb479e1429e5c309c78eeda3448e4c4b6a01613a49041d1faf78a1a`.
+Sparkle's new-key signer produced signature
+`OMAFR0uulGy2nMZq0fli6hzZmZkCO3ThZnfnZN60Gj5lwMSU406bbyMydgpMr4/kAtJTiSlaGzE09F9hkMfrDQ==`
+and its verifier accepted that signature against the exact final bytes. The
+embedded public key is the approved rotated key. No private signing key is in
+this repository or artifact.
+
+The home-screen backup-health regression in this source passed 11 targeted
+browser-script tests and 63 setup tests locally. The exact source commit passed
+the GitHub Actions Python 3.9 and 3.12 jobs. The operator-only upload placed
+the exact DMG under a private **sandbox** pathname and read back all 11,227,700
+bytes with the same SHA-256. Its catalog entry is `testingOnly: true` and
+`accepted: false`; 114 focused commerce/update tests passed with that entry.
+This is an **artifact and private-storage receipt, not release acceptance**:
+the DMG has not been offered to a paid buyer, installed through the production
+appcast, or exercised for clean-account Vault recovery. It does not prove
+hosted backup or two-Mac sync. Keep build 16 public and both integration and
+hosted PRs on hold until their stated acceptance gates pass.
+
+A separate [cross-runner portability run](https://github.com/jsegeren/codex-migrate/actions/runs/36300816262)
+on source `ce23883d029d972aaec5fc2696ecbbd6d47064ad` passed its synthetic
+Vault export and import jobs: the producer verified an encrypted snapshot,
+removed its test Keychain key, and the independent macOS runner refused to
+read the snapshot until it imported the recovery key, then restored the exact
+synthetic transcript. Both Python 3.9 and 3.12 jobs also passed. This tests the
+source recovery-key path across independent CI machines; it is not a clean
+customer-account or packaged-build-20 recovery test.
+
 ## September 23 build 16 in-app update beta release
 
 The current paid artifact is `beta-build16-arm64`, from clean source

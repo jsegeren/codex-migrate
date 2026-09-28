@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 import platform
+import sqlite3
 import subprocess
 import tempfile
 import unittest
@@ -8,7 +9,7 @@ from unittest.mock import patch
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault import search
-from codex_migrate.vault_backup import backup
+from codex_migrate.vault_backup import _paginated_history_unprotected, backup
 from codex_migrate.vault_history import _group_key, search_titles, thread_timeline
 from codex_migrate import vault_identity
 from codex_migrate.vault_identity import (
@@ -25,6 +26,40 @@ def record(kind, payload):
 
 
 class IdentityTests(unittest.TestCase):
+    def test_paginated_history_presence_never_claims_complete_jsonl_coverage(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            codex = Path(temporary) / ".codex"
+            codex.mkdir()
+            self.assertFalse(_paginated_history_unprotected(temporary))
+            database = codex / "thread_history_1.sqlite"
+            with sqlite3.connect(database) as connection:
+                connection.execute("CREATE TABLE thread_items (thread_id TEXT, turn_id TEXT, "
+                                   "item_id TEXT, rollout_ordinal INTEGER, created_at_ms INTEGER, "
+                                   "item_json TEXT, item_type TEXT, updated_at_ordinal INTEGER)")
+                connection.execute("CREATE TABLE thread_history_projection_state ("
+                                   "thread_id TEXT, next_rollout_byte_offset INTEGER, "
+                                   "next_rollout_ordinal INTEGER)")
+                connection.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                   (THREAD_ID, "turn-1", "item-1", 1, 100,
+                                    json.dumps({"id": "item-1", "type": "userMessage",
+                                                "content": [{"type": "text", "text": "synthetic"}]}),
+                                    "userMessage", 1))
+            original = database.read_bytes()
+            self.assertTrue(_paginated_history_unprotected(temporary))
+            self.assertEqual(database.read_bytes(), original)
+
+    def test_linked_paginated_history_is_rejected_without_following_it(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            codex = root / "source/.codex"
+            codex.mkdir(parents=True)
+            outside = root / "outside.sqlite"
+            outside.write_bytes(b"private synthetic test content")
+            (codex / "thread_history_1.sqlite").symlink_to(outside)
+            with self.assertRaises(MigrationError):
+                _paginated_history_unprotected(str(root / "source"))
+            self.assertEqual(outside.read_bytes(), b"private synthetic test content")
+
     def test_static_malformed_record_is_not_retried_as_a_live_change(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "broken.jsonl"
@@ -85,6 +120,21 @@ class IdentityTests(unittest.TestCase):
                     "size": 950, "assistant_messages": 0}]
         self.assertEqual(loss_warnings(previous, current), [THREAD_ID])
 
+    def test_single_lost_turn_is_flagged_even_when_file_remains_large(self):
+        previous = [{"thread_id": THREAD_ID, "identity_state": "verified",
+                     "size": 2_000_000, "assistant_messages": 12, "user_messages": 4}]
+        for counts in ({"assistant_messages": 11, "user_messages": 4},
+                       {"assistant_messages": 12, "user_messages": 3}):
+            current = [{**previous[0], "size": 1_900_000, **counts}]
+            self.assertEqual(loss_warnings(previous, current), [THREAD_ID])
+
+    def test_append_does_not_trigger_loss_warning(self):
+        previous = [{"thread_id": THREAD_ID, "identity_state": "verified",
+                     "size": 1000, "assistant_messages": 3, "user_messages": 2}]
+        current = [{**previous[0], "size": 1200,
+                    "assistant_messages": 4, "user_messages": 3}]
+        self.assertEqual(loss_warnings(previous, current), [])
+
     def test_reported_851mb_to_7mb_compaction_shape_flags_previous_version(self):
         previous = [{"thread_id": THREAD_ID, "identity_state": "verified",
                      "size": 851046757, "records": 122877,
@@ -110,6 +160,84 @@ class EncryptedHistoryTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.build.cleanup()
+
+    def test_paginated_history_marks_verified_jsonl_snapshot_incomplete(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            codex = source / ".codex"
+            path = codex / "sessions" / ("rollout-" + THREAD_ID + ".jsonl")
+            path.parent.mkdir(parents=True)
+            original = record("session_meta", {"id": THREAD_ID})
+            path.write_text(original)
+            database = codex / "thread_history_1.sqlite"
+            with sqlite3.connect(database) as connection:
+                connection.execute("CREATE TABLE thread_items (thread_id TEXT, turn_id TEXT, "
+                                   "item_id TEXT, rollout_ordinal INTEGER, created_at_ms INTEGER, "
+                                   "item_json TEXT, item_type TEXT, updated_at_ordinal INTEGER)")
+                connection.execute("CREATE TABLE thread_history_projection_state ("
+                                   "thread_id TEXT, next_rollout_byte_offset INTEGER, "
+                                   "next_rollout_ordinal INTEGER)")
+                connection.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                   (THREAD_ID, "turn-1", "item-1", 1, 100,
+                                    json.dumps({"id": "item-1", "type": "userMessage",
+                                                "content": [{"type": "text", "text": "synthetic"}]}),
+                                    "userMessage", 1))
+            before = database.read_bytes()
+            vault = root / "vault"
+            try:
+                result = backup(str(source), str(vault), crypto_helper=str(self.helper))
+                self.assertTrue(result.needs_attention)
+                self.assertTrue(result.paginated_history_unprotected)
+                self.assertEqual(result.at_risk_threads, 0)
+                verify_snapshot(str(vault), snapshot=result.snapshot_id,
+                                crypto_helper=str(self.helper))
+                self.assertFalse(snapshot_catalog(str(vault),
+                                                 crypto_helper=str(self.helper))[0]["at_risk"])
+                second = backup(str(source), str(vault), crypto_helper=str(self.helper))
+                self.assertEqual(second.at_risk_threads, 0)
+                self.assertEqual([item["collection"] for item in snapshot_catalog(
+                    str(vault), crypto_helper=str(self.helper))], ["active", "paginated"])
+                self.assertEqual(path.read_text(), original)
+                self.assertEqual(database.read_bytes(), before)
+            finally:
+                if (vault / "vault.json").exists():
+                    key_id = json.loads((vault / "vault.json").read_text())["key_id"]
+                    subprocess.run([str(self.helper), "delete-key", "--key-id", key_id],
+                                   check=True, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE)
+
+    def test_unreadable_optional_title_index_does_not_block_transcript_backup(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            codex = source / ".codex"
+            path = codex / "sessions" / ("rollout-" + THREAD_ID + ".jsonl")
+            path.parent.mkdir(parents=True)
+            original = (record("session_meta", {"id": THREAD_ID})
+                        + record("response_item", {"role": "user", "content": "find this work"}))
+            path.write_text(original)
+            (codex / "session_index.jsonl").write_text("{broken\n")
+            vault = root / "vault"
+            try:
+                result = backup(str(source), str(vault), crypto_helper=str(self.helper))
+                self.assertFalse(result.needs_attention)
+                self.assertTrue(result.title_index_unavailable)
+                self.assertEqual(result.at_risk_threads, 0)
+                self.assertEqual(result.transcript_files, 1)
+                verify_snapshot(str(vault), snapshot=result.snapshot_id,
+                                crypto_helper=str(self.helper))
+                catalog = snapshot_catalog(str(vault), crypto_helper=str(self.helper))
+                self.assertEqual(catalog[0]["thread_id"], THREAD_ID)
+                self.assertEqual(catalog[0]["titles"], [])
+                self.assertEqual(path.read_text(), original)
+                self.assertEqual(len(search(str(source), "find this work")), 1)
+            finally:
+                if (vault / "vault.json").exists():
+                    key_id = json.loads((vault / "vault.json").read_text())["key_id"]
+                    subprocess.run([str(self.helper), "delete-key", "--key-id", key_id],
+                                   check=True, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE)
 
     def test_duplicate_live_thread_id_needs_review(self):
         with tempfile.TemporaryDirectory() as temporary:

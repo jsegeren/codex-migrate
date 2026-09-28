@@ -87,6 +87,12 @@ def parser() -> argparse.ArgumentParser:
     vault_search.add_argument("query")
     vault_search.add_argument("--limit", type=int, default=25)
     vault_search.add_argument("--json", action="store_true")
+    vault_salvage = vault_commands.add_parser(
+        "salvage-preview",
+        help="Read-only, incomplete preview of intact records in one damaged transcript")
+    vault_salvage.add_argument("collection", choices=("active", "archived"))
+    vault_salvage.add_argument("transcript", help="Path relative to the selected conversation collection")
+    vault_salvage.add_argument("--json", action="store_true")
     vault_search_index = vault_commands.add_parser(
         "search-index", help="Build or refresh an optional local fast-search cache")
     vault_search_index.add_argument("--apply", action="store_true",
@@ -329,6 +335,28 @@ def main(argv: Optional[List[str]] = None) -> int:
                     print("Active conversations: %d" % result.active_transcripts)
                     print("Archived conversations: %d" % result.archived_transcripts)
                     print("Transcript bytes: %d" % result.transcript_bytes)
+                    if result.paginated_database_present:
+                        print("Database-backed threads: %d" % result.paginated_threads)
+                        print("Paginated database storage bytes: %d" %
+                              result.paginated_database_bytes)
+                return 0
+            if args.vault_command == "salvage-preview":
+                from codex_migrate.vault_salvage import preview_damaged_thread
+                result = preview_damaged_thread(
+                    args.source_home, args.collection, args.transcript)
+                if args.json:
+                    print(json.dumps(result.as_dict(), indent=2, sort_keys=True))
+                else:
+                    print("INCOMPLETE READ-ONLY PREVIEW · physical file only; fork ancestry not included")
+                    print("Parsed records: %d · NUL-recovered: %d · skipped: %d" % (
+                        result.parsed_records, result.nul_repaired_records,
+                        result.skipped_records))
+                    if result.preview_truncated or result.scan_truncated:
+                        print("Preview limited; additional content may be omitted.")
+                    for entry in result.entries:
+                        print("\n%s%s\n%s" % (
+                            entry.role or "Entry", " (%s)" % entry.timestamp
+                            if entry.timestamp else "", entry.text))
                 return 0
             if args.vault_command == "search-index":
                 from codex_migrate.vault_search_index import build
@@ -380,6 +408,11 @@ def main(argv: Optional[List[str]] = None) -> int:
                     else:
                         print("Would back up %d conversation file(s), %d byte(s)." % (
                             result.transcript_files, result.transcript_bytes))
+                        if result.paginated_database_bytes:
+                            print("Also found %d database-backed thread(s), %d byte(s) of SQLite storage. "
+                                  "Snapshot bytes may differ." % (
+                                      result.paginated_threads,
+                                      result.paginated_database_bytes))
                         print("Destination: %s" % result.destination)
                         print("Client-side authenticated encryption: required")
                         print("Planning mode only; add --apply to create a verified snapshot.")

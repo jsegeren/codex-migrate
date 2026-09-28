@@ -10,6 +10,8 @@ from codex_migrate.vault_recovery import list_snapshots, snapshot_catalog
 def _group_key(file: Dict[str, object]) -> str:
     thread_id = file.get("thread_id")
     if file.get("identity_state") == "verified" and isinstance(thread_id, str):
+        if file.get("collection") == "paginated":
+            return "paginated:id:" + thread_id
         return "id:" + thread_id
     if file.get("identity_state") == "needs_review":
         # A conflicted path can be reused by a different thread. Equal bytes
@@ -84,7 +86,8 @@ def thread_timeline(
     vault: str, key: str, *, crypto_helper: Optional[str] = None,
 ) -> List[Dict[str, object]]:
     if not isinstance(key, str) or not key or len(key) > 4096 \
-            or not (key.startswith("id:") or key.startswith("path:")
+            or not (key.startswith("id:") or key.startswith("paginated:id:")
+                    or key.startswith("path:")
                     or key.startswith("review:")):
         raise ValueError("invalid Vault thread identity")
     versions = [version for version in _versions(vault, crypto_helper=crypto_helper)

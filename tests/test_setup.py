@@ -2,6 +2,7 @@ import json
 import os
 from http.client import HTTPConnection
 from pathlib import Path
+import sqlite3
 import subprocess
 import tempfile
 import threading
@@ -14,6 +15,7 @@ from codex_migrate.errors import MigrationError
 from codex_migrate.setup import SetupDashboard, SETUP_HTML
 from codex_migrate.vault_backup import BackupPlan, BackupResult
 from codex_migrate.vault_install import InstallResult, ThreadInstallResult
+from codex_migrate.vault_paginated import PaginatedItem, encoded_item
 from codex_migrate.vault_recovery import RestoreResult, SnapshotInfo
 from codex_migrate.vault_schedule import SchedulePlan
 from codex_migrate.vault_dashboard import VAULT_HTML
@@ -28,6 +30,8 @@ class SetupTests(unittest.TestCase):
         self.assertIn('data.snapshots.length>=1000?"at least ":""', VAULT_HTML)
         self.assertIn('saved ${data.snapshots.length===1?', VAULT_HTML)
         self.assertIn('fmt(data.transcript_bytes)', VAULT_HTML)
+        self.assertIn('database-backed ${data.paginated_threads===1?', VAULT_HTML)
+        self.assertIn('The encrypted backup size may differ', VAULT_HTML)
         self.assertIn('Vault compresses new backup data when useful', VAULT_HTML)
         self.assertIn('Keep space for the full source size plus overhead', VAULT_HTML)
 
@@ -165,6 +169,145 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertEqual([entry["text"] for entry in page["entries"]], ["Set up Clerk now"])
         self.assertEqual(self.request(path.replace("match=clerk", "match=missing"))[0], 400)
+
+    def test_opened_paginated_backup_search_read_export_never_offers_local_copyback(self):
+        thread_id = "44444444-4444-4444-8444-444444444444"
+        browse = self.home / "browse"
+        folder = browse / ".codex/paginated_history"
+        folder.mkdir(parents=True)
+        item = PaginatedItem(
+            thread_id, "turn-1", "item-1", 1, 100, "userMessage",
+            json.dumps({"id": "item-1", "type": "userMessage",
+                        "content": [{"type": "text", "text": "Saved Clerk setup"}]}))
+        (folder / (thread_id + ".jsonl")).write_bytes(encoded_item(item))
+        with self.helper._browse_data_lock:
+            self.helper._browse_home = browse
+            self.helper._browse_catalog = [{
+                "collection": "paginated", "path": thread_id + ".jsonl",
+                "thread_id": thread_id, "titles": ["Old setup title"],
+            }]
+        code, results = self.request("/api/vault/search?q=clerk&source=backup")
+        self.assertEqual(code, 200)
+        self.assertEqual(results["results"][0]["collection"], "paginated")
+        transcript = quote(thread_id + ".jsonl")
+        path = ("/api/vault/thread?collection=paginated&transcript=" + transcript
+                + "&source=backup&cursor=0&match=Clerk")
+        code, page = self.request(path)
+        self.assertEqual(code, 200)
+        self.assertEqual(page["entries"][0]["text"], "Saved Clerk setup")
+        self.assertEqual(self.request(path.replace("source=backup", "source=local"))[0], 400)
+        code, grant = self.request("/api/vault/export-ticket", {
+            "collection": "paginated", "transcript": thread_id + ".jsonl",
+            "source": "backup",
+        })
+        self.assertEqual(code, 200)
+        code, exported = self.request(grant["url"], authorized=False)
+        self.assertEqual(code, 200)
+        self.assertIn("Saved Clerk setup", exported)
+        self.assertIn("saved paginated source", exported)
+        self.assertEqual(self.request("/api/vault/export-ticket", {
+            "collection": "paginated", "transcript": thread_id + ".jsonl",
+            "source": "local",
+        })[0], 400)
+
+    def test_live_paginated_history_search_and_open_without_a_backup(self):
+        thread_id = "55555555-5555-4555-8555-555555555555"
+        codex = self.home / ".codex"
+        codex.mkdir()
+        database = codex / "thread_history_1.sqlite"
+        with sqlite3.connect(database) as connection:
+            connection.execute("CREATE TABLE thread_items (thread_id TEXT, turn_id TEXT, "
+                               "item_id TEXT, rollout_ordinal INTEGER, created_at_ms INTEGER, "
+                               "item_json TEXT, item_type TEXT, updated_at_ordinal INTEGER)")
+            connection.execute("CREATE TABLE thread_history_projection_state ("
+                               "thread_id TEXT, next_rollout_byte_offset INTEGER, "
+                               "next_rollout_ordinal INTEGER)")
+            for ordinal, body in ((1, "Earlier synthetic work"),
+                                  (2, "Configure Clerk for the fixture")):
+                connection.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                   (thread_id, "turn-1", "item-%d" % ordinal, ordinal,
+                                    100 + ordinal,
+                                    json.dumps({"id": "item-%d" % ordinal,
+                                                "type": "userMessage", "text": body}),
+                                    "userMessage", ordinal))
+        original = database.read_bytes()
+        code, summary = self.request("/api/vault/summary")
+        self.assertEqual(code, 200)
+        self.assertTrue(summary["paginated_database_present"])
+        self.assertEqual(summary["paginated_threads"], 1)
+        self.assertGreaterEqual(summary["paginated_database_bytes"], len(original))
+        code, results = self.request("/api/vault/search?q=clerk")
+        self.assertEqual(code, 200)
+        self.assertEqual(len(results["results"]), 1)
+        match = results["results"][0]
+        self.assertEqual(match["collection"], "paginated")
+        self.assertEqual(match["cursor"], 1)
+        transcript = quote(thread_id + ".jsonl")
+        path = ("/api/vault/thread?collection=paginated&transcript=" + transcript
+                + "&source=local&cursor=1&match=clerk")
+        code, page = self.request(path)
+        self.assertEqual(code, 200)
+        self.assertEqual([entry["text"] for entry in page["entries"]],
+                         ["Configure Clerk for the fixture"])
+        self.assertEqual(self.request(path.replace("match=clerk", "match=missing"))[0], 400)
+        self.assertEqual(self.request(path.replace(thread_id, "66666666-6666-4666-8666-666666666666"))[0], 400)
+        code, grant = self.request("/api/vault/export-ticket", {
+            "collection": "paginated", "transcript": thread_id + ".jsonl",
+            "source": "local",
+        })
+        self.assertEqual(code, 200)
+        code, exported = self.request(grant["url"], authorized=False)
+        self.assertEqual(code, 200)
+        self.assertIn("Configure Clerk for the fixture", exported)
+        self.assertIn("live Codex paginated source", exported)
+        self.assertEqual(database.read_bytes(), original)
+        code, grant = self.request("/api/vault/export-ticket", {
+            "collection": "paginated", "transcript": thread_id + ".jsonl",
+            "source": "local",
+        })
+        self.assertEqual(code, 200)
+        with sqlite3.connect(database) as connection:
+            connection.execute("UPDATE thread_items SET item_json=? WHERE item_id='item-2'",
+                               (json.dumps({"id": "item-2", "type": "userMessage",
+                                            "text": "Changed after ticket"}),))
+        code, body = self.request(grant["url"], authorized=False)
+        self.assertEqual(code, 409)
+        self.assertNotIn("Changed after ticket", body)
+
+    def test_export_ticket_refuses_thread_changed_before_download(self):
+        transcript = self.home / ".codex/sessions/2026/09/changing.jsonl"
+        transcript.parent.mkdir(parents=True)
+        transcript.write_text(json.dumps({"payload": {"text": "original"}}) + "\n")
+        code, grant = self.request("/api/vault/export-ticket", {
+            "collection": "active", "transcript": "2026/09/changing.jsonl",
+            "source": "local",
+        })
+        self.assertEqual(code, 200)
+        with transcript.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps({"payload": {"text": "new work"}}) + "\n")
+        code, body = self.request(grant["url"], authorized=False)
+        self.assertEqual(code, 409)
+        self.assertNotIn("original", body)
+        self.assertNotIn("new work", body)
+        self.assertEqual(self.request(grant["url"], authorized=False)[0], 409)
+
+    def test_export_ticket_refuses_thread_changed_while_counting(self):
+        transcript = self.home / ".codex/sessions/changing.jsonl"
+        transcript.parent.mkdir(parents=True)
+        transcript.write_text(json.dumps({"payload": {"text": "original"}}) + "\n")
+
+        def changed_during_count(*args):
+            yield b"first pass"
+            with transcript.open("a", encoding="utf-8") as stream:
+                stream.write(json.dumps({"payload": {"text": "new work"}}) + "\n")
+
+        with patch("codex_migrate.setup.markdown_chunks", side_effect=changed_during_count):
+            code, body = self.request("/api/vault/export-ticket", {
+                "collection": "active", "transcript": "changing.jsonl", "source": "local",
+            })
+        self.assertEqual(code, 400)
+        self.assertNotIn("original", body)
+        self.assertNotIn("new work", body)
 
     @unittest.skipUnless(search_index_supported(), "requires SQLite FTS5 contentless-delete")
     def test_fast_search_requires_confirmation_and_can_be_deleted_without_source_changes(self):
@@ -799,6 +942,37 @@ class SetupTests(unittest.TestCase):
         path = "/api/vault/thread?collection=active&transcript=../auth.json"
         self.assertEqual(self.request(path)[0], 400)
         self.assertEqual(self.request("/api/vault/summary", extra_headers={"Origin": "https://example.com"})[0], 403)
+
+    def test_damaged_transcript_discovery_and_preview_require_token_and_do_not_write(self):
+        path = self.home / ".codex/sessions/damaged.jsonl"
+        path.parent.mkdir(parents=True)
+        original = (json.dumps({"payload": {"message": {"content": "Surviving text"}}})
+                    + "\n").encode() + b"\x00bad\n"
+        path.write_bytes(original)
+        candidates = "/api/vault/salvage-candidates?q=damaged"
+        preview = "/api/vault/salvage-preview?collection=active&transcript=damaged.jsonl"
+        export = "/api/vault/salvage-export?collection=active&transcript=damaged.jsonl"
+        self.assertEqual(self.request(candidates, authorized=False)[0], 403)
+        self.assertEqual(self.request(preview, authorized=False)[0], 403)
+        self.assertEqual(self.request(export, authorized=False)[0], 403)
+        self.assertEqual(self.request("/api/vault/search?q=Nowhere")[0], 400)
+        self.assertIn('$("salvage-controls").open=true', VAULT_HTML)
+        self.assertEqual(self.request(candidates)[1]["results"][0]["transcript"],
+                         "damaged.jsonl")
+        code, result = self.request(preview)
+        self.assertEqual(code, 200)
+        self.assertEqual(result["entries"][0]["text"], "Surviving text")
+        self.assertEqual(result["skipped_records"], 1)
+        self.assertTrue(result["physical_file_only"])
+        code, markdown = self.request(export)
+        self.assertEqual(code, 200)
+        self.assertIn("# INCOMPLETE Codex transcript salvage", markdown)
+        self.assertIn("Skipped records: 1", markdown)
+        self.assertIn("Surviving text", markdown)
+        self.assertEqual(path.read_bytes(), original)
+        self.assertEqual(self.request(
+            "/api/vault/salvage-preview?collection=active&transcript=../auth.json")[0], 400)
+        self.assertEqual(self.request("/api/vault/salvage-candidates?q=" + "x" * 201)[0], 400)
 
     def test_private_setup_and_picker_require_token(self):
         for path, data in (("/api/setup", None), ("/api/setup", self.config()),

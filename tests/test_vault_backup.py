@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import sqlite3
 import subprocess
 import tempfile
 import unittest
@@ -20,11 +21,14 @@ from codex_migrate.vault_hosted_recovery_client import HostedRecoveryClient
 from codex_migrate.vault_hosted_snapshot_tail import stage_hosted_snapshot_tail
 from codex_migrate.vault_hosted_snapshot_stage import stage_hosted_snapshot
 from codex_migrate.vault_hosted_upload_client import HostedUploadClient
+from codex_migrate.vault import markdown_chunks, read_thread_page, search
 from codex_migrate.vault_backup import backup, plan
 from codex_migrate.vault_identity import TranscriptChanged
+from codex_migrate.vault_install import plan_install
+from codex_migrate.vault_paginated import restored_items
 from codex_migrate.vault_recovery import (
     export_recovery_key, import_recovery_key, list_snapshots, restore_snapshot,
-    vault_storage_usage, verify_snapshot,
+    snapshot_catalog, vault_storage_usage, verify_snapshot,
 )
 from codex_migrate import vault_remote_inventory
 from codex_migrate import vault_remote_recovery
@@ -365,6 +369,16 @@ class VaultBackupTests(unittest.TestCase):
                         window_bytes=64 * 1024, apply=True)
                     self.assertEqual(second, first)
                     self.assertEqual(client.store.writes, 5)
+                    (source / ".codex/thread_history_1.sqlite").write_bytes(
+                        b"synthetic paginated history")
+                    with self.assertRaisesRegex(MigrationError,
+                                                "cannot yet protect Codex paginated history"):
+                        stage_hosted_snapshot(
+                            str(source), metadata, [], journal, client,
+                            crypto_helper=str(self.helper), chunk_size=64 * 1024,
+                            window_bytes=64 * 1024, apply=True)
+                    self.assertEqual(client.store.writes, 5)
+                    (source / ".codex/thread_history_1.sqlite").unlink()
                     original_stage = vault_hosted_snapshot_stage.stage_remote_aware_file_windowed
                     staged_count = 0
 
@@ -1660,6 +1674,129 @@ class VaultBackupTests(unittest.TestCase):
                     with self.assertRaisesRegex(MigrationError, "unsupported"):
                         vault_remote_inventory.encrypted_snapshot_inventory(
                             str(destination), crypto_helper=str(self.helper))
+            finally:
+                self.delete_key(destination)
+
+    def test_paginated_items_are_encrypted_separately_and_recoverable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            destination = root / "vault"
+            codex = source / ".codex"
+            codex.mkdir(parents=True)
+            database = codex / "thread_history_1.sqlite"
+            thread_id = "44444444-4444-4444-8444-444444444444"
+            item = {"id": "item-1", "type": "userMessage",
+                    "content": [{"type": "text", "text": "SYNTHETIC-DATABASE-ONLY-TURN"}]}
+            with sqlite3.connect(database) as connection:
+                connection.execute("CREATE TABLE thread_items (thread_id TEXT, turn_id TEXT, "
+                                   "item_id TEXT, rollout_ordinal INTEGER, created_at_ms INTEGER, "
+                                   "item_json TEXT, item_type TEXT, updated_at_ordinal INTEGER)")
+                connection.execute("CREATE TABLE thread_history_projection_state ("
+                                   "thread_id TEXT, next_rollout_byte_offset INTEGER, "
+                                   "next_rollout_ordinal INTEGER)")
+                connection.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                   (thread_id, "turn-1", "item-1", 1, 100,
+                                    json.dumps(item), "userMessage", 1))
+            original = database.read_bytes()
+            planned = plan(str(source), str(destination))
+            self.assertEqual(planned.transcript_files, 0)
+            self.assertEqual(planned.paginated_threads, 1)
+            self.assertGreaterEqual(planned.paginated_database_bytes, len(original))
+            progress_states = []
+            try:
+                first = backup(str(source), str(destination), crypto_helper=str(self.helper),
+                               chunk_size=64 * 1024, progress=lambda *values: progress_states.append(values))
+                self.assertEqual(progress_states[0], (0, 1, 0, 0))
+                self.assertEqual(progress_states[-1][0:2], (1, 1))
+                self.assertEqual(progress_states[-1][3], 0)
+                self.assertTrue(first.paginated_history_unprotected)
+                self.assertTrue(first.needs_attention)
+                self.assertEqual(first.transcript_files, 1)
+                self.assertEqual(database.read_bytes(), original)
+                catalog = snapshot_catalog(str(destination), crypto_helper=str(self.helper))
+                self.assertEqual([(file["collection"], file["thread_id"])
+                                  for file in catalog], [("paginated", thread_id)])
+                encrypted = b"".join(path.read_bytes() for path in
+                                     destination.rglob("*") if path.is_file())
+                self.assertNotIn(b"SYNTHETIC-DATABASE-ONLY-TURN", encrypted)
+                (root / "browse").mkdir()
+                restored = root / "browse/.codex"
+                restore_snapshot(str(source), str(destination), str(restored),
+                                 crypto_helper=str(self.helper))
+                rows = (restored / "paginated_history" /
+                        (thread_id + ".jsonl")).read_text().splitlines()
+                self.assertEqual(len(rows), 1)
+                self.assertEqual(json.loads(json.loads(rows[0])["item_json"]), item)
+                self.assertEqual(json.loads(next(restored_items(
+                    str(root / "browse"), thread_id)).item_json), item)
+                found = search(str(root / "browse"), "SYNTHETIC-DATABASE-ONLY-TURN",
+                               catalog=catalog)
+                self.assertEqual([(match.collection, match.transcript, match.cursor)
+                                  for match in found], [("paginated", thread_id + ".jsonl", 0)])
+                titled_catalog = [{**catalog[0], "titles": ["An older synthetic title"]}]
+                by_title = search(str(root / "browse"), "older synthetic",
+                                  catalog=titled_catalog)
+                self.assertEqual([(match.collection, match.line) for match in by_title],
+                                 [("paginated", 0)])
+                page, next_cursor = read_thread_page(
+                    str(root / "browse"), "paginated", thread_id + ".jsonl",
+                    expected_query="SYNTHETIC-DATABASE-ONLY-TURN")
+                self.assertIsNone(next_cursor)
+                self.assertEqual([(entry.role, entry.text) for entry in page.entries],
+                                 [("User", "SYNTHETIC-DATABASE-ONLY-TURN")])
+                exported = b"".join(markdown_chunks(
+                    str(root / "browse"), "paginated", thread_id + ".jsonl"))
+                self.assertIn(b"SYNTHETIC-DATABASE-ONLY-TURN", exported)
+                self.assertIn(b"saved paginated source", exported)
+                with self.assertRaisesRegex(MigrationError, "whole-history install is refused"):
+                    plan_install(str(source), str(destination), crypto_helper=str(self.helper))
+                second = backup(str(source), str(destination), crypto_helper=str(self.helper),
+                                chunk_size=64 * 1024)
+                self.assertTrue(second.needs_attention)
+                self.assertEqual(len(list((destination / "objects").rglob("*.cvchunk"))), 1)
+                with sqlite3.connect(database) as connection:
+                    connection.execute("UPDATE thread_items SET item_json='not JSON'")
+                with self.assertRaises(MigrationError):
+                    backup(str(source), str(destination), crypto_helper=str(self.helper),
+                           chunk_size=64 * 1024)
+                self.assertEqual(json.loads((destination / "latest.json").read_text())
+                                 ["snapshot_id"], second.snapshot_id)
+            finally:
+                self.delete_key(destination)
+
+    def test_progress_counts_both_transcript_and_database_source(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            codex = source / ".codex"
+            transcript = codex / "sessions/fixture.jsonl"
+            transcript.parent.mkdir(parents=True)
+            transcript.write_text(json.dumps({"payload": {"text": "synthetic transcript"}}) + "\n")
+            database = codex / "thread_history_1.sqlite"
+            with sqlite3.connect(database) as connection:
+                connection.execute("CREATE TABLE thread_items (thread_id TEXT, turn_id TEXT, "
+                                   "item_id TEXT, rollout_ordinal INTEGER, created_at_ms INTEGER, "
+                                   "item_json TEXT, item_type TEXT, updated_at_ordinal INTEGER)")
+                connection.execute("CREATE TABLE thread_history_projection_state ("
+                                   "thread_id TEXT, next_rollout_byte_offset INTEGER, "
+                                   "next_rollout_ordinal INTEGER)")
+                connection.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                   ("44444444-4444-4444-8444-444444444444", "turn-1",
+                                    "item-1", 1, 100,
+                                    json.dumps({"id": "item-1", "type": "userMessage",
+                                                "text": "synthetic database turn"}),
+                                    "userMessage", 1))
+            destination = root / "vault"
+            updates = []
+            try:
+                result = backup(str(source), str(destination), crypto_helper=str(self.helper),
+                                progress=lambda *values: updates.append(values))
+                self.assertEqual(result.transcript_files, 2)
+                self.assertEqual(updates[0], (0, 2, 0, 0))
+                self.assertTrue(any(done == 1 and total == 2 for done, total, _, _ in updates))
+                self.assertEqual(updates[-1][:2], (2, 2))
+                self.assertEqual(updates[-1][3], 0)
             finally:
                 self.delete_key(destination)
 

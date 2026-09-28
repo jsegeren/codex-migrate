@@ -73,8 +73,16 @@ depends on data size and the connection between the Macs.
 This repository now includes the first open-source Codex Vault primitives for
 local conversation history: read-only inspection, streaming search, a local
 browser, Markdown/PDF/share exports, and versioned client-side encrypted
-backup. Vault backs up only active and archived transcript trees. It does not
+backup. The current paid build backs up only active and archived transcript
+trees; the draft next build also searches, reads, and exports current paginated
+Codex history, then encrypts its items as a separately labelled source for
+saved search, reading, and export. Live reads do not create a backup. These
+additions are not released or independently certified yet.
+Vault does not
 copy `auth.json`, `installation_id`, SSH keys, logs, caches, or runtime locks.
+If Codex's optional title index is damaged, Vault still encrypts and verifies
+intact transcripts. It warns that saved title search may be incomplete; text
+search and the verified backup remain available.
 
 For large local histories, the source CLI has an optional fast-search cache:
 
@@ -116,6 +124,8 @@ through saving the recovery key. During that first backup, daily automatic
 backup is selected by default and manual-only remains available. After the first
 snapshot verifies, the daily option installs a private macOS LaunchAgent that
 adds a verified encrypted snapshot every 24 hours, even when the app is closed.
+If a run fails, it retries at the next six-hour check without replacing the
+last good snapshot; successful runs keep the selected backup cadence.
 Turning automatic backup off removes only the local schedule; existing Vault
 snapshots remain. The local Vault page can also show
 the published backup history and recover a chosen verified snapshot into a
@@ -490,6 +500,23 @@ or installation identity files.
 ./codex-migrate vault inspect
 ./codex-migrate vault search "launch checklist" --limit 25
 ```
+
+If one exact `.jsonl` transcript is damaged, the source CLI has an opt-in,
+read-only salvage preview:
+
+```bash
+./codex-migrate vault salvage-preview active 2026/09/22/rollout-example.jsonl
+```
+
+Use the path relative to `.codex/sessions` (`active`) or
+`.codex/archived_sessions` (`archived`). The preview skips malformed records,
+tries removing NUL bytes from an in-memory copy of records up to 16 MiB, and reports
+omissions. It does not alter the original, reconstruct fork ancestry, restore
+the thread into Codex, or promise a complete transcript. Normal search remains
+strict. The desktop history browser has a separate opt-in "Inspect a damaged
+conversation file" panel that can find physical files by recent date, filename,
+or known current/old title, then show the same incomplete preview and download
+an explicitly incomplete Markdown extraction. It is not a Codex write-back.
 
 The packaged local helper exposes a history browser with
 per-thread Markdown download, print-to-PDF and the browser's native share sheet

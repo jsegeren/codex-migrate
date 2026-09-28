@@ -236,10 +236,14 @@ def loss_warnings(previous: Iterable[Dict[str, object]], current: Iterable[Dict[
             continue
         old_size, new_size = old.get("size"), new.get("size")
         old_assistant, new_assistant = old.get("assistant_messages"), new.get("assistant_messages")
+        old_user, new_user = old.get("user_messages"), new.get("user_messages")
         if (isinstance(old_size, int) and isinstance(new_size, int)
                 and old_size >= 1024 * 1024 and new_size < old_size // 2):
             warnings.append(str(thread_id))
         elif (isinstance(old_assistant, int) and isinstance(new_assistant, int)
-              and old_assistant >= 10 and new_assistant < old_assistant // 2):
+              and new_assistant < old_assistant):
+            warnings.append(str(thread_id))
+        elif (isinstance(old_user, int) and isinstance(new_user, int)
+              and new_user < old_user):
             warnings.append(str(thread_id))
     return warnings
