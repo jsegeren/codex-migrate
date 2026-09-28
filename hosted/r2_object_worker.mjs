@@ -111,8 +111,25 @@ export async function handleObjectRequest(request, bucket, secret) {
     } catch { return answer(409); }
   }
   if (request.method === 'DELETE') {
-    if (request.body || ![null, '0'].includes(
-        request.headers.get('Content-Length'))) return answer(400);
+    if (![null, '0'].includes(request.headers.get('Content-Length'))) return answer(400);
+    // urllib sends Content-Length: 0 with an empty stream. Workerd exposes
+    // that stream as non-null even though no bytes were sent. Accept only a
+    // stream that ends immediately; never ignore a non-empty DELETE body.
+    if (request.body) {
+      try {
+        const reader = request.body.getReader();
+        let ended = false;
+        // Fetch may yield an empty chunk before the end of a zero-length
+        // stream. Bound the reads and reject any actual byte.
+        for (let index = 0; index < 8; index++) {
+          const part = await reader.read();
+          if (part.done) { ended = true; break; }
+          if (!(part.value instanceof Uint8Array) || part.value.byteLength !== 0) break;
+        }
+        void reader.cancel().catch(() => {});
+        if (!ended) return answer(400);
+      } catch { return answer(400); }
+    }
     try {
       await deleteExactOrAbsent(bucket, item);
       return answer(204);

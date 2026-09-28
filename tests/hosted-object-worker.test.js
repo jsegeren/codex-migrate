@@ -53,14 +53,25 @@ test('cleanup DELETE capability is method-bound and requires provider absence', 
     bucket, secret)).status, 403);
   assert.equal((await handleObjectRequest(request('DELETE', key, token,
     Buffer.from('body')), bucket, secret)).status, 400);
+  const disguisedBody = new Request(`https://backup.example.test/v1/object/${key}`, {
+    method: 'DELETE', headers: { Authorization: `Bearer ${token}`,
+      'Content-Length': '0' }, body: Buffer.from('body'),
+  });
+  assert.equal((await handleObjectRequest(disguisedBody, bucket, secret)).status, 400);
   assert.equal(bucket.deletes, 0);
   assert.equal((await handleObjectRequest(request('DELETE', key, token),
     bucket, secret)).status, 204);
   assert.equal(bucket.deletes, 1);
   assert.equal(bucket.objects.has(key), false);
+  // Workerd may expose urllib's Content-Length: 0 as an empty body stream.
+  bucket.objects.set(key, bytes);
+  assert.equal((await handleObjectRequest(request('DELETE', key, token,
+    Buffer.alloc(0)), bucket, secret)).status, 204);
+  assert.equal(bucket.deletes, 2);
+  assert.equal(bucket.objects.has(key), false);
   assert.equal((await handleObjectRequest(request('DELETE', key, token),
     bucket, secret)).status, 204);
-  assert.equal(bucket.deletes, 1);
+  assert.equal(bucket.deletes, 2);
 });
 
 async function worker() { return import('../hosted/r2_object_worker.mjs'); }

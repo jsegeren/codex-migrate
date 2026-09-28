@@ -87,3 +87,40 @@ test('transport probe exercises the authenticated Worker route and cleans up', a
   assert.equal(Object.values(flags).every(Boolean), true);
   assert.equal(bucket.objects.size, 0);
 });
+
+test('native fixture grants only narrow loopback object access', async () => {
+  const bucket = new SyntheticBucket();
+  const data = crypto.getRandomValues(new Uint8Array(4096));
+  const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', data)),
+    byte => byte.toString(16).padStart(2, '0')).join('');
+  const key = `accounts/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/` +
+    `vaults/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/objects/` +
+    `${digest.slice(0, 2)}/${digest.slice(2)}.cvchunk`;
+  const env = { PROBE_ENABLED: '1', SANDBOX_BUCKET: bucket };
+  const grant = async (method, scopedKey = key) => {
+    const body = JSON.stringify({ method, key: scopedKey,
+      bytes: data.byteLength, sha256: digest });
+    return worker.fetch(new Request('http://127.0.0.1/native-grant', {
+      method: 'POST', headers: { 'Content-Length': String(Buffer.byteLength(body)) },
+      body,
+    }), env);
+  };
+  const foreign = key.replace('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    'cccccccc-cccc-4ccc-8ccc-cccccccccccc');
+  assert.equal((await grant('PUT', foreign)).status, 400);
+  assert.equal((await worker.fetch(new Request('https://example.test/native-grant', {
+    method: 'POST', body: '{}', headers: { 'Content-Length': '2' },
+  }), env)).status, 404);
+  const put = await (await grant('PUT')).json();
+  const response = await worker.fetch(new Request(`http://127.0.0.1/v1/object/${key}`, {
+    method: 'PUT', headers: { Authorization: `Bearer ${put.token}`,
+      'Content-Length': String(data.byteLength) }, body: data,
+  }), env);
+  assert.equal(response.status, 201);
+  const remove = await (await grant('DELETE')).json();
+  assert.equal((await worker.fetch(new Request(`http://127.0.0.1/v1/object/${key}`, {
+    method: 'DELETE', headers: { Authorization: `Bearer ${remove.token}`,
+      'Content-Length': '0' }, body: new Uint8Array(0),
+  }), env)).status, 204);
+  assert.equal(bucket.objects.size, 0);
+});

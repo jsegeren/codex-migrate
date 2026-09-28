@@ -9,6 +9,9 @@ const { putImmutableChecked, verifiedHead, readVerifiedBody,
 const { signObjectCapability } = capability;
 const ACCOUNT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const VAULT = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const NATIVE_KEY = new RegExp(`^accounts/${ACCOUNT}/vaults/${VAULT}/objects/` +
+  '[0-9a-f]{2}/[0-9a-f]{62}\\.cvchunk$');
+let nativeSecret;
 
 function hex(bytes) {
   return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
@@ -124,6 +127,44 @@ async function proveTransport(bucket) {
   return result;
 }
 
+async function nativeGrant(request, secret) {
+  const length = Number(request.headers.get('Content-Length'));
+  if (!Number.isSafeInteger(length) || length < 1 || length > 512) {
+    return new Response(null, { status: 400 });
+  }
+  let value;
+  try {
+    const reader = request.body.getReader();
+    const chunks = [];
+    let received = 0;
+    while (true) {
+      const next = await reader.read();
+      if (next.done) break;
+      if (!(next.value instanceof Uint8Array) ||
+          received + next.value.byteLength > length) throw Error('bad fixture body');
+      chunks.push(next.value);
+      received += next.value.byteLength;
+    }
+    if (received !== length) throw Error('bad fixture body');
+    const bytes = new Uint8Array(length);
+    let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+  }
+  catch { return new Response(null, { status: 400 }); }
+  if (!value || typeof value !== 'object' || Array.isArray(value) ||
+      Object.keys(value).sort().join(',') !== 'bytes,key,method,sha256' ||
+      !['PUT', 'GET', 'HEAD', 'DELETE'].includes(value.method) ||
+      typeof value.key !== 'string' || !NATIVE_KEY.test(value.key) ||
+      !Number.isSafeInteger(value.bytes) || value.bytes < 1 ||
+      value.bytes > 64 * 1024 ||
+      typeof value.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(value.sha256)) {
+    return new Response(null, { status: 400 });
+  }
+  const token = await signObjectCapability(value.method, value, secret);
+  return Response.json({ token }, { headers: { 'Cache-Control': 'no-store' } });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -131,11 +172,21 @@ export default {
     // inert; only a deliberate local dev invocation may enable the probe.
     if (env.PROBE_ENABLED !== '1' ||
         !['localhost', '127.0.0.1'].includes(url.hostname) ||
-        request.method !== 'POST' ||
-        !['/probe', '/probe-transport'].includes(url.pathname)) {
+        url.search || url.hash ||
+        !((request.method === 'POST' &&
+           ['/probe', '/probe-transport', '/native-grant'].includes(url.pathname)) ||
+          ['PUT', 'GET', 'HEAD', 'DELETE'].includes(request.method) &&
+           url.pathname.startsWith('/v1/object/'))) {
       return new Response('not found', { status: 404 });
     }
     try {
+      // workerd forbids generating random values in module scope. The secret
+      // remains private to this local dev instance and is never printed.
+      if (!nativeSecret) nativeSecret = crypto.getRandomValues(new Uint8Array(32));
+      if (url.pathname === '/native-grant') return nativeGrant(request, nativeSecret);
+      if (url.pathname.startsWith('/v1/object/')) {
+        return handleObjectRequest(request, env.SANDBOX_BUCKET, nativeSecret);
+      }
       const result = url.pathname === '/probe-transport' ?
         await proveTransport(env.SANDBOX_BUCKET) : await prove(env.SANDBOX_BUCKET);
       return Response.json(result, {

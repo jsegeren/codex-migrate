@@ -72,6 +72,15 @@ exact method, account/Vault-scoped key, byte length, and SHA-256. Uploads are
 stream-size bounded and immutable; reads require matching stored checksum
 metadata. Focused tests, a Wrangler **dry-run bundle**, and a synthetic
 PUT/reuse/HEAD/GET round trip against Wrangler's **local R2 simulation** pass.
+The separate Python `CapabilityHttpStore` now also completes a synthetic
+HEAD/PUT/reuse/GET/DELETE round trip through the actual Worker route under
+local Wrangler. This caught and fixed a zero-length DELETE interoperability
+bug: Workerd can expose Python's empty request as a non-null stream. The
+Worker now accepts that stream only after checking that it contains no bytes.
+The test-only loopback grant fixture is not customer authority and must never
+be deployed.
+The combined transport has **not** been rerun against real R2, and this is not
+a complete snapshot/publication/recovery proof.
 The real Worker path uses Cloudflare's
 [FixedLengthStream](https://developers.cloudflare.com/workers/runtime-apis/streams/transformstream/)
 so R2 accepts the bounded stream without buffering the object in Worker

@@ -10,6 +10,7 @@ Run a local simulation first:
 npx --yes wrangler@4.141.0 dev --config tests/r2-live/wrangler.jsonc --local --ip 127.0.0.1 --port 8789 --var PROBE_ENABLED:1
 curl --fail --silent --show-error --request POST http://127.0.0.1:8789/probe
 curl --fail --silent --show-error --request POST http://127.0.0.1:8789/probe-transport
+PYTHONPATH=src python3 tests/r2-live/native_transport.py http://127.0.0.1:8789
 ```
 
 All nine `/probe` flags and all eight `/probe-transport` flags must be `true`.
@@ -25,11 +26,20 @@ deletes the exact object, and verifies an already-absent retry. A successful
 probe leaves the bucket empty. Both probe routes accept only a loopback
 hostname and must never be deployed or exposed through a tunnel.
 
+The native transport proof uses `CapabilityHttpStore` in a separate Python
+process. A loopback-only fixture issues ephemeral grants scoped to this sandbox
+account and Vault, then the Python client uploads, reuses, downloads, and
+deletes one random object through the production Worker handler. The grant
+endpoint is test-only and must never be deployed. This detects differences
+between Python's HTTP requests and the Worker runtime; it does not prove a
+customer enrollment, a full Vault snapshot, or publication. Its cleanup must
+succeed before treating the probe as passed.
+
 To test against **real R2**, use `wrangler dev` without `--local` and with the
 same explicit `--var PROBE_ENABLED:1`; the config's
 `remote: true` binding then connects to the sandbox bucket while the Worker
 still runs locally. This requires a separate, authorized Cloudflare Wrangler
 credential. Do not use a production bucket, expose the local server, commit a
 credential, or run against actual Codex data. Verify the sandbox bucket is
-empty afterward in Cloudflare. Run both probe routes; a local simulation alone
-is not a live-R2 receipt.
+empty afterward in Cloudflare. Run both probe routes and the native transport
+proof; a local simulation alone is not a live-R2 receipt.
