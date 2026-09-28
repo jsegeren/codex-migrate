@@ -210,6 +210,20 @@ records without creating a plaintext full-history staging copy, and fail closed
 on an unknown schema. It must keep database-derived records distinguishable
 from the JSONL rollout so divergent copies cannot be silently merged.
 
+The draft reader now also follows Codex's bounded `history_base` rollout
+lineage when searching, opening, or exporting database-derived items. Synthetic
+parent/child and nested-fork tests cover an archived parent, a message present
+only in the parent's database rows, a child/grandchild that inherit it, and
+post-fork parent text that must not appear under the descendants. An encrypted
+snapshot restored into a separate folder passes the same search/read case;
+the export stamp includes ancestor files so a changed parent invalidates a
+prepared download. This follows the upstream paginated reader's use of
+rollout IDs and ordinal bounds, not Codex's incomplete global-search behavior.
+It has **not** been exercised against the installed runtime's actual forked
+database, a clean macOS account, or a real customer history. Missing or
+ambiguous lineage still requires review, and this synthetic proof does not
+clear the paginated-history release hold or establish complete source coverage.
+
 - Establish whether the JSONL rollout or the projected database owns each
   durable turn when their lengths disagree, including a post-rewrite case.
 - Capture any database-only recoverable content with a consistent, encrypted

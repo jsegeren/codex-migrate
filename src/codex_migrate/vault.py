@@ -215,6 +215,76 @@ def _lineage_segments(
     return resolve(path, None, None, set())
 
 
+def _session_payload(path: Path) -> Optional[Dict[str, object]]:
+    """Read only the bounded rollout header; never inspect private body text."""
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(descriptor, "rb") as handle:
+            if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+                raise MigrationError("A conversation lineage is not a regular file.")
+            raw = handle.readline(MAX_RECORD_BYTES + 1)
+        if len(raw) > MAX_RECORD_BYTES:
+            raise MigrationError("A conversation header is too large to inspect safely.")
+        header = json.loads(raw)
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise MigrationError("A conversation header contains unreadable JSON.") from error
+    except OSError as error:
+        raise MigrationError("A conversation header could not be inspected safely.") from error
+    if not isinstance(header, dict) or header.get("type") != "session_meta":
+        return None
+    payload = header.get("payload")
+    return payload if isinstance(payload, dict) else None
+
+
+def _selected_rollouts(discovered: List[Tuple[str, Path, str]]) -> Dict[str, List[Path]]:
+    selected: Dict[str, List[Path]] = {}
+    for _, path, _ in discovered:
+        payload = _session_payload(path)
+        if payload is not None:
+            thread_id = canonical_id(payload.get("id"))
+            if thread_id:
+                selected.setdefault(thread_id, []).append(path)
+    return selected
+
+
+def _paginated_ranges(source_home: str, thread_id: str,
+                      discovered: Optional[List[Tuple[str, Path, str]]] = None,
+                      selected: Optional[Dict[str, List[Path]]] = None,
+                      rollouts: Optional[Dict[str, List[Path]]] = None):
+    """Return Codex-visible (rollout ID, start ordinal, exclusive end) ranges.
+
+    Database rows belong to physical rollouts, while a fork inherits bounded
+    ancestor ranges. Missing or ambiguous lineage fails closed; a database-only
+    thread without a rollout keeps its exact-ID rows.
+    """
+    if canonical_id(thread_id) != thread_id:
+        raise ValueError("invalid paginated conversation identifier")
+    discovered = discovered if discovered is not None else list(_transcripts(source_home))
+    selected = selected if selected is not None else _selected_rollouts(discovered)
+    paths = selected.get(thread_id, [])
+    if not paths:
+        return [(thread_id, 0, None)]
+    if len(paths) != 1:
+        raise MigrationError("A paginated conversation has ambiguous selected rollouts.")
+    segments = _lineage_segments(source_home, paths[0], discovered, rollouts)
+    headers = [_session_payload(path) for path, _ in segments]
+    ranges = []
+    for index, (path, _) in enumerate(segments):
+        rollout_id = filename_id(path.name)
+        if not rollout_id or headers[index] is None:
+            raise MigrationError("A paginated conversation has invalid rollout metadata.")
+        base = headers[index].get("history_base")
+        start = base["end_ordinal_exclusive"] + 1 if isinstance(base, dict) else 1
+        next_base = (headers[index + 1].get("history_base")
+                     if index + 1 < len(headers) else None)
+        end = (next_base["end_ordinal_exclusive"]
+               if isinstance(next_base, dict) else None)
+        if end is not None and end < start:
+            raise MigrationError("A paginated conversation has invalid ordinal bounds.")
+        ranges.append((rollout_id, start, end))
+    return ranges
+
+
 def _lineage_records(segments: List[Tuple[Path, int]], cursor: int = 0,
                      stable: bool = False):
     """Yield (record, virtual byte cursor, virtual line) across a fork lineage."""
@@ -416,6 +486,8 @@ def search(
         matched_threads += 1
     if titles_only:
         return matches
+    selected_rollouts = _selected_rollouts(discovered)
+    rollouts = _rollout_map(discovered)
     # Backup v3 keeps database-derived items separate from rollouts. Search
     # their authenticated, restored files without claiming the two sources
     # are interchangeable or creating a plaintext persistent index.
@@ -431,7 +503,9 @@ def search(
                             snippet="Title: " + title_match)
                  if title_match else None)
         if found is None:
-            for index, group in _paginated_entries(source_home, transcript):
+            for index, group in _paginated_entries(
+                    source_home, transcript, discovered=discovered,
+                    selected=selected_rollouts, rollouts=rollouts):
                 for entry in group:
                     position = entry.text.casefold().find(needle)
                     if position >= 0:
@@ -472,7 +546,11 @@ def search(
                                         snippet="Title: " + title_match)
                              if title_match else None)
                     if found is None:
-                        for index, group in _paginated_item_entries(source.items(thread_id)):
+                        ranges = _paginated_ranges(
+                            source_home, thread_id, discovered, selected_rollouts, rollouts)
+                        items = (item for rollout_id, start, end in ranges
+                                 for item in source.items_range(rollout_id, start, end))
+                        for index, group in _paginated_item_entries(items):
                             for entry in group:
                                 position = entry.text.casefold().find(needle)
                                 if position >= 0:
@@ -491,7 +569,6 @@ def search(
                             if len(matches) >= limit:
                                 return matches
                         matched_threads += 1
-    rollouts = _rollout_map(discovered)
     from codex_migrate.vault_search_index import candidates
     indexed_candidates = candidates(source_home, query.strip(), discovered)
     for path, relative, collection, current_title, title_match in prepared:
@@ -565,20 +642,24 @@ def _paginated_item_entries(items):
         yield index, entries
 
 
-def _paginated_entries(source_home: str, transcript: str, live: bool = False):
+def _paginated_entries(source_home: str, transcript: str, live: bool = False,
+                       discovered=None, selected=None, rollouts=None):
     """Read either live SQLite or a separately restored database projection."""
     from codex_migrate.vault_paginated import open_paginated_source, restored_items
 
     if not isinstance(transcript, str) or not transcript.endswith(".jsonl"):
         raise ValueError("invalid paginated conversation identifier")
     thread_id = transcript[:-6]
+    ranges = _paginated_ranges(source_home, thread_id, discovered, selected, rollouts)
     if live:
         with open_paginated_source(source_home) as source:
-            if not source.has_thread(thread_id):
-                raise MigrationError("This Codex paginated conversation was not found.")
-            yield from _paginated_item_entries(source.items(thread_id))
+            items = (item for rollout_id, start, end in ranges
+                     for item in source.items_range(rollout_id, start, end))
+            yield from _paginated_item_entries(items)
     else:
-        yield from _paginated_item_entries(restored_items(source_home, thread_id))
+        items = (item for rollout_id, start, end in ranges
+                 for item in restored_items(source_home, rollout_id, start, end))
+        yield from _paginated_item_entries(items)
 
 
 def read_thread(
@@ -772,9 +853,10 @@ def markdown_chunks(source_home: str, collection: str, transcript: str,
         if canonical_id(thread_id) != thread_id:
             raise ValueError("invalid paginated conversation identifier")
         if live_paginated_source is not None:
-            if not live_paginated_source.has_thread(thread_id):
-                raise MigrationError("This Codex paginated conversation was not found.")
-            groups = _paginated_item_entries(live_paginated_source.items(thread_id))
+            ranges = _paginated_ranges(source_home, thread_id)
+            items = (item for rollout_id, start, end in ranges
+                     for item in live_paginated_source.items_range(rollout_id, start, end))
+            groups = _paginated_item_entries(items)
         else:
             groups = _paginated_entries(source_home, transcript)
         label = "live Codex paginated source" if live_paginated_source is not None else "saved paginated source"
@@ -817,10 +899,26 @@ def markdown_source_stamp(source_home: str, collection: str, transcript: str):
 
         if not isinstance(transcript, str) or not transcript.endswith(".jsonl"):
             raise ValueError("invalid paginated conversation identifier")
-        path = restored_path(source_home, transcript[:-6])
-        info = check_info(path.lstat())
-        return ((str(path), info.st_dev, info.st_ino, info.st_size,
-                 info.st_mtime_ns, info.st_ctime_ns),)
+        thread_id = transcript[:-6]
+        discovered = list(_transcripts(source_home))
+        selected = _selected_rollouts(discovered)
+        ranges = _paginated_ranges(source_home, thread_id, discovered, selected,
+                                   _rollout_map(discovered))
+        stamp = []
+        for rollout_id, _, _ in ranges:
+            path = restored_path(source_home, rollout_id)
+            info = check_info(path.lstat())
+            stamp.append((str(path), info.st_dev, info.st_ino, info.st_size,
+                          info.st_mtime_ns, info.st_ctime_ns))
+        paths = selected.get(thread_id, [])
+        if paths:
+            for path, length in _lineage_segments(source_home, paths[0], discovered):
+                info = check_info(path.lstat())
+                if not stat.S_ISREG(info.st_mode) or info.st_size < length:
+                    raise MigrationError("A paginated conversation changed before export.")
+                stamp.append((str(path), length, info.st_dev, info.st_ino,
+                              info.st_size, info.st_mtime_ns, info.st_ctime_ns))
+        return tuple(stamp)
     path = _find_transcript(source_home, collection, transcript)
     stamp = []
     for segment, length in _lineage_segments(source_home, path):

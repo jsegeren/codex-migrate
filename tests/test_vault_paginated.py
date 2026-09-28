@@ -5,7 +5,7 @@ import tempfile
 import unittest
 
 from codex_migrate.errors import MigrationError
-from codex_migrate.vault import read_thread_page
+from codex_migrate.vault import markdown_chunks, read_thread_page, search
 from codex_migrate.vault_paginated import (
     PaginatedItem, encoded_item, open_paginated_source, restored_items,
     source_footprint,
@@ -113,6 +113,120 @@ class PaginatedSourceTests(unittest.TestCase):
             self.assertTrue(present)
             self.assertEqual(count, 1)
             self.assertGreaterEqual(size, len(before))
+
+    def test_ordinal_ranges_bound_live_and_restored_items(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            database = fixture(home)
+            items = [PaginatedItem(
+                THREAD_ID, "turn-1", "item-1", 1, 100, "userMessage",
+                json.dumps({"id": "item-1", "type": "userMessage", "text": "first"}))]
+            with sqlite3.connect(database) as connection:
+                for ordinal in (2, 3):
+                    item = PaginatedItem(
+                        THREAD_ID, "turn-1", "item-" + str(ordinal), ordinal,
+                        100 + ordinal, "userMessage",
+                        json.dumps({"id": "item-" + str(ordinal),
+                                    "type": "userMessage", "text": str(ordinal)}))
+                    items.append(item)
+                    connection.execute(
+                        "INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        (item.thread_id, item.turn_id, item.item_id,
+                         item.rollout_ordinal, item.created_at_ms, item.item_json,
+                         item.item_type, item.rollout_ordinal))
+            with open_paginated_source(str(home)) as source:
+                self.assertEqual([item.rollout_ordinal for item in
+                                  source.items_range(THREAD_ID, 2, 3)], [2])
+                self.assertEqual([item.rollout_ordinal for item in
+                                  source.items_range(THREAD_ID, 3, None)], [3])
+                self.assertEqual(list(source.items_range(THREAD_ID, 2, 2)), [])
+                with self.assertRaises(ValueError):
+                    list(source.items_range(THREAD_ID, 3, 2))
+
+            restored = home / ".codex/paginated_history"
+            restored.mkdir()
+            (restored / (THREAD_ID + ".jsonl")).write_bytes(
+                b"".join(encoded_item(item) for item in items))
+            self.assertEqual([item.rollout_ordinal for item in
+                              restored_items(str(home), THREAD_ID, 2, 3)], [2])
+            self.assertEqual([item.rollout_ordinal for item in
+                              restored_items(str(home), THREAD_ID, 3)], [3])
+            with self.assertRaises(ValueError):
+                list(restored_items(str(home), THREAD_ID, 3, 2))
+
+    def test_paginated_fork_search_reads_only_visible_database_ranges(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            database = fixture(home)
+            child_id = "55555555-5555-4555-8555-555555555555"
+            grandchild_id = "66666666-6666-4666-8666-666666666666"
+            archived = home / ".codex/archived_sessions"
+            active = home / ".codex/sessions"
+            archived.mkdir()
+            active.mkdir()
+
+            def record(ordinal, kind, payload):
+                return json.dumps({"ordinal": ordinal, "type": kind,
+                                   "payload": payload}) + "\n"
+
+            parent_prefix = (record(0, "session_meta", {"id": THREAD_ID})
+                             + record(1, "event_msg", {"event": "metadata"}))
+            parent_path = archived / ("rollout-" + THREAD_ID + ".jsonl")
+            parent_path.write_text(
+                parent_prefix + record(2, "event_msg", {"event": "later metadata"}))
+            child_rollout = (
+                record(2, "session_meta", {"id": child_id, "history_base": {
+                    "thread_id": THREAD_ID, "end_ordinal_exclusive": 2,
+                    "end_byte_offset": len(parent_prefix.encode()),
+                }}) + record(3, "event_msg", {"event": "child metadata"}))
+            (active / ("rollout-" + child_id + ".jsonl")).write_text(child_rollout)
+            (active / ("rollout-" + grandchild_id + ".jsonl")).write_text(
+                record(4, "session_meta", {"id": grandchild_id, "history_base": {
+                    "thread_id": child_id, "end_ordinal_exclusive": 4,
+                    "end_byte_offset": len(child_rollout.encode()),
+                }}) + record(5, "event_msg", {"event": "grandchild metadata"}))
+            with sqlite3.connect(database) as connection:
+                for thread_id, ordinal, item_id, text in (
+                        (THREAD_ID, 2, "item-later", "Parent database-only later"),
+                        (child_id, 3, "item-child", "Child database-only turn"),
+                        (grandchild_id, 5, "item-grandchild", "Grandchild database-only turn")):
+                    connection.execute(
+                        "INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        (thread_id, "turn-" + item_id, item_id, ordinal, 100 + ordinal,
+                         json.dumps({"id": item_id, "type": "userMessage",
+                                     "text": text}), "userMessage", ordinal))
+            original = database.read_bytes()
+
+            inherited = search(str(home), "synthetic private")
+            self.assertEqual({match.transcript for match in inherited
+                              if match.collection == "paginated"},
+                             {THREAD_ID + ".jsonl", child_id + ".jsonl",
+                              grandchild_id + ".jsonl"})
+            later = search(str(home), "Parent database-only later")
+            self.assertEqual({match.transcript for match in later
+                              if match.collection == "paginated"},
+                             {THREAD_ID + ".jsonl"})
+            page, _ = read_thread_page(str(home), "paginated", child_id + ".jsonl",
+                                       live_paginated=True)
+            self.assertEqual([entry.text for entry in page.entries],
+                             ["synthetic private", "Child database-only turn"])
+            grandchild_page, _ = read_thread_page(
+                str(home), "paginated", grandchild_id + ".jsonl",
+                live_paginated=True)
+            self.assertEqual([entry.text for entry in grandchild_page.entries],
+                             ["synthetic private", "Child database-only turn",
+                              "Grandchild database-only turn"])
+            with open_paginated_source(str(home)) as source:
+                exported = b"".join(markdown_chunks(
+                    str(home), "paginated", child_id + ".jsonl",
+                    live_paginated_source=source))
+            self.assertIn(b"synthetic private", exported)
+            self.assertNotIn(b"Parent database-only later", exported)
+            self.assertEqual(database.read_bytes(), original)
+            parent_path.rename(archived / "unavailable.jsonl")
+            with self.assertRaisesRegex(MigrationError, "parent is missing"):
+                read_thread_page(str(home), "paginated", child_id + ".jsonl",
+                                 live_paginated=True)
 
     def test_footprint_refuses_linked_wal(self):
         with tempfile.TemporaryDirectory() as temporary:
