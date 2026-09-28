@@ -14,7 +14,7 @@ import os
 from pathlib import Path
 import sqlite3
 import stat
-from typing import Iterator, List
+from typing import Iterator, List, Optional
 from urllib.parse import quote
 
 from codex_migrate.errors import MigrationError
@@ -92,13 +92,23 @@ class PaginatedSource:
             raise MigrationError("Codex paginated history could not be inspected safely.") from error
 
     def items(self, thread_id: str) -> Iterator[PaginatedItem]:
+        yield from self.items_range(thread_id, 0, None)
+
+    def items_range(self, thread_id: str, start_ordinal: int,
+                    end_ordinal: Optional[int]) -> Iterator[PaginatedItem]:
         if canonical_id(thread_id) != thread_id:
             raise ValueError("thread id must be a canonical UUID")
+        if (type(start_ordinal) is not int or start_ordinal < 0
+                or (end_ordinal is not None and
+                    (type(end_ordinal) is not int or end_ordinal < start_ordinal))):
+            raise ValueError("invalid paginated history ordinal range")
         try:
             rows = self._connection.execute(
                 "SELECT thread_id, turn_id, item_id, rollout_ordinal, "
                 "created_at_ms, item_type, item_json FROM thread_items "
-                "WHERE thread_id=? ORDER BY rollout_ordinal", (thread_id,))
+                "WHERE thread_id=? AND rollout_ordinal>=? "
+                "AND (? IS NULL OR rollout_ordinal<?) ORDER BY rollout_ordinal",
+                (thread_id, start_ordinal, end_ordinal, end_ordinal))
             previous_ordinal = -1
             for source_id, turn_id, item_id, ordinal, created_at, item_type, raw in rows:
                 if (source_id != thread_id or not isinstance(turn_id, str) or not turn_id
@@ -156,8 +166,14 @@ def restored_path(source_home: str, thread_id: str) -> Path:
     return path
 
 
-def restored_items(source_home: str, thread_id: str) -> Iterator[PaginatedItem]:
+def restored_items(source_home: str, thread_id: str,
+                   start_ordinal: int = 0,
+                   end_ordinal: Optional[int] = None) -> Iterator[PaginatedItem]:
     """Read a separately restored, authenticated v3 source without Codex writes."""
+    if (type(start_ordinal) is not int or start_ordinal < 0
+            or (end_ordinal is not None and
+                (type(end_ordinal) is not int or end_ordinal < start_ordinal))):
+        raise ValueError("invalid paginated history ordinal range")
     path = restored_path(source_home, thread_id)
     try:
         descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
@@ -202,6 +218,10 @@ def restored_items(source_home: str, thread_id: str) -> Iterator[PaginatedItem]:
                     or item.get("type") != record["item_type"]):
                 raise MigrationError("The recovered paginated item identity needs review.")
             previous_ordinal = record["rollout_ordinal"]
+            if previous_ordinal < start_ordinal:
+                continue
+            if end_ordinal is not None and previous_ordinal >= end_ordinal:
+                break
             yield PaginatedItem(thread_id, record["turn_id"], record["item_id"],
                                 record["rollout_ordinal"], record["created_at_ms"],
                                 record["item_type"], record["item_json"])

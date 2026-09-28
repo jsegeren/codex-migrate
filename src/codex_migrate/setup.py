@@ -865,12 +865,6 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
             worker.start()
         return self.vault_browse_status()
 
-    def _browse(self, function, *args, **kwargs):
-        with self._browse_data_lock:
-            if self._browse_home is None:
-                raise MigrationError("Open a verified Vault backup before searching it")
-            return function(str(self._browse_home), *args, **kwargs)
-
     def search_vault_backup(self, phrase, limit, offset=0):
         with self._browse_data_lock:
             if self._browse_home is None or self._browse_catalog is None:
@@ -879,11 +873,19 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                                 catalog=self._browse_catalog, offset=offset)
 
     def read_vault_backup_thread(self, collection, transcript):
-        return self._browse(read_thread, collection, transcript)
+        with self._browse_data_lock:
+            if self._browse_home is None or self._browse_catalog is None:
+                raise MigrationError("Open a verified Vault backup before reading it")
+            return read_thread(str(self._browse_home), collection, transcript,
+                               catalog=self._browse_catalog)
 
     def read_vault_backup_thread_page(self, collection, transcript, cursor, expected_query=""):
-        return self._browse(read_thread_page, collection, transcript, cursor,
-                            expected_query=expected_query)
+        with self._browse_data_lock:
+            if self._browse_home is None or self._browse_catalog is None:
+                raise MigrationError("Open a verified Vault backup before reading it")
+            return read_thread_page(str(self._browse_home), collection, transcript,
+                                    cursor, expected_query=expected_query,
+                                    catalog=self._browse_catalog)
 
     def issue_vault_export_ticket(self, collection, transcript, source="backup"):
         if (collection not in ("active", "archived", "paginated")
@@ -891,9 +893,11 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                 or not transcript or len(transcript) > 4096 or source not in ("backup", "local"):
             raise MigrationError("Choose an opened conversation to export")
         with self._browse_data_lock if source == "backup" else nullcontext():
-            if source == "backup" and self._browse_home is None:
+            if source == "backup" and (self._browse_home is None or
+                                       self._browse_catalog is None):
                 raise MigrationError("Open a verified Vault backup before exporting it")
             export_home = str(self._browse_home) if source == "backup" else str(self.source_home)
+            catalog = self._browse_catalog if source == "backup" else None
             if source == "local" and collection == "paginated":
                 with open_paginated_source(export_home) as live_source:
                     digest = hashlib.sha256()
@@ -906,10 +910,12 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
             else:
                 if collection != "paginated":
                     _find_transcript(export_home, collection, transcript)
-                source_stamp = markdown_source_stamp(export_home, collection, transcript)
+                source_stamp = markdown_source_stamp(export_home, collection, transcript,
+                                                     catalog=catalog)
                 expected_bytes = sum(len(chunk) for chunk in markdown_chunks(
-                    export_home, collection, transcript))
-                if markdown_source_stamp(export_home, collection, transcript) != source_stamp:
+                    export_home, collection, transcript, catalog=catalog))
+                if markdown_source_stamp(export_home, collection, transcript,
+                                         catalog=catalog) != source_stamp:
                     raise MigrationError("The conversation changed while preparing export.")
         ticket = secrets.token_urlsafe(32)
         with self._export_ticket_lock:
@@ -1260,11 +1266,13 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                             query["ticket"][0])
                         with setup._browse_data_lock if source == "backup" else nullcontext():
                             if source == "backup" and (setup._browse_home is None or
+                                                       setup._browse_catalog is None or
                                                        str(setup._browse_home) != export_home):
                                 raise MigrationError("The opened backup changed before export")
                             if source == "local" and export_home != str(setup.source_home):
                                 raise MigrationError("The local source changed before export")
                             live_paginated = source == "local" and collection == "paginated"
+                            catalog = setup._browse_catalog if source == "backup" else None
                             with (open_paginated_source(export_home) if live_paginated
                                   else nullcontext(None)) as live_source:
                                 if live_paginated:
@@ -1279,9 +1287,11 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                                     chunks = markdown_chunks(export_home, collection, transcript,
                                                              live_paginated_source=live_source)
                                 else:
-                                    if markdown_source_stamp(export_home, collection, transcript) != source_stamp:
+                                    if markdown_source_stamp(export_home, collection, transcript,
+                                                             catalog=catalog) != source_stamp:
                                         raise MigrationError("The conversation changed before export")
-                                    chunks = markdown_chunks(export_home, collection, transcript)
+                                    chunks = markdown_chunks(export_home, collection, transcript,
+                                                             catalog=catalog)
                                 first = next(chunks)
                                 self.send_response(200)
                                 self.send_header("Content-Type", "text/markdown; charset=utf-8")

@@ -23,6 +23,29 @@ TRANSCRIPT = b'{"type":"response_item","payload":{"content":"portable synthetic 
 RELATIVE = Path("sessions/2026/09/24/portable.jsonl")
 DATABASE_THREAD = "44444444-4444-4444-8444-444444444444"
 DATABASE_TEXT = "portable synthetic database-only turn"
+PARENT_THREAD = "11111111-1111-4111-8111-111111111111"
+CHILD_THREAD = "22222222-2222-4222-8222-222222222222"
+INHERITED_TEXT = "portable inherited database-only turn"
+PARENT_LATER_TEXT = "portable excluded parent-only turn"
+CHILD_TEXT = "portable child-local database turn"
+
+
+def write_fork_rollouts(codex: Path) -> None:
+    def record(ordinal: int, kind: str, payload: dict) -> str:
+        return json.dumps({"ordinal": ordinal, "type": kind, "payload": payload}) + "\n"
+
+    archived = codex / "archived_sessions"
+    archived.mkdir()
+    parent_prefix = (record(0, "session_meta", {"id": PARENT_THREAD})
+                     + record(1, "event_msg", {"event": "metadata"}))
+    (archived / ("rollout-" + PARENT_THREAD + ".jsonl")).write_text(
+        parent_prefix + record(2, "event_msg", {"event": "later metadata"}))
+    child = codex / "sessions/2026/09/24" / ("rollout-" + CHILD_THREAD + ".jsonl")
+    child.write_text(record(2, "session_meta", {"id": CHILD_THREAD,
+                                                "history_base": {
+        "thread_id": PARENT_THREAD, "end_ordinal_exclusive": 2,
+        "end_byte_offset": len(parent_prefix.encode()),
+    }}) + record(3, "event_msg", {"event": "child metadata"}))
 
 
 def write_paginated_fixture(database: Path) -> None:
@@ -38,6 +61,15 @@ def write_paginated_fixture(database: Path) -> None:
                             json.dumps({"id": "item-1", "type": "userMessage",
                                         "content": [{"type": "text", "text": DATABASE_TEXT}]}),
                             "userMessage", 1))
+        for thread_id, ordinal, item_id, text in (
+                (PARENT_THREAD, 1, "item-parent", INHERITED_TEXT),
+                (PARENT_THREAD, 2, "item-parent-later", PARENT_LATER_TEXT),
+                (CHILD_THREAD, 3, "item-child", CHILD_TEXT)):
+            connection.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                               (thread_id, "turn-" + item_id, item_id, ordinal,
+                                100 + ordinal,
+                                json.dumps({"id": item_id, "type": "userMessage",
+                                            "text": text}), "userMessage", ordinal))
 
 
 def delete_test_key(helper: Path, key_id: str) -> None:
@@ -56,6 +88,7 @@ def produce(bundle: Path, helper: Path) -> None:
     transcript = source / ".codex" / RELATIVE
     transcript.parent.mkdir(parents=True, exist_ok=False)
     transcript.write_bytes(TRANSCRIPT)
+    write_fork_rollouts(source / ".codex")
     write_paginated_fixture(source / ".codex/thread_history_1.sqlite")
     bundle.mkdir(mode=0o700)
     vault = bundle / "vault"
@@ -63,7 +96,7 @@ def produce(bundle: Path, helper: Path) -> None:
     try:
         result = backup(str(source), str(vault), crypto_helper=str(helper))
         key_id = result.key_id
-        if result.transcript_files != 2 or not result.recovery_key:
+        if result.transcript_files != 6 or not result.recovery_key:
             raise AssertionError("Synthetic snapshot was not created")
         receipt = verify_snapshot(str(vault), crypto_helper=str(helper))
         if receipt.snapshot_id != result.snapshot_id:
@@ -95,7 +128,7 @@ def consume(bundle: Path, helper: Path) -> None:
     try:
         key_id = import_recovery_key(str(vault), recovery_key, crypto_helper=str(helper))
         verified = verify_snapshot(str(vault), crypto_helper=str(helper))
-        if verified.transcript_files != 2:
+        if verified.transcript_files != 6:
             raise AssertionError("Imported snapshot file count changed")
         empty_home = bundle.parent / "vault-portability-synthetic-empty-home"
         empty_home.mkdir(mode=0o700, exist_ok=False)
@@ -124,6 +157,25 @@ def consume(bundle: Path, helper: Path) -> None:
             str(restored_home), "paginated", DATABASE_THREAD + ".jsonl"))
         if DATABASE_TEXT.encode("utf-8") not in exported:
             raise AssertionError("Cross-Mac paginated Markdown export lost the turn")
+        inherited = search(str(restored_home), INHERITED_TEXT, catalog=catalog)
+        if {(match.collection, match.transcript) for match in inherited} != {
+                ("paginated", PARENT_THREAD + ".jsonl"),
+                ("paginated", CHILD_THREAD + ".jsonl")}:
+            raise AssertionError("Cross-Mac fork search lost inherited database content")
+        later = search(str(restored_home), PARENT_LATER_TEXT, catalog=catalog)
+        if {(match.collection, match.transcript) for match in later} != {
+                ("paginated", PARENT_THREAD + ".jsonl")}:
+            raise AssertionError("Cross-Mac fork search included post-fork parent content")
+        child_page, next_cursor = read_thread_page(
+            str(restored_home), "paginated", CHILD_THREAD + ".jsonl")
+        if (next_cursor is not None or [entry.text for entry in child_page.entries]
+                != [INHERITED_TEXT, CHILD_TEXT]):
+            raise AssertionError("Cross-Mac fork read lost inherited database content")
+        child_export = b"".join(markdown_chunks(
+            str(restored_home), "paginated", CHILD_THREAD + ".jsonl"))
+        if (INHERITED_TEXT.encode() not in child_export
+                or PARENT_LATER_TEXT.encode() in child_export):
+            raise AssertionError("Cross-Mac fork export used the wrong parent bounds")
         print("Synthetic snapshot decrypted and restored on independent Mac")
     finally:
         if key_id:

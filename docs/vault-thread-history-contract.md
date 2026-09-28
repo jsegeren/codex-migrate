@@ -210,6 +210,39 @@ records without creating a plaintext full-history staging copy, and fail closed
 on an unknown schema. It must keep database-derived records distinguishable
 from the JSONL rollout so divergent copies cannot be silently merged.
 
+The draft reader now also follows Codex's bounded `history_base` rollout
+lineage when searching, opening, or exporting database-derived items. Synthetic
+parent/child and nested-fork tests cover an archived parent, a message present
+only in the parent's database rows, a child/grandchild that inherit it, and
+post-fork parent text that must not appear under the descendants. An encrypted
+snapshot restored into a separate folder passes the same search/read case;
+the export stamp includes ancestor files so a changed parent invalidates a
+prepared download. This follows the upstream paginated reader's use of
+rollout IDs and ordinal bounds, not Codex's incomplete global-search behavior.
+The saved reader uses the authenticated snapshot catalog to distinguish an
+ancestor with no database rows (no saved projection file, so skip that segment)
+from a catalog-listed projection that has gone missing (fail closed). A
+synthetic backup, restore, search, read, and browser Markdown-export test covers
+the no-row-parent case; removal of the catalog-listed child projection is
+rejected rather than silently omitted.
+An opt-in proof using installed Codex CLI 0.158.0-alpha.2 created a real
+paginated parent/fork in a disposable `CODEX_HOME` against a loopback-only
+synthetic model, with all API credentials removed from its process environment.
+Vault found the inherited message under the child through the installed
+database schema. After Codex exited, the test replaced that marker only in
+the disposable JSONL rollouts with equal-length bytes, preserving the actual
+Codex-generated lineage offsets; the database retained the message and Vault
+still found and opened it under the child. The same isolated source was then
+encrypted into a temporary Vault, its test Keychain key deleted, its recovery
+key re-imported, and its snapshot restored into a separate folder. Saved Vault
+search and read found that database-only message under the child. The test
+deletes its temporary key on exit. This proves the draft reader and recovery
+path against the installed fork format and a controlled database-only case on
+one macOS login. It does **not** prove Codex naturally performs that rewrite,
+a real customer-history recovery, or recovery in a clean user account or
+second Mac. Missing or ambiguous lineage still requires review, and the
+paginated-history release hold remains open.
+
 - Establish whether the JSONL rollout or the projected database owns each
   durable turn when their lengths disagree, including a post-rewrite case.
 - Capture any database-only recoverable content with a consistent, encrypted
