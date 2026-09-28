@@ -272,6 +272,21 @@ a real customer-history recovery, or recovery in a clean user account or
 second Mac. Missing or ambiguous lineage still requires review, and the
 paginated-history release hold remains open.
 
+On September 28, the installed-Codex synthetic proof above passed again with
+Codex CLI `0.158.0-alpha.2` after the title-index change. Separately, the
+[Vault cross-runner CI proof](https://github.com/jsegeren/codex-migrate/actions/runs/36462786535)
+at `f33f53c` created an encrypted synthetic snapshot on one macOS runner,
+removed its test Keychain key, and imported the recovery key on a second
+independent runner. That runner found, read, and exported a database-only turn
+and found a title present only in the synthetic `state_5.sqlite` source. The
+[hosted-branch cross-runner CI proof](https://github.com/jsegeren/codex-migrate/actions/runs/36462813960)
+at `7c76562` also passed its separate Vault and hosted ciphertext-portability
+jobs. These are two complementary proofs, not one installed-runtime,
+clean-account end-to-end test: the CI source database is synthetic, and the
+installed-Codex proof re-imported on the same login. Neither proves recovery
+of a naturally damaged real history, installed buyer-app behavior on a clean
+account, or a live hosted R2 disaster restore. Keep those release holds open.
+
 - For a future installed version, revalidate upstream storage semantics and
   the observed schema. A byte/ordinal cursor or item-count comparison alone
   cannot prove semantic equivalence between rollout and projection, including
