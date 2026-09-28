@@ -279,6 +279,21 @@ class HostedUploadClientTests(unittest.TestCase):
                 with self.assertRaisesRegex(MigrationError, "status response is invalid"):
                     self.client.reservation_status(RESERVATION)
 
+    def test_published_reservation_receipt_names_the_exact_snapshot(self):
+        receipt = {"state": "published", "snapshotId": SNAPSHOT,
+                   "verifiedObjectCount": 3}
+        with patch.object(self.client, "_post", return_value=receipt):
+            self.assertEqual(self.client.reservation_receipt(RESERVATION), receipt)
+            self.assertEqual(self.client.reservation_status(RESERVATION), "published")
+        for bad in ({"state": "published"},
+                    {"state": "published", "snapshotId": SNAPSHOT,
+                     "verifiedObjectCount": 2},
+                    {"state": "active", "snapshotId": SNAPSHOT,
+                     "verifiedObjectCount": 3}):
+            with patch.object(self.client, "_post", return_value=bad):
+                with self.assertRaisesRegex(MigrationError, "status response is invalid"):
+                    self.client.reservation_receipt(RESERVATION)
+
     def test_published_chunk_lookup_is_bounded_and_validates_exact_response(self):
         first, second = "a" * 64, "b" * 64
         facts = (75, hashlib.sha256(b"encrypted sample").hexdigest())

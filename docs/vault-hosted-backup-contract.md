@@ -266,6 +266,13 @@ revived. The server still freshly verifies device, purchase, and subscription
 on each attempt. The older local-Vault mirror runner does not yet use this
 pre-recorded-ID protocol, so its crash gap remains; the hosted-only installed
 runner and cleanup UX are still release gates.
+The separate dark hosted-only runner now records that ID before its first
+reserve request, pins the returned last-good base, and retries the same
+snapshot after interruption. It accepts a lost publication response only when
+the service reports that exact snapshot as published. It does not yet run on a
+schedule or in the installed app, and its completed local chunk-journal
+cleanup is still a release gate. None of this makes hosted backup available
+to customers yet.
 An explicit sandbox-only abandon operation now lets the same device quarantine
 its owned pending reservation, including after a subscription lapses. It
 refuses later grants and publication, retains reserved quota, and waits for

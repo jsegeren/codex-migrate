@@ -154,3 +154,23 @@ test('status reads only an owned reservation and cannot replay its read scope', 
     query: async () => ({ rows: [{ state: 'unknown' }] }) }),
   /hosted_reservation_denied/);
 });
+
+test('published status proves the exact snapshot after a lost response', async () => {
+  const session = mintSessionSecret();
+  const reservationId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  const snapshotId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+  const scope = await authorizeReadScope({ sessionToken: session.token, vaultId,
+    query: async () => ({ rows: [{ account_id: accountId, vault_id: vaultId }] }) });
+  assert.deepEqual(await readUploadReservationStatus({ scope, reservationId,
+    query: async () => ({ rows: [{ state: 'published',
+      snapshot_id: snapshotId, verified_object_count: 3 }] }) }),
+  { state: 'published', snapshotId, verifiedObjectCount: 3 });
+  for (const row of [{ state: 'published' },
+    { state: 'active', snapshot_id: snapshotId, verified_object_count: 3 }]) {
+    const fresh = await authorizeReadScope({ sessionToken: session.token, vaultId,
+      query: async () => ({ rows: [{ account_id: accountId, vault_id: vaultId }] }) });
+    await assert.rejects(readUploadReservationStatus({ scope: fresh,
+      reservationId, query: async () => ({ rows: [row] }) }),
+    /hosted_reservation_denied/);
+  }
+});

@@ -16,9 +16,14 @@ const RENEW_SQL = `SELECT hosted.renew_upload_reservation_current(
 const ABANDON_SQL = `SELECT hosted.abandon_upload_reservation(
   $1::uuid, $2::uuid, $3::uuid
 ) AS allowed`;
-const STATUS_SQL = `SELECT state FROM hosted.upload_reservations
-  WHERE account_id = $1::uuid AND vault_id = $2::uuid
-    AND reservation_id = $3::uuid`;
+const STATUS_SQL = `SELECT reservation.state, snapshot.snapshot_id,
+    snapshot.verified_object_count FROM hosted.upload_reservations AS reservation
+  LEFT JOIN hosted.snapshots AS snapshot
+    ON snapshot.reservation_id = reservation.reservation_id
+   AND snapshot.account_id = reservation.account_id
+   AND snapshot.vault_id = reservation.vault_id
+  WHERE reservation.account_id = $1::uuid AND reservation.vault_id = $2::uuid
+    AND reservation.reservation_id = $3::uuid`;
 const STATES = new Set(['active', 'cleanup_pending', 'released', 'published']);
 
 class HostedReservationError extends Error {
@@ -88,11 +93,19 @@ async function readUploadReservationStatus({ scope, reservationId, query }) {
   try {
     const result = await query(STATUS_SQL, [scope.accountId, scope.vaultId,
       reservationId]);
-    const state = result?.rows?.[0]?.state;
-    if (result?.rows?.length !== 1 || !STATES.has(state)) {
+    const row = result?.rows?.[0];
+    const state = row?.state;
+    if (result?.rows?.length !== 1 || !STATES.has(state) ||
+        (state === 'published' ?
+          (!UUID.test(row.snapshot_id) ||
+           !Number.isSafeInteger(row.verified_object_count) ||
+           row.verified_object_count < 3) :
+          (row.snapshot_id != null || row.verified_object_count != null))) {
       throw new HostedReservationError();
     }
-    return Object.freeze({ state });
+    return Object.freeze(state === 'published' ?
+      { state, snapshotId: row.snapshot_id,
+        verifiedObjectCount: row.verified_object_count } : { state });
   } catch { throw new HostedReservationError(); }
 }
 

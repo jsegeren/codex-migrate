@@ -43,7 +43,10 @@ function fixture() {
       if (sql.includes('FROM hosted.upload_reservations')) {
         assert.deepEqual(values, [accountId, vaultId, reservationId]);
         reads++;
-        return { rows: [{ state: reservationState }] };
+        return { rows: [{ state: reservationState,
+          snapshot_id: reservationState === 'published' ?
+            'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee' : null,
+          verified_object_count: reservationState === 'published' ? 3 : null }] };
       }
       writes++;
       if (sql.includes('abandon_upload_reservation')) {
@@ -173,7 +176,11 @@ test('owned device can quarantine pending upload even after subscription lapses'
   assert.deepEqual((await f.send()).body, { state: 'cleanup_pending' });
   f.setReservationState('released');
   assert.deepEqual((await f.send()).body, { state: 'released' });
-  assert.equal(f.reads(), 2);
+  f.setReservationState('published');
+  assert.deepEqual((await f.send()).body, { state: 'published',
+    snapshotId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+    verifiedObjectCount: 3 });
+  assert.equal(f.reads(), 3);
   assert.equal(f.writes(), 1);
   f.req.body.vaultId = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
   assert.equal((await f.send()).statusCode, 403);

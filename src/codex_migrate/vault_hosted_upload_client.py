@@ -189,13 +189,28 @@ class HostedUploadClient:
 
     def reservation_status(self, reservation_id: str) -> str:
         """Read authoritative cleanup state without requiring a subscription."""
+        return self.reservation_receipt(reservation_id)["state"]
+
+    def reservation_receipt(self, reservation_id: str) -> dict:
+        """Reconcile a lost publication response to one exact published ID."""
         self._require_reservation(reservation_id)
         result = self._post({"action": "status", "vaultId": self._vault_id,
                              "reservationId": reservation_id})
-        if (set(result) != {"state"} or result["state"] not in
-                ("active", "cleanup_pending", "released", "published")):
+        state = result.get("state")
+        if state in ("active", "cleanup_pending", "released"):
+            valid = set(result) == {"state"}
+        elif state == "published":
+            snapshot_id = result.get("snapshotId")
+            count = result.get("verifiedObjectCount")
+            valid = (set(result) == {"state", "snapshotId", "verifiedObjectCount"}
+                     and isinstance(snapshot_id, str) and
+                     _UUID.fullmatch(snapshot_id) is not None and
+                     type(count) is int and 3 <= count <= 1_000_000)
+        else:
+            valid = False
+        if not valid:
             raise MigrationError("The hosted upload status response is invalid.")
-        return result["state"]
+        return result
 
     @staticmethod
     def _require_reservation(reservation_id: str) -> None:

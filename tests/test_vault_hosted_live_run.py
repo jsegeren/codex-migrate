@@ -1,0 +1,197 @@
+"""A hosted-only backup must never lose its reservation or claim early success."""
+
+import json
+from pathlib import Path
+import tempfile
+import unittest
+from unittest.mock import patch
+
+from codex_migrate.errors import MigrationError
+from codex_migrate.vault_hosted_live_run import HostedLiveBackupRun
+from codex_migrate.vault_hosted_recovery_client import HostedRecoveryClient
+from codex_migrate.vault_hosted_upload_client import HostedUploadClient
+
+
+ACCOUNT = "11111111-1111-4111-8111-111111111111"
+VAULT = "22222222-2222-4222-8222-222222222222"
+BASE = "33333333-3333-4333-8333-333333333333"
+OTHER = "44444444-4444-4444-8444-444444444444"
+KEY = "55555555-5555-4555-8555-555555555555"
+TOKEN = "hv1_" + "a" * 43
+ORIGIN = "http://127.0.0.1:49111"
+
+
+class HostedLiveRunTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.home = self.root / "home"
+        self.home.mkdir(mode=0o700)
+        self.helper = self.root / "helper"
+        self.helper.write_text("#!/bin/sh\nexit 0\n")
+        self.helper.chmod(0o700)
+        self.upload = HostedUploadClient(
+            ORIGIN, "http://127.0.0.1:49112", TOKEN, ACCOUNT, VAULT,
+            allow_loopback_http=True)
+        self.recovery = HostedRecoveryClient(
+            ORIGIN, TOKEN, VAULT, allow_loopback_http=True)
+        self.run = HostedLiveBackupRun(self.upload, self.recovery, str(self.home))
+        self.metadata = {"format": "codex-vault", "version": 1,
+                         "key_id": KEY, "created_at": "2026-09-27T00:00:00+00:00"}
+
+    def back_up(self, run=None, metadata=None):
+        return (run or self.run).back_up_live_history(
+            metadata or self.metadata, crypto_helper=str(self.helper),
+            max_prior_bytes=5_000_000, apply=True)
+
+    def test_plan_and_invalid_setup_do_not_reserve(self):
+        with patch.object(self.upload, "reserve_with_base") as reserve:
+            with self.assertRaisesRegex(MigrationError, "explicit confirmation"):
+                self.run.back_up_live_history(
+                    self.metadata, crypto_helper=str(self.helper),
+                    max_prior_bytes=5_000_000)
+            with self.assertRaisesRegex(MigrationError, "size limit"):
+                self.run.back_up_live_history(
+                    self.metadata, crypto_helper=str(self.helper),
+                    max_prior_bytes=0, apply=True)
+            reserve.assert_not_called()
+        self.assertIsNone(self.run.pending())
+
+    def test_lost_reservation_reply_retries_exact_pre_recorded_id(self):
+        ids = []
+
+        def reserve(*, reservation_id, apply):
+            self.assertTrue(apply)
+            ids.append(reservation_id)
+            if len(ids) == 1:
+                raise MigrationError("network reply lost")
+            return reservation_id, None
+
+        with patch.object(self.upload, "reserve_with_base", side_effect=reserve), \
+                patch("codex_migrate.vault_hosted_live_run.stage_reserved_hosted_snapshot",
+                      return_value="staged") as stage, patch.object(
+                self.upload, "publish_hosted_stage") as publish:
+            with self.assertRaisesRegex(MigrationError, "reply lost"):
+                self.back_up()
+            pending = self.run.pending()
+            self.assertEqual(pending["phase"], "reserving")
+            self.assertEqual(pending["reservationId"], ids[0])
+            self.assertNotIn(TOKEN.encode(), self.run._state.read_bytes())
+            self.assertEqual(json.loads(self.run._state.read_text())["phase"],
+                             "reserving")
+            stage.assert_not_called()
+            publish.assert_not_called()
+            publish.return_value = {"snapshotId": pending["snapshotId"],
+                                    "verifiedObjectCount": 3}
+            self.assertEqual(self.back_up()["snapshotId"], pending["snapshotId"])
+            self.assertEqual(ids, [pending["reservationId"]] * 2)
+            self.assertIsNone(self.run.pending())
+            self.assertIsNone(json.loads((self.run._directory /
+                ("snapshot-" + pending["snapshotId"]) / "journal.json")
+                .read_text())["baseSnapshotId"])
+
+    def test_interrupted_stage_keeps_exact_base_snapshot_and_key(self):
+        ids = []
+
+        def reserve(*, reservation_id, apply):
+            ids.append(reservation_id)
+            return reservation_id, BASE
+
+        with patch.object(self.upload, "reserve_with_base", side_effect=reserve), \
+                patch.object(self.upload, "reservation_receipt",
+                             return_value={"state": "active"}), patch(
+                "codex_migrate.vault_hosted_live_run.stage_reserved_hosted_snapshot",
+                side_effect=[MigrationError("upload interrupted"), "staged"]), \
+                patch.object(self.upload, "publish_hosted_stage") as publish:
+            with self.assertRaisesRegex(MigrationError, "upload interrupted"):
+                self.back_up()
+            pending = self.run.pending()
+            self.assertEqual(pending["phase"], "active")
+            self.assertEqual(json.loads(self.run._state.read_text())["baseSnapshotId"],
+                             BASE)
+            publish.return_value = {"snapshotId": pending["snapshotId"],
+                                    "verifiedObjectCount": 3}
+            resumed = HostedLiveBackupRun(self.upload, self.recovery, str(self.home))
+            self.assertEqual(self.back_up(resumed)["snapshotId"],
+                             pending["snapshotId"])
+            self.assertEqual(ids, [pending["reservationId"]] * 2)
+            self.assertIsNone(resumed.pending())
+
+    def test_lost_publication_ack_reconciles_exact_server_snapshot(self):
+        with patch.object(self.upload, "reserve_with_base",
+                          side_effect=lambda *, reservation_id, apply:
+                          (reservation_id, BASE)), patch(
+                "codex_migrate.vault_hosted_live_run.stage_reserved_hosted_snapshot",
+                return_value="staged") as stage, patch.object(
+                self.upload, "publish_hosted_stage",
+                side_effect=MigrationError("publication reply lost")) as publish:
+            with self.assertRaisesRegex(MigrationError, "reply lost"):
+                self.back_up()
+            pending = self.run.pending()
+            self.assertEqual(pending["phase"], "active")
+            with patch.object(self.upload, "reservation_receipt", return_value={
+                    "state": "published", "snapshotId": pending["snapshotId"],
+                    "verifiedObjectCount": 3}):
+                self.assertEqual(self.back_up(), {
+                    "snapshotId": pending["snapshotId"],
+                    "verifiedObjectCount": 3})
+            stage.assert_called_once()
+            publish.assert_called_once()
+            self.assertIsNone(self.run.pending())
+
+    def test_foreign_publication_or_key_change_keeps_pending_state(self):
+        with patch.object(self.upload, "reserve_with_base",
+                          side_effect=lambda *, reservation_id, apply:
+                          (reservation_id, BASE)), patch(
+                "codex_migrate.vault_hosted_live_run.stage_reserved_hosted_snapshot",
+                side_effect=MigrationError("interrupted")):
+            with self.assertRaisesRegex(MigrationError, "interrupted"):
+                self.back_up()
+        pending = self.run.pending()
+        with patch.object(self.upload, "reservation_receipt", return_value={
+                "state": "published", "snapshotId": OTHER,
+                "verifiedObjectCount": 3}):
+            with self.assertRaisesRegex(MigrationError, "does not match"):
+                self.back_up()
+        with self.assertRaisesRegex(MigrationError, "different hosted key"):
+            self.back_up(metadata={**self.metadata, "key_id": OTHER})
+        self.assertEqual(self.run.pending(), pending)
+
+    def test_retry_refuses_a_changed_reservation_base(self):
+        bases = iter((BASE, OTHER))
+        with patch.object(self.upload, "reserve_with_base",
+                          side_effect=lambda *, reservation_id, apply:
+                          (reservation_id, next(bases))), patch.object(
+                self.upload, "reservation_receipt", return_value={"state": "active"}), \
+                patch("codex_migrate.vault_hosted_live_run.stage_reserved_hosted_snapshot",
+                      side_effect=MigrationError("interrupted")) as stage:
+            with self.assertRaisesRegex(MigrationError, "interrupted"):
+                self.back_up()
+            pending = self.run.pending()
+            with self.assertRaisesRegex(MigrationError, "base changed on retry"):
+                self.back_up()
+            stage.assert_called_once()
+            self.assertEqual(self.run.pending(), pending)
+
+    def test_unsafe_pending_file_is_not_replaced_or_retried(self):
+        with patch.object(self.upload, "reserve_with_base",
+                          side_effect=MigrationError("reply lost")) as reserve:
+            with self.assertRaisesRegex(MigrationError, "reply lost"):
+                self.back_up()
+            self.run._state.chmod(0o644)
+            with self.assertRaisesRegex(MigrationError, "state is unsafe"):
+                self.run.pending()
+            with self.assertRaisesRegex(MigrationError, "state is unsafe"):
+                self.back_up()
+            reserve.assert_called_once()
+
+    def test_dangling_state_folder_link_is_not_reported_as_empty(self):
+        self.run._directory.parent.mkdir(parents=True, mode=0o700)
+        self.run._directory.symlink_to(self.root / "missing")
+        with self.assertRaisesRegex(MigrationError, "linked path"):
+            self.run.pending()
+
+
+if __name__ == "__main__":
+    unittest.main()
