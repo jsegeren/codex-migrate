@@ -30,6 +30,7 @@ _TOKEN = re.compile(r"hv1_[A-Za-z0-9_-]{43}\Z")
 _GRANT = re.compile(r"[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\Z")
 _PAGE_SIZE = 256
 _MAX_RESPONSE = 128 * 1024
+_UNSPECIFIED = object()
 
 
 def _origin(value: str, allow_loopback_http: bool) -> str:
@@ -209,7 +210,8 @@ class HostedRecoveryClient:
                                     allow_loopback_http=self._allow_loopback_http)
         return receipt, store
 
-    def prior_catalog(self, *, key_id: str, crypto_helper: str, max_bytes: int
+    def prior_catalog(self, *, key_id: str, crypto_helper: str, max_bytes: int,
+                      expected_snapshot_id: object = _UNSPECIFIED
                       ) -> Tuple[Optional[str], List[dict]]:
         """Read only the authenticated prior manifest for hosted loss warnings.
 
@@ -219,8 +221,16 @@ class HostedRecoveryClient:
         """
         if type(max_bytes) is not int or max_bytes <= 0:
             raise MigrationError("The hosted recovery size limit is invalid.")
+        if (expected_snapshot_id is not _UNSPECIFIED and
+                expected_snapshot_id is not None and
+                (not isinstance(expected_snapshot_id, str) or
+                 not re.fullmatch(_UUID, expected_snapshot_id))):
+            raise MigrationError("The reserved hosted snapshot base is invalid.")
         pointer = self._latest()
         latest = pointer[2]
+        observed = None if latest is None else latest["snapshotId"]
+        if expected_snapshot_id is not _UNSPECIFIED and observed != expected_snapshot_id:
+            raise MigrationError("The hosted backup changed after reservation.")
         if latest is None:
             return None, []
         helper = _helper_path(crypto_helper)

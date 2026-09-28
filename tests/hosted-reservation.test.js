@@ -12,18 +12,32 @@ test('fresh paid scope creates a bounded byte reservation', async () => {
   const receipt = await createUploadReservation({ scope: await freshScope(),
     bytes: 1234, query: async (sql, values) => {
       calls++;
-      assert.match(sql, /reserve_upload_current/);
+      assert.match(sql, /reserve_upload_with_base_current/);
       assert.deepEqual(values.slice(0, 2), [accountId, vaultId]);
       assert.match(values[2], /^[0-9a-f-]{36}$/);
       assert.equal(values[3], 1234);
       assert.equal(values[5], 100_000_000);
-      return { rows: [{ allowed: true }] };
+      return { rows: [{ allowed: true, base_snapshot_id: null }] };
     } });
   assert.equal(calls, 1);
   assert.equal(receipt.reservationId.length, 36);
+  assert.equal(receipt.baseSnapshotId, null);
   assert.equal(Object.isFrozen(receipt), true);
   assert.ok(Date.parse(receipt.expiresAt) > Date.now() + 50 * 60_000);
   assert.ok(Date.parse(receipt.expiresAt) < Date.now() + 60 * 60_000);
+});
+
+test('reservation returns its atomic prior base and rejects malformed receipts', async () => {
+  const base = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const receipt = await createUploadReservation({ scope: await freshScope(),
+    bytes: 1, query: async () => ({ rows: [{ allowed: true,
+      base_snapshot_id: base }] }) });
+  assert.equal(receipt.baseSnapshotId, base);
+  for (const bad of [undefined, 'not-an-id', 7]) {
+    await assert.rejects(createUploadReservation({ scope: await freshScope(),
+      bytes: 1, query: async () => ({ rows: [{ allowed: true,
+        base_snapshot_id: bad }] }) }), /hosted_reservation_denied/);
+  }
 });
 
 test('renewal rechecks scope and does not trust client-shaped quota', async () => {

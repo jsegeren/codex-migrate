@@ -147,6 +147,11 @@ class HostedUploadClient:
         return observed
 
     def reserve(self, *, apply: bool = False) -> str:
+        return self.reserve_with_base(apply=apply)[0]
+
+    def reserve_with_base(self, *, apply: bool = False
+                          ) -> Tuple[str, Optional[str]]:
+        """Return the exact last-good pointer captured by this reservation."""
         if apply is not True:
             raise MigrationError("Hosted upload changes require explicit confirmation.")
         # New PUT grants grow the reservation by exact distinct ciphertext
@@ -154,7 +159,8 @@ class HostedUploadClient:
         # for a mostly-unchanged incremental backup.
         result = self._post({"action": "reserve", "vaultId": self._vault_id,
                              "bytes": 1})
-        return self._reservation(result)
+        reservation_id = self._reservation(result, include_base=True)
+        return reservation_id, result["baseSnapshotId"]
 
     def renew(self, reservation_id: str, *, apply: bool = False) -> str:
         if apply is not True:
@@ -190,11 +196,18 @@ class HostedUploadClient:
             raise MigrationError("The hosted upload reservation is invalid.")
 
     @staticmethod
-    def _reservation(result: dict, expected: str = "") -> str:
+    def _reservation(result: dict, expected: str = "", *,
+                     include_base: bool = False) -> str:
         value = result.get("reservationId")
-        if (set(result) != {"reservationId", "expiresAt"} or
+        keys = {"reservationId", "expiresAt"}
+        if include_base:
+            keys.add("baseSnapshotId")
+        base = result.get("baseSnapshotId")
+        if (set(result) != keys or
                 not isinstance(value, str) or not _UUID.fullmatch(value) or
                 (expected and value != expected) or
+                (include_base and base is not None and
+                 (not isinstance(base, str) or not _UUID.fullmatch(base))) or
                 not isinstance(result.get("expiresAt"), str) or
                 not re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z",
                                  result["expiresAt"])):

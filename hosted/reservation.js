@@ -6,9 +6,9 @@ const { consumeAuthorizedScope, consumeAuthorizedReadScope } = require('./access
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const LEASE_MS = 55 * 60 * 1000;
-const CREATE_SQL = `SELECT hosted.reserve_upload_current(
+const CREATE_SQL = `SELECT allowed, base_snapshot_id FROM hosted.reserve_upload_with_base_current(
   $1::uuid, $2::uuid, $3::uuid, $4::bigint, $5::timestamptz, $6::bigint
-) AS allowed`;
+)`;
 const RENEW_SQL = `SELECT hosted.renew_upload_reservation_current(
   $1::uuid, $2::uuid, $3::uuid, $4::timestamptz, $5::bigint
 ) AS allowed`;
@@ -34,10 +34,13 @@ async function createUploadReservation({ scope, bytes, query }) {
   try {
     const result = await query(CREATE_SQL, [scope.accountId, scope.vaultId,
       reservationId, bytes, expiresAt, scope.allowanceBytes]);
-    if (result?.rows?.length !== 1 || result.rows[0].allowed !== true) {
+    const row = result?.rows?.[0];
+    if (result?.rows?.length !== 1 || row.allowed !== true ||
+        (row.base_snapshot_id !== null && !UUID.test(row.base_snapshot_id))) {
       throw new HostedReservationError();
     }
-    return Object.freeze({ reservationId, expiresAt });
+    return Object.freeze({ reservationId, expiresAt,
+      baseSnapshotId: row.base_snapshot_id });
   } catch { throw new HostedReservationError(); }
 }
 

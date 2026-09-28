@@ -50,9 +50,9 @@ function fixture() {
         assert.deepEqual(values, [accountId, vaultId, reservationId]);
         return { rows: [{ allowed: true }] };
       }
-      if (sql.includes('reserve_upload_current')) {
+      if (sql.includes('reserve_upload_with_base_current')) {
         assert.equal(values[3], 20);
-        return { rows: [{ allowed: true }] };
+        return { rows: [{ allowed: true, base_snapshot_id: null }] };
       }
       if (sql.includes('renew_upload_reservation_current')) {
         assert.equal(values[2], reservationId);
@@ -116,6 +116,7 @@ test('paid sandbox device can reserve, renew, decide and get exact PUT/HEAD gran
   const reserve = await f.send();
   assert.equal(reserve.statusCode, 200);
   assert.equal(reserve.body.reservationId.length, 36);
+  assert.equal(reserve.body.baseSnapshotId, null);
   assert.equal(reserve.headers['Cache-Control'], 'no-store');
   f.req.body = { action: 'renew', vaultId, reservationId };
   assert.equal((await f.send()).statusCode, 200);

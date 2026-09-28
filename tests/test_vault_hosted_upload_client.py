@@ -121,7 +121,8 @@ class _Handler(BaseHTTPRequestHandler):
             if request["bytes"] != 1:
                 return self._json(403, {"error": "access_denied"})
             return self._json(200, {"reservationId": RESERVATION,
-                                    "expiresAt": EXPIRY})
+                                    "expiresAt": EXPIRY,
+                                    "baseSnapshotId": self.server.base_snapshot_id})
         if request.get("reservationId") != RESERVATION:
             return self._json(403, {"error": "access_denied"})
         if action == "renew":
@@ -207,6 +208,7 @@ class HostedUploadClientTests(unittest.TestCase):
         self.server.fail_next_publish = False
         self.server.stale_next_publish = False
         self.server.stale_body = {"error": "stale_snapshot"}
+        self.server.base_snapshot_id = None
         self.server.fail_next_verify = False
         self.server.fail_next_checkpoint_publish = False
         self.server.stale_next_checkpoint_publish = False
@@ -241,6 +243,19 @@ class HostedUploadClientTests(unittest.TestCase):
         with patch.object(self.client, "_post", return_value={"cleanupPending": False}):
             with self.assertRaisesRegex(MigrationError, "response is invalid"):
                 self.client.abandon(RESERVATION, apply=True)
+
+    def test_reservation_returns_captured_base_and_rejects_malformed_receipts(self):
+        with self.assertRaises(MigrationError):
+            self.client.reserve_with_base()
+        self.assertEqual(self.client.reserve_with_base(apply=True),
+                         (RESERVATION, None))
+        self.server.base_snapshot_id = SNAPSHOT
+        self.assertEqual(self.client.reserve_with_base(apply=True),
+                         (RESERVATION, SNAPSHOT))
+        with patch.object(self.client, "_post", return_value={
+                "reservationId": RESERVATION, "expiresAt": EXPIRY}):
+            with self.assertRaisesRegex(MigrationError, "response is invalid"):
+                self.client.reserve_with_base(apply=True)
 
     def test_reservation_status_accepts_only_a_known_server_state(self):
         with patch.object(self.client, "_post", return_value={"state": "released"}) as post:

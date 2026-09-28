@@ -33,6 +33,7 @@ DECLARE
   v_stale_reservation uuid := '22222222-2222-4222-8222-222222222222';
   v_next_reservation uuid := '33333333-3333-4333-8333-333333333333';
   v_other_reservation uuid := '44444444-4444-4444-8444-444444444444';
+  v_denied_reservation uuid := '99999999-9999-4999-8999-999999999999';
   v_first uuid := '55555555-5555-4555-8555-555555555555';
   v_stale uuid := '66666666-6666-4666-8666-666666666666';
   v_next uuid := '77777777-7777-4777-8777-777777777777';
@@ -41,9 +42,13 @@ DECLARE
   v_rejected boolean;
   v_error text;
   v_sqlstate text;
+  v_allowed boolean;
+  v_base uuid;
 BEGIN
-  IF NOT hosted.reserve_upload(v_account, v_vault, v_first_reservation,
-      30, clock_timestamp() + interval '15 minutes') OR
+  SELECT allowed, base_snapshot_id INTO v_allowed, v_base
+    FROM hosted.reserve_upload_with_base_current(v_account, v_vault,
+      v_first_reservation, 30, clock_timestamp() + interval '15 minutes', 500);
+  IF v_allowed IS NOT TRUE OR v_base IS NOT NULL OR
      NOT hosted.reserve_upload(v_account, v_vault, v_stale_reservation,
       30, clock_timestamp() + interval '15 minutes') OR
      NOT hosted.reserve_upload(v_account, v_other_vault, v_other_reservation,
@@ -88,11 +93,21 @@ BEGIN
   -- An independent Mac/Vault can publish while this Vault has stale work.
   PERFORM hosted.publish_verified_snapshot(v_account, v_other_vault,
     v_other_reservation, v_other, pg_temp.fixture_objects(v_other_vault, v_other));
-  IF NOT hosted.reserve_upload(v_account, v_vault, v_next_reservation,
-      30, clock_timestamp() + interval '15 minutes') OR
+  SELECT allowed, base_snapshot_id INTO v_allowed, v_base
+    FROM hosted.reserve_upload_with_base_current(v_account, v_vault,
+      v_next_reservation, 30, clock_timestamp() + interval '15 minutes', 500);
+  IF v_allowed IS NOT TRUE OR v_base <> v_first OR
      (SELECT base_snapshot_id FROM hosted.upload_reservations
       WHERE reservation_id = v_next_reservation) <> v_first THEN
     RAISE EXCEPTION 'new reservation did not capture current last-good';
+  END IF;
+  SELECT allowed, base_snapshot_id INTO v_allowed, v_base
+    FROM hosted.reserve_upload_with_base_current(v_account, v_vault,
+      v_denied_reservation, 501, clock_timestamp() + interval '15 minutes', 500);
+  IF v_allowed IS NOT FALSE OR v_base IS NOT NULL OR EXISTS (
+      SELECT 1 FROM hosted.upload_reservations
+      WHERE reservation_id = v_denied_reservation) THEN
+    RAISE EXCEPTION 'denied reservation returned a base or changed state';
   END IF;
   PERFORM hosted.publish_verified_snapshot(v_account, v_vault,
     v_next_reservation, v_next, pg_temp.fixture_objects(v_vault, v_next));

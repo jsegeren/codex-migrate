@@ -167,10 +167,24 @@ class HostedRecoveryClientTests(unittest.TestCase):
     def test_authenticated_empty_vault_is_not_a_catalog_error(self):
         self.server.snapshot_id = None
         snapshot_id, files = self.client().prior_catalog(
-            key_id="unused", crypto_helper="/missing-helper", max_bytes=1_000_000)
+            key_id="unused", crypto_helper="/missing-helper", max_bytes=1_000_000,
+            expected_snapshot_id=None)
         self.assertIsNone(snapshot_id)
         self.assertEqual(files, [])
         self.assertEqual([item["action"] for item in self.server.requests], ["latest"])
+
+    def test_reserved_base_must_match_latest_before_any_manifest_download(self):
+        other = "22222222-2222-4222-8222-222222222222"
+        with self.assertRaisesRegex(MigrationError, "changed after reservation"):
+            self.client().prior_catalog(key_id="unused",
+                crypto_helper="/missing-helper", max_bytes=1_000_000,
+                expected_snapshot_id=None)
+        with self.assertRaisesRegex(MigrationError, "changed after reservation"):
+            self.client().prior_catalog(key_id="unused",
+                crypto_helper="/missing-helper", max_bytes=1_000_000,
+                expected_snapshot_id=other)
+        self.assertEqual([item["action"] for item in self.server.requests],
+                         ["latest", "latest"])
 
     def test_latest_change_refuses_prior_inventory(self):
         self.server.latest_sequence = [SNAPSHOT, "22222222-2222-4222-8222-222222222222"]

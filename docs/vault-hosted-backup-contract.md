@@ -402,7 +402,13 @@ egress allowance. Do not claim that B2 restores are always free. See its
   authenticated `409 stale_snapshot`; the native client treats it as a
   distinct failed upload that must be reviewed and abandoned before a new
   reservation. Other or uncertain database failures remain generic failures.
-  The installed path still must reserve first and fetch the prior catalog.
+  A reservation now returns the exact last-good snapshot ID captured in the
+  same database statement as the quota reservation, or `null` for a first
+  backup. The native client can require its authenticated prior-catalog read
+  to match that ID before staging transcript bytes; a changed pointer fails
+  closed. The installed path still must wire these calls in that order and
+  retain the reservation identity through publication. Neither the receipt nor
+  the prior-catalog method alone is an installed backup workflow.
   The staged hosted-only object graph has also been recovered through the native
   download, key-import, verification, and restore path in a synthetic test
   without first creating a full ciphertext Vault on the source Mac. That test
