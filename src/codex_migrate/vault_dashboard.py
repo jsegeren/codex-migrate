@@ -469,6 +469,9 @@ async function runSearch(append=false){
       source==="history"?"No matching saved title found. Choose one dated backup to search its full text.":
       source==="local_titles"?"No matching local title found. Try searching conversation text.":
       "No matching conversation text found.";
+    if(data.partial_results){
+      $("status").textContent+=" Some conversations have ambiguous history copies and could not be searched. Results may be incomplete.";
+    }
   }catch(error){
     if(request===searchRequest){
       fail(error);

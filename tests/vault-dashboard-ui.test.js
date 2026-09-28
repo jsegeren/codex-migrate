@@ -198,3 +198,33 @@ test('matching titles appear before full-text search and are not duplicated', as
   assert.equal(elements.get('more-results').hidden, true);
   assert.equal(vm.runInContext('searchPage.offset', context), 2);
 });
+
+test('search warns when ambiguous history copies make results incomplete', async () => {
+  const elements = new Map([
+    ['search-source', { value: 'local' }],
+    ['query', { value: 'lost thread' }],
+    ['error', { textContent: '' }],
+    ['thread', { hidden: false }],
+    ['more-results', { hidden: false, disabled: false }],
+    ['status', { textContent: '' }],
+    ['index-build', { disabled: false }],
+    ['results-panel', { hidden: true }],
+    ['results', { children: [], replaceChildren(...nodes) { this.children = nodes; },
+      append(...nodes) { this.children.push(...nodes); } }],
+    ['salvage-controls', { open: false }],
+    ['salvage-status', { textContent: '' }],
+  ]);
+  const context = {
+    $: id => elements.get(id), URLSearchParams,
+    api: async url => url.includes('source=local_titles') ? { results: [] } :
+      { results: [], has_more: false, partial_results: true },
+    fail: error => { elements.get('error').textContent = error.message; },
+    setTimeout: () => 1, clearTimeout: () => {},
+  };
+  vm.createContext(context);
+  vm.runInContext('let searchPage=null; let searchRequest=0; ' + runSearch, context);
+  await context.runSearch();
+  assert.equal(elements.get('error').textContent, '');
+  assert.match(elements.get('status').textContent, /Results may be incomplete/);
+  assert.equal(elements.get('salvage-controls').open, false);
+});

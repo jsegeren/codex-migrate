@@ -25,6 +25,10 @@ TEXT_KEYS = frozenset(("content", "message", "summary", "text", "title"))
 MAX_LINEAGE_DEPTH = 32
 
 
+class AmbiguousLineage(MigrationError):
+    """Multiple physical rollouts could supply one thread's inherited text."""
+
+
 @dataclass(frozen=True)
 class VaultSummary:
     active_transcripts: int
@@ -207,8 +211,10 @@ def _lineage_segments(
                     or isinstance(ordinal, bool) or ordinal < 0):
                 raise MigrationError("A conversation fork has an invalid parent reference.")
             parents = by_rollout.get(parent_id, [])
-            if len(parents) != 1:
+            if not parents:
                 raise MigrationError("A conversation fork's parent is missing or ambiguous.")
+            if len(parents) != 1:
+                raise AmbiguousLineage("A conversation fork's parent is missing or ambiguous.")
             prefix = resolve(parents[0], boundary, ordinal, seen | {candidate})
         return prefix + [(candidate, length)]
 
@@ -265,7 +271,7 @@ def _paginated_ranges(source_home: str, thread_id: str,
     if not paths:
         return [(thread_id, 0, None)]
     if len(paths) != 1:
-        raise MigrationError("A paginated conversation has ambiguous selected rollouts.")
+        raise AmbiguousLineage("A paginated conversation has ambiguous selected rollouts.")
     segments = _lineage_segments(source_home, paths[0], discovered, rollouts)
     headers = [_session_payload(path) for path, _ in segments]
     ranges = []
@@ -422,8 +428,12 @@ def search(
     catalog: Optional[List[Dict[str, object]]] = None,
     offset: int = 0,
     titles_only: bool = False,
+    warnings: Optional[List[str]] = None,
 ) -> List[VaultMatch]:
-    """Find title matches first, then recent matching conversation text."""
+    """Find title matches first; report skipped ambiguous lineages to callers."""
+    def skipped_ambiguous() -> None:
+        if warnings is not None and "ambiguous_lineage" not in warnings:
+            warnings.append("ambiguous_lineage")
     needle = query.strip().casefold()
     if not needle:
         raise ValueError("search query must not be empty")
@@ -504,21 +514,25 @@ def search(
                             snippet="Title: " + title_match)
                  if title_match else None)
         if found is None:
-            for index, group in _paginated_entries(
-                    source_home, transcript, discovered=discovered,
-                    selected=selected_rollouts, rollouts=rollouts,
-                    available=paginated_catalog_ids):
-                for entry in group:
-                    position = entry.text.casefold().find(needle)
-                    if position >= 0:
-                        found = VaultMatch(
-                            collection="paginated", transcript=transcript,
-                            line=index + 1, timestamp=entry.timestamp, title=title,
-                            snippet=_snippet(entry.text, position, len(query.strip())),
-                            cursor=index)
+            try:
+                for index, group in _paginated_entries(
+                        source_home, transcript, discovered=discovered,
+                        selected=selected_rollouts, rollouts=rollouts,
+                        available=paginated_catalog_ids):
+                    for entry in group:
+                        position = entry.text.casefold().find(needle)
+                        if position >= 0:
+                            found = VaultMatch(
+                                collection="paginated", transcript=transcript,
+                                line=index + 1, timestamp=entry.timestamp, title=title,
+                                snippet=_snippet(entry.text, position, len(query.strip())),
+                                cursor=index)
+                            break
+                    if found is not None:
                         break
-                if found is not None:
-                    break
+            except AmbiguousLineage:
+                skipped_ambiguous()
+                continue
         if found is not None:
             if matched_threads >= offset:
                 matches.append(found)
@@ -548,8 +562,12 @@ def search(
                                         snippet="Title: " + title_match)
                              if title_match else None)
                     if found is None:
-                        ranges = _paginated_ranges(
-                            source_home, thread_id, discovered, selected_rollouts, rollouts)
+                        try:
+                            ranges = _paginated_ranges(
+                                source_home, thread_id, discovered, selected_rollouts, rollouts)
+                        except AmbiguousLineage:
+                            skipped_ambiguous()
+                            continue
                         items = (item for rollout_id, start, end in ranges
                                  for item in source.items_range(rollout_id, start, end))
                         for index, group in _paginated_item_entries(items):
@@ -577,7 +595,11 @@ def search(
         if title_match is not None:
             continue
         match = None
-        segments = _lineage_segments(source_home, path, discovered, rollouts)
+        try:
+            segments = _lineage_segments(source_home, path, discovered, rollouts)
+        except AmbiguousLineage:
+            skipped_ambiguous()
+            continue
         if (indexed_candidates is not None
                 and not any(part in indexed_candidates for part, _ in segments)):
             continue
