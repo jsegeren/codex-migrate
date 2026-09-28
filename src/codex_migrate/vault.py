@@ -543,9 +543,21 @@ def read_thread_page(
             if (len(entries) + len(new_entries) > max_entries
                     or total + new_bytes > max_text_bytes):
                 if not entries:
-                    raise MigrationError("This message is too large to preview. Export the saved conversation instead.")
-                next_cursor = start
-                break
+                    if expected_query and start == cursor:
+                        raise MigrationError("The search match exceeds the preview budget. Download Markdown for the full conversation.")
+                    if not new_entries:
+                        raise MigrationError("This conversation record is too large to preview safely.")
+                    first = next((entry for entry in new_entries if entry.text), new_entries[0])
+                    excerpt = first.text[:1000].encode("utf-8")[:max_text_bytes].decode(
+                        "utf-8", errors="ignore")
+                    new_entries = [ThreadEntry(
+                        timestamp=first.timestamp, role=first.role,
+                        text=excerpt, excerpted=True,
+                    )]
+                    new_bytes = len(excerpt.encode("utf-8"))
+                else:
+                    next_cursor = start
+                    break
             entries.extend(new_entries)
             total += new_bytes
     finally:

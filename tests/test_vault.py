@@ -216,8 +216,10 @@ class VaultTests(unittest.TestCase):
             self.assertTrue(page.entries[0].excerpted)
             self.assertIn("Clerk marker", page.entries[0].text)
             self.assertLess(len(page.entries[0].text), 2000)
-            with self.assertRaisesRegex(MigrationError, "too large to preview"):
-                read_thread_page(str(root), "active", "large.jsonl", match.cursor)
+            from_start, _ = read_thread_page(str(root), "active", "large.jsonl", match.cursor)
+            self.assertTrue(from_start.entries[0].excerpted)
+            self.assertTrue(from_start.entries[0].text.startswith("A"))
+            self.assertLess(len(from_start.entries[0].text), 2000)
             transcript.write_text(json.dumps({"payload": {"message": {"content": body}}}) + "\n",
                                   encoding="utf-8")
             first_match = search(str(root), "clerk", limit=1)[0]
@@ -227,6 +229,41 @@ class VaultTests(unittest.TestCase):
                 expected_query="clerk")
             self.assertTrue(first_page.entries[0].excerpted)
             self.assertIn("Clerk marker", first_page.entries[0].text)
+
+    def test_large_record_preview_can_continue_to_later_work(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            transcript = root / ".codex/sessions/large.jsonl"
+            transcript.parent.mkdir(parents=True)
+            transcript.write_text(
+                json.dumps({"payload": {"text": "A" * (1024 * 1024 + 1)}}) + "\n"
+                + json.dumps({"payload": {"text": "Later important work"}}) + "\n",
+                encoding="utf-8",
+            )
+            first, cursor = read_thread_page(
+                str(root), "active", "large.jsonl", max_entries=1)
+            self.assertEqual(len(first.entries), 1)
+            self.assertTrue(first.entries[0].excerpted)
+            self.assertIsNotNone(cursor)
+            later, end = read_thread_page(
+                str(root), "active", "large.jsonl", cursor, max_entries=1)
+            self.assertEqual([entry.text for entry in later.entries],
+                             ["Later important work"])
+            self.assertIsNone(end)
+            self.assertIn(b"A" * 1024, b"".join(markdown_chunks(
+                str(root), "active", "large.jsonl")))
+
+    def test_large_record_excerpt_respects_utf8_byte_budget(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            transcript = root / ".codex/sessions/large.jsonl"
+            transcript.parent.mkdir(parents=True)
+            transcript.write_text(json.dumps({"payload": {"text": "é" * 100}}) + "\n")
+            page, end = read_thread_page(
+                str(root), "active", "large.jsonl", max_text_bytes=5)
+            self.assertIsNone(end)
+            self.assertTrue(page.entries[0].excerpted)
+            self.assertLessEqual(len(page.entries[0].text.encode("utf-8")), 5)
 
     def test_search_rejects_linked_transcript(self):
         with tempfile.TemporaryDirectory() as temporary:
