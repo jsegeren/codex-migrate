@@ -80,6 +80,12 @@ def stage_hosted_snapshot(
         raise MigrationError("Hosted backup state cannot be inside Codex history.")
     with local_history_lock(source_home):
         has_paginated = _paginated_history_unprotected(source_home)
+        if has_paginated:
+            # Fail before the first remote PUT when the separate history
+            # database or one of SQLite's sidecars cannot be read safely.
+            from codex_migrate.vault_paginated import source_footprint
+            if not source_footprint(source_home)[2]:
+                raise MigrationError("Codex paginated history changed before hosted staging.")
         files = _source_files(source_home)
         if len(files) > 100_000:
             raise MigrationError("The hosted snapshot has too many transcripts.")

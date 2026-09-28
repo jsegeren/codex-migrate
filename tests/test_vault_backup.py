@@ -552,6 +552,40 @@ class VaultBackupTests(unittest.TestCase):
                 subprocess.run([str(self.helper), "delete-key", "--key-id", key_id],
                                check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
+    def test_hosted_staging_refuses_unsafe_paginated_sidecar_before_upload(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            source.mkdir(mode=0o700)
+            self.fixture(source)
+            database = source / ".codex/thread_history_1.sqlite"
+            with sqlite3.connect(database) as connection:
+                connection.execute("CREATE TABLE thread_items (thread_id TEXT, turn_id TEXT, "
+                                   "item_id TEXT, rollout_ordinal INTEGER, created_at_ms INTEGER, "
+                                   "item_json TEXT, item_type TEXT, updated_at_ordinal INTEGER)")
+                connection.execute("CREATE TABLE thread_history_projection_state ("
+                                   "thread_id TEXT, next_rollout_byte_offset INTEGER, "
+                                   "next_rollout_ordinal INTEGER)")
+            outside = root / "outside-sidecar"
+            outside.write_bytes(b"unrelated private data")
+            Path(str(database) + "-shm").symlink_to(outside)
+            directory = root / "journal"
+            directory.mkdir(mode=0o700)
+            key_id = str(uuid.uuid4())
+            metadata = {"format": "codex-vault", "version": 1,
+                        "key_id": key_id, "created_at": "2026-09-28T00:00:00+00:00"}
+            with HostedChunkJournal(
+                    directory, account_id=str(uuid.uuid4()),
+                    vault_id=str(uuid.uuid4()), reservation_id=str(uuid.uuid4()),
+                    snapshot_id=str(uuid.uuid4()), key_id=key_id) as journal, patch.object(
+                    vault_hosted_snapshot_stage, "stage_remote_aware_file_windowed") as upload:
+                with self.assertRaises(MigrationError):
+                    stage_hosted_snapshot(str(source), metadata, [], journal,
+                                          object(), crypto_helper=str(self.helper),
+                                          apply=True)
+                upload.assert_not_called()
+            self.assertEqual(outside.read_bytes(), b"unrelated private data")
+
     def test_hosted_live_runner_stages_publishes_and_restores_synthetic_history(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
