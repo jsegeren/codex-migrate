@@ -65,6 +65,13 @@ restored content. Both Python jobs passed. The CI helper uses a disposable
 test Keychain configuration, not the final signed buyer app; a clean-account
 release-app recovery test and installed-runtime scale proof remain open.
 
+A September 28 low-priority, read-only pass over this Mac's installed Codex
+paginated database validated the known schema and all 799,860 item records
+across 1,615 thread IDs in 15.5 seconds. It reported only aggregate counts
+and bytes; it did not log message content, create a snapshot, or alter Codex.
+This is one installed-version source-read scale check, **not** an encrypted
+full-size backup, scheduled run, clean-account restore, or second-Mac proof.
+
 ## September 27 integrated-source local package — not released
 
 Committed source `e644570` packaged as an arm64 **local-test-only** build-20 app.
