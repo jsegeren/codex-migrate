@@ -273,7 +273,10 @@ second Mac. Missing or ambiguous lineage still requires review, and the
 paginated-history release hold remains open.
 
 On September 28, the installed-Codex synthetic proof above passed again with
-Codex CLI `0.158.0-alpha.2` after the title-index change. Separately, the
+Codex CLI `0.158.0-alpha.2` after the title-index change; it now also verifies
+Markdown export of the saved database-only inherited turn after recovery-key
+import and restoration. This remains one-login, disposable-source evidence.
+Separately, the
 [Vault cross-runner CI proof](https://github.com/jsegeren/codex-migrate/actions/runs/36462786535)
 at `f33f53c` created an encrypted synthetic snapshot on one macOS runner,
 removed its test Keychain key, and imported the recovery key on a second

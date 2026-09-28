@@ -19,7 +19,7 @@ import time
 import unittest
 import uuid
 
-from codex_migrate.vault import read_thread_page, search
+from codex_migrate.vault import markdown_chunks, read_thread_page, search
 from codex_migrate.vault_backup import backup
 from codex_migrate.vault_recovery import (
     import_recovery_key, restore_snapshot, snapshot_catalog,
@@ -263,6 +263,10 @@ class InstalledCodexPaginatedTests(unittest.TestCase):
                     cursor=recovered_child[0].cursor, expected_query=marker.decode())
                 self.assertTrue(any(marker.decode() in entry.text
                                     for entry in recovered_page.entries))
+                exported = b"".join(markdown_chunks(
+                    str(restored_home), "paginated", child_id + ".jsonl",
+                    catalog=catalog))
+                self.assertIn(marker, exported)
             finally:
                 if (vault / "vault.json").exists():
                     key_id = json.loads((vault / "vault.json").read_text())["key_id"]
