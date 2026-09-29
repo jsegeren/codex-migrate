@@ -34,6 +34,9 @@ of work created before the first verified backup, or describe a synthetic R2
 test as disaster-recovery certification. A paid business pilot must show a
 successful off-device backup and a clean-Mac restore of representative data,
 with a visible last-good receipt and failed-run alerting.
+OpenAI's [Codex local-use guidance](https://learn.chatgpt.com/docs/hipaa-configuration)
+assigns workstation and local-retention responsibility to the organization;
+its audit records are not a demonstrated restore of complete local history.
 
 For multiple seats, investigate an organization owner/admin view with seat
 enrollment, backup health by device, last verified backup, failed-run alerts,
@@ -46,6 +49,49 @@ cannot recover an employee's ciphertext if both employee-held keys are lost.
 Business recovery therefore requires a separately reviewed, explicit company-
 controlled key-custody design and offboarding procedure; do not silently
 escrow a key with Segeren Studio or imply the admin interface alone solves it.
+
+### Business privacy and recovery boundary
+
+The business outcome is organizational continuity of Codex work, not employee
+surveillance. An authorized admin needs proof that enrolled devices are backed
+up and a governed way to recover company-owned records after device loss or
+offboarding. Routine health views may show device, seat, snapshot time, size,
+verification status, and failure reason, but not conversation text, titles,
+search terms, or decrypted exports. Content access requires an explicit
+organization-approved recovery path, a purpose, narrowly scoped authorization,
+and an audit record of who requested, approved, and performed it. An admin role
+alone must not grant silent content browsing.
+
+Client-side encryption remains the baseline: the hosted service stores
+ciphertext and the minimum metadata needed to verify, retain, bill, and restore
+it. Segeren Studio must not hold a unilateral plaintext-decryption capability.
+The business key-custody design must give the organization a tested recovery
+route without depending on one employee's Keychain, while making its access
+policy and employee notice explicit. Device enrollment and revocation,
+least-privilege service credentials, authenticated restore, and an auditable
+key-use trail are release requirements. A backup is not “protected” merely
+because an upload succeeded: the service must verify the published snapshot,
+surface missed or failed schedules, and pass an independent clean-Mac restore
+drill using the organization's recovery route.
+
+Do not market this as Microsoft 365-equivalent governance, zero-knowledge,
+SOC 2-certified, HIPAA-compliant, or enterprise-ready until the corresponding
+controls and independent evidence actually exist. Business discovery should
+test whether buyers need retention, offboarding recovery, legal hold, or
+content access—and who in their organization may authorize each—before an
+admin console or key policy is finalized.
+
+Search and insight are possible follow-ons, not prerequisites for the first
+verified business backup. An employee may search and export their own
+authorized local history. Organization-wide content search would require a
+separate, explicit content-access policy, key-use authorization, access logs,
+and a clear answer to whether it searches only company-owned work; it must not
+arrive accidentally through a backup admin role. Start any aggregate reporting
+with service-health measures such as enrolled seats, protected seats, backup
+freshness, verified restores, retained bytes, and failure trends. Do not use
+backup telemetry as a covert individual-productivity or conversation-monitoring
+system. Decide with pilot buyers whether any further aggregate work insights
+are useful and permissible before collecting additional content-derived data.
 
 The Founder rejected a customer-set spending cap and directed pricing toward
 a substantially higher-value business offer. Any $20/month plus usage example
