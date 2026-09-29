@@ -1029,8 +1029,9 @@ egress allowance. Do not claim that B2 restores are always free. See its
    current transcript and paginated sources. An archive move retaining the ID
    is not a deletion. This conservative stop protects against accidental source
    cleanup, but intentional deletion needs a reviewed rebaseline that preserves
-   the older recoverable version. Partial disappearance of unverified-ID files
-   still needs a separate safe policy before release.
+   the older recoverable version. Partial disappearance of transcripts without
+   a verified ID now also stops publication. Same-path rewrites remain eligible;
+   moves must retain the exact content hash or require review.
    A legitimate intentional reset will need an explicit reviewed rebaseline
    path before customer release; silently treating it as a fresh first backup
    would discard the only evidence of the gap.

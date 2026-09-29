@@ -11,7 +11,8 @@ from codex_migrate.vault_hosted_chunk_journal import HostedChunkJournal
 from codex_migrate.vault_hosted_live_stage import stage_reserved_hosted_snapshot
 from codex_migrate.vault_hosted_recovery_client import HostedRecoveryClient
 from codex_migrate.vault_hosted_snapshot_stage import (
-    _missing_verified_threads, stage_hosted_snapshot,
+    _missing_unidentified_transcripts, _missing_verified_threads,
+    stage_hosted_snapshot,
 )
 from codex_migrate.vault_hosted_upload_client import HostedUploadClient
 
@@ -91,6 +92,54 @@ class HostedLiveStageTests(unittest.TestCase):
                           "path": BASE + ".jsonl"}]))
         self.assertTrue(_missing_verified_threads(
             [original], [{**original, "identity_state": "needs_review"}]))
+
+    def test_unidentified_transcript_deletion_and_ambiguous_move_stop(self):
+        first = {"collection": "active", "path": "one.jsonl",
+                 "identity_state": "unverified", "sha256": "a" * 64}
+        second = {**first, "path": "two.jsonl"}
+        self.assertTrue(_missing_unidentified_transcripts(
+            [first, second], [second]))
+        self.assertTrue(_missing_unidentified_transcripts(
+            [first], [{**first, "path": "new.jsonl", "sha256": "b" * 64}]))
+        self.assertFalse(_missing_unidentified_transcripts(
+            [first], [{**first, "sha256": "b" * 64}]))
+        self.assertFalse(_missing_unidentified_transcripts(
+            [first], [{**first, "collection": "archived", "path": "new.jsonl"}]))
+        self.assertTrue(_missing_unidentified_transcripts(
+            [first, second], [{**first, "collection": "archived",
+                              "path": "new.jsonl"}]))
+
+    def test_partial_unidentified_wipe_does_not_publish_a_new_snapshot(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "source"
+            active = source / ".codex/sessions/current.jsonl"
+            active.parent.mkdir(parents=True, mode=0o700)
+            active.write_text(
+                '{"type":"session_meta","payload":{"id":"' + OTHER + '"}}\n',
+                encoding="utf-8")
+            journal_dir = Path(temporary) / "journal"
+            journal_dir.mkdir(mode=0o700)
+            staged = SimpleNamespace(size=active.stat().st_size,
+                                     sha256="a" * 64, chunks=[])
+            with HostedChunkJournal(
+                    journal_dir, account_id=ACCOUNT, vault_id=VAULT,
+                    reservation_id=RESERVATION, snapshot_id=SNAPSHOT,
+                    key_id=KEY, base_snapshot_id=BASE) as journal, patch(
+                    "codex_migrate.vault_hosted_snapshot_stage.published_source_facts",
+                    return_value=({}, None)), patch(
+                    "codex_migrate.vault_hosted_snapshot_stage.stage_remote_aware_file_windowed",
+                    return_value=staged), patch(
+                    "codex_migrate.vault_hosted_snapshot_stage.stage_hosted_snapshot_tail"
+                    ) as publish:
+                with self.assertRaisesRegex(MigrationError,
+                                            "without a verified thread ID disappeared"):
+                    stage_hosted_snapshot(
+                        str(source), self.metadata,
+                        [{"collection": "active", "path": "lost.jsonl",
+                          "sha256": "b" * 64, "identity_state": "unverified"}],
+                        journal, object(), crypto_helper="/unused-helper",
+                        apply=True)
+                publish.assert_not_called()
 
     def test_partial_wipe_does_not_publish_a_new_hosted_snapshot(self):
         with tempfile.TemporaryDirectory() as temporary:

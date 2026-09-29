@@ -6,6 +6,7 @@ checked object graph. It never publishes, schedules, or claims protection.
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 import os
 from pathlib import Path
@@ -138,6 +139,36 @@ def _missing_verified_threads(previous: Sequence[dict], current: Sequence[dict])
              if item.get("collection") in history and
              item.get("identity_state") == "verified" and item.get("thread_id")}
     return bool(before - after)
+
+
+def _missing_unidentified_transcripts(previous: Sequence[dict],
+                                      current: Sequence[dict]) -> bool:
+    """Do not silently drop files whose Codex thread ID could not be trusted.
+
+    Keep a row when its path still exists, even if the file was appended. A
+    move to a different path is recognized only by the same plaintext hash;
+    identical copies are counted so deleting one cannot hide behind another.
+    An ambiguous move/rewrite stops publication for explicit review.
+    """
+    collections = ("active", "archived")
+    before_paths = {(item.get("collection"), item.get("path"))
+                    for item in previous if item.get("collection") in collections}
+    now = {(item.get("collection"), item.get("path")) for item in current
+           if item.get("collection") in collections}
+    remaining = Counter(
+        item.get("sha256") for item in current
+        if item.get("collection") in collections and
+           (item.get("collection"), item.get("path")) not in before_paths)
+    for item in previous:
+        if (item.get("collection") not in collections or
+                item.get("identity_state") == "verified" or
+                (item.get("collection"), item.get("path")) in now):
+            continue
+        digest = item.get("sha256")
+        if not isinstance(digest, str) or not _HEX.fullmatch(digest) or not remaining[digest]:
+            return True
+        remaining[digest] -= 1
+    return False
 
 
 def _reuse_candidates(files: list, prior: Sequence[dict],
@@ -435,6 +466,11 @@ def stage_hosted_snapshot(
             raise MigrationError(
                 "A previously verified Codex thread disappeared since the prior "
                 "backup. No new hosted snapshot was published; review the source.")
+        if _missing_unidentified_transcripts(previous_catalog, manifest_files):
+            raise MigrationError(
+                "A Codex transcript without a verified thread ID disappeared or "
+                "moved ambiguously since the prior backup. No new hosted snapshot "
+                "was published; review the source.")
         manifest = {
             "format": "codex-vault-snapshot",
             "version": (4 if any(item["collection"] == "attachments"
