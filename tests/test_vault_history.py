@@ -10,12 +10,12 @@ from unittest.mock import patch
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault import search
 from codex_migrate.vault_backup import _paginated_history_unprotected, backup
-from codex_migrate.vault_history import _group_key, search_titles, thread_timeline
+from codex_migrate.vault_history import _group_key, _versions, search_titles, thread_timeline
 from codex_migrate import vault_identity
 from codex_migrate.vault_identity import (
     TranscriptChanged, loss_warnings, peek_identity, scan_transcript,
 )
-from codex_migrate.vault_recovery import snapshot_catalog, verify_snapshot
+from codex_migrate.vault_recovery import list_snapshots, snapshot_catalog, verify_snapshot
 
 
 THREAD_ID = "44444444-4444-4444-8444-444444444444"
@@ -26,6 +26,33 @@ def record(kind, payload):
 
 
 class IdentityTests(unittest.TestCase):
+    def test_history_remains_browsable_after_one_thousand_daily_versions(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            vault = Path(temporary) / "vault"
+            for folder in ("refs", "manifests", "objects"):
+                (vault / folder).mkdir(parents=True, exist_ok=True)
+            (vault / "vault.json").write_text(json.dumps({
+                "format": "codex-vault", "version": 1,
+                "key_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "created_at": "2026-09-28T00:00:00+00:00",
+            }))
+            for index in range(1001):
+                snapshot_id = f"11111111-1111-4111-8111-{index:012x}"
+                reference = {"format": "codex-vault-reference", "version": 1,
+                             "snapshot_id": snapshot_id,
+                             "created_at": "2026-09-28T00:00:00+00:00",
+                             "manifest": f"manifests/{snapshot_id}.cvmanifest"}
+                (vault / "refs" / f"{snapshot_id}.json").write_text(
+                    json.dumps(reference))
+                (vault / "manifests" / f"{snapshot_id}.cvmanifest").touch()
+            (vault / "latest.json").write_text(json.dumps(reference))
+            snapshots = list_snapshots(str(vault), limit=None)
+            self.assertEqual(len(snapshots), 1001)
+            self.assertEqual(snapshots[0].snapshot_id, reference["snapshot_id"])
+            self.assertEqual(len(list_snapshots(str(vault), limit=1)), 1)
+            with patch("codex_migrate.vault_history.snapshot_catalog", return_value=[]):
+                self.assertEqual(list(_versions(str(vault))), [])
+
     def test_paginated_history_presence_never_claims_complete_jsonl_coverage(self):
         with tempfile.TemporaryDirectory() as temporary:
             codex = Path(temporary) / ".codex"
@@ -100,6 +127,29 @@ class IdentityTests(unittest.TestCase):
             self.assertEqual(len(hits), 2)
             self.assertEqual([item["version_count"] for item in hits], [1, 1])
             self.assertEqual(len(thread_timeline("unused", second["key"])), 1)
+
+    def test_unverified_same_path_changed_bytes_are_not_one_thread(self):
+        base = {"collection": "codex", "path": "sessions/unknown.jsonl",
+                "transcript": "sessions/unknown.jsonl", "thread_id": None,
+                "identity_state": "unverified", "titles": ["Same title"],
+                "records": 1, "assistant_messages": 0, "at_risk": False,
+                "size": 20}
+        older = {**base, "sha256": "a" * 64, "snapshot_id": "older",
+                 "created_at": "2026-09-01T00:00:00Z"}
+        newer = {**base, "sha256": "b" * 64, "snapshot_id": "newer",
+                 "created_at": "2026-09-02T00:00:00Z"}
+        duplicate = {**older, "snapshot_id": "duplicate",
+                     "created_at": "2026-09-03T00:00:00Z"}
+        for version in (older, newer, duplicate):
+            version["key"] = _group_key(version)
+        self.assertNotEqual(older["key"], newer["key"])
+        self.assertEqual(older["key"], duplicate["key"])
+        with patch("codex_migrate.vault_history._versions",
+                   return_value=[newer, duplicate, older]):
+            hits = search_titles("unused", "Same title")
+            self.assertEqual(len(hits), 2)
+            self.assertEqual([hit["version_count"] for hit in hits], [1, 1])
+            self.assertEqual(len(thread_timeline("unused", older["key"])), 1)
 
     def test_embedded_id_survives_rename_and_conflict_needs_review(self):
         with tempfile.TemporaryDirectory() as temporary:

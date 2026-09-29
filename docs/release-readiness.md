@@ -26,6 +26,14 @@ to the search engine. The second search also warned about ambiguous history
 copies, so neither result is proof of complete recall. This is local source
 behavior, not a released-buyer or large-history performance guarantee.
 
+A synthetic 1,001-snapshot regression found and removed a separate long-term
+history failure: the local Vault browser previously refused all history once
+the folder held more than 1,000 references. Bounded CLI/browser requests remain
+bounded, but internal title and timeline traversal can now read all retained
+versions, yielding entries instead of building a second version list. This does
+not prove fast browsing at realistic multi-year history size or clear the
+paginated-history release hold.
+
 An opt-in source-interpreter search benchmark used only a disposable SQLite
 history with 200 threads, 100,000 items, and 1 KiB of deterministic,
 high-trigram-variety base64 text per item. The 142,303,232-byte source database

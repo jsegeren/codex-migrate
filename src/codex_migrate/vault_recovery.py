@@ -212,8 +212,9 @@ def snapshot_catalog(
     return result
 
 
-def list_snapshots(vault: str, *, limit: int = 100) -> List[SnapshotInfo]:
-    if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 1000:
+def list_snapshots(vault: str, *, limit: Optional[int] = 100) -> List[SnapshotInfo]:
+    if limit is not None and (not isinstance(limit, int) or isinstance(limit, bool)
+                              or not 1 <= limit <= 1000):
         raise ValueError("snapshot limit must be between 1 and 1000")
     root, _, latest_id, _, _ = _snapshot(vault, "latest")
     references = root / "refs"
@@ -221,7 +222,10 @@ def list_snapshots(vault: str, *, limit: int = 100) -> List[SnapshotInfo]:
     if not references.is_dir():
         raise MigrationError("The Vault snapshot history is missing.")
     paths = sorted(references.glob("*.json"))
-    if len(paths) > 1000:
+    # The CLI/browser request may be capped, but retained history must not
+    # become unreadable after 1,001 daily backups. Keep a separate generous
+    # filesystem-abuse bound instead of treating ordinary retention as damage.
+    if len(paths) > 100000:
         raise MigrationError("The Vault snapshot history is unexpectedly large.")
     history = []
     for path in paths:
@@ -247,7 +251,7 @@ def list_snapshots(vault: str, *, limit: int = 100) -> List[SnapshotInfo]:
             latest=checked_id == latest_id,
         ))
     history.sort(key=lambda item: (item.created_at, item.snapshot_id), reverse=True)
-    return history[:limit]
+    return history if limit is None else history[:limit]
 
 
 def vault_storage_usage(vault: str) -> Dict[str, int]:

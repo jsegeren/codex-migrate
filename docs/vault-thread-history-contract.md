@@ -8,6 +8,12 @@ first verified snapshot or to turns written since the latest verified capture.
 
 ## Identity and versions
 
+Local retained history must remain discoverable past the first 1,000 daily
+snapshots. User-facing snapshot requests stay bounded, while title search and
+per-thread timelines traverse all retained references without materializing
+every thread version in a second list. A synthetic 1,001-reference regression
+proves enumeration still works; it is not a large-history latency benchmark.
+
 - A validated Codex `session_meta.payload.id` is the primary thread identity.
   Cross-check it against `session_index.jsonl` and the rollout filename when
   those sources are available. A title and a path are discovery attributes,
@@ -22,7 +28,9 @@ first verified snapshot or to turns written since the latest verified capture.
   files with the same ID in one capture, is `needs_review`. Keep the files and
   versions separate; do not infer sameness from a title or a similar body.
   When no ID can be validated, retain a source-scoped path-based discovery
-  result, but do not automatically connect it to a renamed or moved file.
+  result, but do not automatically connect it to a renamed or moved file—or
+  treat changed bytes at the same path as one thread. Identical captured bytes
+  may deduplicate; a different digest remains a separate result for review.
 - Search current and archived transcript text, current and historical titles,
   and titles across snapshots. Older full text is searched in a selected
   snapshot. A v1 snapshot remains readable but cannot claim title aliases it
