@@ -8,6 +8,12 @@ first verified snapshot or to turns written since the latest verified capture.
 
 ## Identity and versions
 
+Local retained history must remain discoverable past the first 1,000 daily
+snapshots. User-facing snapshot requests stay bounded, while title search and
+per-thread timelines traverse all retained references without materializing
+every thread version in a second list. A synthetic 1,001-reference regression
+proves enumeration still works; it is not a large-history latency benchmark.
+
 - A validated Codex `session_meta.payload.id` is the primary thread identity.
   Cross-check it against `session_index.jsonl` and the rollout filename when
   those sources are available. A title and a path are discovery attributes,

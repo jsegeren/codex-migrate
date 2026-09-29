@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Iterator, List, Optional, Tuple
 
 from codex_migrate.vault_recovery import list_snapshots, snapshot_catalog
 
@@ -25,12 +25,11 @@ def _group_key(file: Dict[str, object]) -> str:
             + "/" + str(file["sha256"]))
 
 
-def _versions(vault: str, *, crypto_helper: Optional[str] = None) -> List[Dict[str, object]]:
-    versions: List[Dict[str, object]] = []
-    for snapshot in list_snapshots(vault, limit=1000):
+def _versions(vault: str, *, crypto_helper: Optional[str] = None) -> Iterator[Dict[str, object]]:
+    for snapshot in list_snapshots(vault, limit=None):
         for file in snapshot_catalog(
                 vault, snapshot=snapshot.snapshot_id, crypto_helper=crypto_helper):
-            versions.append({
+            yield {
                 "key": _group_key(file),
                 "snapshot_id": snapshot.snapshot_id,
                 "created_at": snapshot.created_at,
@@ -44,8 +43,7 @@ def _versions(vault: str, *, crypto_helper: Optional[str] = None) -> List[Dict[s
                 "records": file["records"],
                 "assistant_messages": file["assistant_messages"],
                 "at_risk": file["at_risk"],
-            })
-    return versions
+            }
 
 
 def search_titles(
