@@ -37,6 +37,55 @@ test('valid request sends consent to fixed maintainer, not visitor', async () =>
   assert.match(res.body, /data-analytics-event="generate_lead"/);
   assert.match(res.body, /src="\/analytics\.js\?v=20260911-ecommerce"/);
 });
+test('team pilot request uses the same fixed recipient and only bounded qualification fields', async () => {
+  const res = await submit({ body: {
+    intent: 'team-pilot', email: 'buyer@example.net', team_size: '26-100',
+    codex_surface: 'both', consent: 'yes', website: '',
+  } });
+  assert.equal(res.statusCode, 200);
+  assert.equal(sent.length, 1);
+  const payload = JSON.parse(sent[0].options.body);
+  assert.deepEqual(payload.personalizations, [{ to: [{ email: 'maintainer@example.com' }] }]);
+  assert.equal(payload.subject, '[Codex Backup] Team pilot conversation request');
+  assert.equal(payload.reply_to.email, 'buyer@example.net');
+  assert.match(payload.content[0].value, /26–100 people/);
+  assert.match(payload.content[0].value, /Mac app and CLI\/IDE/);
+  assert.match(payload.content[0].value, /not available yet/);
+  assert.doesNotMatch(JSON.stringify(payload), /conversation text|repository content/);
+  assert.match(res.body, /data-analytics-event="team_pilot_request_sent"/);
+  assert.match(res.body, /href="\/codex-backup-for-teams"/);
+  assert.doesNotMatch(res.body, /buyer@example/);
+});
+test('team pilot rejects forged or unconsented qualification without sending', async () => {
+  const valid = { intent: 'team-pilot', email: 'buyer@example.net',
+    team_size: '6-25', codex_surface: 'cli-ide', consent: 'yes', website: '' };
+  for (const body of [
+    { ...valid, team_size: '1000000' },
+    { ...valid, codex_surface: 'other\nBcc: attacker@example.net' },
+    { ...valid, consent: '' },
+    { ...valid, message: 'customer secrets' },
+    { ...valid, website: 'spam' },
+  ]) {
+    assert.equal((await submit({ body })).statusCode, 400);
+  }
+  assert.equal(sent.length, 0);
+});
+test('team pilot provider failure is not reported as a lead', async () => {
+  global.fetch = async () => ({ status: 403 });
+  const res = await submit({ body: { intent: 'team-pilot', email: 'buyer@example.net',
+    team_size: '2-5', codex_surface: 'mac-app', consent: 'yes', website: '' } });
+  assert.equal(res.statusCode, 503);
+  assert.match(res.body, /could not confirm/);
+  assert.doesNotMatch(res.body, /data-analytics-event=/);
+  assert.match(res.body, /href="\/codex-backup-for-teams"/);
+});
+test('browser-encoded team form reaches the team flow without changing launch consent', async () => {
+  const res = await submit({ body: 'intent=team-pilot&email=buyer%40example.net&team_size=6-25&codex_surface=cli-ide&consent=yes&website=' });
+  assert.equal(res.statusCode, 200);
+  assert.equal(sent.length, 1);
+  assert.match(JSON.parse(sent[0].options.body).content[0].value, /team design-partner conversation/);
+  assert.doesNotMatch(JSON.parse(sent[0].options.body).content[0].value, /Please email me when the Mac app is available/);
+});
 test('rendered signup responses use Joshua, never the shortened public name', async () => {
   const responses = [await submit()];
   delete process.env.SENDGRID_API_KEY;
