@@ -134,6 +134,66 @@ test('provider and database failures return only a generic error', async () => {
   assert.deepEqual(res.body, { error: 'temporarily_unavailable' });
 });
 
+test('sandbox session rotation rechecks purchase and never returns a bearer', async () => {
+  const env = { HOSTED_MODE: 'sandbox', HOSTED_SANDBOX_ENROLLMENT_OPEN: 'yes' };
+  const old = mintSessionSecret();
+  const replacement = mintSessionSecret();
+  const oldDeviceId = randomUUID();
+  const newDeviceId = randomUUID();
+  const accountId = randomUUID();
+  const vaultId = randomUUID();
+  let active = true;
+  let purchaseChecks = 0;
+  let rotations = 0;
+  const handler = makeHandler(async () => ({
+    query: async (sql, values) => {
+      if (sql.includes('FROM hosted.device_sessions')) {
+        assert.deepEqual(values, [old.tokenHash, oldDeviceId]);
+        return { rows: active ? [{ account_id: accountId, vault_id: vaultId,
+          device_id: oldDeviceId, purchase_session_id: purchase.sessionId,
+          purchase_mode: purchase.mode }] : [] };
+      }
+      assert.match(sql, /hosted\.rotate_device_session/);
+      assert.deepEqual(values, [old.tokenHash, oldDeviceId,
+        replacement.tokenHash, newDeviceId]);
+      rotations++;
+      active = false;
+      return { rows: [{ account_id: accountId, vault_id: vaultId }] };
+    },
+    verifyPurchaseSession: async (id, mode) => {
+      assert.deepEqual([id, mode], [purchase.sessionId, purchase.mode]);
+      purchaseChecks++;
+      return purchase;
+    },
+  }), env);
+  const req = { method: 'POST', headers: {
+    'content-type': 'application/json', authorization: `Bearer ${old.token}` },
+  body: { action: 'rotate', oldDeviceId, newDeviceId,
+    newDeviceTokenHash: replacement.tokenHash } };
+  const send = async () => {
+    const res = response();
+    await handler(req, res);
+    return res;
+  };
+  const first = await send();
+  assert.equal(first.statusCode, 200);
+  assert.deepEqual(first.body, { accountId, vaultId, deviceId: newDeviceId });
+  assert.equal(JSON.stringify(first.body).includes(old.token), false);
+  assert.equal(JSON.stringify(first.body).includes(replacement.token), false);
+  assert.equal(purchaseChecks, 1);
+  assert.equal(rotations, 1);
+  assert.equal((await send()).statusCode, 503);
+  assert.equal(rotations, 1);
+  delete req.headers.authorization;
+  assert.equal((await send()).statusCode, 403);
+  req.headers.authorization = `Bearer ${old.token}`;
+  req.body.newDeviceTokenHash = 'bad';
+  assert.equal((await send()).statusCode, 503);
+  req.body.newDeviceTokenHash = replacement.tokenHash;
+  req.body.purchaseToken = purchaseToken;
+  assert.equal((await send()).statusCode, 400);
+});
+
 test('enrollment database is pinned to the sandbox without opening recovery', () => {
   const env = { HOSTED_MODE: 'sandbox', HOSTED_SANDBOX_ENROLLMENT_OPEN: 'yes',
     COMMERCE_DATABASE_URL: 'postgresql://fixture:fixture@ep-square-queen-av5us6bx.c-11.us-east-1.aws.neon.tech/neondb?sslmode=require' };

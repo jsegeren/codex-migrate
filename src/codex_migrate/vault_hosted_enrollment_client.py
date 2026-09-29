@@ -229,6 +229,66 @@ class HostedEnrollmentClient:
         """Recover an ambiguous claim using the same Keychain-held bearer."""
         return self._session(device_id, crypto_helper)[1]
 
+    def rotate_device(self, old_device_id: str, new_device_id: str,
+                      expected_account_id: str, expected_vault_id: str, *,
+                      crypto_helper: Optional[str] = None,
+                      apply: bool = False) -> dict:
+        """Replace one expiring bearer; retry by resolving the saved new one.
+
+        The caller must persist the new Keychain credential and its ID before
+        invoking this method. A lost server reply may mean rotation succeeded;
+        never mint another credential or repeat the mutation in that case.
+        """
+        _require_apply(apply)
+        if (not isinstance(old_device_id, str) or
+                not re.fullmatch(_UUID, old_device_id) or
+                not isinstance(new_device_id, str) or
+                not re.fullmatch(_UUID, new_device_id) or
+                old_device_id == new_device_id or
+                not isinstance(expected_account_id, str) or
+                not re.fullmatch(_UUID, expected_account_id) or
+                not isinstance(expected_vault_id, str) or
+                not re.fullmatch(_UUID, expected_vault_id)):
+            raise MigrationError("The hosted device rotation is invalid.")
+        # Validate the actual Keychain bearer before consuming the old session.
+        # A stale device-list hash must not strand the schedule with a token
+        # that cannot authenticate on the next wake.
+        new_token = self._credential(new_device_id, crypto_helper)
+        new_hash = hashlib.sha256(b"codex-vault-hosted-session-v1\0" +
+                                  new_token.encode("ascii")).hexdigest()
+
+        def matching(identity: dict) -> dict:
+            if (identity["accountId"] != expected_account_id or
+                    identity["vaultId"] != expected_vault_id):
+                raise MigrationError("The hosted device changed identity.")
+            return identity
+
+        # A previous request may have committed while its acknowledgement was
+        # lost. The newly persisted bearer is authoritative if it resolves.
+        try:
+            resolved_new = self._post({"action": "resolve",
+                                       "deviceId": new_device_id}, new_token)
+        except MigrationError:
+            pass
+        else:
+            return matching(_identity(resolved_new, new_device_id))
+        old_token, old_identity = self._session(old_device_id, crypto_helper)
+        matching(old_identity)
+        try:
+            result = self._post({"action": "rotate", "oldDeviceId": old_device_id,
+                                 "newDeviceId": new_device_id,
+                                 "newDeviceTokenHash": new_hash}, old_token)
+        except MigrationError:
+            # Do not retry the mutation. Only the new bearer can prove that a
+            # timed-out request actually committed on the server.
+            try:
+                resolved_new = self._post({"action": "resolve",
+                                           "deviceId": new_device_id}, new_token)
+                return matching(_identity(resolved_new, new_device_id))
+            except MigrationError:
+                raise MigrationError("Hosted device rotation could not be confirmed.") from None
+        return matching(_identity(result, new_device_id))
+
     def upload_client(self, device_id: str, worker_origin: str, *,
                       crypto_helper: Optional[str] = None) -> HostedUploadClient:
         """Open a dark upload adapter without handing its bearer to browser code."""

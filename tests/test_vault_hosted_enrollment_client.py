@@ -18,6 +18,10 @@ DEVICE = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
 TOKEN = "hv1_" + "a" * 43
 TOKEN_HASH = hashlib.sha256(b"codex-vault-hosted-session-v1\0" +
                             TOKEN.encode("ascii")).hexdigest()
+NEW_DEVICE = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+NEW_TOKEN = "hv1_" + "d" * 43
+NEW_TOKEN_HASH = hashlib.sha256(b"codex-vault-hosted-session-v1\0" +
+                                NEW_TOKEN.encode("ascii")).hexdigest()
 PURCHASE = "cs_test_fixture." + "b" * 64
 CODE = "hve1_" + "c" * 43
 
@@ -46,6 +50,24 @@ class _Handler(BaseHTTPRequestHandler):
             # The server has acted, but the client cannot know if it did.
             self.close_connection = True
             return
+        if self.server.rotation_active and body["action"] == "resolve":
+            expected = (NEW_DEVICE if self.server.rotated else DEVICE)
+            bearer = (NEW_TOKEN if self.server.rotated else TOKEN)
+            if (body["deviceId"] != expected or
+                    self.headers.get("Authorization") != "Bearer " + bearer):
+                self.send_error(503)
+                return
+        if body["action"] == "rotate" and self.server.rotation_active:
+            if (self.server.rotated or body["oldDeviceId"] != DEVICE or
+                    body["newDeviceId"] != NEW_DEVICE or
+                    body["newDeviceTokenHash"] != NEW_TOKEN_HASH or
+                    self.headers.get("Authorization") != "Bearer " + TOKEN):
+                self.send_error(503)
+                return
+            self.server.rotated = True
+            if self.server.lose_rotate_reply:
+                self.close_connection = True
+                return
         if body["action"] in ("begin", "begin_recovery"):
             result = {"status": "sent"}
         elif body["action"] == "list_recovery_vaults":
@@ -54,6 +76,9 @@ class _Handler(BaseHTTPRequestHandler):
         elif body["action"] in ("claim", "claim_recovery"):
             result = {"accountId": ACCOUNT, "vaultId": VAULT,
                       "deviceId": body["deviceId"]}
+        elif body["action"] == "rotate":
+            result = {"accountId": ACCOUNT, "vaultId": VAULT,
+                      "deviceId": body["newDeviceId"]}
         else:
             result = {"accountId": ACCOUNT, "vaultId": VAULT,
                       "deviceId": body["deviceId"]}
@@ -70,6 +95,9 @@ class HostedEnrollmentClientTests(unittest.TestCase):
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
         self.server.calls = []
         self.server.lose_claim_reply = False
+        self.server.rotation_active = False
+        self.server.rotated = False
+        self.server.lose_rotate_reply = False
         self.server.recovery_account = ACCOUNT
         self.server.worker_origin = "http://127.0.0.1:54321"
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
@@ -91,9 +119,14 @@ class HostedEnrollmentClientTests(unittest.TestCase):
         if arguments == ["hosted-device-create"]:
             return {"device_id": DEVICE, "token_hash": TOKEN_HASH}
         if arguments == ["hosted-device-list"]:
-            return {"devices": [{"device_id": DEVICE, "token_hash": TOKEN_HASH}]}
+            return {"devices": [{"device_id": DEVICE, "token_hash": TOKEN_HASH},
+                                {"device_id": NEW_DEVICE,
+                                 "token_hash": NEW_TOKEN_HASH}]}
         if arguments == ["hosted-device-read", "--device-id", DEVICE]:
             return {"device_id": DEVICE, "token_hash": TOKEN_HASH, "token": TOKEN}
+        if arguments == ["hosted-device-read", "--device-id", NEW_DEVICE]:
+            return {"device_id": NEW_DEVICE, "token_hash": NEW_TOKEN_HASH,
+                    "token": NEW_TOKEN}
         raise AssertionError("unexpected helper operation")
 
     def test_email_claim_and_resolve_keep_bearer_out_of_claim(self):
@@ -134,6 +167,58 @@ class HostedEnrollmentClientTests(unittest.TestCase):
         self.assertEqual(self.helper_calls.count(["hosted-device-create"]), 1)
         self.assertFalse(any("delete" in part for call in self.helper_calls
                              for part in call))
+
+    def test_rotation_resolves_new_bearer_after_lost_ack_without_replay(self):
+        self.server.rotation_active = True
+        self.server.lose_rotate_reply = True
+        with patch("codex_migrate.vault_hosted_enrollment_client._helper_path",
+                   return_value=Path("/synthetic/helper")), \
+                patch("codex_migrate.vault_hosted_enrollment_client._run_helper",
+                      side_effect=self.fake_helper):
+            client = self.client()
+            expected = {"accountId": ACCOUNT, "vaultId": VAULT,
+                        "deviceId": NEW_DEVICE}
+            self.assertEqual(client.rotate_device(DEVICE, NEW_DEVICE,
+                             ACCOUNT, VAULT, apply=True), expected)
+            self.assertEqual(client.rotate_device(DEVICE, NEW_DEVICE,
+                             ACCOUNT, VAULT, apply=True), expected)
+        actions = [body["action"] for body, _ in self.server.calls]
+        self.assertEqual(actions, ["resolve", "resolve", "rotate", "resolve",
+                                   "resolve"])
+        self.assertEqual(actions.count("rotate"), 1)
+        self.assertEqual(self.server.calls[2][1], "Bearer " + TOKEN)
+        self.assertNotIn(TOKEN, json.dumps(self.server.calls[2][0]))
+        self.assertFalse(any("delete" in part for call in self.helper_calls
+                             for part in call))
+
+    def test_rotation_refuses_mismatched_identity_or_missing_confirmation(self):
+        self.server.rotation_active = True
+        with patch("codex_migrate.vault_hosted_enrollment_client._helper_path",
+                   return_value=Path("/synthetic/helper")), \
+                patch("codex_migrate.vault_hosted_enrollment_client._run_helper",
+                      side_effect=self.fake_helper):
+            client = self.client()
+            with self.assertRaisesRegex(MigrationError, "changed identity"):
+                client.rotate_device(DEVICE, NEW_DEVICE, NEW_DEVICE, VAULT,
+                                     apply=True)
+            self.assertFalse(self.server.rotated)
+            with self.assertRaisesRegex(MigrationError, "explicit confirmation"):
+                client.rotate_device(DEVICE, NEW_DEVICE, ACCOUNT, VAULT)
+
+    def test_rotation_refuses_corrupt_new_keychain_bearer_before_server_mutation(self):
+        def corrupt_new(path, arguments):
+            result = self.fake_helper(path, arguments)
+            if arguments == ["hosted-device-read", "--device-id", NEW_DEVICE]:
+                return {**result, "token_hash": "0" * 64}
+            return result
+        with patch("codex_migrate.vault_hosted_enrollment_client._helper_path",
+                   return_value=Path("/synthetic/helper")), \
+                patch("codex_migrate.vault_hosted_enrollment_client._run_helper",
+                      side_effect=corrupt_new):
+            with self.assertRaisesRegex(MigrationError, "credential is invalid"):
+                self.client().rotate_device(DEVICE, NEW_DEVICE, ACCOUNT, VAULT,
+                                            apply=True)
+        self.assertEqual(self.server.calls, [])
 
     def test_keychain_credential_opens_native_upload_and_recovery_clients(self):
         with patch("codex_migrate.vault_hosted_enrollment_client._helper_path",

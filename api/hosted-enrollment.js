@@ -1,13 +1,13 @@
-// Sandbox-only first-device enrollment. This proves ownership of an existing
-// app purchase and its email, but grants zero upload capacity. It does not
-// start a hosted trial, subscription, or backup.
+// Sandbox-only enrollment and scoped device rotation. Pairing proves an
+// existing purchase and email, but grants zero upload capacity. Neither
+// action starts a hosted trial, subscription, or backup.
 const { reply } = require('../commerce/http');
 const { runtime: commerceRuntime } = require('../commerce/runtime');
 const { sandboxDatabaseUrl,
   sandboxDatabaseRuntime } = require('../hosted/recovery_runtime');
 const { enrollmentMail } = require('../hosted/enrollment_mail');
 const { beginEnrollment, claimEnrollment,
-  resolveFirstDevice, beginRecovery, listRecoveryVaults,
+  resolveFirstDevice, rotateDeviceSession, beginRecovery, listRecoveryVaults,
   claimRecoveryVault } = require('../hosted/enrollment');
 
 const BEARER = /^Bearer (hv1_[A-Za-z0-9_-]{43})$/;
@@ -33,9 +33,11 @@ function requestBody(req) {
       'action,code,purchaseToken' :
     data.action === 'claim_recovery' ?
       'action,code,deviceId,deviceTokenHash,purchaseToken,vaultId' :
-    data.action === 'resolve' ? 'action,deviceId' : null;
+    data.action === 'resolve' ? 'action,deviceId' :
+    data.action === 'rotate' ?
+      'action,newDeviceId,newDeviceTokenHash,oldDeviceId' : null;
   if (keys !== expected ||
-      (data.action !== 'resolve' &&
+      (!['resolve', 'rotate'].includes(data.action) &&
         (typeof data.purchaseToken !== 'string' ||
          data.purchaseToken.length > 330)) ||
       (['claim', 'claim_recovery'].includes(data.action) &&
@@ -45,7 +47,11 @@ function requestBody(req) {
         typeof data.code !== 'string') ||
       (data.action === 'claim_recovery' &&
         typeof data.vaultId !== 'string') ||
-      (data.action === 'resolve' && typeof data.deviceId !== 'string')) {
+      (data.action === 'resolve' && typeof data.deviceId !== 'string') ||
+      (data.action === 'rotate' &&
+        (typeof data.oldDeviceId !== 'string' ||
+         typeof data.newDeviceId !== 'string' ||
+         typeof data.newDeviceTokenHash !== 'string'))) {
     throw Error('invalid_request');
   }
   return data;
@@ -82,7 +88,7 @@ function makeHandler(load = enrollmentRuntime, env = process.env) {
     try { data = requestBody(req); }
     catch { return reply(res, 400, { error: 'invalid_request' }); }
     const token = BEARER.exec(req.headers.authorization || '')?.[1];
-    if (data.action === 'resolve' && !token) {
+    if (['resolve', 'rotate'].includes(data.action) && !token) {
       return reply(res, 403, { error: 'access_denied' });
     }
     try {
@@ -119,6 +125,14 @@ function makeHandler(load = enrollmentRuntime, env = process.env) {
           vaultId: data.vaultId, deviceId: data.deviceId,
           deviceTokenHash: data.deviceTokenHash,
           verifyPurchase: verifyPurchaseToken, query,
+        }));
+      }
+      if (data.action === 'rotate') {
+        return reply(res, 200, await rotateDeviceSession({
+          oldDeviceToken: token, oldDeviceId: data.oldDeviceId,
+          newDeviceId: data.newDeviceId,
+          newDeviceTokenHash: data.newDeviceTokenHash,
+          verifyPurchase: verifyPurchaseSession, query,
         }));
       }
       return reply(res, 200, await resolveFirstDevice({

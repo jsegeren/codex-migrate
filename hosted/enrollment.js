@@ -38,6 +38,9 @@ const RECOVERY_LIST_SQL = `SELECT vault_id, published_at
 const RECOVERY_CLAIM_SQL = `SELECT hosted.claim_recovery_vault_device(
   $1::text, $2::text, $3::text, $4::uuid, $5::uuid, $6::text
 ) AS account_id`;
+const ROTATE_SQL = `SELECT account_id, vault_id FROM hosted.rotate_device_session(
+  $1::text, $2::uuid, $3::text, $4::uuid
+)`;
 
 class HostedEnrollmentError extends Error {
   constructor() { super('hosted_enrollment_unavailable'); }
@@ -208,5 +211,29 @@ async function resolveFirstDevice({ deviceToken, deviceId, query,
   } catch { throw new HostedEnrollmentError(); }
 }
 
+async function rotateDeviceSession({ oldDeviceToken, oldDeviceId, newDeviceId,
+  newDeviceTokenHash, query, verifyPurchase }) {
+  if (typeof query !== 'function' || typeof verifyPurchase !== 'function' ||
+      !UUID.test(oldDeviceId) || !UUID.test(newDeviceId) ||
+      oldDeviceId === newDeviceId || !DIGEST.test(newDeviceTokenHash)) {
+    throw new HostedEnrollmentError();
+  }
+  try {
+    // The existing session and its current purchase are checked first. The
+    // database then atomically consumes that exact active bearer; a concurrent
+    // replay, expired bearer, or conflicting replacement receives no row.
+    const old = await resolveFirstDevice({ deviceToken: oldDeviceToken,
+      deviceId: oldDeviceId, query, verifyPurchase });
+    const result = await query(ROTATE_SQL, [tokenHash(oldDeviceToken),
+      oldDeviceId, newDeviceTokenHash, newDeviceId]);
+    const row = result?.rows?.[0];
+    if (result?.rows?.length !== 1 || row.account_id !== old.accountId ||
+        row.vault_id !== old.vaultId) throw new HostedEnrollmentError();
+    return Object.freeze({ accountId: old.accountId, vaultId: old.vaultId,
+      deviceId: newDeviceId });
+  } catch { throw new HostedEnrollmentError(); }
+}
+
 module.exports = { HostedEnrollmentError, beginEnrollment, claimEnrollment,
-  resolveFirstDevice, beginRecovery, listRecoveryVaults, claimRecoveryVault };
+  resolveFirstDevice, rotateDeviceSession, beginRecovery, listRecoveryVaults,
+  claimRecoveryVault };

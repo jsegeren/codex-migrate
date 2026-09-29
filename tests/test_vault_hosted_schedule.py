@@ -10,7 +10,7 @@ from unittest.mock import patch
 from codex_migrate.cli import parser
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_hosted_schedule import (
-    LABEL, _paths, hosted_schedule_status, install_hosted_schedule,
+    LABEL, _paths, _rotation_path, hosted_schedule_status, install_hosted_schedule,
     remove_hosted_schedule, run_hosted_scheduled_backup,
 )
 from codex_migrate.vault_schedule import prepare_update, resume_after_update
@@ -19,6 +19,7 @@ from codex_migrate.vault_schedule import prepare_update, resume_after_update
 ACCOUNT = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 VAULT = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
 DEVICE = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+NEW_DEVICE = "11111111-1111-4111-8111-111111111111"
 SNAPSHOT = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
 NEXT = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
 KEY = "ffffffff-ffff-4fff-8fff-ffffffffffff"
@@ -36,8 +37,19 @@ class HostedScheduleTests(unittest.TestCase):
         self.recovery = SimpleNamespace(
             latest_snapshot=lambda **_kw: {"snapshotId": SNAPSHOT},
             prior_catalog=lambda **_kw: (SNAPSHOT, []))
+        self.rotation_calls = []
         self.enrollment = SimpleNamespace(
-            backup_clients=lambda *_args, **_kw: (self.upload, self.recovery))
+            backup_clients=lambda *_args, **_kw: (self.upload, self.recovery),
+            create_device=lambda **_kw: NEW_DEVICE,
+            rotate_device=self._rotate,
+            resolve=lambda device_id, **_kw: {"accountId": ACCOUNT,
+                                               "vaultId": VAULT,
+                                               "deviceId": device_id})
+
+    def _rotate(self, old_id, new_id, account_id, vault_id, **_kw):
+        self.rotation_calls.append((old_id, new_id, account_id, vault_id))
+        return {"accountId": account_id, "vaultId": vault_id,
+                "deviceId": new_id}
 
     def _patches(self):
         return (patch("codex_migrate.vault_hosted_schedule.HostedEnrollmentClient",
@@ -121,6 +133,48 @@ class HostedScheduleTests(unittest.TestCase):
             self.assertEqual(run_hosted_scheduled_backup(str(config_path)), 0)
         self.assertEqual(json.loads(status_path.read_text())["status"], "unchanged")
         self.assertEqual(json.loads(good_path.read_text())["snapshot_id"], SNAPSHOT)
+        self.assertEqual(self.rotation_calls,
+                         [(DEVICE, NEW_DEVICE, ACCOUNT, VAULT)])
+        self.assertEqual(json.loads(config_path.read_text())["device_id"], NEW_DEVICE)
+        self.assertFalse(_rotation_path(self.home).exists())
+
+        with a, b, patch("codex_migrate.vault_hosted_schedule.HostedLiveBackupRun",
+                         return_value=fake_run):
+            self.assertEqual(run_hosted_scheduled_backup(str(config_path)), 0)
+        self.assertEqual(len(self.rotation_calls), 1)
+
+    def test_ambiguous_rotation_preserves_pending_id_and_last_good(self):
+        self._install()
+        config_path, status_path, good_path, _ = _paths(self.home)
+        good_before = good_path.read_bytes()
+        created = []
+        self.enrollment.create_device = lambda **_kw: (
+            created.append(NEW_DEVICE) or NEW_DEVICE)
+        self.enrollment.rotate_device = lambda *_args, **_kw: (
+            (_ for _ in ()).throw(MigrationError("synthetic lost acknowledgement")))
+        fake_run = SimpleNamespace(back_up_live_history=lambda *_args, **_kw: {
+            "unchanged": True, "lastGoodSnapshotId": SNAPSHOT})
+        a, b, _, _ = self._patches()
+        with a, b, patch("codex_migrate.vault_hosted_schedule.HostedLiveBackupRun",
+                         return_value=fake_run):
+            self.assertEqual(run_hosted_scheduled_backup(str(config_path)), 1)
+        pending_path = _rotation_path(self.home)
+        self.assertEqual(json.loads(pending_path.read_text()),
+                         {"old_device_id": DEVICE, "new_device_id": NEW_DEVICE})
+        self.assertEqual(pending_path.stat().st_mode & 0o077, 0)
+        self.assertEqual(json.loads(config_path.read_text())["device_id"], DEVICE)
+        self.assertEqual(good_path.read_bytes(), good_before)
+        self.assertEqual(json.loads(status_path.read_text())["status"], "failed")
+
+        self.enrollment.rotate_device = self._rotate
+        with a, b, patch("codex_migrate.vault_hosted_schedule.HostedLiveBackupRun",
+                         return_value=fake_run):
+            self.assertEqual(run_hosted_scheduled_backup(str(config_path)), 0)
+        self.assertEqual(created, [NEW_DEVICE])
+        self.assertEqual(self.rotation_calls,
+                         [(DEVICE, NEW_DEVICE, ACCOUNT, VAULT)])
+        self.assertEqual(json.loads(config_path.read_text())["device_id"], NEW_DEVICE)
+        self.assertFalse(pending_path.exists())
 
     def test_failed_check_keeps_prior_verified_receipt(self):
         self._install()

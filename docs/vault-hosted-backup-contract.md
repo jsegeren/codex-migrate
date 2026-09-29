@@ -101,15 +101,17 @@ at-risk run. It has synthetic safety tests, but is not wired to enrollment or
 the signed customer's UI and has not run a 30-minute physical-Mac acceptance
   cycle. It is not a customer backup service or a recovery-window claim yet.
 
-Current sandbox device sessions expire after 29 days. Without a credential
-lifecycle, an unattended schedule would then lose access even on a healthy
-Mac. A dark database rotation primitive now replaces one active scoped device
-session with a different Keychain-held bearer and revokes the old session in
-one transaction; disposable PostgreSQL tests cover replay, wrong-device,
-expiry, and failed-insert rollback. No native rotation, ambiguous-response
-reconciliation, schedule handoff, or HTTP action is wired yet. Automated
-renewal/rotation and a visible re-enrollment path after prolonged offline time
-are release gates, not a hidden day-29 failure to ship.
+Sandbox device sessions expire after 29 days. A sandbox-only enrollment action
+and dark native scheduler now rotate the bearer on the first hosted scheduled
+run and every 14 days thereafter. The caller first saves a new Keychain
+credential; the database atomically revokes the old session and inserts the
+new one for the same account and Vault. A durable, bearer-free handoff record
+lets the next run reconcile a crash or lost response by resolving the *same*
+new credential. SQL, API, and native tests cover replay, wrong-device, expiry,
+failed-insert rollback, identity substitution, and an ambiguous response.
+No production subscription or customer UI invokes this yet. A visible
+re-enrollment path after a Mac has been offline past expiry, physical-Mac
+unattended acceptance, and clean-Mac recovery remain release gates.
 
 The sandbox recovery API now has an account-scoped, device-authenticated
 read-only usage query for server-accounted retained and reserved encrypted

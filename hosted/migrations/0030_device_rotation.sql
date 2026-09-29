@@ -2,7 +2,8 @@
 -- The caller must first authenticate the old bearer and persist the newly
 -- generated bearer in Keychain. This transaction never extends the old token;
 -- a lost response is reconciled by resolving the new bearer, not by blindly
--- repeating a rotation. No HTTP route or scheduled client invokes it yet.
+-- repeating a rotation. The sandbox-only route and dark scheduled client
+-- invoke it; no customer-facing hosted backup is enabled.
 CREATE FUNCTION hosted.rotate_device_session(
   p_old_hash text, p_old_device_id uuid,
   p_new_hash text, p_new_device_id uuid

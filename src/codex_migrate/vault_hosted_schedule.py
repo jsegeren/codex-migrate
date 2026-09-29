@@ -8,7 +8,7 @@ off-device backup receipt.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import os
 from pathlib import Path
 import platform
@@ -34,6 +34,7 @@ from codex_migrate.vault_schedule import (
 LABEL = "com.segeren.codex-vault.hosted-backup"
 SERVICE_ORIGIN = "https://migrate.segeren.com"
 INTERVAL_SECONDS = 30 * 60
+ROTATION_INTERVAL = timedelta(days=14)
 MAX_PRIOR_BYTES = 64 * 1024 * 1024
 _FORMAT = "codex-vault-hosted-schedule"
 _UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z")
@@ -53,12 +54,20 @@ def _paths(source_home: str) -> tuple:
             home / "Library/LaunchAgents" / (LABEL + ".plist"))
 
 
+def _rotation_path(source_home: str) -> Path:
+    return _home(source_home) / "Library/Application Support/Codex Vault/hosted-rotation.json"
+
+
 def _configuration(path: Path) -> dict:
     value = _safe_json(path)
-    if (set(value) != {"format", "version", "source_home", "account_id",
-                       "vault_id", "device_id", "key_metadata", "installed_at"} or
-            value.get("format") != _FORMAT or value.get("version") != 1 or
+    base = {"format", "version", "source_home", "account_id",
+            "vault_id", "device_id", "key_metadata", "installed_at"}
+    if (set(value) not in (base, base | {"session_rotated_at"}) or
+            value.get("format") != _FORMAT or
+            value.get("version") not in (1, 2) or
             type(value.get("version")) is not int or
+            (value["version"] == 1 and set(value) != base) or
+            (value["version"] == 2 and set(value) != base | {"session_rotated_at"}) or
             not isinstance(value.get("source_home"), str) or
             not Path(value["source_home"]).is_absolute() or
             any(not isinstance(value.get(key), str) or not _UUID.fullmatch(value[key])
@@ -67,7 +76,56 @@ def _configuration(path: Path) -> dict:
         raise MigrationError("The hosted backup schedule is invalid.")
     _metadata(value["key_metadata"])
     _timestamp(value.get("installed_at"))
+    if value["version"] == 2 and value["session_rotated_at"] is not None:
+        _timestamp(value["session_rotated_at"])
     return value
+
+
+def _rotate_if_due(config_path: Path, configuration: dict,
+                   enrollment: HostedEnrollmentClient, helper: Path) -> dict:
+    """Durably hand a scheduled run to a new bearer before the old one expires."""
+    pending_path = _rotation_path(configuration["source_home"])
+    pending = _safe_json(pending_path) if pending_path.exists() else None
+    if pending is not None:
+        if (set(pending) != {"old_device_id", "new_device_id"} or
+                any(not isinstance(pending.get(key), str) or
+                    not _UUID.fullmatch(pending[key])
+                    for key in ("old_device_id", "new_device_id")) or
+                pending["old_device_id"] == pending["new_device_id"]):
+            raise MigrationError("The hosted device handoff is invalid.")
+        if pending["new_device_id"] == configuration["device_id"]:
+            # A crash after saving the new schedule but before cleanup.
+            pending_path.unlink()
+            _fsync_directory(pending_path.parent)
+            return configuration
+        if pending["old_device_id"] != configuration["device_id"]:
+            raise MigrationError("The hosted device handoff changed identity.")
+    else:
+        rotated_at = configuration.get("session_rotated_at")
+        if rotated_at is not None:
+            age = datetime.now(timezone.utc) - _timestamp(rotated_at)
+            if timedelta(0) <= age < ROTATION_INTERVAL:
+                return configuration
+        new_device_id = enrollment.create_device(crypto_helper=str(helper), apply=True)
+        pending = {"old_device_id": configuration["device_id"],
+                   "new_device_id": new_device_id}
+        _atomic_json(pending_path, pending, replace=False)
+
+    identity = enrollment.rotate_device(
+        pending["old_device_id"], pending["new_device_id"],
+        configuration["account_id"], configuration["vault_id"],
+        crypto_helper=str(helper), apply=True)
+    if (identity != {"accountId": configuration["account_id"],
+                     "vaultId": configuration["vault_id"],
+                     "deviceId": pending["new_device_id"]}):
+        raise MigrationError("The hosted device handoff changed identity.")
+    updated = {**configuration, "version": 2,
+               "device_id": pending["new_device_id"],
+               "session_rotated_at": _now()}
+    _atomic_json(config_path, updated, replace=True)
+    pending_path.unlink()
+    _fsync_directory(pending_path.parent)
+    return updated
 
 
 def _loaded() -> bool:
@@ -118,10 +176,10 @@ def install_hosted_schedule(source_home: str, device_id: str, metadata: dict, *,
     except KeyError as error:
         raise MigrationError("The macOS account home is unavailable.") from error
     configuration = {
-        "format": _FORMAT, "version": 1, "source_home": str(home),
+        "format": _FORMAT, "version": 2, "source_home": str(home),
         "account_id": upload._account_id, "vault_id": upload._vault_id,
         "device_id": device_id, "key_metadata": metadata,
-        "installed_at": _now(),
+        "installed_at": _now(), "session_rotated_at": None,
     }
     program = engine + ["vault", "--source-home", str(home),
                         "hosted-scheduled-run", "--config", str(config_path)]
@@ -135,6 +193,12 @@ def install_hosted_schedule(source_home: str, device_id: str, metadata: dict, *,
     with _update_lock(str(home), nonblocking=True) as marker_path:
         if _pending_update(marker_path) is not None:
             raise MigrationError("Wait for the app update before enabling hosted backup.")
+        if _rotation_path(str(home)).exists():
+            raise MigrationError("Complete the pending hosted device handoff first.")
+        current = enrollment.resolve(device_id, crypto_helper=str(helper))
+        if current != {"accountId": upload._account_id,
+                       "vaultId": upload._vault_id, "deviceId": device_id}:
+            raise MigrationError("The hosted backup device changed identity.")
         previous_config = _safe_file(config_path)
         previous_plist = _safe_file(plist_path)
         previous_good = _safe_file(good_path)
@@ -194,6 +258,7 @@ def run_hosted_scheduled_backup(config_path: str) -> int:
                          replace=True)
             helper = _helper_path(None)
             enrollment = HostedEnrollmentClient(SERVICE_ORIGIN)
+            configuration = _rotate_if_due(path, configuration, enrollment, helper)
             upload, recovery = enrollment.backup_clients(
                 configuration["device_id"], crypto_helper=str(helper))
             if (upload._account_id != configuration["account_id"] or
