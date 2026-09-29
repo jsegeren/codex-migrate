@@ -882,25 +882,30 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                                 catalog=self._browse_catalog, offset=offset,
                                 warnings=warnings)
 
-    def read_vault_backup_thread(self, collection, transcript):
+    def read_vault_backup_thread(self, collection, transcript, physical_only=False):
         with self._browse_data_lock:
             if self._browse_home is None or self._browse_catalog is None:
                 raise MigrationError("Open a verified Vault backup before reading it")
             return read_thread(str(self._browse_home), collection, transcript,
-                               catalog=self._browse_catalog)
+                               catalog=self._browse_catalog, physical_only=physical_only)
 
-    def read_vault_backup_thread_page(self, collection, transcript, cursor, expected_query=""):
+    def read_vault_backup_thread_page(self, collection, transcript, cursor,
+                                      expected_query="", physical_only=False):
         with self._browse_data_lock:
             if self._browse_home is None or self._browse_catalog is None:
                 raise MigrationError("Open a verified Vault backup before reading it")
             return read_thread_page(str(self._browse_home), collection, transcript,
                                     cursor, expected_query=expected_query,
-                                    catalog=self._browse_catalog)
+                                    catalog=self._browse_catalog,
+                                    physical_only=physical_only)
 
-    def issue_vault_export_ticket(self, collection, transcript, source="backup"):
-        if (collection not in ("active", "archived", "paginated")
-                or not isinstance(transcript, str)) \
-                or not transcript or len(transcript) > 4096 or source not in ("backup", "local"):
+    def issue_vault_export_ticket(self, collection, transcript, source="backup",
+                                  physical_only=False):
+        if (type(physical_only) is not bool
+                or (physical_only and collection == "paginated")
+                or collection not in ("active", "archived", "paginated")
+                or not isinstance(transcript, str) or not transcript
+                or len(transcript) > 4096 or source not in ("backup", "local")):
             raise MigrationError("Choose an opened conversation to export")
         with self._browse_data_lock if source == "backup" else nullcontext():
             if source == "backup" and (self._browse_home is None or
@@ -921,11 +926,12 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                 if collection != "paginated":
                     _find_transcript(export_home, collection, transcript)
                 source_stamp = markdown_source_stamp(export_home, collection, transcript,
-                                                     catalog=catalog)
+                                                     catalog=catalog, physical_only=physical_only)
                 expected_bytes = sum(len(chunk) for chunk in markdown_chunks(
-                    export_home, collection, transcript, catalog=catalog))
+                    export_home, collection, transcript, catalog=catalog,
+                    physical_only=physical_only))
                 if markdown_source_stamp(export_home, collection, transcript,
-                                         catalog=catalog) != source_stamp:
+                                         catalog=catalog, physical_only=physical_only) != source_stamp:
                     raise MigrationError("The conversation changed while preparing export.")
         ticket = secrets.token_urlsafe(32)
         with self._export_ticket_lock:
@@ -936,7 +942,7 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                 raise MigrationError("Too many pending exports. Retry in one minute.")
             self._export_tickets[ticket] = (now + 60, source, export_home,
                                             collection, transcript, expected_bytes,
-                                            source_stamp)
+                                            source_stamp, physical_only)
         return ticket
 
     def consume_vault_export_ticket(self, ticket):
@@ -1273,8 +1279,9 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                         return
                     stream_started = False
                     try:
-                        source, export_home, collection, transcript, expected_bytes, source_stamp = setup.consume_vault_export_ticket(
-                            query["ticket"][0])
+                        (source, export_home, collection, transcript, expected_bytes,
+                         source_stamp, physical_only) = setup.consume_vault_export_ticket(
+                             query["ticket"][0])
                         with setup._browse_data_lock if source == "backup" else nullcontext():
                             if source == "backup" and (setup._browse_home is None or
                                                        setup._browse_catalog is None or
@@ -1299,10 +1306,12 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                                                              live_paginated_source=live_source)
                                 else:
                                     if markdown_source_stamp(export_home, collection, transcript,
-                                                             catalog=catalog) != source_stamp:
+                                                             catalog=catalog,
+                                                             physical_only=physical_only) != source_stamp:
                                         raise MigrationError("The conversation changed before export")
                                     chunks = markdown_chunks(export_home, collection, transcript,
-                                                             catalog=catalog)
+                                                             catalog=catalog,
+                                                             physical_only=physical_only)
                                 first = next(chunks)
                                 self.send_response(200)
                                 self.send_header("Content-Type", "text/markdown; charset=utf-8")
@@ -1451,12 +1460,15 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                                 self.wfile.write(encoded)
                             return
                         if (parsed.path in ("/api/vault/thread", "/api/vault/export")
-                                and set(query) <= {"collection", "transcript", "source", "cursor", "match"}):
+                                and set(query) <= {"collection", "transcript", "source", "cursor", "match", "physical"}):
                             collection = query.get("collection", [""])[0]
                             transcript = query.get("transcript", [""])[0]
                             source = query.get("source", ["local"])[0]
+                            physical_only = query.get("physical", ["0"])[0] == "1"
                             if (len(collection) > 16 or len(transcript) > 4096
                                 or source not in ("local", "backup")
+                                or ("physical" in query and (query["physical"] != ["1"]
+                                        or collection == "paginated"))
                                 or ("cursor" in query and (parsed.path != "/api/vault/thread"
                                         or len(query["cursor"]) != 1
                                         or len(query["cursor"][0]) > 20))
@@ -1469,18 +1481,22 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                                 expected_query = query.get("match", [""])[0]
                                 thread, next_cursor = (
                                     setup.read_vault_backup_thread_page(
-                                        collection, transcript, cursor, expected_query)
+                                        collection, transcript, cursor, expected_query,
+                                        physical_only=physical_only)
                                     if source == "backup" else
                                     read_thread_page(setup.source_home, collection, transcript,
                                                      cursor, expected_query=expected_query,
-                                                     live_paginated=collection == "paginated"))
+                                                     live_paginated=collection == "paginated",
+                                                     physical_only=physical_only))
                                 self._json(200, {**thread.as_dict(),
                                                  "next_cursor": next_cursor})
                                 return
-                            thread = (setup.read_vault_backup_thread(collection, transcript)
+                            thread = (setup.read_vault_backup_thread(collection, transcript,
+                                                                      physical_only=physical_only)
                                       if source == "backup" else
                                       read_thread(setup.source_home, collection, transcript,
-                                                  live_paginated=collection == "paginated"))
+                                                  live_paginated=collection == "paginated",
+                                                  physical_only=physical_only))
                             if parsed.path == "/api/vault/thread":
                                 self._json(200, thread.as_dict())
                             else:
@@ -1565,10 +1581,12 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                             raise MigrationError("Invalid export request size")
                         payload = json.loads(self.rfile.read(length))
                         if (not isinstance(payload, dict) or
-                                set(payload) != {"collection", "transcript", "source"}):
+                                not {"collection", "transcript", "source"} <= set(payload) or
+                                set(payload) - {"collection", "transcript", "source", "physical_only"}):
                             raise MigrationError("Choose a saved conversation to export")
                         ticket = setup.issue_vault_export_ticket(
-                            payload["collection"], payload["transcript"], payload["source"])
+                            payload["collection"], payload["transcript"], payload["source"],
+                            payload.get("physical_only", False))
                         self._json(200, {"url": "/api/vault/download?ticket=" + ticket})
                     except (MigrationError, ValueError, TypeError):
                         self._json(400, {"error": "The saved conversation could not be prepared for export."})

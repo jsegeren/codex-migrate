@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import patch
 
 from codex_migrate.errors import MigrationError
-from codex_migrate.vault import inspect, markdown, markdown_chunks, read_thread, read_thread_page, search
+from codex_migrate.vault import AmbiguousLineage, inspect, markdown, markdown_chunks, read_thread, read_thread_page, search
 from codex_migrate.vault_identity import scan_transcript
 
 
@@ -115,6 +115,50 @@ class VaultTests(unittest.TestCase):
             self.assertEqual(warnings, ["ambiguous_lineage"])
             with self.assertRaisesRegex(MigrationError, "ambiguous"):
                 read_thread(str(root), "active", child.name)
+
+    def test_ambiguous_fork_exposes_only_own_physical_text_as_incomplete(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            active = root / ".codex/sessions"
+            archived = root / ".codex/archived_sessions"
+            active.mkdir(parents=True)
+            archived.mkdir()
+            parent_id = "11111111-1111-4111-8111-111111111111"
+            child_id = "22222222-2222-4222-8222-222222222222"
+            parent_record = json.dumps({"type": "session_meta", "payload": {
+                "id": parent_id, "message": "parent-only secret"}}) + "\n"
+            for folder in (active, archived):
+                (folder / ("rollout-" + parent_id + ".jsonl")).write_text(parent_record)
+            child = active / ("rollout-" + child_id + ".jsonl")
+            child.write_text(
+                json.dumps({"type": "session_meta", "payload": {
+                    "id": child_id, "history_base": {"thread_id": parent_id,
+                        "end_ordinal_exclusive": 0, "end_byte_offset": 0}}}) + "\n"
+                + json.dumps({"payload": {"message": {
+                    "content": "child-only recovery needle"}}}) + "\n")
+            warnings = []
+            matches = search(str(root), "recovery needle", warnings=warnings)
+            self.assertEqual(len(matches), 1)
+            self.assertEqual(matches[0].transcript, child.name)
+            self.assertTrue(matches[0].physical_only)
+            self.assertEqual(warnings, ["ambiguous_lineage"])
+            with self.assertRaises(AmbiguousLineage):
+                read_thread(str(root), "active", child.name)
+            page, next_cursor = read_thread_page(
+                str(root), "active", child.name, matches[0].cursor,
+                expected_query="recovery needle", physical_only=True)
+            self.assertTrue(page.physical_only)
+            self.assertIsNone(next_cursor)
+            self.assertEqual([entry.text for entry in page.entries],
+                             ["child-only recovery needle"])
+            exported = b"".join(markdown_chunks(
+                str(root), "active", child.name, physical_only=True))
+            self.assertIn(b"INCOMPLETE Codex physical file", exported)
+            self.assertIn(b"child-only recovery needle", exported)
+            self.assertNotIn(b"parent-only secret", exported)
+            (archived / ("rollout-" + parent_id + ".jsonl")).unlink()
+            with self.assertRaisesRegex(MigrationError, "changed"):
+                read_thread(str(root), "active", child.name, physical_only=True)
 
     def test_common_word_returns_recent_distinct_threads_not_old_message_hits(self):
         with tempfile.TemporaryDirectory() as temporary:

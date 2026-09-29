@@ -9,6 +9,8 @@ const displayTitle = vm.runInNewContext(
 const runSearch = source.match(/async function runSearch\(append=false\)\{[\s\S]*?\n\}/)[0];
 const completeVisibleConversation = vm.runInNewContext(
   '(' + source.match(/function completeVisibleConversation\([\s\S]*?\n\}/)[0] + ')');
+const threadParams = vm.runInNewContext(
+  '(' + source.match(/function params\([\s\S]*?\n\}/)[0] + ')', { URLSearchParams });
 const markdownFile = source.match(/async function markdownFile\(\)\{[\s\S]*?\n\}/)[0];
 const backupView = source.match(/function backupView\(data\)\{[\s\S]*?\n\}/)[0];
 const scheduleView = source.match(/function scheduleView\(data\)\{[\s\S]*?\n\}/)[0];
@@ -246,6 +248,17 @@ test('search warns when ambiguous history copies make results incomplete', async
   assert.equal(elements.get('error').textContent, '');
   assert.match(elements.get('status').textContent, /Results may be incomplete/);
   assert.equal(elements.get('salvage-controls').open, false);
+});
+
+test('physical-copy results carry the explicit read mode and cannot offer copy-back', () => {
+  const incomplete = { collection: 'active', transcript: 'rollout-child.jsonl',
+    source: 'backup', physical_only: true };
+  assert.equal(threadParams(incomplete).get('physical'), '1');
+  assert.equal(threadParams({ ...incomplete, physical_only: false }).has('physical'), false);
+  assert.match(source, /Incomplete physical copy: inherited fork history is not included/);
+  assert.match(source, /thread\.physical_only/);
+  assert.match(source, /selected\.physical_only\)return;if\(!confirm\("Restore only/);
+  assert.match(source, /physical_only:!!selected\.physical_only/);
 });
 
 test('search identifies damaged-file omissions and opens read-only inspection', async () => {

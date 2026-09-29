@@ -1,5 +1,19 @@
 # Desktop release readiness
 
+## September 29 ambiguous-fork retrieval — draft only
+
+When a fork names a parent rollout ID with multiple physical candidates, the
+draft Vault still refuses to infer a complete lineage. It now searches the
+child's own JSONL bytes separately and labels any match as an **incomplete
+physical copy**. The browser can open and export that exact file with a warning
+that inherited history is absent; it does not offer selected copy-back into
+Codex. The server also refuses selected copy-back if the recovered child's
+parent lineage is ambiguous. Synthetic local and opened-backup API checks cover
+search, matched read, Markdown export, and copy-back refusal. Ambiguous
+database-only inheritance remains excluded with an incomplete-results warning.
+This work is not in the public notarized build and does not establish complete
+search recall or clean-Mac recovery.
+
 ## September 29 current-source portability proof — draft only
 
 At source commit `578b4d6`, [CI run 36633107207](https://github.com/jsegeren/codex-migrate/actions/runs/36633107207)

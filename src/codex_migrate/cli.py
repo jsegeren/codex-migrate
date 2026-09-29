@@ -614,15 +614,16 @@ def main(argv: Optional[List[str]] = None) -> int:
             else:
                 for item in results:
                     when = " (%s)" % item.timestamp if item.timestamp else ""
-                    print("%s · %s:%d%s" % (
-                        item.collection, item.transcript, item.line, when))
+                    print("%s · %s:%d%s%s" % (
+                        item.collection, item.transcript, item.line, when,
+                        " · INCOMPLETE physical copy" if item.physical_only else ""))
                     print("  %s" % item.snippet)
                 if not results:
                     print("No matching conversation text found.")
             if warnings:
                 if "ambiguous_lineage" in warnings:
-                    print("Some conversations have ambiguous history copies and could not be "
-                          "searched. Results may be incomplete.", file=sys.stderr)
+                    print("Some conversations have ambiguous history copies. Own-file matches "
+                          "are marked incomplete; inherited text was not searched.", file=sys.stderr)
                 if "damaged_transcript" in warnings:
                     print("A damaged conversation file was skipped. Results may be incomplete; "
                           "use salvage-preview on a copy for an incomplete read-only export.",

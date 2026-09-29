@@ -60,6 +60,7 @@ class VaultMatch:
     snippet: str
     title: Optional[str] = None
     cursor: int = 0
+    physical_only: bool = False
 
     def as_dict(self) -> Dict[str, object]:
         return asdict(self)
@@ -81,12 +82,14 @@ class VaultThread:
     collection: str
     transcript: str
     entries: List[ThreadEntry]
+    physical_only: bool = False
 
     def as_dict(self) -> Dict[str, object]:
         return {
             "collection": self.collection,
             "transcript": self.transcript,
             "entries": [entry.as_dict() for entry in self.entries],
+            "physical_only": self.physical_only,
         }
 
 
@@ -228,6 +231,25 @@ def _lineage_segments(
         return prefix + [(candidate, length)]
 
     return resolve(path, None, None, set())
+
+
+def _read_segments(source_home: str, path: Path, physical_only: bool = False) -> List[Tuple[Path, int]]:
+    """Permit a separately labelled file-only read only after proven ambiguity."""
+    try:
+        segments = _lineage_segments(source_home, path)
+    except AmbiguousLineage:
+        if not physical_only:
+            raise
+        try:
+            info = check_info(path.lstat())
+        except OSError as error:
+            raise MigrationError("The physical conversation changed before reading.") from error
+        if not stat.S_ISREG(info.st_mode):
+            raise MigrationError("The physical conversation is not a regular file.")
+        return [(path, info.st_size)]
+    if physical_only:
+        raise MigrationError("The history copies changed. Search again before opening a physical file.")
+    return segments
 
 
 def _session_payload(path: Path) -> Optional[Dict[str, object]]:
@@ -515,15 +537,25 @@ def search(
     # An old title must be findable without scanning gigabytes of newer body
     # text first. A title hit represents its thread once; body search below
     # skips it rather than adding a misleading duplicate result.
-    for _, relative, collection, current_title, title_match in prepared:
+    for path, relative, collection, current_title, title_match in prepared:
         if title_match is None:
             continue
+        try:
+            _lineage_segments(source_home, path, discovered)
+            physical_only = False
+        except AmbiguousLineage:
+            skipped_ambiguous()
+            physical_only = True
+        except MigrationError:
+            # Keep a known title discoverable even if the body needs review.
+            physical_only = False
         match = VaultMatch(
             collection=collection, transcript=relative, line=0,
             timestamp=None, title=current_title,
             snippet="Title: " + _snippet(title_match,
                                           title_match.casefold().find(needle),
                                           len(query.strip())),
+            physical_only=physical_only,
         )
         if matched_threads >= offset:
             matches.append(match)
@@ -650,11 +682,14 @@ def search(
         if title_match is not None:
             continue
         match = None
+        physical_only = False
         try:
             segments = _lineage_segments(source_home, path, discovered, rollouts)
         except AmbiguousLineage:
             skipped_ambiguous()
-            continue
+            info = check_info(path.lstat())
+            segments = [(path, info.st_size)]
+            physical_only = True
         except UnreadableTranscript:
             if warnings is None:
                 raise
@@ -681,6 +716,7 @@ def search(
                         title=current_title,
                         snippet=_snippet(text, position, len(query.strip())),
                         cursor=cursor,
+                        physical_only=physical_only,
                     )
                     break
                 if match is not None:
@@ -780,9 +816,12 @@ def read_thread(
     max_text_bytes: int = 25 * 1024 * 1024,
     live_paginated: bool = False,
     catalog: Optional[List[Dict[str, object]]] = None,
+    physical_only: bool = False,
 ) -> VaultThread:
     """Return message-like text from one exact discovered transcript."""
     if collection == "paginated":
+        if physical_only:
+            raise ValueError("physical-file mode does not apply to database history")
         entries: List[ThreadEntry] = []
         total = 0
         for _, group in _paginated_entries(source_home, transcript, live_paginated,
@@ -796,7 +835,7 @@ def read_thread(
     path = _find_transcript(source_home, collection, transcript)
     entries: List[ThreadEntry] = []
     total = 0
-    for record, _, _ in _lineage_records(_lineage_segments(source_home, path)):
+    for record, _, _ in _lineage_records(_read_segments(source_home, path, physical_only)):
         seen = set()
         for text in _record_texts(source_home, record):
             if text in seen:
@@ -811,7 +850,7 @@ def read_thread(
                 role=_first_named_string(record, "role"),
                 text=text,
             ))
-    return VaultThread(collection, transcript, entries)
+    return VaultThread(collection, transcript, entries, physical_only)
 
 
 def read_thread_page(
@@ -820,6 +859,7 @@ def read_thread_page(
     expected_query: str = "",
     live_paginated: bool = False,
     catalog: Optional[List[Dict[str, object]]] = None,
+    physical_only: bool = False,
 ):
     """Read one bounded page of a live or verified Vault conversation."""
     if not isinstance(cursor, int) or cursor < 0 or cursor > 1 << 63:
@@ -829,6 +869,8 @@ def read_thread_page(
     if not isinstance(expected_query, str) or len(expected_query) > 500:
         raise ValueError("invalid conversation search match")
     if collection == "paginated":
+        if physical_only:
+            raise ValueError("physical-file mode does not apply to database history")
         entries: List[ThreadEntry] = []
         total = 0
         next_cursor = None
@@ -874,7 +916,7 @@ def read_thread_page(
     path = _find_transcript(source_home, collection, transcript)
     entries: List[ThreadEntry] = []
     total = 0
-    segments = _lineage_segments(source_home, path)
+    segments = _read_segments(source_home, path, physical_only)
     if cursor > sum(length for _, length in segments):
         raise MigrationError("A saved conversation changed while opening it.")
     next_cursor = None
@@ -932,18 +974,20 @@ def read_thread_page(
             total += new_bytes
     finally:
         records.close()
-    return VaultThread(collection, transcript, entries), next_cursor
+    return VaultThread(collection, transcript, entries, physical_only), next_cursor
 
 
 def markdown(thread: VaultThread) -> str:
     """Create a portable, plain Markdown representation of a thread."""
     lines = [
-        "# Codex conversation",
+        "# INCOMPLETE Codex physical file" if thread.physical_only else "# Codex conversation",
         "",
         "- Collection: %s" % thread.collection,
         "- Transcript: `%s`" % thread.transcript.replace("`", "\\`"),
-        "",
     ]
+    if thread.physical_only:
+        lines.append("- Fork ancestry is not included. Do not install this export into Codex.")
+    lines.append("")
     for index, entry in enumerate(thread.entries, start=1):
         heading = entry.role.strip().title() if entry.role and entry.role.strip() else "Entry %d" % index
         lines.extend(("## %s" % heading, ""))
@@ -954,7 +998,7 @@ def markdown(thread: VaultThread) -> str:
 
 
 def markdown_chunks(source_home: str, collection: str, transcript: str,
-                    live_paginated_source=None, catalog=None):
+                    live_paginated_source=None, catalog=None, physical_only=False):
     """Stream an exact transcript as Markdown without buffering its full body.
 
     For a saved source, the caller keeps the verified private browse copy alive.
@@ -962,6 +1006,8 @@ def markdown_chunks(source_home: str, collection: str, transcript: str,
     alive until the iterator is exhausted.
     """
     if collection == "paginated":
+        if physical_only:
+            raise ValueError("physical-file mode does not apply to database history")
         if not isinstance(transcript, str) or not transcript.endswith(".jsonl"):
             raise ValueError("invalid paginated conversation identifier")
         thread_id = transcript[:-6]
@@ -986,9 +1032,14 @@ def markdown_chunks(source_home: str, collection: str, transcript: str,
                 yield (prefix + entry.text + "\n\n").encode("utf-8")
         return
     path = _find_transcript(source_home, collection, transcript)
-    segments = _lineage_segments(source_home, path)
-    header = "# Codex conversation\n\n- Collection: %s\n- Transcript: `%s`\n\n" % (
+    segments = _read_segments(source_home, path, physical_only)
+    header = ("# INCOMPLETE Codex physical file\n\n" if physical_only else
+              "# Codex conversation\n\n")
+    header += "- Collection: %s\n- Transcript: `%s`\n" % (
         collection, transcript.replace("`", "\\`"))
+    if physical_only:
+        header += "- Fork ancestry is not included. Do not install this export into Codex.\n"
+    header += "\n"
     yield header.encode("utf-8")
     index = 0
     for record, _, _ in _lineage_records(segments, stable=True):
@@ -1008,9 +1059,11 @@ def markdown_chunks(source_home: str, collection: str, transcript: str,
 
 
 def markdown_source_stamp(source_home: str, collection: str, transcript: str,
-                          catalog=None):
+                          catalog=None, physical_only=False):
     """Bind a prepared export to the exact transcript lineage it measured."""
     if collection == "paginated":
+        if physical_only:
+            raise ValueError("physical-file mode does not apply to database history")
         from codex_migrate.vault_paginated import restored_path
 
         if not isinstance(transcript, str) or not transcript.endswith(".jsonl"):
@@ -1042,7 +1095,7 @@ def markdown_source_stamp(source_home: str, collection: str, transcript: str,
         return tuple(stamp)
     path = _find_transcript(source_home, collection, transcript)
     stamp = []
-    for segment, length in _lineage_segments(source_home, path):
+    for segment, length in _read_segments(source_home, path, physical_only):
         try:
             info = check_info(segment.lstat())
         except OSError as error:

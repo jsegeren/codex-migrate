@@ -20,7 +20,7 @@ import uuid
 from codex_migrate.errors import MigrationError
 from codex_migrate.processes import codex_running
 from codex_migrate.source_availability import check_info, require_local
-from codex_migrate.vault import TRANSCRIPT_FOLDERS
+from codex_migrate.vault import TRANSCRIPT_FOLDERS, _lineage_segments, _rollout_map
 from codex_migrate.vault_identity import peek_identity
 from codex_migrate.vault_backup import (
     _atomic_json,
@@ -258,6 +258,15 @@ def _selected_source(
     if logical not in records:
         raise MigrationError("The selected conversation is not present in this Vault snapshot.")
     source = recovered / folder / Path(*relative.parts)
+    discovered = []
+    for candidate in records:
+        candidate_path = PurePosixPath(candidate)
+        candidate_folder = candidate_path.parts[0]
+        discovered.append((candidate_folder, recovered / Path(*candidate_path.parts),
+                           PurePosixPath(*candidate_path.parts[1:]).as_posix()))
+    # A physical child alone is useful to read or export, but not safe to copy
+    # back into Codex when its inherited parent cannot be proven exactly.
+    _lineage_segments(str(recovered), source, discovered, _rollout_map(discovered))
     source_id, source_state = peek_identity(source, relative.as_posix())
     if source_state == "verified" and source_id:
         for other in records:

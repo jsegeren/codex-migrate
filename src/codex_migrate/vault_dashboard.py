@@ -295,7 +295,11 @@ function displayTitle(value,query=""){
   const start=matchOffset>90?Math.max(0,matchOffset-30):0;
   return `${start?"…":""}${chars.slice(start,start+120).join("").trimEnd()}${start+120<chars.length?"…":""}`;
 }
-function params(item){return new URLSearchParams({collection:item.collection,transcript:item.transcript,source:item.source||"local"})}
+function params(item){
+  const query=new URLSearchParams({collection:item.collection,transcript:item.transcript,source:item.source||"local"});
+  if(item.physical_only)query.set("physical","1");
+  return query;
+}
 function completeVisibleConversation(item,excerpted,nextCursor){
   return !(Number.isSafeInteger(item.cursor)&&item.cursor>0&&item.line>0)&&
     !excerpted&&(nextCursor===null||nextCursor===undefined||nextCursor==="");
@@ -315,13 +319,13 @@ async function openThread(item){
     if(fromMatch){query.set("cursor",String(item.cursor));query.set("match",item.match_query||"")}
     const thread=await api("/api/vault/thread?"+query);selected=item;
     const fromBackup=item.source==="backup";
-    $("restore-thread").hidden=!fromBackup||item.collection==="paginated";
-    $("thread-restore-note").hidden=!fromBackup||item.collection==="paginated";
+    $("restore-thread").hidden=!fromBackup||item.collection==="paginated"||thread.physical_only;
+    $("thread-restore-note").hidden=!fromBackup||item.collection==="paginated"||thread.physical_only;
     $("thread-restore-status").textContent=item.collection==="paginated"
       ?"Paginated history can be read and exported here. Copying it into Codex is not supported.":"";
     $("thread-restore-error").textContent="";
     threadExcerpted=thread.entries.some(entry=>entry.excerpted);
-    $("thread-meta").textContent=`${fromBackup?"Opened backup":"This Mac"} · ${thread.collection} · ${fromMatch?"Starting at the search match · ":""}${thread.entries.length} readable entries${threadExcerpted?". A long message is excerpted here; Download Markdown for full text.":thread.next_cursor!==null&&thread.next_cursor!==undefined?" so far. Download Markdown includes the full conversation.":""}`;
+    $("thread-meta").textContent=`${fromBackup?"Opened backup":"This Mac"} · ${thread.collection} · ${fromMatch?"Starting at the search match · ":""}${thread.entries.length} readable entries${thread.physical_only?" · Incomplete physical copy: inherited fork history is not included; do not restore this into Codex.":threadExcerpted?". A long message is excerpted here; Download Markdown for full text.":thread.next_cursor!==null&&thread.next_cursor!==undefined?" so far. Download Markdown includes the full conversation.":""}`;
     $("read-from-start").hidden=!fromMatch||item.cursor===0;
     $("entries").replaceChildren();appendEntries(thread.entries);
     $("load-more").dataset.cursor=thread.next_cursor===null||thread.next_cursor===undefined?"":String(thread.next_cursor);
@@ -349,9 +353,9 @@ async function openThread(item){
   }catch(error){
     if(item.source==="backup"||item.source==="local"){
       selected=item;$("entries").replaceChildren();$("load-more").hidden=true;
-      $("print").hidden=true;$("share").hidden=true;$("read-from-start").hidden=true;$("restore-thread").hidden=item.source!=="backup"||item.collection==="paginated";
+      $("print").hidden=true;$("share").hidden=true;$("read-from-start").hidden=true;$("restore-thread").hidden=item.source!=="backup"||item.collection==="paginated"||item.physical_only;
       $("thread-meta").textContent=item.source==="local"?
-        "This conversation could not be read normally. Try a saved version, or inspect its physical file in the damaged-conversation panel above. Markdown export may fail too.":
+        "This conversation could not be read normally. Try a saved version, or inspect its physical file above. Markdown export may fail too.":
         "This saved conversation could not be read normally. Try another verified backup version.";
       $("thread").hidden=false;
     }
@@ -369,7 +373,7 @@ $("load-more").onclick=async()=>{
     $("load-more").dataset.cursor=page.next_cursor===null?"":String(page.next_cursor);
     $("load-more").hidden=!$("load-more").dataset.cursor;
     const fromMatch=Number.isSafeInteger(selected.cursor)&&selected.cursor>=0&&selected.line>0;
-    $("thread-meta").textContent=`${selected.source==="backup"?"Opened backup":"This Mac"} · ${page.collection} · ${fromMatch?"Starting at the search match · ":""}${$("entries").children.length} readable entries${threadExcerpted?". A long message is excerpted here; Download Markdown for full text.":page.next_cursor!==null?" so far. Download Markdown includes the full conversation.":""}`;
+    $("thread-meta").textContent=`${selected.source==="backup"?"Opened backup":"This Mac"} · ${page.collection} · ${fromMatch?"Starting at the search match · ":""}${$("entries").children.length} readable entries${page.physical_only?" · Incomplete physical copy: inherited fork history is not included; do not restore this into Codex.":threadExcerpted?". A long message is excerpted here; Download Markdown for full text.":page.next_cursor!==null?" so far. Download Markdown includes the full conversation.":""}`;
     $("print").hidden=!completeVisibleConversation(selected,threadExcerpted,page.next_cursor);
     $("share").hidden=$("print").hidden;
   }catch(error){fail(error)}finally{$("load-more").disabled=false}
@@ -423,7 +427,7 @@ async function runSearch(append=false){
     }else{
       item.source=source==="local_titles"?"local":source;
       item.match_query=query;
-      small.textContent=`${item.collection}${item.timestamp?" · "+item.timestamp:""}`;
+      small.textContent=`${item.collection}${item.timestamp?" · "+item.timestamp:""}${item.physical_only?" · Incomplete physical copy":""}`;
       if(item.title)title.textContent=displayTitle(item.title,query);
       text.textContent=item.snippet;button.onclick=()=>openThread(item);
     }
@@ -486,8 +490,8 @@ async function runSearch(append=false){
       }
       if(reasons.includes("ambiguous_lineage")){
         $("status").textContent+=source==="local"?
-          " Some conversations have ambiguous history copies. Their inherited text was not searched. Inspect each physical file below by title or date; its fork ancestry is not included.":
-          " Some saved conversations have ambiguous history copies and could not be searched completely. Try another verified backup version.";
+          " Some conversations have ambiguous history copies. Their own-file matches are labeled incomplete; inherited text was not searched. Inspect the physical files below by title or date.":
+          " Some saved conversations have ambiguous history copies. Own-file matches are labeled incomplete; inherited text was not searched. Try another verified backup version.";
         if(source==="local")$("salvage-controls").open=true;
       }else if(!reasons.length){
         $("status").textContent+=" Some conversation text could not be searched. Results may be incomplete.";
@@ -605,7 +609,7 @@ $("index-remove").onclick=async()=>{
 };
 async function markdownFile(){
   if(!selected)throw Error("Open a conversation first");
-  const grant=await api("/api/vault/export-ticket",{collection:selected.collection,transcript:selected.transcript,source:selected.source||"local"});
+  const grant=await api("/api/vault/export-ticket",{collection:selected.collection,transcript:selected.transcript,source:selected.source||"local",physical_only:!!selected.physical_only});
   const response=await fetch(grant.url,{cache:"no-store"});
   if(!response.ok)throw Error("This conversation changed before sharing. Open it again and retry.");
   const size=Number(response.headers.get("Content-Length"));
@@ -620,8 +624,9 @@ async function markdownFile(){
 $("download").onclick=async()=>{try{
   if(!selected)throw Error("Open a conversation first");
   const link=document.createElement("a");link.download="codex-conversation.md";
-  const grant=await api("/api/vault/export-ticket",{collection:selected.collection,transcript:selected.transcript,source:selected.source||"local"});
-  link.href=grant.url;link.click();$("status").textContent="Downloading the full conversation…";
+  const grant=await api("/api/vault/export-ticket",{collection:selected.collection,transcript:selected.transcript,source:selected.source||"local",physical_only:!!selected.physical_only});
+  link.href=grant.url;link.click();$("status").textContent=selected.physical_only?
+    "Downloading an incomplete physical-copy export…":"Downloading the full conversation…";
 }catch(error){fail(error)}};
 $("print").onclick=()=>window.print();
 $("share").onclick=async()=>{try{if(!navigator.share){$("status").textContent="This browser cannot open the share sheet. Use Download Markdown, then share or email the file.";return}const file=await markdownFile();if(!navigator.canShare||navigator.canShare({files:[file]})){await navigator.share({title:"Codex conversation",files:[file]});$("status").textContent="Share sheet opened."}else{$("status").textContent="This browser cannot share files. Use Download Markdown, then share or email the file."}}catch(error){if(error.name!=="AbortError")fail(error)}};
@@ -769,7 +774,7 @@ $("install-recover").onclick=async()=>{if(!confirm("Roll back the interrupted in
 let selectedRecoveryTimer=null;
 function selectedRecoveryView(data){selectedRecoveryRunning=data.status==="running";const attention=data.status==="needs_attention";$("restore-thread").disabled=selectedRecoveryRunning||installRunning||attention;$("thread-restore-error").textContent=(data.status==="failed"||attention)?(data.error||"Selected recovery stopped safely."):"";if(data.status==="running"){$("thread-restore-status").textContent="Verifying the backup again and recovering this conversation…"}else if(data.status==="installed"){$("thread-restore-status").textContent="Conversation restored and verified. Reopen Codex to use it."}else if(data.status==="already_present"){$("thread-restore-status").textContent="This exact conversation is already present. Nothing was changed."}else if(data.status==="failed"||attention){$("thread-restore-status").textContent=""}if(selectedRecoveryRunning&&!selectedRecoveryTimer)selectedRecoveryTimer=setInterval(refreshSelectedRecovery,1000);if(!selectedRecoveryRunning&&selectedRecoveryTimer){clearInterval(selectedRecoveryTimer);selectedRecoveryTimer=null}refreshRestoreButton()}
 async function refreshSelectedRecovery(){try{selectedRecoveryView(await api("/api/vault/thread-install-status"))}catch(error){$("thread-restore-error").textContent=error.message}}
-$("restore-thread").onclick=async()=>{if(!selected||selected.source!=="backup")return;if(!confirm("Restore only this verified conversation into Codex? Close Codex and its CLI sessions first. Existing conversations will not be overwritten or merged."))return;try{$("thread-restore-error").textContent="";selectedRecoveryView(await api("/api/vault/install-thread",{collection:selected.collection,transcript:selected.transcript,apply:true}))}catch(error){$("thread-restore-error").textContent=error.message}};
+$("restore-thread").onclick=async()=>{if(!selected||selected.source!=="backup"||selected.physical_only)return;if(!confirm("Restore only this verified conversation into Codex? Close Codex and its CLI sessions first. Existing conversations will not be overwritten or merged."))return;try{$("thread-restore-error").textContent="";selectedRecoveryView(await api("/api/vault/install-thread",{collection:selected.collection,transcript:selected.transcript,apply:true}))}catch(error){$("thread-restore-error").textContent=error.message}};
 api("/api/vault/summary").then(data=>{
   const files=data.active_transcripts+data.archived_transcripts;
   const attachmentFiles=data.attachment_files||0;

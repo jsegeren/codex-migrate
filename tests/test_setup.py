@@ -1022,6 +1022,73 @@ class SetupTests(unittest.TestCase):
             read_thread(str(self.home), "paginated", ambiguous + ".jsonl",
                         live_paginated=True)
 
+    def test_ambiguous_fork_opens_and_exports_only_labeled_physical_copy(self):
+        codex = self.home / ".codex"
+        active = codex / "sessions"
+        archived = codex / "archived_sessions"
+        active.mkdir(parents=True)
+        archived.mkdir()
+        parent_id = "11111111-1111-4111-8111-111111111111"
+        child_id = "22222222-2222-4222-8222-222222222222"
+        for folder in (active, archived):
+            (folder / ("rollout-" + parent_id + ".jsonl")).write_text(
+                json.dumps({"type": "session_meta", "payload": {"id": parent_id}}) + "\n")
+        child_name = "rollout-" + child_id + ".jsonl"
+        (active / child_name).write_text(
+            json.dumps({"type": "session_meta", "payload": {
+                "id": child_id, "history_base": {"thread_id": parent_id,
+                    "end_ordinal_exclusive": 0, "end_byte_offset": 0}}}) + "\n"
+            + json.dumps({"payload": {"message": {
+                "content": "physical-only buyer needle"}}}) + "\n")
+        code, result = self.request("/api/vault/search?q=buyer%20needle")
+        self.assertEqual(code, 200)
+        self.assertEqual(len(result["results"]), 1)
+        match = result["results"][0]
+        self.assertTrue(match["physical_only"])
+        self.assertEqual(result["partial_reasons"], ["ambiguous_lineage"])
+        path = "/api/vault/thread?collection=active&transcript=" + child_name
+        self.assertEqual(self.request(path)[0], 400)
+        code, page = self.request(path + "&physical=1&cursor=%d&match=buyer%%20needle" % match["cursor"])
+        self.assertEqual(code, 200)
+        self.assertTrue(page["physical_only"])
+        self.assertEqual([entry["text"] for entry in page["entries"]],
+                         ["physical-only buyer needle"])
+        self.assertEqual(self.request(path + "&physical=0")[0], 400)
+        code, grant = self.request("/api/vault/export-ticket", {
+            "collection": "active", "transcript": child_name,
+            "source": "local", "physical_only": True,
+        })
+        self.assertEqual(code, 200)
+        code, exported = self.request(grant["url"])
+        self.assertEqual(code, 200)
+        self.assertIn("INCOMPLETE Codex physical file", exported)
+        self.assertIn("physical-only buyer needle", exported)
+        self.assertNotIn("parent-only", exported)
+        browse = self.home / "opened-copy"
+        for folder in ("sessions", "archived_sessions"):
+            (browse / ".codex" / folder).mkdir(parents=True)
+        for folder, filename in ((active, child_name),
+                                 (active, "rollout-" + parent_id + ".jsonl"),
+                                 (archived, "rollout-" + parent_id + ".jsonl")):
+            target = browse / ".codex" / folder.name / filename
+            target.write_bytes((folder / filename).read_bytes())
+        with self.helper._browse_data_lock:
+            self.helper._browse_home = browse
+            self.helper._browse_catalog = []
+        code, saved = self.request("/api/vault/search?q=buyer%20needle&source=backup")
+        self.assertEqual(code, 200)
+        self.assertTrue(saved["results"][0]["physical_only"])
+        code, page = self.request(path + "&source=backup&physical=1")
+        self.assertEqual(code, 200)
+        self.assertTrue(page["physical_only"])
+        code, grant = self.request("/api/vault/export-ticket", {
+            "collection": "active", "transcript": child_name,
+            "source": "backup", "physical_only": True,
+        })
+        self.assertEqual(code, 200)
+        self.assertIn("INCOMPLETE Codex physical file",
+                      self.request(grant["url"])[1])
+
     def test_vault_search_local_titles_does_not_require_matching_content(self):
         codex = self.home / ".codex"
         folder = codex / "sessions"
@@ -1068,8 +1135,8 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(search_result["partial_reasons"], ["damaged_transcript"])
         self.assertIn('$("salvage-controls").open=true', VAULT_HTML)
         self.assertIn("Inspect a physical conversation file", VAULT_HTML)
-        self.assertIn("Their inherited text was not searched", VAULT_HTML)
-        self.assertIn("its fork ancestry is not included", VAULT_HTML)
+        self.assertIn("inherited text was not searched", VAULT_HTML)
+        self.assertIn("excludes inherited fork history", VAULT_HTML)
         self.assertIn("overwritten bytes cannot be recovered", VAULT_HTML)
         self.assertEqual(self.request(candidates)[1]["results"][0]["transcript"],
                          "damaged.jsonl")
