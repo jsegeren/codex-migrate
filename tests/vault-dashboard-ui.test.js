@@ -4,12 +4,26 @@ const { test } = require('node:test');
 const vm = require('node:vm');
 
 const source = readFileSync(new URL('../src/codex_migrate/vault_dashboard.py', `file://${__filename}`), 'utf8');
+const displayTitle = vm.runInNewContext(
+  '(' + source.match(/function displayTitle\([\s\S]*?\n\}/)[0] + ')');
 const runSearch = source.match(/async function runSearch\(append=false\)\{[\s\S]*?\n\}/)[0];
 const completeVisibleConversation = vm.runInNewContext(
   '(' + source.match(/function completeVisibleConversation\([\s\S]*?\n\}/)[0] + ')');
 const markdownFile = source.match(/async function markdownFile\(\)\{[\s\S]*?\n\}/)[0];
 const backupView = source.match(/function backupView\(data\)\{[\s\S]*?\n\}/)[0];
 const scheduleView = source.match(/function scheduleView\(data\)\{[^\n]*\}/)[0];
+
+test('long Codex prompt-titles stay scannable without hiding the matching phrase', () => {
+  const title = 'Opening prompt '.repeat(30) + 'Unification Foundation' + ' tail'.repeat(30);
+  const excerpt = displayTitle(title, 'Unification Foundation');
+  assert.ok(excerpt.length <= 122);
+  assert.match(excerpt, /Unification Foundation/);
+  assert.match(excerpt, /^…/);
+  assert.equal(displayTitle('Line one\n  line two'), 'Line one line two');
+  assert.equal(displayTitle('🙂'.repeat(130)).includes('\ufffd'), false);
+  assert.match(source, /title\.textContent=displayTitle\(item\.title,query\)/);
+  assert.match(source, /displayTitle\(version\.titles\.at\(-1\)/);
+});
 
 test('schedule view explicitly disclaims incomplete paginated coverage', () => {
   const elements = new Map();
@@ -171,6 +185,7 @@ test('matching titles appear before full-text search and are not duplicated', as
   let finishText, opened, notice;
   const context = {
     $: id => elements.get(id), document: { createElement: node }, URLSearchParams,
+    displayTitle,
     api: url => url.includes('source=local_titles') ?
       Promise.resolve({ results: [title] }) :
       new Promise(resolve => { finishText = resolve; }),

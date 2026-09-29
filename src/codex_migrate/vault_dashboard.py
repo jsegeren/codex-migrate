@@ -11,7 +11,7 @@ VAULT_HTML = r'''<!doctype html>
 :root{color-scheme:dark;--bg:#080b10;--panel:#111722;--line:#344057;--text:#f7f8fa;--muted:#bdc7d8;--purple:#6042a6;--light:#d9cdff}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 20% 0,#172038 0,transparent 36%),var(--bg);color:var(--text);font:500 16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--light)}header{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:28px}h1{font-size:clamp(34px,7vw,58px);letter-spacing:-.045em;line-height:1;margin:10px 0}.lede,.muted{color:var(--muted)}.lede{font-size:18px;max-width:680px;margin:0}.panel{background:color-mix(in srgb,var(--panel) 95%,transparent);border:1px solid var(--line);border-radius:18px;padding:22px;margin:18px 0}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.metric{border:1px solid var(--line);border-radius:13px;padding:14px}.metric span{display:block;color:var(--muted);font-size:14px}.metric strong{font-size:22px}form,.actions{display:flex;gap:10px;flex-wrap:wrap}input,select,textarea,button,a.button{font:inherit;border-radius:10px;border:1px solid #8996ad;padding:11px 14px}input,select,textarea{background:#080b10;color:var(--text);flex:1;min-width:220px}textarea{display:block;width:100%;resize:none}button,a.button{background:var(--purple);color:white;font-weight:750;cursor:pointer;text-decoration:none}button.secondary,a.secondary{background:transparent}button:disabled,select:disabled{opacity:.55;cursor:wait}.result{width:100%;text-align:left;background:#151d2a;margin:10px 0;padding:15px;line-height:1.45}.result small{display:block;color:var(--muted);margin-bottom:5px}.entry{border-top:1px solid var(--line);padding:20px 0}.entry:first-child{border-top:0}.entry h3{margin:0 0 4px;font-size:17px}.entry time{display:block;color:var(--muted);font-size:14px;margin-bottom:10px}.entry p{white-space:pre-wrap;overflow-wrap:anywhere;margin:0}#error,#backup-error,#schedule-error,#restore-error,#install-error{color:#ffc3c8}#status,#backup-status,#schedule-status,#restore-status,#install-status{color:var(--muted)}#recovery{border-left:4px solid var(--light);padding-left:16px;margin-top:18px}.subsection{border-top:1px solid var(--line);margin-top:22px;padding-top:18px}[hidden]{display:none!important}fieldset{margin:18px 0;padding:0;border:0}legend{margin-bottom:10px;font-weight:750}fieldset label{display:flex;gap:11px;padding:13px 14px;margin:8px 0;border:1px solid var(--line);border-radius:11px;cursor:pointer}fieldset input{flex:0 0 auto;min-width:0;width:19px;height:19px;margin:3px 0 0;accent-color:var(--purple)}fieldset label span,fieldset label small{display:block}fieldset label small{margin-top:3px;color:var(--muted);font-size:14px}.retention-note{font-size:14px;margin-top:10px}
-.result strong{display:block;margin-bottom:4px}#browse-error,#thread-restore-error{color:#ffc3c8}#browse-status,#thread-restore-status{color:var(--muted)}
+.result strong{display:block;margin-bottom:4px;overflow-wrap:anywhere}#browse-error,#thread-restore-error{color:#ffc3c8}#browse-status,#thread-restore-status{color:var(--muted)}
 #index-error{color:#ffc3c8}#index-status{color:var(--muted)}
 #salvage-error{color:#ffc3c8}#salvage-status{color:var(--muted)}#salvage-search{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end}#salvage-search label{grid-column:1/-1}#salvage-search input{min-width:0}
 .app{min-height:100vh;display:grid;grid-template-columns:238px 1fr}.sidebar{position:sticky;top:0;height:100vh;padding:28px 18px 24px;border-right:1px solid var(--line);background:#0c1018;display:flex;flex-direction:column}.brand{display:flex;gap:12px;align-items:center;padding:0 8px 26px}.brand-mark{width:36px;height:36px;display:grid;place-items:center;border-radius:11px;background:linear-gradient(145deg,#9475ff,#5735d6);font-size:14px;font-weight:850;box-shadow:0 10px 30px #6f4cff44}.brand strong,.brand small{display:block}.brand small{color:var(--muted);font-size:12px}.nav{display:grid;gap:8px}.nav a{display:flex;align-items:center;gap:12px;padding:12px 14px;color:#aeb8ca;border-radius:11px;text-decoration:none;font-weight:700}.nav a:hover,.nav a.active{color:white;background:#1d2434}.nav-icon{width:18px;text-align:center;color:#a991ff}.protection{margin-top:auto;border-top:1px solid var(--line);padding:18px 8px 0;font-size:13px;color:var(--muted)}.protection strong{color:var(--text)}.dot{display:inline-block;width:9px;height:9px;margin-right:8px;border-radius:50%;background:#45dfa0;box-shadow:0 0 0 5px #45dfa014}.content{min-width:0}.topline{font-size:14px;color:var(--muted);font-weight:750}.view-head h1{font-size:clamp(38px,5vw,58px)}.view-head{align-items:center;margin-bottom:26px}.panel h2{margin-top:0}.storage-assessment{border:1px solid var(--line);border-radius:13px;padding:14px 16px;margin:14px 0;background:#0c121d}.storage-assessment strong,.storage-assessment span{display:block}.storage-assessment span{color:var(--muted);font-size:14px;margin-top:3px}.storage-assessment.cloud_sync{border-color:#25654d;background:#0d251c}.storage-assessment.cloud_sync strong{color:#5ee5aa}.storage-assessment.local{border-color:#7a5824;background:#2c210f}.storage-assessment.local strong{color:#ffd58a}.storage-assessment.external_or_network{border-color:#4c5a74}.view-backup .summary,.view-recovery .summary,.view-backup #restore-panel,.view-backup #search-panel,.view-backup #results-panel,.view-backup #thread,.view-conversations #backup-panel,.view-conversations #restore-panel,.view-recovery #backup-panel,.view-recovery #search-panel,.view-recovery #results-panel,.view-recovery #thread{display:none!important}.view-conversations main{width:min(1120px,calc(100% - 48px))}.view-conversations #search-panel{margin-bottom:12px}.view-conversations #results-panel{width:36%;float:left;margin-right:14px}.view-conversations #thread{overflow:hidden;min-height:420px}.view-conversations #status,.view-conversations #error{clear:both}.view-recovery main{width:min(980px,calc(100% - 48px))}
@@ -286,6 +286,15 @@ $("choose-history-vault").onclick=async()=>{
 };
 let selected=null;
 let threadExcerpted=false;
+function displayTitle(value,query=""){
+  const title=String(value||"").replace(/\s+/g," ").trim();
+  const chars=Array.from(title);
+  if(chars.length<=120)return title;
+  const match=query?title.toLocaleLowerCase().indexOf(query.toLocaleLowerCase()):-1;
+  const matchOffset=match<0?-1:Array.from(title.slice(0,match)).length;
+  const start=matchOffset>90?Math.max(0,matchOffset-30):0;
+  return `${start?"…":""}${chars.slice(start,start+120).join("").trimEnd()}${start+120<chars.length?"…":""}`;
+}
 function params(item){return new URLSearchParams({collection:item.collection,transcript:item.transcript,source:item.source||"local"})}
 function completeVisibleConversation(item,excerpted,nextCursor){
   return !(Number.isSafeInteger(item.cursor)&&item.cursor>0&&item.line>0)&&
@@ -326,7 +335,7 @@ async function openThread(item){
         const button=document.createElement("button");button.type="button";button.className="result";
         const when=new Date(version.created_at);
         const label=Number.isNaN(when.getTime())?version.created_at:when.toLocaleString();
-        button.textContent=`${label} · ${version.titles.at(-1)||"Untitled"} · ${fmt(version.size)}${version.at_risk?" · Needs review":""}`;
+        button.textContent=`${label} · ${displayTitle(version.titles.at(-1)||"Untitled")} · ${fmt(version.size)}${version.at_risk?" · Needs review":""}`;
         button.onclick=()=>openSavedResult({matching_snapshot:version.snapshot_id,
           matching_collection:version.collection,matching_transcript:version.transcript,key:item.key});
         return button;
@@ -409,13 +418,13 @@ async function runSearch(append=false){
     const small=document.createElement("small"),text=document.createElement("span"),title=document.createElement("strong");
     if(source==="history"){
       small.textContent=`${item.version_count} saved ${item.version_count===1?"version":"versions"} · ${item.identity_state}${item.at_risk?" · Needs review":""}`;
-      text.textContent=item.matching_title;
+      text.textContent=displayTitle(item.matching_title,query);
       button.onclick=()=>openSavedResult(item);
     }else{
       item.source=source==="local_titles"?"local":source;
       item.match_query=query;
       small.textContent=`${item.collection}${item.timestamp?" · "+item.timestamp:""}`;
-      if(item.title)title.textContent=item.title;
+      if(item.title)title.textContent=displayTitle(item.title,query);
       text.textContent=item.snippet;button.onclick=()=>openThread(item);
     }
     button.append(small);if(title.textContent)button.append(title);button.append(text);return button;

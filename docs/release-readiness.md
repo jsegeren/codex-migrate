@@ -7,6 +7,16 @@ distribution decision; the dated entries below preserve their original status.
 
 ## September 28 paginated-history coverage hold
 
+A read-only dogfood search on this Mac returned ten capped results in 2.34 s:
+nine from the paginated-history source and one from an active transcript. No
+conversation text was included in the receipt and no backup was created. A
+second search exposed that Codex sometimes stores an entire opening prompt as
+the thread title; the draft Vault results and version list now display a
+bounded, whitespace-normalized excerpt while keeping the full title available
+to the search engine. The second search also warned about ambiguous history
+copies, so neither result is proof of complete recall. This is local source
+behavior, not a released-buyer or large-history performance guarantee.
+
 An opt-in source-interpreter search benchmark used only a disposable SQLite
 history with 200 threads, 100,000 items, and 1 KiB of deterministic,
 high-trigram-variety base64 text per item. The 142,303,232-byte source database
