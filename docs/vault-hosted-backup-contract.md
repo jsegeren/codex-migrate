@@ -1,4 +1,4 @@
-# Optional hosted Vault backup — product and release contract
+# Hosted Vault backup — product and release contract
 
 Status: approved direction with local and synthetic live-R2 transport tests, **not a hosted
 service or for sale**. This document does not authorize a production bucket, a
@@ -14,7 +14,7 @@ Vault format:
    app. That folder may be local, on an external drive, or in the customer's
    cloud-sync provider. A detected cloud folder is not proof that its remote
    copy has synced; a local-only folder does not insure against Mac loss.
-2. **Segeren-hosted backup.** A buyer may opt in after buying the $49 Mac app.
+2. **Segeren-hosted backup for the current individual path.** A buyer may opt in after buying the $49 Mac app.
    Their **first hosted month is free**. The earlier $10/month direction was
    rejected as too low. Business pricing, allowances, and billing are not
    approved or live. It uploads client-encrypted transcript objects and required
@@ -37,6 +37,50 @@ with a visible last-good receipt and failed-run alerting.
 OpenAI's [Codex local-use guidance](https://learn.chatgpt.com/docs/hipaa-configuration)
 assigns workstation and local-retention responsibility to the organization;
 its audit records are not a demonstrated restore of complete local history.
+
+The intended business experience is: install the signed Mac app, enroll the
+device under the company's account, make the first encrypted off-device backup
+during setup, then back up changed Codex history automatically without
+requiring the employee to reopen the app. Target a **30-minute default
+checkpoint interval** for an active Mac, subject to measured runtime and cost
+on both physical test Macs before it becomes a customer promise. After the
+first complete version, the scheduled path must identify changed history,
+reuse already published encrypted chunks, and upload only new encrypted
+chunks plus a small new manifest/reference; it must not rescan every unchanged
+transcript byte or HEAD every retained remote object twice an hour. Preserve
+the last independently verified snapshot and periodically audit older remote
+objects without putting a full object scrub on every checkpoint's critical
+path. A changed source or an uncertain remote receipt must fail closed and be
+retried, never be called a successful backup. A missed run, offline Mac,
+unavailable service, or stalled upload must leave the last good version intact
+and make the protection gap visible to both the employee and designated
+admin. If a Mac is destroyed, the company must be able to enroll a clean Mac,
+use its own recovery material, locate a verified version, read/export it, and
+attempt Codex re-import without the original employee's Keychain or device.
+This is scheduled backup with an explicit recovery-point window, **not**
+zero-loss continuous sync or a whole-Mac backup. Git repository backup does
+not include local Codex chats and discussions.
+
+The current hosted prototype is **not a business enrollment model**. Its
+account, device, subscription, and recovery paths all depend on one person's
+$49 app-purchase session and buyer-email challenge. That proves neither that
+the company owns the backup nor that an authorized company representative can
+recover it when that person or Mac is gone. Keep that consumer path intact,
+but do not expose it as team protection or make an employee's individual
+purchase token the company's durable recovery authority. Whether a business
+contract includes a Mac-app charge is a commercial decision separate from
+technical ownership of company data.
+
+Before a business pilot, establish one organization-owned account with an
+identified purchaser and designated administrator, explicit seat/device
+enrollment and revocation, a company-held recovery route, and a subscription
+or contract entitlement checked independently of an employee's app receipt.
+Company identity must be explicit: email-domain similarity or possession of
+one buyer's mailbox is not proof that a person may enroll a device, administer
+the organization, or read another employee's history. Existing individual
+accounts are not silently merged into a company account. The first pilot may
+handle admin approval manually, but the approval, device assignment, key
+custody, and restore drill must be recorded and independently verifiable.
 
 For multiple seats, investigate an organization owner/admin view with seat
 enrollment, backup health by device, last verified backup, failed-run alerts,
@@ -65,6 +109,12 @@ alone must not grant silent content browsing.
 Client-side encryption remains the baseline: the hosted service stores
 ciphertext and the minimum metadata needed to verify, retain, bill, and restore
 it. Segeren Studio must not hold a unilateral plaintext-decryption capability.
+The current format uses a random customer-held master key, keyed chunk IDs,
+authenticated encryption, and SHA-256 checks of ciphertext. A salt or hash
+alone would not protect conversation content. Do not market the service as
+unable to see *any* metadata: object counts, sizes, backup times, and random
+Vault identifiers are visible to the service. No plaintext title, transcript,
+repository content, or recovery key may be sent to the hosted service.
 The business key-custody design must give the organization a tested recovery
 route without depending on one employee's Keychain, while making its access
 policy and employee notice explicit. Device enrollment and revocation,
@@ -98,8 +148,16 @@ system. Decide with pilot buyers whether any further aggregate work insights
 are useful and permissible before collecting additional content-derived data.
 
 The Founder rejected a customer-set spending cap and directed pricing toward
-a substantially higher-value business offer. Any $20/month plus usage example
-is only an economics floor, not approved business pricing. Publish no hosted
+a substantially higher-value business offer. Price the recovery service at
+**no less than 3× fully loaded per-customer cost**, with an 80% gross-margin
+target (about 5× cost) after measuring retained encrypted bytes and version
+growth, R2 and Worker operations, database/API/monitoring, payment processing,
+expected support and recovery drills, refunds, and allocated fixed overhead.
+Three times cost is only a 66.7% margin, not the desired ceiling. Bound included
+retention and storage in the published offer, price exceptional usage
+explicitly, and do not silently pause backup or delete the last good version
+when a customer crosses a limit. Any $20/month plus usage example is only an
+obsolete economics floor, not approved business pricing. Publish no hosted
 price or enterprise protection claim until product proof, service scope,
 retention, billing behavior, and customer-facing terms are approved.
 

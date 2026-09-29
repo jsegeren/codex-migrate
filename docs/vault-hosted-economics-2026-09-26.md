@@ -66,6 +66,24 @@ Repeating an unchanged backup should reuse existing chunks; a
 rewritten or compacted transcript can create new chunks and must be measured.
 Do not count shared free allowances as a per-customer subsidy.
 
+### Thirty-minute business cadence is an incremental-engine gate
+
+The measured two-Mac baseline has 36,356 unique encrypted chunks and about
+140.57 GB of stable raw transcripts. A naive 30-minute run that HEAD-checks
+every retained chunk would make about **52.35 million Class B reads per
+30-day month** even if nothing changed: roughly **$18.85** at the published
+metered rate before account-wide free allowance and billable-unit rounding.
+Re-reading every raw transcript on that cadence would move about **202 TB
+through the two local machines per month**. These are extrapolations from one
+owner's measured baseline, not observed invoices or customer averages.
+They make the present whole-history staging loop unsuitable as a 30-minute
+default. The release path needs a trustworthy changed-source inventory,
+reuse of published ciphertext, upload of only new encrypted chunks and the
+new manifest/reference, and periodic—not per-checkpoint—full remote scrubs.
+Record actual per-run bytes read, novel bytes uploaded, object operations,
+duration, and retained-version growth on both Macs before pricing or
+advertising a recovery-point window.
+
 ## Published provider rates and a restore month
 
 Rates below are US-dollar public on-demand examples, not a provider invoice.
