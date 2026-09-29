@@ -966,6 +966,21 @@ class VaultBackupTests(unittest.TestCase):
                         crypto_helper=str(self.helper), chunk_size=64 * 1024,
                         window_bytes=64 * 1024, apply=True)
                     self.assertEqual(smaller.at_risk_threads, 1)
+                with sqlite3.connect(database) as connection:
+                    connection.execute("DELETE FROM thread_items")
+                writes_before_gap = client.store.writes
+                identity = {**identity, "reservation_id": str(uuid.uuid4()),
+                            "snapshot_id": str(uuid.uuid4())}
+                empty_directory = root / "empty-db-journal"
+                empty_directory.mkdir(mode=0o700)
+                with HostedChunkJournal(empty_directory, **identity,
+                                        base_snapshot_id=snapshot_id) as journal:
+                    with self.assertRaisesRegex(MigrationError, "disappeared or emptied"):
+                        stage_hosted_snapshot(
+                            str(source), metadata, staging_catalog, journal, client,
+                            crypto_helper=str(self.helper), chunk_size=64 * 1024,
+                            window_bytes=64 * 1024, apply=True)
+                self.assertEqual(client.store.writes, writes_before_gap)
                 database.unlink()
                 identity = {**identity, "reservation_id": str(uuid.uuid4()),
                             "snapshot_id": str(uuid.uuid4())}
@@ -973,12 +988,12 @@ class VaultBackupTests(unittest.TestCase):
                 missing_directory.mkdir(mode=0o700)
                 with HostedChunkJournal(missing_directory, **identity,
                                         base_snapshot_id=snapshot_id) as journal:
-                    missing = stage_hosted_snapshot(
-                        str(source), metadata, staging_catalog, journal, client,
-                        crypto_helper=str(self.helper), chunk_size=64 * 1024,
-                        window_bytes=64 * 1024, apply=True)
-                    self.assertEqual(missing.at_risk_threads, 1)
-                    self.assertEqual(missing.transcript_files, 0)
+                    with self.assertRaisesRegex(MigrationError, "disappeared or emptied"):
+                        stage_hosted_snapshot(
+                            str(source), metadata, staging_catalog, journal, client,
+                            crypto_helper=str(self.helper), chunk_size=64 * 1024,
+                            window_bytes=64 * 1024, apply=True)
+                self.assertEqual(client.store.writes, writes_before_gap)
             finally:
                 subprocess.run([str(self.helper), "delete-key", "--key-id", key_id],
                                check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -2433,12 +2448,17 @@ class VaultBackupTests(unittest.TestCase):
                            chunk_size=64 * 1024)
                 self.assertEqual(json.loads((destination / "latest.json").read_text())
                                  ["snapshot_id"], repeated.snapshot_id)
+                with sqlite3.connect(database) as connection:
+                    connection.execute("DELETE FROM thread_items")
+                with self.assertRaisesRegex(MigrationError, "emptied since"):
+                    backup(str(source), str(destination), crypto_helper=str(self.helper),
+                           chunk_size=64 * 1024)
                 database.unlink()
-                missing = backup(str(source), str(destination), crypto_helper=str(self.helper),
-                                 chunk_size=64 * 1024)
-                self.assertTrue(missing.needs_attention)
-                self.assertEqual(missing.at_risk_threads, 1)
-                self.assertEqual(missing.transcript_files, 0)
+                with self.assertRaisesRegex(MigrationError, "disappeared since"):
+                    backup(str(source), str(destination), crypto_helper=str(self.helper),
+                           chunk_size=64 * 1024)
+                self.assertEqual(json.loads((destination / "latest.json").read_text())
+                                 ["snapshot_id"], repeated.snapshot_id)
                 self.assertEqual(snapshot_catalog(str(destination),
                     snapshot=repeated.snapshot_id, crypto_helper=str(self.helper))[0]
                     ["thread_id"], thread_id)

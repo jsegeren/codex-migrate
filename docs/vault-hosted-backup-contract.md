@@ -1005,10 +1005,13 @@ egress allowance. Do not claim that B2 restores are always free. See its
    independent server proof of
    encrypted content. Selecting an older complete version in the installed
    buyer UI and proving that recovery on a clean Mac remain open gates.
-   Local and hosted staging now also flag a previously captured paginated
-   history database that vanishes entirely; a newer empty capture must not
-   erase the protection-gap warning or displace the older readable version
-   as the source-reported complete choice.
+   Local and hosted staging now refuse to publish when a previously captured
+   paginated-history database vanishes or becomes empty. The earlier readable
+   version remains current and the scheduled run must surface the failure;
+   an empty replacement cannot silently become a green backup on the next run.
+   A legitimate intentional reset will need an explicit reviewed rebaseline
+   path before customer release; silently treating it as a fresh first backup
+   would discard the only evidence of the gap.
 4. **Prove commerce and operations:** separate Stripe *subscription* checkout
    and webhook state from the existing one-time purchase; enforce active,
    past-due, cancellation, refund, and dispute states; publish no entitlement

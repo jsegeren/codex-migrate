@@ -508,6 +508,17 @@ def _backup_unlocked(
             if not directory.is_dir():
                 raise MigrationError("A Vault storage path is not a folder.")
         previous_files = _previous_catalog(root, key_id, helper)
+        if any(item.get("collection") == "paginated" for item in previous_files):
+            if not paginated_history_unprotected:
+                raise MigrationError(
+                    "Codex paginated history disappeared since the prior "
+                    "backup. The previous Vault version is unchanged.")
+            from codex_migrate.vault_paginated import source_footprint
+            count, _, available = source_footprint(source_home)
+            if not available or count == 0:
+                raise MigrationError(
+                    "Codex paginated history emptied since the prior "
+                    "backup. The previous Vault version is unchanged.")
 
         snapshot_id = str(uuid.uuid4()).lower()
         created_at = datetime.now(timezone.utc).isoformat()
@@ -682,10 +693,6 @@ def _backup_unlocked(
             (item for item in previous_files if item.get("collection") == "paginated"),
             (item for item in manifest_files if item.get("collection") == "paginated"),
         ))
-        if not paginated_history_unprotected:
-            paginated_at_risk.update(
-                item["thread_id"] for item in previous_files
-                if item.get("collection") == "paginated" and item.get("thread_id"))
         paginated_at_risk.update(missing_paginated_attachments)
         for item in manifest_files:
             if item["collection"] == "paginated":

@@ -197,6 +197,11 @@ def stage_hosted_snapshot(
             if not available:
                 raise MigrationError("Codex paginated history changed before hosted staging.")
             paginated_stable = source_fingerprint(source_home) == paginated_before
+        if (any(item.get("collection") == "paginated" for item in previous_catalog)
+                and (not has_paginated or paginated_count == 0)):
+            raise MigrationError(
+                "Codex paginated history disappeared or emptied since the prior "
+                "backup. No new hosted snapshot was staged; review the source.")
         files = _source_files(source_home)
         if len(files) > 100_000:
             raise MigrationError("The hosted snapshot has too many transcripts.")
@@ -390,13 +395,6 @@ def stage_hosted_snapshot(
              if item.get("collection") == "paginated"),
             (item for item in manifest_files
              if item["collection"] == "paginated")))
-        if not has_paginated:
-            # A vanished database is not evidence that its prior threads were
-            # intentionally deleted. Preserve the prior version as the clean
-            # recovery choice instead of certifying an empty replacement.
-            paginated_risk.update(
-                item["thread_id"] for item in previous_catalog
-                if item.get("collection") == "paginated" and item.get("thread_id"))
         paginated_risk.update(missing_paginated_attachments)
         for item in manifest_files:
             if item["collection"] == "paginated":
