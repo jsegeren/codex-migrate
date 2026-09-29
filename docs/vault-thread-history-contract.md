@@ -264,6 +264,17 @@ threads consider indexed parent rollouts. Synthetic tests cover matching,
 changes during indexing, and fallback; this is not yet a measured search-speed
 receipt on a full customer-sized history.
 
+A September 29 isolated benchmark used distinct base64-like synthetic text,
+not customer history. At 1,000 threads/100,000 items (73.8 MB SQLite), direct
+hit/miss queries took 0.482/0.481 seconds; a 12.248-second index build made
+the equivalent queries 0.019/0.017 seconds and used 36.1 MB. At 2,000
+threads/200,000 items (147.6 MB SQLite), direct hit/miss took 0.973/0.959
+seconds; a 25.425-second build made them 0.034/0.032 seconds and used
+67.4 MB. These bounded synthetic runs establish the cache's benefit and
+temporary-disk cost at those shapes, not usable latency or build cost for the
+Founder's much larger live rollout corpus. The large-history product gate
+remains open, and index creation remains explicit opt-in.
+
 The current [official app-server contract](https://learn.chatgpt.com/docs/app-server)
 can list and summarize existing paginated threads, but its full-history read
 and item-pagination operations fail closed for them. It is not a supported
