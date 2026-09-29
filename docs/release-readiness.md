@@ -1,5 +1,26 @@
 # Desktop release readiness
 
+## September 29 physical two-Mac synthetic restore — narrow pass
+
+The second Mac (`Joshuas-MacBook-Pro-128.local`, user `joshuasegeren`)
+successfully ran the corrected one-file receiver against the disposable Vault
+bundle under `/tmp/codex-vault-physical.BZ6uiT`. It imported the synthetic
+recovery key, verified the encrypted snapshot contained one transcript,
+restored it into a separate empty temporary home, and compared the restored
+conversation byte-for-byte with the fixture. The receiver reported
+`Physical cross-Mac synthetic recovery: PASS` on September 29 at about
+22:36 UTC. Its cleanup path deleted the disposable imported Keychain key;
+the successful exit confirms that cleanup did not fail. The real Codex home
+and installed application data were not changed.
+
+The earlier receiver failure was a mismatched **test fixture**: it ran the
+nine-file portability assertion against this one-file bundle. The corrected
+wrapper invoked `physical_onefile_receiver.py` instead. This pass proves
+recovery-key import and one synthetic local Vault restore using the second
+Mac's installed helper; it does **not** prove hosted R2 recovery, a clean-account
+business recovery route, attachment/database coverage on that Mac, or recovery
+of the Founder's real history. Those release gates remain open.
+
 ## September 29 ambiguous-fork retrieval — draft only
 
 When a fork names a parent rollout ID with multiple physical candidates, the
