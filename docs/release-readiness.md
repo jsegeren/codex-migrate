@@ -37,6 +37,11 @@ helper for one scheduled run and failed; it now selects the current helper
 when both are present, then the same signed package passed. The test removed
 its LaunchAgent and disposable Keychain key. This is not Apple-notarized,
 buyer-installed, or real-history backup evidence.
+The same signed test package performed one read-only search of this Mac's live
+Codex history in 3.75 seconds, returning the requested cap of 20 matches:
+19 database-backed and one active transcript. The engine emitted a warning,
+so this is not a complete-recall claim. No result text was logged, and no
+backup or search index was created.
 
 The Founder authorized a **self-service paid beta** on September 7 while the
 remaining acceptance checks continue. This is not full release certification.
