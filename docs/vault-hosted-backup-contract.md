@@ -373,21 +373,22 @@ bucket afterward. The test-only account-scoped Workers Scripts token was
 revoked immediately. No customer data, production bucket, deployed Worker,
 authenticated customer enrollment, subscription, or clean-Mac restore was
 involved; those release gates remain open.
-The draft HEAD grant requires a fresh upload entitlement and active
+The draft HEAD grant requires an active device-bound entitlement lease and
 reservation, then checks that the exact key, size, and checksum either belong
 to a published snapshot of that Vault or have a PUT grant recorded under this
 same reservation. The latter permits read-after-write verification and retry
 of a staged object without exposing another staged upload. It grants only a
-30-second HEAD probe, not a read or overwrite. A missing or unrecorded object
+short-lived HEAD probe, not a read or overwrite. A missing or unrecorded object
 must use the reserved PUT path; a HEAD response alone never becomes publication
 proof. Treating an authorization failure as "absent" would be unsafe. A
-server-only decision now returns either a short-lived exact HEAD capability or
-`put_required` for an active, owned reservation. Invalid authority returns a
-denial, never `put_required`; the latter is not an upload capability and must
-be followed by a separate quota-recorded PUT grant. A native sandbox client
-consumes this decision, pins the service and Worker origins, reconciles a lost
-PUT response by exact HEAD, and requires explicit mutation confirmation. It
-is not wired to the buyer UI. A dark `/api/hosted-upload` route joins
+server-only decision returns either an exact HEAD capability or `put_required`
+for an active, owned reservation. Invalid authority returns a denial, never
+`put_required`; that decision alone is not an upload capability. The bounded
+batch coordinator can record the separate quota-checked PUT grant and issue
+both exact PUT and HEAD capabilities in the same service response. A native
+sandbox client pins the service and Worker origins, reconciles a lost PUT
+response by exact HEAD, and requires explicit mutation confirmation. It is not
+wired to the buyer UI. A dark `/api/hosted-upload` route joins
 reservation, renewal, decision, and exact PUT grant actions. It is available
 only when separately enabled in the pinned sandbox; each action rechecks the
 device, current Mac-app purchase, and current Stripe Subscription. An empty
