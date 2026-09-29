@@ -308,12 +308,22 @@ async function loadOverview(){
     const conversations=(summary.active_transcripts||0)+(summary.archived_transcripts||0);
     const label=`${conversations.toLocaleString()} ${conversations===1?"conversation":"conversations"}`;
     const verifiedScheduled=schedule.enabled&&schedule.healthy&&schedule.last_run?.status==="completed";
+    const coverageGap=Boolean(schedule.paginated_history_unprotected||
+      schedule.last_run?.paginated_history_unprotected||backup.paginated_history_unprotected);
     const attention=schedule.last_run?.status==="needs_attention"||backup.status==="needs_attention";
-    $("overview-health-card").classList.toggle("attention",!verifiedScheduled||attention);
-    $("overview-health-icon").textContent=verifiedScheduled&&!attention?"✓":"!";
-    if(attention){
+    const scheduleProblem=Boolean(schedule.error)||(schedule.enabled&&!schedule.healthy);
+    const problem=coverageGap||attention||scheduleProblem||backup.status==="failed";
+    $("overview-health-card").classList.toggle("attention",!verifiedScheduled||problem);
+    $("overview-health-icon").textContent=verifiedScheduled&&!problem?"✓":"!";
+    if(coverageGap){
+      $("overview-health").textContent="Some Codex history is not backed up";
+      $("overview-health-detail").textContent="This build does not capture Codex's paginated-history database. A verified snapshot may still miss messages.";
+    }else if(attention){
       $("overview-health").textContent="Conversation backup needs review";
       $("overview-health-detail").textContent="An earlier verified version may hold missing content.";
+    }else if(scheduleProblem){
+      $("overview-health").textContent="Automatic backup needs attention";
+      $("overview-health-detail").textContent=schedule.error||"Open Backups to check the latest run.";
     }else if(verifiedScheduled){
       $("overview-health").textContent="Automatic backup verified";
       $("overview-health-detail").textContent=`${label} · Daily encrypted backup`;
@@ -651,7 +661,9 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
             raise MigrationError("Choose a valid backup interval")
         result = install_vault_schedule(
             self.source_home, destination, interval_hours=interval_hours)
-        return {"enabled": True, "healthy": True, **result.as_dict()}
+        # Re-read the actual schedule and coverage state. Installation alone
+        # does not make a transcript-only backup complete protection.
+        return {**result.as_dict(), **self.vault_schedule()}
 
     def disable_vault_schedule(self):
         return remove_vault_schedule(self.source_home)
