@@ -188,6 +188,33 @@ class VaultTests(unittest.TestCase):
             self.assertEqual(old[0].title, "Current renamed project")
             self.assertEqual(current[0].title, "Current renamed project")
 
+    def test_search_old_session_title_shows_current_renamed_state_title(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            codex = root / ".codex"
+            folder = codex / "sessions"
+            folder.mkdir(parents=True)
+            thread_id = "11111111-1111-4111-8111-111111111111"
+            (folder / ("rollout-" + thread_id + ".jsonl")).write_text(
+                json.dumps({"type": "session_meta", "payload": {"id": thread_id}}) + "\n",
+                encoding="utf-8",
+            )
+            (codex / "session_index.jsonl").write_text(
+                json.dumps({"id": thread_id, "thread_name": "Old planning title"}) + "\n",
+                encoding="utf-8",
+            )
+            with sqlite3.connect(codex / "state_5.sqlite") as connection:
+                connection.execute("CREATE TABLE threads (id TEXT, title TEXT, name TEXT)")
+                connection.execute("INSERT INTO threads VALUES (?, ?, ?)",
+                                   (thread_id, "Release work", "Current release title"))
+            old = search(str(root), "Old planning title", titles_only=True)
+            self.assertEqual(len(old), 1)
+            self.assertEqual(old[0].transcript, "rollout-" + thread_id + ".jsonl")
+            self.assertEqual(old[0].title, "Current release title")
+            self.assertIn("Old planning title", old[0].snippet)
+            self.assertEqual(len(search(str(root), "Current release title",
+                                        titles_only=True)), 1)
+
     def test_state_title_prefix_is_bounded_when_codex_saved_a_long_prompt(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
