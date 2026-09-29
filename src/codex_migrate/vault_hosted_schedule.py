@@ -109,7 +109,7 @@ def install_hosted_schedule(source_home: str, device_id: str, metadata: dict, *,
     if any(item.get("at_risk") is True for item in catalog):
         raise MigrationError("Review the first hosted backup's at-risk threads before scheduling.")
 
-    config_path, _, good_path, plist_path = _paths(str(home))
+    config_path, status_path, good_path, plist_path = _paths(str(home))
     engine = list(engine_command or _engine_command())
     if not engine or not isinstance(engine[0], str) or not Path(engine[0]).is_absolute():
         raise MigrationError("The hosted backup engine is unavailable.")
@@ -138,6 +138,7 @@ def install_hosted_schedule(source_home: str, device_id: str, metadata: dict, *,
         previous_config = _safe_file(config_path)
         previous_plist = _safe_file(plist_path)
         previous_good = _safe_file(good_path)
+        previous_status = _safe_file(status_path)
         was_loaded = _loaded()
         _ensure_owned_directory(home, config_path.parent)
         _ensure_owned_directory(home, plist_path.parent)
@@ -147,13 +148,16 @@ def install_hosted_schedule(source_home: str, device_id: str, metadata: dict, *,
             # Observed now, not first published now. Never invent a recovery time.
             _atomic_json(good_path, {"snapshot_id": latest["snapshotId"],
                                      "observed_at": _now()}, replace=True)
+            _atomic_json(status_path, {"status": "awaiting_check",
+                                       "checked_at": _now()}, replace=True)
             if was_loaded:
                 _launchctl(["bootout", "gui/%d/%s" % (os.getuid(), LABEL)])
             _launchctl(["bootstrap", "gui/%d" % os.getuid(), str(plist_path)])
         except Exception:
             for path, previous in ((config_path, previous_config),
                                    (plist_path, previous_plist),
-                                   (good_path, previous_good)):
+                                   (good_path, previous_good),
+                                   (status_path, previous_status)):
                 if previous is None:
                     path.unlink(missing_ok=True)
                 else:
@@ -251,7 +255,7 @@ def hosted_schedule_status(source_home: str) -> dict:
     if status_path.exists():
         status = _safe_json(status_path)
         if (not isinstance(status.get("status"), str) or
-                status["status"] not in {"running", "failed", "unchanged",
+                status["status"] not in {"awaiting_check", "running", "failed", "unchanged",
                                           "verified", "needs_attention"} or
                 not isinstance(status.get("checked_at"), str)):
             raise MigrationError("The hosted backup status is invalid.")

@@ -206,6 +206,19 @@ class HostedScheduleTests(unittest.TestCase):
         self.assertFalse(plist_path.exists())
         self.assertTrue(good_path.exists())
 
+    def test_reinstall_does_not_inherit_previous_schedule_health(self):
+        self._install()
+        config_path, status_path, _, _ = _paths(self.home)
+        status_path.write_text(json.dumps({"status": "verified", "checked_at":
+                                           "2026-09-29T00:00:00+00:00",
+                                           "snapshot_id": SNAPSHOT}))
+        self._install()
+        self.assertTrue(config_path.exists())
+        self.assertEqual(json.loads(status_path.read_text())["status"],
+                         "awaiting_check")
+        with patch("codex_migrate.vault_hosted_schedule._loaded", return_value=True):
+            self.assertFalse(hosted_schedule_status(self.home)["healthy"])
+
 
 if __name__ == "__main__":
     unittest.main()
