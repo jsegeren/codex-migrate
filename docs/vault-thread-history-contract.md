@@ -336,6 +336,13 @@ attempt, not evidence that installed-app recovery succeeds or fails in a
 signed-in GUI account. The disposable bundles were removed. The clean-account
 installed-app recovery gate remains open.
 
+A later read-only check confirmed that the newer Mac's console user was signed
+in, but a disposable Keychain write from its SSH session returned macOS status
+36 (interaction not allowed); `launchctl asuser` also did not grant that shell
+the GUI Keychain context. No real Vault key was accessed. Repeating recovery
+through SSH would not satisfy this gate: run the exact installed app in the
+signed-in GUI account and verify its import, read, and export there.
+
 - For a future installed version, revalidate upstream storage semantics and
   the observed schema. A byte/ordinal cursor or item-count comparison alone
   cannot prove semantic equivalence between rollout and projection, including
