@@ -205,6 +205,18 @@ verified recovery, service obligations, and buyer evidence rather than merely
 marking up object storage. Neither this example nor the old consumer proposal
 is a live subscription or checkout entitlement.
 
+The current business pricing hypothesis to test with buyers is **$49/month
+including 100 GB of retained encrypted objects, plus $0.15 per additional
+GB-month**. This is not Founder-approved pricing or a live entitlement. With
+published US domestic-card Stripe Payments and pay-as-you-go Billing rates,
+and R2 Standard storage at $0.015/GB-month, a steady 75 GB account would
+leave about $45.81 of a $49 charge (93.5%), and a steady 1,000 GB account
+would leave about $162.08 of a $184 charge (88.1%), **before** Workers,
+requests, database/API, support, refunds, taxes, and retention growth. These
+are storage-plus-payment contribution examples, not product gross margins.
+The first included hosted month needs a separately approved capacity policy;
+an unbounded free month is not implied by this price hypothesis.
+
 The proposed billing unit is retained **encrypted object bytes**, not raw
 Codex-folder size, upload volume, thread count, snapshot count, or number of
 Macs. A reused object is counted once within its Vault; separate Vaults are
