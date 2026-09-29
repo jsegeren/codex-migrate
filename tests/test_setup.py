@@ -1067,6 +1067,9 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(search_result["results"], [])
         self.assertEqual(search_result["partial_reasons"], ["damaged_transcript"])
         self.assertIn('$("salvage-controls").open=true', VAULT_HTML)
+        self.assertIn("Inspect a physical conversation file", VAULT_HTML)
+        self.assertIn("Their inherited text was not searched", VAULT_HTML)
+        self.assertIn("its fork ancestry is not included", VAULT_HTML)
         self.assertIn("overwritten bytes cannot be recovered", VAULT_HTML)
         self.assertEqual(self.request(candidates)[1]["results"][0]["transcript"],
                          "damaged.jsonl")
