@@ -8,16 +8,28 @@
     <meta property="og:title" content="Codex backup for teams — design partners wanted">
     <meta property="og:description" content="Local Codex work can outlive a lost Mac. Help shape verified, encrypted off-device backup and recovery for teams. Not available yet.">
     <meta property="og:type" content="website">
-    <link rel="icon" href="/assets/mark.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css?v=20260929-teams"><script src="/analytics.js?v=20260911-ecommerce" defer></script>
+    <link rel="icon" href="/assets/mark.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css?v=20260929-pilot-form"><script src="/analytics.js?v=20260911-ecommerce" defer></script>
   </head>
   <body>
     <header class="site-header"><a class="brand" href="/"><span class="brand-mark" aria-hidden="true">CM</span><span>Codex Migrate</span></a><nav aria-label="Primary navigation"><a href="/">Mac app</a><a href="https://github.com/jsegeren/codex-migrate">Source</a></nav></header>
-    <main class="legal shell">
+    <main class="legal shell team-page">
       <p class="eyebrow">For teams using local OpenAI Codex on Mac</p>
       <h1>Protect the Codex work your team can’t afford to lose.</h1>
-      <p class="lede">Your team’s local Codex conversations can hold plans, decisions, and task history absent from Git. Loss, theft, hardware failure, or accidental deletion can put that work at risk. We’re building a verified off-device recovery copy.</p>
-      <div class="actions"><a class="button button-primary" data-analytics-event="team_pilot_email_click" href="mailto:joshua@segeren.com?subject=Codex%20Backup%20team%20design%20partner&amp;body=Team%20size%20and%20Mac%20setup%3A%0ACodex%20surfaces%20we%20use%20(local%20app%2C%20CLI%2C%20IDE%2C%20cloud)%3A%0AHow%20we%20back%20up%20local%20Codex%20history%20today%3A%0ARecovery%20scenario%20we%20need%20to%20solve%3A%0A">Talk to Joshua about a pilot</a></div>
-      <p class="pilot-note">This is a design-partner conversation, not a purchase or enrollment. Do not send credentials, conversation text, repositories, or customer data.</p>
+      <p class="lede">Local Codex conversations hold plans and decisions Git never captures. Loss, theft, hardware failure, or an accidental delete can erase them. We’re building verified off-device recovery for teams.</p>
+      <form class="signup-form pilot-form" action="/api/signup" method="post" aria-describedby="pilot-privacy">
+        <h2>Talk to Joshua about a pilot</h2>
+        <input type="hidden" name="intent" value="team-pilot">
+        <label for="pilot-email">Work email</label>
+        <input id="pilot-email" name="email" type="email" autocomplete="email" inputmode="email" maxlength="254" placeholder="you@company.com" required>
+        <label for="pilot-size">Team size</label>
+        <select id="pilot-size" name="team_size" required><option value="">Select a range</option><option value="2-5">2–5 people</option><option value="6-25">6–25 people</option><option value="26-100">26–100 people</option><option value="101-plus">101+ people</option><option value="not-sure">Not sure</option></select>
+        <label for="pilot-surface">How your team uses Codex</label>
+        <select id="pilot-surface" name="codex_surface" required><option value="">Select a surface</option><option value="mac-app">Mac app</option><option value="cli-ide">CLI or IDE</option><option value="both">Mac app and CLI/IDE</option><option value="cloud-only">Codex Cloud only</option><option value="not-sure">Not sure</option></select>
+        <div class="form-trap" aria-hidden="true"><label for="pilot-website">Leave this empty</label><input id="pilot-website" name="website" type="text" tabindex="-1" autocomplete="off"></div>
+        <label class="consent"><input name="consent" type="checkbox" value="yes" required><span>Joshua may contact me about a team pilot. I understand the hosted service is not available yet.</span></label>
+        <button class="button button-primary" type="submit">Request a conversation</button>
+      </form>
+      <p class="pilot-note" id="pilot-privacy">No purchase or newsletter. Your request goes to Joshua’s inbox via SendGrid. Do not send credentials or customer data. Prefer email? <a data-analytics-event="team_pilot_email_click" href="mailto:joshua@segeren.com?subject=Codex%20Backup%20team%20design%20partner">Write to Joshua directly</a>. <a href="/privacy">Privacy</a>.</p>
       <h2>What we are building</h2>
       <ul>
         <li>Scheduled, client-encrypted backup of supported local Codex history to off-device storage.</li>

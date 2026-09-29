@@ -23,10 +23,16 @@ Production-only sensitive environment variables:
 - `LAUNCH_NOTIFY_EMAIL`: fixed maintainer inbox.
 
 Never put these values in Git, browser code, screenshots, or command logs.
-The endpoint accepts same-origin URL-encoded POSTs, one validated address,
-explicit launch-only consent, and an empty honeypot. It sends a fixed plain-text
-message to the maintainer only. No visitor autoresponder, payment, or bulk
-newsletter is created. Open/click tracking is disabled for the notification.
+In launch mode, the endpoint accepts same-origin URL-encoded POSTs, one
+validated address, explicit launch-only consent, and an empty honeypot. It
+sends a fixed plain-text message to the maintainer only. No visitor
+autoresponder, payment, or bulk newsletter is created. Open/click tracking is
+disabled for the notification.
+The business design-partner page uses that same rate-limited endpoint with an
+explicit `team-pilot` intent, a team-size range and Codex-surface choice from
+fixed lists, and separate contact consent. It sends those bounded selections
+to the same maintainer inbox; it does not enroll the visitor in launch mail,
+accept free-text customer data, or grant access to the hosted service.
 
 Success means SendGrid returned 202, not proof of inbox delivery. Error and
 timeout responses never claim success, and ambiguous sends are not retried
