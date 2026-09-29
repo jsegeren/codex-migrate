@@ -364,6 +364,53 @@ The current public beta remains a transcript-tree backup with the disclosed
 testing boundary. Its claim and Help copy need an independent product-truth
 review against this finding before the next public release.
 
+## OpenAI account-switch boundary (September 28)
+
+Changing the OpenAI login on one Mac is not a Mac-to-Mac migration and is not
+an established account-to-account thread transfer. OpenAI's
+[authentication documentation](https://learn.chatgpt.com/docs/auth) says logout
+clears current credentials; it does not say whether the desktop app will list
+or resume account A's local threads after account B signs in. Its
+[project documentation](https://learn.chatgpt.com/docs/projects) distinguishes
+a saved chat transcript from the current working tree. Repositories,
+worktrees, and unfinished code remain filesystem state; model access, cloud
+work, plugins, and account permissions follow the active login. Vault must not
+equate a readable local rollout with authorization or native resumability
+under a different OpenAI account.
+
+Read-only schema inspection of this Mac's installed `state_5.sqlite` found
+`creator_user_id` and `creator_account_id` columns in `threads`, but all 2,031
+thread rows had NULL in both. No identifiers or conversation content were
+recorded. Those columns are therefore insufficient to attribute this history
+to an account or to partition it safely. Older Codex schemas may not have
+them at all. The migration and Vault paths must continue to exclude
+`auth.json`, `installation_id`, and other credentials; no account identity is
+to be inferred from a title, path, or thread ID.
+
+Before claiming account portability, run a controlled test with two separately
+authorized OpenAI accounts, a disposable macOS user/profile, and a harmless
+synthetic Codex thread. Record the installed app and CLI versions and test:
+
+1. Create, close, list, reopen, and continue the thread as account A; record
+   the local files and database rows without copying authentication material.
+2. Sign out only in the disposable profile, sign in as account B, then check
+   list visibility, read behavior, and continuation separately in the desktop
+   app and CLI. Do not send account A's synthetic transcript as a new prompt
+   under B merely to make a test pass; distinguish true native continuation
+   from a new thread seeded with exported context.
+3. Sign out B and return to A. Verify A's thread, repo, worktree, and local
+   Vault snapshot are unchanged. Confirm account-specific cloud work and
+   connected services have not been silently mixed.
+4. Repeat with a clean OS user or second Mac only after the same-profile test
+   is understood. Preserve separate accounts and credentials throughout.
+
+Until that evidence exists, the defensible Vault guarantee is encrypted
+preservation plus independent find, read, and export of captured local work.
+An explicitly labelled new-thread handoff could later use an export with the
+user's consent. Native continuation under another account is an open proof
+gate, not a marketed capability. Cross-account access must never be enabled
+by copying credentials or rewriting account identifiers.
+
 ## Acceptance and boundaries
 
 Use synthetic content for destructive tests. On each physical Mac, produce a
