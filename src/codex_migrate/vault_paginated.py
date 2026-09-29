@@ -332,6 +332,14 @@ _READER_FLAG = "--vault-paginated-reader"
 _MAX_PROTOCOL_LINE = MAX_RECORD_BYTES * 2 + 4096
 
 
+def _sandbox_profile(codex: Path) -> str:
+    # sandbox-exec resolves /var and /tmp through /private before matching.
+    # Its Scheme parser does not interpret JSON's \uXXXX path escapes, so
+    # preserve Unicode path characters while escaping quotes and controls.
+    return ("(version 1)(allow default)(deny file-write* (subpath " +
+            json.dumps(str(codex), ensure_ascii=False) + "))")
+
+
 def _send_protocol(stream, value: dict) -> None:
     stream.write((json.dumps(value, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8"))
     stream.flush()
@@ -489,8 +497,7 @@ def open_paginated_source(source_home: str) -> Iterator[_SandboxedPaginatedSourc
         raise ValueError("source home must be absolute")
     codex = _canonical_macos_path(Path(source_home) / ".codex")
     _require_unlinked_path(codex)
-    # sandbox-exec resolves /var and /tmp through /private before matching.
-    profile = "(version 1)(allow default)(deny file-write* (subpath " + json.dumps(str(codex)) + "))"
+    profile = _sandbox_profile(codex)
     command = ([sys.executable, _READER_FLAG, source_home]
                if getattr(sys, "frozen", False) else
                [sys.executable, "-B", "-m", "codex_migrate.vault_paginated",

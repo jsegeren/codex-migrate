@@ -3,13 +3,16 @@ from contextlib import closing
 from pathlib import Path
 import shutil
 import sqlite3
+import subprocess
+import sys
 import tempfile
 import unittest
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault import markdown_chunks, read_thread_page, search
 from codex_migrate.vault_paginated import (
-    PaginatedItem, encoded_item, open_paginated_source, restored_items,
+    PaginatedItem, _canonical_macos_path, _sandbox_profile,
+    encoded_item, open_paginated_source, restored_items,
     source_footprint,
 )
 
@@ -40,6 +43,19 @@ def fixture(root: Path) -> Path:
 
 
 class PaginatedSourceTests(unittest.TestCase):
+    def test_sandbox_denies_source_writes_with_unicode_and_quotes_in_home(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            codex = Path(temporary) / 'José "safe"' / ".codex"
+            codex.mkdir(parents=True)
+            target = codex / "must-not-exist"
+            profile = _sandbox_profile(_canonical_macos_path(codex))
+            result = subprocess.run(
+                ["/usr/bin/sandbox-exec", "-p", profile, sys.executable, "-c",
+                 "from pathlib import Path; import sys; Path(sys.argv[1]).write_bytes(b'x')",
+                 str(target)], capture_output=True, timeout=10)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse(target.exists())
+
     def test_search_order_uses_newest_item_not_thread_identity(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
