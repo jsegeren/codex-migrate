@@ -1401,7 +1401,8 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                                                     warnings=warnings))
                             self._json(200, {"results": [item.as_dict() for item in results[:page_size]],
                                              "has_more": len(results) > page_size,
-                                             "partial_results": bool(warnings)})
+                                             "partial_results": bool(warnings),
+                                             "partial_reasons": warnings})
                             return
                         if (parsed.path == "/api/vault/salvage-candidates"
                                 and set(query) <= {"q", "offset"}

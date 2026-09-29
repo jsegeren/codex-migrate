@@ -29,6 +29,10 @@ class AmbiguousLineage(MigrationError):
     """Multiple physical rollouts could supply one thread's inherited text."""
 
 
+class UnreadableTranscript(MigrationError):
+    """A stable physical transcript contains an unreadable JSON record."""
+
+
 @dataclass(frozen=True)
 class VaultSummary:
     active_transcripts: int
@@ -192,7 +196,7 @@ def _lineage_segments(
         except MigrationError:
             raise
         except (UnicodeError, json.JSONDecodeError) as error:
-            raise MigrationError("A conversation transcript contains unreadable JSON.") from error
+            raise UnreadableTranscript("A conversation transcript contains unreadable JSON.") from error
         except OSError as error:
             raise MigrationError("A conversation fork could not be inspected safely.") from error
         payload = header.get("payload") if isinstance(header, dict) else None
@@ -233,7 +237,7 @@ def _session_payload(path: Path) -> Optional[Dict[str, object]]:
             raise MigrationError("A conversation header is too large to inspect safely.")
         header = json.loads(raw)
     except (UnicodeError, json.JSONDecodeError) as error:
-        raise MigrationError("A conversation header contains unreadable JSON.") from error
+        raise UnreadableTranscript("A conversation header contains unreadable JSON.") from error
     except OSError as error:
         raise MigrationError("A conversation header could not be inspected safely.") from error
     if not isinstance(header, dict) or header.get("type") != "session_meta":
@@ -242,10 +246,18 @@ def _session_payload(path: Path) -> Optional[Dict[str, object]]:
     return payload if isinstance(payload, dict) else None
 
 
-def _selected_rollouts(discovered: List[Tuple[str, Path, str]]) -> Dict[str, List[Path]]:
+def _selected_rollouts(discovered: List[Tuple[str, Path, str]],
+                       warnings: Optional[List[str]] = None) -> Dict[str, List[Path]]:
     selected: Dict[str, List[Path]] = {}
     for _, path, _ in discovered:
-        payload = _session_payload(path)
+        try:
+            payload = _session_payload(path)
+        except UnreadableTranscript:
+            if warnings is None:
+                raise
+            if "damaged_transcript" not in warnings:
+                warnings.append("damaged_transcript")
+            continue
         if payload is not None:
             thread_id = canonical_id(payload.get("id"))
             if thread_id:
@@ -321,7 +333,7 @@ def _lineage_records(segments: List[Tuple[Path, int]], cursor: int = 0,
                         try:
                             record = json.loads(raw)
                         except (UnicodeError, json.JSONDecodeError) as error:
-                            raise MigrationError("A conversation transcript contains unreadable JSON.") from error
+                            raise UnreadableTranscript("A conversation transcript contains unreadable JSON.") from error
                         line_number += 1
                         yield record, origin + position, line_number
                 finally:
@@ -430,10 +442,13 @@ def search(
     titles_only: bool = False,
     warnings: Optional[List[str]] = None,
 ) -> List[VaultMatch]:
-    """Find title matches first; report skipped ambiguous lineages to callers."""
+    """Find title matches first; report skipped ambiguous or damaged files."""
     def skipped_ambiguous() -> None:
         if warnings is not None and "ambiguous_lineage" not in warnings:
             warnings.append("ambiguous_lineage")
+    def skipped_damaged() -> None:
+        if warnings is not None and "damaged_transcript" not in warnings:
+            warnings.append("damaged_transcript")
     needle = query.strip().casefold()
     if not needle:
         raise ValueError("search query must not be empty")
@@ -496,7 +511,7 @@ def search(
         matched_threads += 1
     if titles_only:
         return matches
-    selected_rollouts = _selected_rollouts(discovered)
+    selected_rollouts = _selected_rollouts(discovered, warnings)
     rollouts = _rollout_map(discovered)
     paginated_catalog_ids = _paginated_catalog_ids(catalog)
     # Backup v3 keeps database-derived items separate from rollouts. Search
@@ -532,6 +547,11 @@ def search(
                         break
             except AmbiguousLineage:
                 skipped_ambiguous()
+                continue
+            except UnreadableTranscript:
+                if warnings is None:
+                    raise
+                skipped_damaged()
                 continue
         if found is not None:
             if matched_threads >= offset:
@@ -573,6 +593,11 @@ def search(
                         except AmbiguousLineage:
                             skipped_ambiguous()
                             continue
+                        except UnreadableTranscript:
+                            if warnings is None:
+                                raise
+                            skipped_damaged()
+                            continue
                         if (indexed_rollouts is not None
                                 and not any(rollout_id in indexed_rollouts
                                             for rollout_id, _, _ in ranges)):
@@ -609,30 +634,41 @@ def search(
         except AmbiguousLineage:
             skipped_ambiguous()
             continue
+        except UnreadableTranscript:
+            if warnings is None:
+                raise
+            skipped_damaged()
+            continue
         if (indexed_candidates is not None
                 and not any(part in indexed_candidates for part, _ in segments)):
             continue
-        for record, cursor, line_number in _lineage_records(segments):
-            seen = set()
-            for text in _strings(record):
-                if text in seen:
-                    continue
-                seen.add(text)
-                position = text.casefold().find(needle)
-                if position < 0:
-                    continue
-                match = VaultMatch(
-                    collection=collection,
-                    transcript=relative,
-                    line=line_number,
-                    timestamp=_timestamp(record),
-                    title=current_title,
-                    snippet=_snippet(text, position, len(query.strip())),
-                    cursor=cursor,
-                )
-                break
-            if match is not None:
-                break
+        try:
+            for record, cursor, line_number in _lineage_records(segments):
+                seen = set()
+                for text in _strings(record):
+                    if text in seen:
+                        continue
+                    seen.add(text)
+                    position = text.casefold().find(needle)
+                    if position < 0:
+                        continue
+                    match = VaultMatch(
+                        collection=collection,
+                        transcript=relative,
+                        line=line_number,
+                        timestamp=_timestamp(record),
+                        title=current_title,
+                        snippet=_snippet(text, position, len(query.strip())),
+                        cursor=cursor,
+                    )
+                    break
+                if match is not None:
+                    break
+        except UnreadableTranscript:
+            if warnings is None:
+                raise
+            skipped_damaged()
+            continue
         if match is not None:
             if matched_threads >= offset:
                 matches.append(match)

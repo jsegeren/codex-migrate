@@ -13,6 +13,42 @@ from codex_migrate.vault_identity import scan_transcript
 
 
 class VaultTests(unittest.TestCase):
+    def test_damaged_transcript_does_not_hide_healthy_search_matches(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            folder = root / ".codex/sessions"
+            folder.mkdir(parents=True)
+            damaged = folder / "damaged.jsonl"
+            damaged.write_bytes(
+                json.dumps({"type": "session_meta", "payload": {
+                    "id": "11111111-1111-4111-8111-111111111111"}}).encode() +
+                b"\n\x00broken\n")
+            healthy = folder / "healthy.jsonl"
+            healthy.write_text(json.dumps({"payload": {"message": {
+                "content": "Healthy needle"}}}) + "\n")
+            before = damaged.read_bytes()
+            warnings = []
+            matches = search(str(root), "needle", warnings=warnings)
+            self.assertEqual([item.transcript for item in matches], ["healthy.jsonl"])
+            self.assertEqual(warnings, ["damaged_transcript"])
+            self.assertEqual(damaged.read_bytes(), before)
+            with self.assertRaisesRegex(MigrationError, "unreadable JSON"):
+                search(str(root), "needle")
+
+    def test_damaged_header_does_not_hide_healthy_search_matches(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            folder = root / ".codex/sessions"
+            folder.mkdir(parents=True)
+            (folder / "damaged.jsonl").write_bytes(b"\x00broken header\n")
+            (folder / "healthy.jsonl").write_text(
+                json.dumps({"payload": {"message": {
+                    "content": "A healthy needle"}}}) + "\n")
+            warnings = []
+            matches = search(str(root), "needle", warnings=warnings)
+            self.assertEqual([item.transcript for item in matches], ["healthy.jsonl"])
+            self.assertEqual(warnings, ["damaged_transcript"])
+
     def fixture(self, root: Path) -> None:
         active = root / ".codex/sessions/2026/09/17/active.jsonl"
         archived = root / ".codex/archived_sessions/archived.jsonl"

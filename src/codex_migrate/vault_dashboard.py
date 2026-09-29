@@ -196,7 +196,7 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 <p class="muted">Search this Mac's text or titles. For older versions, search saved titles, then open a backup to search its full text.</p>
 <details class="subsection" id="salvage-controls">
 <summary>Inspect a damaged conversation file</summary>
-<p class="muted">If ordinary search stops on an unreadable transcript, find its physical file by a known title or filename. This separate preview skips damaged records and never changes the original. It may be incomplete and does not restore the thread in Codex.</p>
+<p class="muted">If search reports a skipped damaged transcript, find its physical file by a known title or filename. This separate preview skips damaged records and never changes the original. It may be incomplete and does not restore the thread in Codex.</p>
 <form id="salvage-search">
 <label for="salvage-query">Title or filename (optional)</label>
 <input id="salvage-query" maxlength="200" autocomplete="off" placeholder="Blank shows recent files">
@@ -479,7 +479,14 @@ async function runSearch(append=false){
       source==="local_titles"?"No matching local title found. Try searching conversation text.":
       "No matching conversation text found.";
     if(data.partial_results){
-      $("status").textContent+=" Some conversations have ambiguous history copies and could not be searched. Results may be incomplete.";
+      const reasons=Array.isArray(data.partial_reasons)?data.partial_reasons:[];
+      if(reasons.includes("damaged_transcript")){
+        $("status").textContent+=" A damaged conversation file was skipped. Results may be incomplete; use the damaged-file panel below for read-only inspection.";
+        $("salvage-controls").open=true;
+      }
+      if(reasons.includes("ambiguous_lineage")||!reasons.length){
+        $("status").textContent+=" Some conversations have ambiguous history copies and could not be searched. Results may be incomplete.";
+      }
     }
   }catch(error){
     if(request===searchRequest){

@@ -556,8 +556,13 @@ def main(argv: Optional[List[str]] = None) -> int:
                 if not results:
                     print("No matching conversation text found.")
             if warnings:
-                print("Some conversations have ambiguous history copies and could not be "
-                      "searched. Results may be incomplete.", file=sys.stderr)
+                if "ambiguous_lineage" in warnings:
+                    print("Some conversations have ambiguous history copies and could not be "
+                          "searched. Results may be incomplete.", file=sys.stderr)
+                if "damaged_transcript" in warnings:
+                    print("A damaged conversation file was skipped. Results may be incomplete; "
+                          "use salvage-preview on a copy for an incomplete read-only export.",
+                          file=sys.stderr)
             return 0
 
         config = _config(args)
