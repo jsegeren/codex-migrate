@@ -171,17 +171,30 @@ def resume_after_update(source_home: str, installed_build: int) -> None:
         deferred = marker["deferred"]
         marker_path.unlink()
         _fsync_directory(marker_path.parent)
-    if deferred and _loaded():
-        try:
-            subprocess.Popen(
-                ["/bin/launchctl", "kickstart", "-k", "gui/%d/%s" % (os.getuid(), LABEL)],
-                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL, start_new_session=True,
-            )
-        except OSError:
-            # Keep the app available; the failed receipt remains visible and
-            # the LaunchAgent will try again at its next scheduled interval.
-            pass
+    if deferred:
+        # Both schedules share this update guard. A hosted check deferred by
+        # Sparkle must catch up too, even if local-folder backup is disabled.
+        from codex_migrate.vault_hosted_schedule import (
+            LABEL as HOSTED_LABEL, _loaded as hosted_loaded,
+            _paths as hosted_paths,
+        )
+        hosted_config, _, _, hosted_plist = hosted_paths(source_home)
+        hosted_installed = (hosted_config.exists() and hosted_plist.exists()
+                            and hosted_loaded())
+        for label, loaded in ((LABEL, _loaded()), (HOSTED_LABEL, hosted_installed)):
+            if not loaded:
+                continue
+            try:
+                subprocess.Popen(
+                    ["/bin/launchctl", "kickstart", "-k",
+                     "gui/%d/%s" % (os.getuid(), label)],
+                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL, start_new_session=True,
+                )
+            except OSError:
+                # The failed receipt remains visible and this LaunchAgent
+                # retries at its own next interval.
+                pass
 
 
 def _ensure_owned_directory(home: Path, destination: Path) -> None:

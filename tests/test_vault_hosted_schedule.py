@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 import plistlib
 import tempfile
@@ -12,6 +13,7 @@ from codex_migrate.vault_hosted_schedule import (
     LABEL, _paths, hosted_schedule_status, install_hosted_schedule,
     remove_hosted_schedule, run_hosted_scheduled_backup,
 )
+from codex_migrate.vault_schedule import prepare_update, resume_after_update
 
 
 ACCOUNT = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
@@ -218,6 +220,20 @@ class HostedScheduleTests(unittest.TestCase):
                          "awaiting_check")
         with patch("codex_migrate.vault_hosted_schedule._loaded", return_value=True):
             self.assertFalse(hosted_schedule_status(self.home)["healthy"])
+
+    def test_app_update_restarts_deferred_hosted_check_without_local_schedule(self):
+        self._install()
+        config_path, status_path, _, _ = _paths(self.home)
+        self.assertTrue(prepare_update(self.home, lambda: True, 17))
+        self.assertEqual(run_hosted_scheduled_backup(str(config_path)), 0)
+        self.assertEqual(json.loads(status_path.read_text())["status"], "failed")
+        with patch("codex_migrate.vault_schedule._loaded", return_value=False), \
+                patch("codex_migrate.vault_hosted_schedule._loaded", return_value=True), \
+                patch("codex_migrate.vault_schedule.subprocess.Popen") as start:
+            resume_after_update(self.home, 17)
+        self.assertEqual(start.call_args.args[0], [
+            "/bin/launchctl", "kickstart", "-k",
+            "gui/%d/%s" % (os.getuid(), LABEL)])
 
 
 if __name__ == "__main__":
