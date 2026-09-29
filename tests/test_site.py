@@ -85,11 +85,23 @@ class SiteTests(unittest.TestCase):
         self.assertIn("does not transfer ordinary ChatGPT cloud chats", readme)
 
     def test_indexed_pages_have_canonical_urls(self):
-        for name in ("privacy", "terms", "refunds", "codex-vault", "backup-codex-conversations-mac", "search-codex-conversation-history", "recover-missing-codex-chats", "moving-to-a-new-mac", "codex-history-missing-new-mac", "backup-and-recovery", "compare-codex-migration-tools", "access-codex-from-another-machine"):
+        for name in ("privacy", "terms", "refunds", "codex-vault", "codex-vault-for-teams", "backup-codex-conversations-mac", "search-codex-conversation-history", "recover-missing-codex-chats", "moving-to-a-new-mac", "codex-history-missing-new-mac", "backup-and-recovery", "compare-codex-migration-tools", "access-codex-from-another-machine"):
             self.assertIn('<link rel="canonical" href="https://migrate.segeren.com/' + name + '">',
                           (SITE / (name + ".html")).read_text())
         self.assertIn('<link rel="canonical" href="https://migrate.segeren.com/ja/codex-new-mac">',
                       (SITE / "ja/codex-new-mac.html").read_text())
+
+    def test_team_pilot_inquiry_does_not_present_hosting_as_live(self):
+        page = (SITE / "codex-vault-for-teams.html").read_text()
+        self.assertIn("Hosted team backup is in development and is not for sale yet.", page)
+        self.assertIn("does not yet capture content stored only in Codex’s separate paginated-history database", page)
+        self.assertIn("off-device backup and independent clean-Mac restore", page)
+        self.assertIn("Do not send credentials, transcripts, or repository contents", page)
+        self.assertIn('data-analytics-event="team_pilot_contact"', page)
+        self.assertIn('href="/codex-vault-for-teams"', (SITE / "codex-vault.html").read_text())
+        self.assertIn('href="/codex-vault-for-teams"', (SITE / "index.html").read_text())
+        self.assertIn("https://migrate.segeren.com/codex-vault-for-teams",
+                      (SITE / "sitemap.xml").read_text())
 
     def test_vault_search_pages_are_focused_truthful_and_discoverable(self):
         sitemap = (SITE / "sitemap.xml").read_text()
