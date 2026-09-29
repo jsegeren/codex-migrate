@@ -66,6 +66,19 @@ Repeating an unchanged backup should reuse existing chunks; a
 rewritten or compacted transcript can create new chunks and must be measured.
 Do not count shared free allowances as a per-customer subsidy.
 
+The current **dark** upload API separately authorizes each object decision
+and PUT grant. Each authorization rechecks the app purchase and hosted
+subscription with Stripe. For the measured 36,356 novel chunks, a first
+backup could make roughly **72,712 first-party authorization requests and
+corresponding provider checks** before manifests, retries, and other steps.
+That is an unacceptable latency, provider-rate-limit, availability, and
+service-COGS risk even if R2 object operations are cheap. Before customer
+release, replace this request amplification with bounded, account-scoped
+batch/run authorization that preserves timely revocation and exact-object
+immutable checks; measure actual initial-upload latency and per-buyer service
+cost. Do not solve this by silently trusting a stale purchase or unbounded
+client-supplied object list.
+
 ### Thirty-minute business cadence is an incremental-engine gate
 
 The working policy is a **30-minute check while the Mac is awake**, not a
