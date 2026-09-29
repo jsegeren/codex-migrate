@@ -149,9 +149,16 @@ retention policy, or customer-facing abandon flow exists. These functions
 must remain dark until those gates and operational review pass.
 The September 27 synthetic Wrangler local-R2 probe passed all nine upload,
 integrity, read, exact-delete, and already-absent retry flags. Its separate
-Node test is in CI. A remote-binding attempt stopped before touching R2
-because this session had no Cloudflare API token; local simulation is not a
-real-R2 cleanup receipt.
+Node test is in CI. On September 28, the same sandbox fixture ran with a real
+R2 remote binding: all nine primitive flags and eight capability-route flags
+passed. The separate Python transport and encrypted snapshot roundtrip also
+passed, including deletion of the test key, recovery-key import, exact restore
+of synthetic transcript and database-only content, and exact test-object
+cleanup. Cloudflare showed zero objects and zero bytes in the named sandbox
+bucket afterward. The test-only account-scoped Workers Scripts token was
+revoked immediately. No customer data, production bucket, deployed Worker,
+authenticated customer enrollment, subscription, or clean-Mac restore was
+involved; those release gates remain open.
 The draft HEAD grant requires a fresh upload entitlement and active
 reservation, then checks that the exact key, size, and checksum either belong
 to a published snapshot of that Vault or have a PUT grant recorded under this

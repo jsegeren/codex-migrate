@@ -194,7 +194,8 @@ download, and deletion through the same loopback Worker. The probes used
 random synthetic objects and removed them afterward. This is a local runtime
 transport receipt only: it did not connect to Cloudflare R2, publish an
 encrypted snapshot, exercise billing or enrollment, or prove clean-account
-recovery. The real-R2 sandbox and customer release gates remain open.
+recovery. At this local-only checkpoint, the real-R2 sandbox and customer
+release gates remained open.
 
 A follow-up opt-in local test joined the real encrypted snapshot staging path
 to that loopback Worker, including one synthetic JSONL transcript and one
@@ -205,6 +206,17 @@ synthetic message, and confirmed its scoped objects were deleted. The seven
 fixture unit tests also passed. Grants came from a test-only local issuer;
 this still does not prove an authenticated hosted service, actual Cloudflare
 R2, independent publication, scheduled backup, or clean-account recovery.
+
+The subsequent real-R2 sandbox run passed both Worker probes (9/9 primitive
+and 8/8 capability-route flags), the separate native Python transport check,
+and a full synthetic encrypted snapshot/recovery roundtrip through the
+locally running Worker with a remote R2 binding. The test deleted its scoped
+objects; the Cloudflare dashboard then showed zero objects and bytes in the
+named sandbox bucket. The same-day Workers Scripts token was revoked. This
+proves the sandbox transport and encryption/recovery path, **not** customer
+authentication, subscription entitlement, provider-backed publication at real
+scale, a deployed service, or clean-Mac disaster recovery. No public build or
+checkout changed.
 
 An opt-in whole-run scale probe on the hosted branch passed in 53.454 s with
 2,048 additional synthetic transcript files and a roughly 72 MiB synthetic

@@ -99,9 +99,13 @@ provide the SHA-256 and immutable-write proof this product requires. The
 leading R2 path is a small authenticated Cloudflare Worker using the R2
 binding's `put(..., { sha256, onlyIf })`, followed by a metadata check. A
 64 KiB synthetic-object probe passed those primitives against real R2 on
-September 27, 2026, and left its private sandbox bucket empty. That is not a
-customer-authenticated service, a realistic-scale proof, or a clean-Mac
-recovery test. The Worker can stream encrypted objects directly to R2 without
+September 27, 2026. On September 28, both the primitive and capability-route
+probes, a separate Python transport check, and a complete synthetic encrypted
+snapshot/recovery roundtrip passed against the real R2 sandbox binding. The
+private sandbox bucket showed zero objects and bytes after cleanup, and the
+temporary Cloudflare token was revoked. This is not a customer-authenticated
+service, a realistic-scale proof, or a clean-Mac recovery test. The Worker can
+stream encrypted objects directly to R2 without
 relaying them through Vercel. Its inbound 100 MB limit on a Free Cloudflare
 account accommodates ordinary encrypted chunks, but an oversized manifest
 must fail safely or use a separately proven path.
