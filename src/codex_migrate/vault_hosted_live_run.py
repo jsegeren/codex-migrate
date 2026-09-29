@@ -105,7 +105,7 @@ class HostedLiveBackupRun:
                     not _UUID.fullmatch(value[key]) for key in
                     ("reservationId", "snapshotId", "keyId")) or
                 not ((value.get("phase") == "reserving" and set(value) == common) or
-                     (value.get("phase") == "active" and
+                     (value.get("phase") in ("active", "cleanup_pending") and
                       set(value) == common | {"baseSnapshotId"} and
                       (value["baseSnapshotId"] is None or
                        isinstance(value["baseSnapshotId"], str) and
@@ -138,6 +138,9 @@ class HostedLiveBackupRun:
         key_id = _metadata(metadata)
         with self._locked():
             state = self._pending()
+            if state is not None and state["phase"] == "cleanup_pending":
+                raise MigrationError(
+                    "The abandoned hosted upload needs verified cleanup before another backup.")
             if state is None:
                 state = {"format": _FORMAT, "version": 1,
                          "accountId": self._upload._account_id,
@@ -193,6 +196,62 @@ class HostedLiveBackupRun:
             self._finish(snapshot_id)
             return result
 
+    def cleanup_status(self) -> Optional[str]:
+        """Report service state; local quarantine alone never releases quota."""
+        state = self.pending()
+        return (None if state is None else
+                self._upload.reservation_status(state["reservationId"]))
+
+    def abandon_pending(self, *, apply: bool = False) -> str:
+        """Quarantine a failed run; retire its journal only after release.
+
+        Keep the owner-only journal while the provider cleans up. After the
+        service confirms release, remove only this run's recognized scratch.
+        Neither a lost ACK nor an unexpected local file authorizes a new run.
+        """
+        if apply is not True:
+            raise MigrationError("Hosted backup changes require explicit confirmation.")
+        with self._locked():
+            state = self._pending()
+            if state is None:
+                return "none"
+            reservation_id = state["reservationId"]
+            receipt = self._upload.reservation_receipt(reservation_id)
+            if receipt["state"] == "published":
+                if (state["phase"] == "cleanup_pending" or
+                        receipt["snapshotId"] != state["snapshotId"]):
+                    raise MigrationError("The hosted publication conflicts with abandonment.")
+                self._finish(state["snapshotId"])
+                return "published"
+            if receipt["state"] == "active":
+                if state["phase"] == "cleanup_pending":
+                    raise MigrationError("The abandoned hosted upload is active again.")
+                try:
+                    self._upload.abandon(reservation_id, apply=True)
+                    receipt = {"state": "cleanup_pending"}
+                except MigrationError:
+                    # The ACK may be lost after quarantine. Read the exact
+                    # reservation instead of issuing a second blind action.
+                    receipt = self._upload.reservation_receipt(reservation_id)
+                    if receipt["state"] not in ("cleanup_pending", "released"):
+                        raise MigrationError(
+                            "The hosted upload could not be confirmed abandoned.") from None
+            if receipt["state"] not in ("cleanup_pending", "released"):
+                raise MigrationError("The hosted upload needs manual review.")
+            if state["phase"] != "cleanup_pending":
+                state = {**state, "phase": "cleanup_pending",
+                         "baseSnapshotId": state.get("baseSnapshotId")}
+                _atomic_json(self._state, state, replace=True)
+            if receipt["state"] == "cleanup_pending":
+                return "cleanup_pending"
+            self._retire_published_journal(state["snapshotId"], released=True)
+            try:
+                self._state.unlink()
+                _fsync_directory(self._directory)
+            except OSError as error:
+                raise MigrationError("The released hosted backup journal remains.") from error
+            return "released"
+
     @staticmethod
     def _private_directory(path: Path) -> None:
         info = path.lstat()
@@ -207,17 +266,18 @@ class HostedLiveBackupRun:
                 info.st_nlink != 1 or info.st_mode & 0o077):
             raise MigrationError("The published hosted journal file is unsafe.")
 
-    def _retire_published_journal(self, snapshot_id: str) -> None:
-        """Remove only recognized scratch after exact server publication.
+    def _retire_published_journal(self, snapshot_id: str, *, released: bool = False) -> None:
+        """Remove only recognized scratch after publication or verified release.
 
         An unexpected file, especially an unreceipted ciphertext chunk, is
         retained for review rather than guessed to be disposable. A partial
         cleanup is retryable because the run marker is removed last.
         """
         state = self._pending()
-        if (state is None or state["phase"] != "active" or
+        if (state is None or state["phase"] != (
+                "cleanup_pending" if released else "active") or
                 state["snapshotId"] != snapshot_id):
-            raise MigrationError("The published hosted run identity changed.")
+            raise MigrationError("The hosted run identity changed before cleanup.")
         root = self._directory / ("snapshot-" + snapshot_id)
         _require_unlinked_path(root, allow_missing_leaf=True)
         try:
@@ -260,8 +320,13 @@ class HostedLiveBackupRun:
                     if not re.fullmatch(r"[0-9a-f]{2}", prefix.name):
                         raise MigrationError("The published hosted scratch is not empty.")
                     self._private_directory(prefix)
-                    if any(prefix.iterdir()):
-                        raise MigrationError("The published hosted scratch is not empty.")
+                    for chunk in prefix.iterdir():
+                        if not released:
+                            raise MigrationError("The published hosted scratch is not empty.")
+                        if not re.fullmatch(r"[0-9a-f]{62}\.cvchunk", chunk.name):
+                            raise MigrationError("The hosted scratch has unknown files.")
+                        self._private_file(chunk)
+                        file_paths.append(chunk)
                     directory_paths.append(prefix)
                 directory_paths.append(child)
             else:

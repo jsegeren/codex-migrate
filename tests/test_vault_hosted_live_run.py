@@ -45,6 +45,27 @@ class HostedLiveRunTests(unittest.TestCase):
             metadata or self.metadata, crypto_helper=str(self.helper),
             max_prior_bytes=5_000_000, apply=True)
 
+    def interrupted_run(self, *, scratch_name=None):
+        def stage(*args, **kwargs):
+            if scratch_name is not None:
+                scratch_root = args[2].directory / "scratch"
+                scratch_root.mkdir(mode=0o700)
+                prefix = scratch_root / "aa"
+                prefix.mkdir(mode=0o700)
+                chunk = prefix / scratch_name
+                chunk.write_bytes(b"synthetic ciphertext")
+                chunk.chmod(0o600)
+            raise MigrationError("upload interrupted")
+
+        with patch.object(self.upload, "reserve_with_base",
+                          side_effect=lambda *, reservation_id, apply:
+                          (reservation_id, BASE)), patch(
+                "codex_migrate.vault_hosted_live_run.stage_reserved_hosted_snapshot",
+                side_effect=stage):
+            with self.assertRaisesRegex(MigrationError, "upload interrupted"):
+                self.back_up()
+        return self.run.pending()
+
     def test_plan_and_invalid_setup_do_not_reserve(self):
         with patch.object(self.upload, "reserve_with_base") as reserve:
             with self.assertRaisesRegex(MigrationError, "explicit confirmation"):
@@ -296,6 +317,72 @@ class HostedLiveRunTests(unittest.TestCase):
                 self.assertEqual(self.back_up()["snapshotId"], pending["snapshotId"])
             stage.assert_called_once()
             publish.assert_called_once()
+            self.assertIsNone(self.run.pending())
+
+    def test_abandon_requires_confirmation_and_server_release_before_new_run(self):
+        pending = self.interrupted_run(scratch_name="b" * 62 + ".cvchunk")
+        journal = self.run._directory / ("snapshot-" + pending["snapshotId"])
+        with patch.object(self.upload, "reservation_receipt") as receipt, \
+                patch.object(self.upload, "abandon") as abandon:
+            with self.assertRaisesRegex(MigrationError, "explicit confirmation"):
+                self.run.abandon_pending()
+            receipt.assert_not_called()
+            abandon.assert_not_called()
+            receipt.return_value = {"state": "active"}
+            self.assertEqual(self.run.abandon_pending(apply=True), "cleanup_pending")
+            abandon.assert_called_once_with(pending["reservationId"], apply=True)
+            self.assertEqual(self.run.pending()["phase"], "cleanup_pending")
+            self.assertTrue(journal.exists())
+            with self.assertRaisesRegex(MigrationError, "verified cleanup"):
+                self.back_up()
+            receipt.return_value = {"state": "released"}
+            self.assertEqual(self.run.abandon_pending(apply=True), "released")
+            self.assertIsNone(self.run.pending())
+            self.assertFalse(journal.exists())
+
+    def test_lost_abandon_ack_reconciles_without_repeat_action(self):
+        pending = self.interrupted_run()
+        with patch.object(self.upload, "reservation_receipt",
+                          side_effect=[{"state": "active"},
+                                       {"state": "cleanup_pending"},
+                                       {"state": "released"}]) as receipt, \
+                patch.object(self.upload, "abandon",
+                             side_effect=MigrationError("ACK lost")) as abandon:
+            self.assertEqual(self.run.abandon_pending(apply=True), "cleanup_pending")
+            self.assertEqual(self.run.pending()["phase"], "cleanup_pending")
+            self.assertEqual(self.run.abandon_pending(apply=True), "released")
+            abandon.assert_called_once_with(pending["reservationId"], apply=True)
+            self.assertEqual(receipt.call_count, 3)
+            self.assertIsNone(self.run.pending())
+
+    def test_unconfirmed_abandon_keeps_active_run_retryable(self):
+        pending = self.interrupted_run()
+        with patch.object(self.upload, "reservation_receipt",
+                          return_value={"state": "active"}), patch.object(
+                self.upload, "abandon", side_effect=MigrationError("network down")):
+            self.assertEqual(self.run.cleanup_status(), "active")
+            with self.assertRaisesRegex(MigrationError, "could not be confirmed"):
+                self.run.abandon_pending(apply=True)
+        self.assertEqual(self.run.pending(), pending)
+
+    def test_released_run_keeps_unknown_scratch_for_review(self):
+        pending = self.interrupted_run(scratch_name="unknown.cvchunk")
+        journal = self.run._directory / ("snapshot-" + pending["snapshotId"])
+        with patch.object(self.upload, "reservation_receipt",
+                          return_value={"state": "released"}):
+            with self.assertRaisesRegex(MigrationError, "unknown files"):
+                self.run.abandon_pending(apply=True)
+        self.assertEqual(self.run.pending()["phase"], "cleanup_pending")
+        self.assertTrue((journal / "scratch/aa/unknown.cvchunk").exists())
+
+    def test_abandon_reconciles_published_run_without_quarantine(self):
+        pending = self.interrupted_run()
+        with patch.object(self.upload, "reservation_receipt", return_value={
+                "state": "published", "snapshotId": pending["snapshotId"],
+                "verifiedObjectCount": 1}), patch.object(
+                self.upload, "abandon") as abandon:
+            self.assertEqual(self.run.abandon_pending(apply=True), "published")
+            abandon.assert_not_called()
             self.assertIsNone(self.run.pending())
 
 
