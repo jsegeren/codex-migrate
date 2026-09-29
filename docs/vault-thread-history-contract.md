@@ -398,12 +398,25 @@ Treat the possibility of old local threads being visible to a newly signed-in
 account in the same macOS user as a privacy issue to test, not a benefit to
 advertise.
 
+There is real but contradictory field evidence. In an
+[August 2026 CLI discussion](https://www.reddit.com/r/codex/comments/1voiin4/when_i_switch_account_in_codex_cli_using_codex/),
+users report continuing local sessions after switching between paid accounts.
+An [upstream Desktop issue](https://github.com/openai/codex/issues/20004)
+reports sessions hidden after account/provider changes and warns that
+`encrypted_content` can fail when sent through the wrong provider or account.
+That issue's concrete reproduction is on Windows and includes custom
+providers, so it is not proof of the same failure on Mac with two OpenAI
+accounts. Together these reports justify testing both visibility and actual
+continuation, including a synthetic thread with encrypted model state.
+
 Before claiming account portability, run a controlled test with two separately
 authorized OpenAI accounts, a disposable macOS user/profile, and a harmless
 synthetic Codex thread. Record the installed app and CLI versions and test:
 
-1. Create, close, list, reopen, and continue the thread as account A; record
-   the local files and database rows without copying authentication material.
+1. Create, close, list, reopen, and continue the thread as account A. Include
+   a normal completed model turn that produces encrypted model state when
+   supported; record its presence, not its bytes. Record the local files and
+   database rows without copying authentication material.
 2. Sign out only in the disposable profile, sign in as account B, then check
    list visibility, read behavior, and continuation separately in the desktop
    app and CLI. Do not send account A's synthetic transcript as a new prompt
