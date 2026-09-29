@@ -58,6 +58,25 @@ class VaultSalvageTests(unittest.TestCase):
             self.assertEqual(result.skipped_records, 3)
             self.assertEqual(result.parsed_records, 1)
 
+    def test_nul_insertion_is_parseable_but_overwritten_structure_is_not_invented(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            path = self.fixture(home)
+            inserted = record("Known text").replace(b"Known", b"Kn\x00own")
+            overwritten = record("Unrecoverable").replace(
+                b'{"payload":', b'\x00"payload":')
+            original = inserted + overwritten + record("Later intact")
+            path.write_bytes(original)
+            result = vault_salvage.preview_damaged_thread(
+                str(home), "active", "damaged.jsonl")
+            self.assertEqual([entry.text for entry in result.entries],
+                             ["Known text", "Later intact"])
+            self.assertEqual((result.parsed_records, result.nul_repaired_records,
+                              result.skipped_records), (2, 1, 1))
+            self.assertIn("Records parsed after NUL removal: 1",
+                          vault_salvage.incomplete_markdown(result))
+            self.assertEqual(path.read_bytes(), original)
+
     def test_preview_limit_is_explicit_and_does_not_stop_damage_counting(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)

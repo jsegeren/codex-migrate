@@ -348,7 +348,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                     print(json.dumps(result.as_dict(), indent=2, sort_keys=True))
                 else:
                     print("INCOMPLETE READ-ONLY PREVIEW · physical file only; fork ancestry not included")
-                    print("Parsed records: %d · NUL-recovered: %d · skipped: %d" % (
+                    print("Parsed records: %d · parsed after NUL removal: %d · skipped: %d" % (
                         result.parsed_records, result.nul_repaired_records,
                         result.skipped_records))
                     if result.preview_truncated or result.scan_truncated:

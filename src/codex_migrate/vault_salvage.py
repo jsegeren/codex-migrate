@@ -206,7 +206,7 @@ def incomplete_markdown(result: SalvagePreview) -> str:
         "Collection: %s" % result.collection,
         "Transcript: %s" % json.dumps(result.transcript, ensure_ascii=False),
         "Readable records: %d" % result.parsed_records,
-        "NUL-recovered records: %d" % result.nul_repaired_records,
+        "Records parsed after NUL removal: %d" % result.nul_repaired_records,
         "Skipped records: %d" % result.skipped_records,
         "Preview limit reached: %s" % ("yes" if result.preview_truncated else "no"),
         "Scan limit reached: %s" % ("yes" if result.scan_truncated else "no"),
