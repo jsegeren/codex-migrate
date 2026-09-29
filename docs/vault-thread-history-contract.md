@@ -360,6 +360,17 @@ signed-in GUI account and verify its import, read, and export there.
 - Measure the extra encrypted bytes and changed bytes across two scheduled
   runs before setting a hosted capacity tier or default retention policy.
 
+An isolated September 29 synthetic sizing run used 100 generated threads with
+100 items each and distinct 200-byte text payloads. Its 4,280,320-byte SQLite
+source produced a 1,357,548-byte first Vault (including metadata). A second
+snapshot without source changes added zero ciphertext objects and grew the
+Vault by 46,604 bytes of snapshot metadata. In a separate run from the same
+baseline, appending one item added one 13,282-byte encrypted object and grew
+the Vault by 59,886 bytes total. Both snapshots verified and the temporary
+Keychain keys were removed. These are small, compressible synthetic runs, not
+a customer-history, scheduled-LaunchAgent, R2-transfer, or cost/retention
+measurement; those gates remain open.
+
 The current public beta remains a transcript-tree backup with the disclosed
 testing boundary. Its claim and Help copy need an independent product-truth
 review against this finding before the next public release.
