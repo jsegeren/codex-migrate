@@ -150,6 +150,14 @@ payload volume, proved off-device recovery, or clears the public-release hold.
 
 ## September 28 hosted/Vault integration checkpoint — not released
 
+An opt-in whole-run scale probe on the hosted branch passed in 53.454 s with
+2,048 additional synthetic transcript files and a roughly 72 MiB synthetic
+long thread. It exercised hosted-only staging, a second snapshot, remote-object
+reuse through an **in-memory** store, exact publication checks, removal of the
+test Keychain key, recovery-key import, and byte-for-byte restore into an empty
+synthetic home. It did not use R2, a separate macOS login, customer data, a
+scheduled wake, or a signed buyer build; those gates remain open.
+
 The hosted draft includes the paginated-history Vault integration at merge
 `2bc4b4a`. That merge first made the transcript-only stage refuse a source with
 Codex's paginated-history database, rather than falsely claiming complete
