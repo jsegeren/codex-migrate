@@ -239,6 +239,7 @@ footer p { color: #8e8b83; font-size: 14px; }
 .legal p, .legal li { color: var(--ink); }
 .legal li { margin: 7px 0; }
 .legal .notice { padding: 20px 22px; background: var(--paper-deep); border-left: 4px solid var(--purple); }
+.pilot-note { margin-top: 22px; }
 .guide-lede { max-width: 820px; font-size: 21px; font-weight: 600; line-height: 1.6; }
 .vault-guide-demo { max-width: 980px; margin: 34px 0 46px; }
 .vault-guide code { padding: 2px 5px; border-radius: 5px; background: var(--paper-deep); font: 500 15px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }

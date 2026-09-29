@@ -85,7 +85,7 @@ class SiteTests(unittest.TestCase):
         self.assertIn("does not transfer ordinary ChatGPT cloud chats", readme)
 
     def test_indexed_pages_have_canonical_urls(self):
-        for name in ("privacy", "terms", "refunds", "codex-vault", "backup-codex-conversations-mac", "search-codex-conversation-history", "recover-missing-codex-chats", "moving-to-a-new-mac", "codex-history-missing-new-mac", "backup-and-recovery", "compare-codex-migration-tools", "access-codex-from-another-machine"):
+        for name in ("privacy", "terms", "refunds", "codex-vault", "codex-backup-for-teams", "backup-codex-conversations-mac", "search-codex-conversation-history", "recover-missing-codex-chats", "moving-to-a-new-mac", "codex-history-missing-new-mac", "backup-and-recovery", "compare-codex-migration-tools", "access-codex-from-another-machine"):
             self.assertIn('<link rel="canonical" href="https://migrate.segeren.com/' + name + '">',
                           (SITE / (name + ".html")).read_text())
         self.assertIn('<link rel="canonical" href="https://migrate.segeren.com/ja/codex-new-mac">',
@@ -108,6 +108,20 @@ class SiteTests(unittest.TestCase):
         self.assertIn("paginated-history database", recovery)
         self.assertIn("Vault cannot reconstruct them", recovery)
         self.assertIn("preserving the new Mac’s authentication and installation identity", recovery)
+
+    def test_business_design_partner_page_is_discoverable_without_pretending_to_sell_hosting(self):
+        source = (SITE / "codex-backup-for-teams.html").read_text()
+        text = " ".join(self.parse("codex-backup-for-teams.html").text)
+        self.assertIn('href="/codex-backup-for-teams"', (SITE / "index.html").read_text())
+        self.assertIn("https://migrate.segeren.com/codex-backup-for-teams",
+                      (SITE / "sitemap.xml").read_text())
+        self.assertIn("This hosted team service is not available yet", text)
+        self.assertIn("Account-saved ChatGPT-app chats are another case", text)
+        self.assertIn("current backup can miss history held only", text)
+        self.assertIn("there is no pre-order or charge here", text)
+        self.assertIn("Talk to Joshua about a pilot", text)
+        self.assertIn("mailto:joshua@segeren.com?subject=Codex%20Backup", source)
+        self.assertNotIn("/api/checkout", source)
 
     def test_comparison_distinguishes_search_backup_and_migration(self):
         source = (SITE / "compare-codex-migration-tools.html").read_text()
