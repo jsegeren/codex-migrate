@@ -29,6 +29,16 @@ passed six tests with two optional tests skipped. This establishes package
 inclusion for the attachment path, not a signed buyer release, real-history
 backup, or clean-account/real-R2 disaster recovery.
 
+The same unsigned bundle was copied to a temporary folder on the second Mac
+and started successfully from SSH, but its synthetic attachment-backup test
+stopped when the authenticated helper returned failure before any snapshot was
+published. The SSH login also could not query that user's login Keychain; an
+attempt to enter the GUI bootstrap from SSH was denied by macOS. This is **not**
+a successful second-Mac backup test or proof of a product failure in the
+normal interactive session. No installed app or Codex history was touched;
+the temporary test copy was moved to Trash. Repeat this gate in a genuine
+signed-in GUI session or another appropriately authenticated test context.
+
 ## September 28 paginated-history coverage hold
 
 On September 29, exact draft source `66ed54b59e7da4cf7ead58250c4e482fcfa049e5`
