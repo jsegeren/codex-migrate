@@ -32,6 +32,7 @@ function fixture() {
   let reservationState = 'cleanup_pending';
   let leaseActive = true;
   let deviceActive = true;
+  let denyGrantKey = null;
   const handler = makeHandler(async received => {
     assert.equal(received, env);
     loads++;
@@ -77,6 +78,7 @@ function fixture() {
         return { rows: [{ decision: granted.has(values[3]) ? 'head' : 'put' }] };
       }
       if (sql.includes('reserve_object_grant_elastic_current')) {
+        if (values[3] === denyGrantKey) return { rows: [{ allowed: false }] };
         granted.add(values[3]);
         return { rows: [{ allowed: true }] };
       }
@@ -109,6 +111,7 @@ function fixture() {
     setEntitlement: value => { entitlement = value; },
     setLeaseActive: value => { leaseActive = value; },
     setDeviceActive: value => { deviceActive = value; },
+    denyGrantFor: value => { denyGrantKey = value; },
     setReservationState: value => { reservationState = value; },
     send: async () => { const res = response(); await handler(req, res); return res; } };
 }
@@ -264,6 +267,26 @@ test('a bounded batch issues exact PUT and HEAD grants with one service call', a
   f.req.body.items = [item];
   delete f.req.headers['x-hosted-upload-lease'];
   assert.equal((await f.send()).statusCode, 403);
+});
+
+test('a failed batch returns no partial grants and an exact retry succeeds', async () => {
+  const f = fixture();
+  f.req.body = { action: 'lease', vaultId, reservationId };
+  const lease = await f.send();
+  f.req.headers['x-hosted-upload-lease'] = lease.body.lease;
+  const another = { ...item, key: 'objects/bb/' + 'b'.repeat(62) + '.cvchunk' };
+  f.req.body = { action: 'batch', vaultId, reservationId,
+    items: [item, another] };
+  f.denyGrantFor(`accounts/${accountId}/vaults/${vaultId}/${another.key}`);
+  const denied = await f.send();
+  assert.equal(denied.statusCode, 503);
+  assert.deepEqual(denied.body, { error: 'temporarily_unavailable' });
+  assert.equal(JSON.stringify(denied.body).includes('grant'), false);
+  f.denyGrantFor(null);
+  const retry = await f.send();
+  assert.equal(retry.statusCode, 200);
+  assert.deepEqual(retry.body.objects.map(row => row.action),
+    ['head', 'put_required']);
 });
 
 test('lapsed subscription cannot reserve or grant any object', async () => {
