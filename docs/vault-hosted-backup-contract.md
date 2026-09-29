@@ -981,6 +981,16 @@ egress allowance. Do not claim that B2 restores are always free. See its
    remote ciphertext, upload only new chunks, and leave both versions readable
    on a clean Mac. A fresh nonce under an existing object ID must fail rather
    than overwrite or silently count as protected.
+   A verified ciphertext publication is not necessarily a complete Codex
+   capture: the current client can publish a snapshot with at-risk threads,
+   while the service advances its `last_good_snapshot_id` pointer and the
+   scheduler retains the older green receipt only on that Mac. Before release,
+   distinguish the latest published version from the latest source-reported
+   complete version in durable recovery metadata. A clean Mac must identify
+   the protection gap and offer the older complete version without depending
+   on the lost Mac's receipt; test this with a missing attachment and a
+   shortened paginated thread. Do not treat a client-reported coverage flag as
+   independent server verification of encrypted conversation content.
 4. **Prove commerce and operations:** separate Stripe *subscription* checkout
    and webhook state from the existing one-time purchase; enforce active,
    past-due, cancellation, refund, and dispute states; publish no entitlement
