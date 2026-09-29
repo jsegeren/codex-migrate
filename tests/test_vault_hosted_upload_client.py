@@ -10,6 +10,7 @@ import tempfile
 import threading
 import unittest
 from unittest.mock import patch
+from uuid import UUID
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_hosted_backup_run import HostedBackupRun
@@ -118,7 +119,8 @@ class _Handler(BaseHTTPRequestHandler):
             self.server.pages.append(request["objects"])
             return self._json(200, {"acceptedObjects": len(request["objects"])})
         if action == "reserve":
-            if request["bytes"] != 1:
+            if (request["bytes"] != 1 or
+                    request.get("reservationId", RESERVATION) != RESERVATION):
                 return self._json(403, {"error": "access_denied"})
             return self._json(200, {"reservationId": RESERVATION,
                                     "expiresAt": EXPIRY,
@@ -574,6 +576,8 @@ class HostedUploadClientTests(unittest.TestCase):
             ), len(FIRST) + len(manifest) + len(SECOND), True)
             with patch("codex_migrate.vault_hosted_backup_run.encrypted_snapshot_inventory",
                        return_value=inventory), patch(
+                       "codex_migrate.vault_hosted_backup_run.uuid.uuid4",
+                       return_value=UUID(RESERVATION)), patch(
                        "codex_migrate.vault_hosted_upload_client.encrypted_snapshot_inventory",
                        return_value=inventory), patch(
                        "codex_migrate.vault_remote_transfer.encrypted_snapshot_inventory",

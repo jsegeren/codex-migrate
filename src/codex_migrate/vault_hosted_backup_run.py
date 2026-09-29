@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import stat
 from typing import Iterator, Optional
+import uuid
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_backup import (
@@ -29,9 +30,7 @@ _FORMAT = "codex-vault-hosted-upload"
 class HostedBackupRun:
     """Resume only the same snapshot and reservation until publication.
 
-    This sandbox adapter does not create snapshots, schedules, or billing. A
-    crash between server reservation and the journal write can leave an unused
-    server reservation; its expiry and cleanup remain release gates.
+    This sandbox adapter does not create snapshots, schedules, or billing.
     """
 
     def __init__(self, client: HostedUploadClient, source_home: str):
@@ -96,7 +95,7 @@ class HostedBackupRun:
         if (not isinstance(value, dict) or
                 (set(value) != common or value.get("version") != 1) and
                 (set(value) != common | {"state"} or value.get("version") != 2 or
-                 value.get("state") != "cleanup_pending") or
+                 value.get("state") not in ("reserving", "cleanup_pending")) or
                 value["format"] != _FORMAT
                 or type(value["version"]) is not int
                 or value["accountId"] != self._client._account_id
@@ -119,7 +118,7 @@ class HostedBackupRun:
         return None if state is None else {
             "snapshotId": state["snapshotId"],
             "reservationId": state["reservationId"],
-            **({"state": "cleanup_pending"} if state["version"] == 2 else {}),
+            **({"state": state["state"]} if state["version"] == 2 else {}),
         }
 
     def cleanup_status(self) -> Optional[str]:
@@ -135,7 +134,8 @@ class HostedBackupRun:
             raise MigrationError("Hosted backup changes require explicit confirmation.")
         with self._locked():
             state = self._pending()
-            if state is not None and state["version"] == 2:
+            if (state is not None and state["version"] == 2 and
+                    state["state"] == "cleanup_pending"):
                 if self._client.reservation_status(state["reservationId"]) != "released":
                     raise MigrationError(
                         "The abandoned hosted upload is awaiting verified cleanup.")
@@ -156,13 +156,23 @@ class HostedBackupRun:
                 raise MigrationError(
                     "A different hosted snapshot is pending; review it before starting another.")
             if state is None:
-                reservation_id = self._client.reserve(apply=True)
-                state = {"format": _FORMAT, "version": 1,
+                state = {"format": _FORMAT, "version": 2,
                          "accountId": self._client._account_id,
                          "vaultId": self._client._vault_id,
                          "snapshotId": inventory.snapshot_id,
-                         "reservationId": reservation_id}
+                         "reservationId": str(uuid.uuid4()),
+                         "state": "reserving"}
+                # Save the chosen ID before calling the service. A lost
+                # response or process crash retries this exact reservation.
                 _atomic_json(self._journal, state)
+            if state["version"] == 2 and state["state"] == "reserving":
+                reservation_id, _ = self._client.reserve_with_base(
+                    reservation_id=state["reservationId"], apply=True)
+                if reservation_id != state["reservationId"]:
+                    raise MigrationError("The hosted upload reservation changed.")
+                state = {key: value for key, value in state.items() if key != "state"}
+                state["version"] = 1
+                _atomic_json(self._journal, state, replace=True)
             result = self._client.back_up_snapshot(
                 vault, reservation_id=state["reservationId"],
                 snapshot=state["snapshotId"],
