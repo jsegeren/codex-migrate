@@ -1117,7 +1117,7 @@ class VaultBackupTests(unittest.TestCase):
                     max_prior_bytes=5_000_000, apply=True)
                 self.assertEqual(checked, {
                     "unchanged": True, "lastGoodSnapshotId": published["snapshotId"],
-                    "lastGoodObjectCount": 6})
+                    "lastGoodObjectCount": 6, "atRiskThreads": 0})
                 self.assertEqual(upload.store.writes, prior_writes)
                 self.assertEqual(upload.published_id, published["snapshotId"])
                 self.assertIsNone(runner.pending())

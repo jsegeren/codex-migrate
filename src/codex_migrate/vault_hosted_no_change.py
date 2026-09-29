@@ -114,5 +114,14 @@ def unchanged_published_history(
             return None
         if recovery.latest_snapshot(expected_account_id=account_id) != latest:
             return None
+        # An unchanged source does not make an at-risk published version safe.
+        # Legacy/ambiguous catalog rows without an explicit false flag also
+        # cannot be promoted to a clean scheduled check.
+        at_risk = {
+            (item["collection"], item.get("thread_id") or item["path"])
+            for item in catalog
+            if item["collection"] != "attachments" and item.get("at_risk") is not False
+        }
         return {"unchanged": True, "lastGoodSnapshotId": snapshot_id,
-                "lastGoodObjectCount": latest["totalObjects"]}
+                "lastGoodObjectCount": latest["totalObjects"],
+                "atRiskThreads": len(at_risk)}

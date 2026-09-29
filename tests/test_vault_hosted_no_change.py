@@ -23,7 +23,8 @@ class Recovery:
         self.pointer = {"snapshotId": SNAPSHOT, "totalObjects": 4,
                         "totalBytes": 100}
         self.catalog = [{"collection": "active", "path": "thread.jsonl",
-                         "size": size, "thread_id": THREAD, "titles": []}]
+                         "size": size, "thread_id": THREAD, "titles": [],
+                         "at_risk": False}]
         self.catalog_reads = 0
         self.pointer_reads = 0
         self.change_pointer_after_first = False
@@ -67,7 +68,7 @@ class HostedNoChangeTests(unittest.TestCase):
     def test_exact_sealed_inventory_returns_a_check_not_a_new_snapshot(self):
         self.assertEqual(self.check(), {
             "unchanged": True, "lastGoodSnapshotId": SNAPSHOT,
-            "lastGoodObjectCount": 4})
+            "lastGoodObjectCount": 4, "atRiskThreads": 0})
         self.assertEqual(self.recovery.catalog_reads, 1)
         self.assertEqual(self.recovery.pointer_reads, 2)
 
@@ -103,3 +104,9 @@ class HostedNoChangeTests(unittest.TestCase):
         self.assertIsNone(self.check())
         attachment.unlink()
         self.assertIsNone(self.check())
+
+    def test_unchanged_at_risk_catalog_never_becomes_clean(self):
+        self.recovery.catalog[0]["at_risk"] = True
+        self.assertEqual(self.check()["atRiskThreads"], 1)
+        del self.recovery.catalog[0]["at_risk"]
+        self.assertEqual(self.check()["atRiskThreads"], 1)

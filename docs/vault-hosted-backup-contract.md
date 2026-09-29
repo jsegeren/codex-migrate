@@ -97,7 +97,9 @@ can open an already published, non-at-risk snapshot with its Keychain key.
 The agent stores no bearer or recovery key; each run obtains the Worker origin
 from the authenticated service, records unchanged checks separately from
 verified publications, and preserves the prior green receipt on a failed or
-at-risk run. It has synthetic safety tests, but is not wired to enrollment or
+at-risk run. An unchanged check of an at-risk published version remains
+`needs_attention`; it cannot turn the schedule green without recovering the
+missing content. It has synthetic safety tests, but is not wired to enrollment or
 the signed customer's UI and has not run a 30-minute physical-Mac acceptance
   cycle. It is not a customer backup service or a recovery-window claim yet.
 

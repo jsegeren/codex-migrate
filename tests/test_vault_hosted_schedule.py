@@ -127,7 +127,8 @@ class HostedScheduleTests(unittest.TestCase):
         self._install()
         config_path, status_path, good_path, _ = _paths(self.home)
         fake_run = SimpleNamespace(back_up_live_history=lambda *_args, **_kw: {
-            "unchanged": True, "lastGoodSnapshotId": SNAPSHOT})
+            "unchanged": True, "lastGoodSnapshotId": SNAPSHOT,
+            "atRiskThreads": 0})
         a, b, _, _ = self._patches()
         with a, b, patch("codex_migrate.vault_hosted_schedule.HostedLiveBackupRun",
                          return_value=fake_run):
@@ -151,7 +152,8 @@ class HostedScheduleTests(unittest.TestCase):
             "hv1_" + "a" * 43, ACCOUNT, VAULT, allow_loopback_http=True)
         config_path, status_path, _, _ = _paths(self.home)
         fake_run = SimpleNamespace(back_up_live_history=lambda *_args, **_kw: {
-            "unchanged": True, "lastGoodSnapshotId": SNAPSHOT})
+            "unchanged": True, "lastGoodSnapshotId": SNAPSHOT,
+            "atRiskThreads": 0})
         a, b, _, _ = self._patches()
         with a, b, patch("codex_migrate.vault_hosted_schedule.HostedLiveBackupRun",
                          return_value=fake_run):
@@ -175,7 +177,8 @@ class HostedScheduleTests(unittest.TestCase):
         self.enrollment.rotate_device = lambda *_args, **_kw: (
             (_ for _ in ()).throw(MigrationError("synthetic lost acknowledgement")))
         fake_run = SimpleNamespace(back_up_live_history=lambda *_args, **_kw: {
-            "unchanged": True, "lastGoodSnapshotId": SNAPSHOT})
+            "unchanged": True, "lastGoodSnapshotId": SNAPSHOT,
+            "atRiskThreads": 0})
         a, b, _, _ = self._patches()
         with a, b, patch("codex_migrate.vault_hosted_schedule.HostedLiveBackupRun",
                          return_value=fake_run):
@@ -245,6 +248,13 @@ class HostedScheduleTests(unittest.TestCase):
             self.assertEqual(run_hosted_scheduled_backup(str(config_path)), 0)
         self.assertEqual(json.loads(status_path.read_text())["status"], "needs_attention")
         self.assertEqual(json.loads(good_path.read_text())["snapshot_id"], SNAPSHOT)
+        fake_run.back_up_live_history = lambda *_args, **_kw: {
+            "unchanged": True, "lastGoodSnapshotId": NEXT, "atRiskThreads": 2}
+        with a, b, patch("codex_migrate.vault_hosted_schedule.HostedLiveBackupRun",
+                         return_value=fake_run):
+            self.assertEqual(run_hosted_scheduled_backup(str(config_path)), 0)
+        self.assertEqual(json.loads(status_path.read_text())["status"], "needs_attention")
+        self.assertEqual(json.loads(good_path.read_text())["snapshot_id"], SNAPSHOT)
 
     def test_device_identity_change_refuses_backup(self):
         self._install()
@@ -268,7 +278,8 @@ class HostedScheduleTests(unittest.TestCase):
         self.assertEqual(status["status"], "awaiting_check")
         a, b, _, _ = self._patches()
         fake_run = SimpleNamespace(back_up_live_history=lambda *_args, **_kw: {
-            "unchanged": True, "lastGoodSnapshotId": SNAPSHOT})
+            "unchanged": True, "lastGoodSnapshotId": SNAPSHOT,
+            "atRiskThreads": 0})
         with a, b, patch("codex_migrate.vault_hosted_schedule.HostedLiveBackupRun",
                          return_value=fake_run):
             self.assertEqual(run_hosted_scheduled_backup(str(config_path)), 0)

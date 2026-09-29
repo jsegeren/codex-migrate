@@ -285,7 +285,8 @@ def run_hosted_scheduled_backup(config_path: str) -> int:
                 max_prior_bytes=MAX_PRIOR_BYTES, apply=True)
             if result.get("unchanged") is True:
                 snapshot_id = result["lastGoodSnapshotId"]
-                state = "unchanged"
+                state = ("unchanged" if result.get("atRiskThreads") == 0
+                         else "needs_attention")
             else:
                 snapshot_id = result["snapshotId"]
                 risk = result.get("atRiskThreads")
