@@ -121,6 +121,10 @@ class SiteTests(unittest.TestCase):
         self.assertIn("there is no pre-order or charge here", text)
         self.assertIn("Talk to Joshua about a pilot", text)
         self.assertIn("mailto:joshua@segeren.com?subject=Codex%20Backup", source)
+        self.assertIn('data-analytics-event="team_pilot_email_click"', source)
+        self.assertIn('href="/privacy#website-analytics" data-analytics-preferences', source)
+        self.assertIn("An email-link click does not tell us whether you sent a message",
+                      (SITE / "privacy.html").read_text())
         self.assertNotIn("/api/checkout", source)
         self.assertIn("[business backup design partners](https://migrate.segeren.com/codex-backup-for-teams)",
                       (ROOT / "README.md").read_text())
