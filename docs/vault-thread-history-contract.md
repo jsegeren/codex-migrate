@@ -387,6 +387,17 @@ them at all. The migration and Vault paths must continue to exclude
 `auth.json`, `installation_id`, and other credentials; no account identity is
 to be inferred from a title, path, or thread ID.
 
+The installed CLI reports `0.158.0-alpha.2`. Its matching upstream
+[`thread_list_response_inner` and `list_threads_common` source](https://github.com/openai/codex/blob/10382da79a2a2d6e8ae221fa63077215389c1ad2/codex-rs/app-server/src/request_processors/thread_processor.rs)
+lists local threads using project, source, model-provider, working-directory,
+and similar filters but does not apply `creator_account_id` or
+`creator_user_id` as a list filter. This is evidence about that CLI/app-server
+revision, not a live two-account result. The desktop client may apply its own
+filter, and listing alone cannot prove read or resume under another account.
+Treat the possibility of old local threads being visible to a newly signed-in
+account in the same macOS user as a privacy issue to test, not a benefit to
+advertise.
+
 Before claiming account portability, run a controlled test with two separately
 authorized OpenAI accounts, a disposable macOS user/profile, and a harmless
 synthetic Codex thread. Record the installed app and CLI versions and test:
