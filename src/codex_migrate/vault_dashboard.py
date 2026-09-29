@@ -522,7 +522,7 @@ async function previewSalvageFile(item){
       if(entry.timestamp){const time=document.createElement("time");time.textContent=entry.timestamp;article.append(time)}
       const p=document.createElement("p");p.textContent=entry.text;article.append(p);return article;
     }));
-    $("salvage-meta").textContent=`${item.transcript} · ${data.parsed_records} readable records, ${data.nul_repaired_records} recovered around NUL bytes, ${data.skipped_records} skipped. Physical file only; fork ancestry is not included.${data.preview_truncated||data.scan_truncated?" Preview limited; additional content may be omitted.":""}`;
+    $("salvage-meta").textContent=`${item.transcript} · ${data.parsed_records} readable records, ${data.nul_repaired_records} parseable after NUL removal, ${data.skipped_records} skipped.${data.nul_repaired_records?" NUL-stripped text may still be incomplete; overwritten bytes cannot be recovered.":""} Physical file only; fork ancestry is not included.${data.preview_truncated||data.scan_truncated?" Preview limited; additional content may be omitted.":""}`;
     salvageSelected=item;
     $("salvage-preview").hidden=false;$("salvage-status").textContent="";
     $("salvage-preview").scrollIntoView({behavior:"smooth"});

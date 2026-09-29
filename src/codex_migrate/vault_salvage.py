@@ -111,7 +111,7 @@ def _drain_record(handle) -> bool:
 def preview_damaged_thread(source_home: str, collection: str, transcript: str,
                           *, max_entries: int = 100,
                           max_text_bytes: int = 1024 * 1024) -> SalvagePreview:
-    """Recover only parseable records from the selected physical JSONL file.
+    """Preview only parseable records from the selected physical JSONL file.
 
     A bounded record may be parsed again after NUL bytes are removed from an
     in-memory copy. Other malformed or oversized records are counted and
@@ -194,19 +194,21 @@ def preview_damaged_thread(source_home: str, collection: str, transcript: str,
 
 
 def incomplete_markdown(result: SalvagePreview) -> str:
-    """Export only the recovered preview, with conspicuous provenance limits."""
+    """Export only the parseable preview, with conspicuous provenance limits."""
     lines = [
         "# INCOMPLETE Codex transcript salvage",
         "",
         "Read-only extraction from one physical JSONL file. This is not the original",
         "transcript, a complete backup, or a file to install into Codex.",
-        "Malformed records were skipped; missing bytes cannot be recovered here.",
+        "Malformed records were skipped. NUL bytes were removed only from an",
+        "in-memory copy; any original bytes they replaced remain lost, even",
+        "when the resulting JSON can be read. Missing text cannot be recovered here.",
         "Fork ancestry is not included. The original file was not changed.",
         "",
         "Collection: %s" % result.collection,
         "Transcript: %s" % json.dumps(result.transcript, ensure_ascii=False),
         "Readable records: %d" % result.parsed_records,
-        "NUL-recovered records: %d" % result.nul_repaired_records,
+        "Parseable after NUL removal (may be incomplete): %d" % result.nul_repaired_records,
         "Skipped records: %d" % result.skipped_records,
         "Preview limit reached: %s" % ("yes" if result.preview_truncated else "no"),
         "Scan limit reached: %s" % ("yes" if result.scan_truncated else "no"),

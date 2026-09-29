@@ -46,6 +46,27 @@ class VaultSalvageTests(unittest.TestCase):
             self.assertEqual(path.read_bytes(), original)
             self.assertEqual((home / ".codex/auth.json").read_text(), "NEVER-READ-AUTH")
 
+    def test_nul_overwrite_stays_explicitly_incomplete_even_if_json_parses(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            path = self.fixture(home)
+            original = record("Before damage").replace(b"Before", b"Be\x00ore")
+            path.write_bytes(original)
+            result = vault_salvage.preview_damaged_thread(
+                str(home), "active", "damaged.jsonl")
+            self.assertEqual([entry.text for entry in result.entries], ["Beore damage"])
+            self.assertEqual(result.nul_repaired_records, 1)
+            markdown = vault_salvage.incomplete_markdown(result)
+            self.assertIn("may be incomplete", markdown)
+            self.assertIn("bytes they replaced remain lost", markdown)
+            output = io.StringIO()
+            with redirect_stdout(output):
+                status = main(["vault", "--source-home", str(home),
+                               "salvage-preview", "active", "damaged.jsonl"])
+            self.assertEqual(status, 0)
+            self.assertIn("overwritten bytes cannot be recovered", output.getvalue())
+            self.assertEqual(path.read_bytes(), original)
+
     def test_invalid_utf8_oversized_and_nonobject_records_are_counted_not_invented(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
