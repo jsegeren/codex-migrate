@@ -22,7 +22,9 @@ first verified snapshot or to turns written since the latest verified capture.
   files with the same ID in one capture, is `needs_review`. Keep the files and
   versions separate; do not infer sameness from a title or a similar body.
   When no ID can be validated, retain a source-scoped path-based discovery
-  result, but do not automatically connect it to a renamed or moved file.
+  result, but do not automatically connect it to a renamed or moved file—or
+  treat changed bytes at the same path as one thread. Identical captured bytes
+  may deduplicate; a different digest remains a separate result for review.
 - Search current and archived transcript text, current and historical titles,
   and titles across snapshots. Older full text is searched in a selected
   snapshot. A v1 snapshot remains readable but cannot claim title aliases it

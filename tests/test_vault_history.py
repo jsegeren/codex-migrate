@@ -101,6 +101,29 @@ class IdentityTests(unittest.TestCase):
             self.assertEqual([item["version_count"] for item in hits], [1, 1])
             self.assertEqual(len(thread_timeline("unused", second["key"])), 1)
 
+    def test_unverified_same_path_changed_bytes_are_not_one_thread(self):
+        base = {"collection": "codex", "path": "sessions/unknown.jsonl",
+                "transcript": "sessions/unknown.jsonl", "thread_id": None,
+                "identity_state": "unverified", "titles": ["Same title"],
+                "records": 1, "assistant_messages": 0, "at_risk": False,
+                "size": 20}
+        older = {**base, "sha256": "a" * 64, "snapshot_id": "older",
+                 "created_at": "2026-09-01T00:00:00Z"}
+        newer = {**base, "sha256": "b" * 64, "snapshot_id": "newer",
+                 "created_at": "2026-09-02T00:00:00Z"}
+        duplicate = {**older, "snapshot_id": "duplicate",
+                     "created_at": "2026-09-03T00:00:00Z"}
+        for version in (older, newer, duplicate):
+            version["key"] = _group_key(version)
+        self.assertNotEqual(older["key"], newer["key"])
+        self.assertEqual(older["key"], duplicate["key"])
+        with patch("codex_migrate.vault_history._versions",
+                   return_value=[newer, duplicate, older]):
+            hits = search_titles("unused", "Same title")
+            self.assertEqual(len(hits), 2)
+            self.assertEqual([hit["version_count"] for hit in hits], [1, 1])
+            self.assertEqual(len(thread_timeline("unused", older["key"])), 1)
+
     def test_embedded_id_survives_rename_and_conflict_needs_review(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "renamed.jsonl"

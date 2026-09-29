@@ -18,8 +18,11 @@ def _group_key(file: Dict[str, object]) -> str:
         # may be shown together, but distinct captures are never one history.
         return ("review:" + str(file["collection"]) + "/" + str(file["path"])
                 + "/" + str(file["sha256"]))
-    # Missing IDs have only a source-scoped path discovery hint.
-    return "path:" + str(file["collection"]) + "/" + str(file["path"])
+    # A path is only a discovery hint, not a stable thread identity. Keep
+    # changed bytes separate when no ID can be validated; equal captures may
+    # still deduplicate without claiming that two versions are one thread.
+    return ("path:" + str(file["collection"]) + "/" + str(file["path"])
+            + "/" + str(file["sha256"]))
 
 
 def _versions(vault: str, *, crypto_helper: Optional[str] = None) -> List[Dict[str, object]]:
