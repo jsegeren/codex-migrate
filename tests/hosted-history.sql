@@ -94,4 +94,23 @@ BEGIN
   END IF;
 END $$;
 
+DO $$
+DECLARE
+  selected uuid;
+BEGIN
+  -- A newer ciphertext-verified version may need attention; choose the
+  -- newest source-reported complete version, not the vault pointer.
+  UPDATE hosted.snapshots SET source_coverage = 'complete'
+    WHERE snapshot_id = 'df000000-0000-4000-8000-000000000005';
+  SELECT s.snapshot_id INTO selected FROM hosted.snapshots AS s
+    JOIN hosted.upload_reservations AS r ON r.reservation_id = s.reservation_id
+    WHERE s.account_id = 'df000000-0000-4000-8000-000000000001'
+      AND s.vault_id = 'df000000-0000-4000-8000-000000000002'
+      AND s.source_coverage = 'complete'
+    ORDER BY s.published_at DESC, s.snapshot_id DESC LIMIT 1;
+  IF selected <> 'df000000-0000-4000-8000-000000000005' THEN
+    RAISE EXCEPTION 'latest complete snapshot selection failed';
+  END IF;
+END $$;
+
 ROLLBACK;

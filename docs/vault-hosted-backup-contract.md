@@ -996,7 +996,10 @@ egress allowance. Do not claim that B2 restores are always free. See its
    and exposes the claim in recovery history. The dark recovery command uses
    that claim and inspects the authenticated restored catalog; neither an
    `unknown` claim nor observed at-risk sources can be reported as a clean
-   recovery. This is not independent server proof of
+   recovery. A bounded, authenticated lookup now finds the most recent
+   source-reported complete version even if the newer published version needs
+   attention; the dark read-only command names both without choosing or
+   restoring either automatically. This is not independent server proof of
    encrypted content. Selecting an older complete version in the installed
    buyer UI and proving that recovery on a clean Mac remain open gates.
 4. **Prove commerce and operations:** separate Stripe *subscription* checkout

@@ -18,6 +18,30 @@ from codex_migrate.vault_recovery import snapshot_catalog
 from codex_migrate.vault_schedule import _home
 
 
+def hosted_recovery_options(device_id: str, *,
+                            crypto_helper: Optional[str] = None) -> dict:
+    """Show the newest published and newest source-complete versions, read-only."""
+    helper = _helper_path(crypto_helper)
+    enrollment = HostedEnrollmentClient(SERVICE_ORIGIN)
+    upload, recovery = enrollment.backup_clients(
+        device_id, crypto_helper=str(helper))
+    account_id, worker_origin, latest = recovery._latest()
+    if account_id != upload._account_id or worker_origin != upload._worker_origin:
+        raise MigrationError("The hosted recovery authority changed.")
+    latest_complete = recovery.latest_source_complete_snapshot(
+        expected_account_id=account_id,
+        expected_worker_origin=worker_origin)
+    if recovery._latest() != (account_id, worker_origin, latest):
+        raise MigrationError("The hosted recovery versions changed.")
+    if (latest is None and latest_complete is not None) or (
+            latest is not None and latest["sourceCoverage"] == "complete" and
+            latest_complete != latest):
+        raise MigrationError("The hosted recovery versions changed.")
+    return {"latest": latest, "latest_source_complete": latest_complete,
+            "coverage_gap": latest is not None and
+            latest["sourceCoverage"] != "complete"}
+
+
 def recover_hosted_snapshot(
     source_home: str, output: str, device_id: str, *,
     max_bytes: int, snapshot_id: Optional[str] = None,

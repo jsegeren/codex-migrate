@@ -6,6 +6,10 @@ ALTER TABLE hosted.snapshots ADD COLUMN source_coverage text NOT NULL
   DEFAULT 'unknown'
   CHECK (source_coverage IN ('unknown', 'complete', 'needs_attention'));
 --> statement-breakpoint
+CREATE INDEX snapshots_latest_source_complete_idx
+  ON hosted.snapshots (account_id, vault_id, published_at DESC, snapshot_id DESC)
+  WHERE source_coverage = 'complete';
+--> statement-breakpoint
 CREATE FUNCTION hosted.publish_checkpointed_staged_current(
   p_account_id uuid, p_vault_id uuid, p_reservation_id uuid,
   p_snapshot_id uuid, p_current_allowance bigint, p_source_coverage text

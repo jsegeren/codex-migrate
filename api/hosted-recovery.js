@@ -5,7 +5,8 @@ const { reply } = require('../commerce/http');
 const { recoveryRuntime } = require('../hosted/recovery_runtime');
 const { authorizeReadScope, HostedAccessError } = require('../hosted/access');
 const { getAccountStorageUsage, getLastGoodSnapshot, getPublishedSnapshot,
-  listPublishedSnapshots, listPublishedObjects } = require('../hosted/read_inventory');
+  getLatestSourceCompleteSnapshot, listPublishedSnapshots, listPublishedObjects } =
+  require('../hosted/read_inventory');
 const { issuePublishedGet, issueLastGoodManifest } = require('../hosted/read_grant');
 
 const BEARER = /^Bearer (hv1_[A-Za-z0-9_-]{43})$/;
@@ -25,6 +26,7 @@ function requestBody(req) {
   const { action } = req.body;
   const allowed = action === 'usage' ? ['action', 'vaultId'] :
     action === 'latest' ? ['action', 'vaultId'] :
+    action === 'latest_complete' ? ['action', 'vaultId'] :
     action === 'history' ? ['action', 'vaultId', 'beforeAt', 'beforeSnapshotId'] :
     action === 'snapshot' ? ['action', 'vaultId', 'snapshotId'] :
     action === 'objects' ? ['action', 'vaultId', 'snapshotId', 'afterKey'] :
@@ -32,7 +34,7 @@ function requestBody(req) {
     action === 'get' ? ['action', 'vaultId', 'snapshotId', 'relativeKey'] : [];
   if (!allowed.length || Object.keys(req.body).some(key => !allowed.includes(key)) ||
       typeof req.body.vaultId !== 'string') throw Error('invalid_request');
-  if (!['usage', 'latest', 'history'].includes(action) &&
+  if (!['usage', 'latest', 'latest_complete', 'history'].includes(action) &&
       typeof req.body.snapshotId !== 'string') {
     throw Error('invalid_request');
   }
@@ -80,6 +82,10 @@ function makeHandler(load = recoveryRuntime, env = process.env) {
       if (data.action === 'latest') {
         return reply(res, 200, { accountId: scope.accountId, workerOrigin,
           latest: await getLastGoodSnapshot({ scope, query }) });
+      }
+      if (data.action === 'latest_complete') {
+        return reply(res, 200, { accountId: scope.accountId, workerOrigin,
+          latestComplete: await getLatestSourceCompleteSnapshot({ scope, query }) });
       }
       if (data.action === 'history') {
         const page = await listPublishedSnapshots({ scope,

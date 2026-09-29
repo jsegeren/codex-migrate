@@ -8,7 +8,9 @@ from unittest.mock import patch
 
 from codex_migrate.cli import main, parser
 from codex_migrate.errors import MigrationError
-from codex_migrate.vault_hosted_disaster_recovery import recover_hosted_snapshot
+from codex_migrate.vault_hosted_disaster_recovery import (
+    hosted_recovery_options, recover_hosted_snapshot,
+)
 
 
 ACCOUNT = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
@@ -36,7 +38,10 @@ class HostedDisasterRecoveryTests(unittest.TestCase):
             return {"version": 1, "snapshot_id": SNAPSHOT}, object()
 
         self.recovery = SimpleNamespace(_latest=lambda: self.pointer,
+                                        latest_source_complete_snapshot=lambda **_kw:
+                                        self.complete,
                                         prepare=prepare)
+        self.complete = self.pointer[2]
         self.enrollment = SimpleNamespace(
             backup_clients=lambda *_args, **_kw: (self.upload, self.recovery))
         catalog = patch("codex_migrate.vault_hosted_disaster_recovery.snapshot_catalog",
@@ -103,6 +108,50 @@ class HostedDisasterRecoveryTests(unittest.TestCase):
         self.assertTrue(result["needs_attention"])
         self.assertEqual(result["at_risk_sources"], 0)
         self.assertEqual(result["source_coverage"], "unknown")
+
+    def test_recovery_options_offer_older_complete_without_choosing_it_silently(self):
+        older = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
+        self.pointer[2]["sourceCoverage"] = "needs_attention"
+        self.complete = {"snapshotId": older, "totalObjects": 3,
+                         "totalBytes": 200, "sourceCoverage": "complete"}
+        helper, enrollment, download = self._patches()
+        with helper, enrollment, download as receiver:
+            options = hosted_recovery_options(DEVICE)
+        self.assertTrue(options["coverage_gap"])
+        self.assertEqual(options["latest"]["snapshotId"], SNAPSHOT)
+        self.assertEqual(options["latest_source_complete"]["snapshotId"], older)
+        receiver.assert_not_called()
+        self.complete = None
+        with helper, enrollment, download:
+            options = hosted_recovery_options(DEVICE)
+        self.assertIsNone(options["latest_source_complete"])
+
+    def test_hosted_backups_cli_is_read_only_and_names_coverage_gap(self):
+        self.pointer[2]["sourceCoverage"] = "needs_attention"
+        self.complete = None
+        printed = io.StringIO()
+        helper, enrollment, download = self._patches()
+        with helper, enrollment, download as receiver, redirect_stdout(printed):
+            self.assertEqual(main(["vault", "hosted-backups", "--device-id", DEVICE]), 0)
+        self.assertIn("Newest published backup", printed.getvalue())
+        self.assertIn("none available", printed.getvalue())
+        receiver.assert_not_called()
+
+    def test_recovery_options_refuse_a_changing_latest_pointer(self):
+        self.pointer[2]["sourceCoverage"] = "needs_attention"
+        self.complete = None
+        def advance(**_kwargs):
+            self.pointer = (ACCOUNT, WORKER, {"snapshotId":
+                "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+                "totalObjects": 3, "totalBytes": 100,
+                "sourceCoverage": "complete"})
+            return None
+        self.recovery.latest_source_complete_snapshot = advance
+        helper, enrollment, download = self._patches()
+        with helper, enrollment, download as receiver:
+            with self.assertRaisesRegex(MigrationError, "versions changed"):
+                hosted_recovery_options(DEVICE)
+        receiver.assert_not_called()
 
     def test_plan_and_bad_limit_do_not_open_credentials(self):
         with patch("codex_migrate.vault_hosted_disaster_recovery.HostedEnrollmentClient") as client:

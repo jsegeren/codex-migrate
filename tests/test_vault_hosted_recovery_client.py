@@ -73,6 +73,10 @@ class _Handler(BaseHTTPRequestHandler):
                 {"snapshotId": snapshot_id,
                  "totalObjects": len(rows), "totalBytes": total,
                  "sourceCoverage": "complete"}})
+        if claim["action"] == "latest_complete":
+            return self._reply(200, {"accountId": ACCOUNT,
+                "workerOrigin": self.server.origin,
+                "latestComplete": self.server.latest_complete})
         if claim["action"] == "usage":
             return self._reply(200, {"accountId": ACCOUNT,
                 "retainedBytes": self.server.retained_bytes,
@@ -162,6 +166,7 @@ class HostedRecoveryClientTests(unittest.TestCase):
         self.server.mutate_manifest = None
         self.server.mutate_get = None
         self.server.latest_sequence = []
+        self.server.latest_complete = None
         self.server.retained_bytes = 75_000_000_000
         self.server.reserved_bytes = 0
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
@@ -193,6 +198,26 @@ class HostedRecoveryClientTests(unittest.TestCase):
             "publishedAt": "2026-09-28T20:00:00.123456Z"}]
         with self.assertRaises(MigrationError):
             self.client().history_page()
+
+    def test_latest_source_complete_can_be_older_or_absent(self):
+        self.assertIsNone(self.client().latest_source_complete_snapshot(
+            expected_account_id=ACCOUNT,
+            expected_worker_origin=self.server.origin))
+        self.server.latest_complete = {"snapshotId": OLDER,
+            "totalObjects": 3, "totalBytes": 25,
+            "sourceCoverage": "complete"}
+        self.assertEqual(self.client().latest_source_complete_snapshot(
+            expected_account_id=ACCOUNT,
+            expected_worker_origin=self.server.origin)["snapshotId"], OLDER)
+        with self.assertRaises(MigrationError):
+            self.client().latest_source_complete_snapshot(
+                expected_account_id=VAULT,
+                expected_worker_origin=self.server.origin)
+        self.server.latest_complete["sourceCoverage"] = "unknown"
+        with self.assertRaises(MigrationError):
+            self.client().latest_source_complete_snapshot(
+                expected_account_id=ACCOUNT,
+                expected_worker_origin=self.server.origin)
 
     def test_account_storage_usage_is_account_bound_and_strict(self):
         self.assertEqual(self.client().account_storage_usage(

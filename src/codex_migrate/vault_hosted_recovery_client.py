@@ -155,6 +155,25 @@ class HostedRecoveryClient:
             raise MigrationError("The hosted recovery version is invalid.")
         return selected
 
+    def latest_source_complete_snapshot(self, *, expected_account_id: str,
+                                        expected_worker_origin: str) -> Optional[dict]:
+        """Read the newest Mac-reported complete version, if one exists."""
+        if (not isinstance(expected_account_id, str)
+                or not re.fullmatch(_UUID, expected_account_id)
+                or not isinstance(expected_worker_origin, str)):
+            raise MigrationError("The hosted recovery account is invalid.")
+        reply = self._post({"action": "latest_complete", "vaultId": self._vault_id})
+        if (set(reply) != {"accountId", "workerOrigin", "latestComplete"}
+                or reply["accountId"] != expected_account_id
+                or reply["workerOrigin"] != expected_worker_origin):
+            raise MigrationError("The hosted complete version is invalid.")
+        if reply["latestComplete"] is None:
+            return None
+        selected = self._summary(reply["latestComplete"])
+        if selected["sourceCoverage"] != "complete":
+            raise MigrationError("The hosted complete version is invalid.")
+        return selected
+
     def account_storage_usage(self, *, expected_account_id: str) -> dict:
         """Read server-accounted retained bytes, not a customer bill or R2 proof."""
         if (not isinstance(expected_account_id, str) or

@@ -2,7 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { authorizeReadScope } = require('../hosted/access');
 const { getAccountStorageUsage, getLastGoodSnapshot, getPublishedSnapshot,
-  listPublishedSnapshots, listPublishedObjects } = require('../hosted/read_inventory');
+  getLatestSourceCompleteSnapshot, listPublishedSnapshots, listPublishedObjects } =
+  require('../hosted/read_inventory');
 const { mintSessionSecret } = require('./hosted-device-fixture');
 
 const accountId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -60,6 +61,34 @@ test('last-good discovery comes only from the owned Vault pointer', async () => 
     query: async () => ({ rows: [{ last_good_snapshot_id: null,
       verified_object_count: null, staged_bytes: null }] }) }), null);
 });
+
+test('latest source-complete lookup is scoped, ordered, and never assumes one exists',
+  async () => {
+    const complete = await getLatestSourceCompleteSnapshot({ scope: await scope(),
+      query: async (sql, values) => {
+        assert.match(sql, /source_coverage = 'complete'/);
+        assert.match(sql, /ORDER BY s\.published_at DESC, s\.snapshot_id DESC LIMIT 1/);
+        assert.deepEqual(values, [accountId, vaultId]);
+        return { rows: [{ snapshot_id: snapshotId,
+          verified_object_count: 3, staged_bytes: '30',
+          source_coverage: 'complete' }] };
+      } });
+    assert.deepEqual(complete, { snapshotId, totalObjects: 3,
+      totalBytes: 30, sourceCoverage: 'complete' });
+    assert.equal(await getLatestSourceCompleteSnapshot({ scope: await scope(),
+      query: async () => ({ rows: [] }) }), null);
+    for (const rows of [
+      [{ snapshot_id: snapshotId, verified_object_count: 3,
+        staged_bytes: '30', source_coverage: 'unknown' }],
+      [{ snapshot_id: snapshotId, verified_object_count: 3,
+        staged_bytes: '30', source_coverage: 'complete' },
+      { snapshot_id: snapshotId, verified_object_count: 3,
+        staged_bytes: '30', source_coverage: 'complete' }],
+    ]) {
+      await assert.rejects(getLatestSourceCompleteSnapshot({ scope: await scope(),
+        query: async () => ({ rows }) }), /hosted_inventory_denied/);
+    }
+  });
 
 test('owned published versions page without losing microsecond order', async () => {
   const at = '2026-09-28T20:00:00.123456Z';

@@ -108,6 +108,25 @@ test('owned last-good and inventory responses contain no secret', async () => {
   assert.equal(page.headers['Cache-Control'], 'no-store');
 });
 
+test('complete-version lookup never substitutes a newer at-risk publication',
+  async () => {
+    const f = fixture(async (sql, values) => {
+      assert.match(sql, /source_coverage = 'complete'/);
+      assert.deepEqual(values, [accountId, vaultId]);
+      return { rows: [{ snapshot_id: snapshotId,
+        verified_object_count: 3, staged_bytes: '30',
+        source_coverage: 'complete' }] };
+    });
+    f.req.body = { action: 'latest_complete', vaultId };
+    const answer = await f.send();
+    assert.equal(answer.statusCode, 200);
+    assert.deepEqual(answer.body.latestComplete,
+      { snapshotId, totalObjects: 3, totalBytes: 30,
+        sourceCoverage: 'complete' });
+    f.req.body.snapshotId = snapshotId;
+    assert.equal((await f.send()).statusCode, 400);
+  });
+
 test('usage exposes account-retained bytes only to an authenticated device', async () => {
   const f = fixture(async (sql, values) => {
     assert.match(sql, /FROM hosted\.accounts WHERE account_id = \$1::uuid/);

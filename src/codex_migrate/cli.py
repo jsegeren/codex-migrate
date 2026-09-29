@@ -188,6 +188,11 @@ def parser() -> argparse.ArgumentParser:
     vault_hosted_scheduled_run = vault_commands.add_parser(
         "hosted-scheduled-run", help=argparse.SUPPRESS)
     vault_hosted_scheduled_run.add_argument("--config", required=True)
+    vault_hosted_backups = vault_commands.add_parser(
+        "hosted-backups", help=argparse.SUPPRESS)
+    vault_hosted_backups.add_argument("--device-id", required=True)
+    vault_hosted_backups.add_argument("--crypto-helper")
+    vault_hosted_backups.add_argument("--json", action="store_true")
     vault_hosted_recover = vault_commands.add_parser(
         "hosted-recover", help=argparse.SUPPRESS)
     vault_hosted_recover.add_argument("--device-id", required=True)
@@ -295,6 +300,23 @@ def main(argv: Optional[List[str]] = None) -> int:
             if args.vault_command == "hosted-scheduled-run":
                 from codex_migrate.vault_hosted_schedule import run_hosted_scheduled_backup
                 return run_hosted_scheduled_backup(args.config)
+            if args.vault_command == "hosted-backups":
+                from codex_migrate.vault_hosted_disaster_recovery import hosted_recovery_options
+                options = hosted_recovery_options(
+                    args.device_id, crypto_helper=args.crypto_helper)
+                if args.json:
+                    print(json.dumps(options, indent=2, sort_keys=True))
+                elif options["latest"] is None:
+                    print("No published hosted backup is available.")
+                else:
+                    print("Newest published backup: %s (%s)" % (
+                        options["latest"]["snapshotId"],
+                        options["latest"]["sourceCoverage"]))
+                    if options["coverage_gap"]:
+                        prior = options["latest_source_complete"]
+                        print("Newest source-reported complete backup: %s" % (
+                            prior["snapshotId"] if prior else "none available"))
+                return 0
             if args.vault_command == "hosted-recover":
                 from codex_migrate.vault_hosted_disaster_recovery import recover_hosted_snapshot
                 result = recover_hosted_snapshot(

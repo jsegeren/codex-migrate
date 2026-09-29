@@ -44,6 +44,13 @@ const SNAPSHOT_SQL = `SELECT s.verified_object_count, r.staged_bytes,
   JOIN hosted.upload_reservations AS r ON r.reservation_id = s.reservation_id
   WHERE s.account_id = $1::uuid AND s.vault_id = $2::uuid
     AND s.snapshot_id = $3::uuid`;
+const LATEST_SOURCE_COMPLETE_SQL = `SELECT s.snapshot_id,
+    s.verified_object_count, r.staged_bytes, s.source_coverage
+  FROM hosted.snapshots AS s
+  JOIN hosted.upload_reservations AS r ON r.reservation_id = s.reservation_id
+  WHERE s.account_id = $1::uuid AND s.vault_id = $2::uuid
+    AND s.source_coverage = 'complete'
+  ORDER BY s.published_at DESC, s.snapshot_id DESC LIMIT 1`;
 const USAGE_SQL = `SELECT retained_bytes, reserved_bytes
   FROM hosted.accounts WHERE account_id = $1::uuid`;
 
@@ -127,6 +134,24 @@ async function getPublishedSnapshot({ scope, snapshotId, query }) {
   } catch { throw new HostedInventoryError(); }
 }
 
+async function getLatestSourceCompleteSnapshot({ scope, query }) {
+  if (!consumeAuthorizedReadScope(scope) || typeof query !== 'function') {
+    throw new HostedInventoryError();
+  }
+  try {
+    const result = await query(LATEST_SOURCE_COMPLETE_SQL,
+      [scope.accountId, scope.vaultId]);
+    if (!Array.isArray(result?.rows) || result.rows.length > 1) {
+      throw new HostedInventoryError();
+    }
+    if (!result.rows.length) return null;
+    const row = result.rows[0];
+    if (row.source_coverage !== 'complete') throw new HostedInventoryError();
+    return snapshotSummary(row.snapshot_id, row.verified_object_count,
+      row.staged_bytes, row.source_coverage);
+  } catch { throw new HostedInventoryError(); }
+}
+
 async function listPublishedSnapshots({ scope, beforeAt = null,
   beforeSnapshotId = null, query }) {
   if (!consumeAuthorizedReadScope(scope) || typeof query !== 'function' ||
@@ -204,4 +229,5 @@ async function listPublishedObjects({ scope, snapshotId, afterKey = null, query 
 }
 
 module.exports = { HostedInventoryError, getAccountStorageUsage, getLastGoodSnapshot,
-  getPublishedSnapshot, listPublishedSnapshots, listPublishedObjects };
+  getPublishedSnapshot, getLatestSourceCompleteSnapshot, listPublishedSnapshots,
+  listPublishedObjects };
