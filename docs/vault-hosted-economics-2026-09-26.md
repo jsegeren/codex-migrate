@@ -125,12 +125,11 @@ network endpoint and actual provider behavior remain unproved. Workers Paid has 
 minimum**, including 10 million monthly requests and 30 million CPU-ms, then
 $0.30/million requests and $0.02/million CPU-ms. This $5 is shared fixed
 overhead, not a per-customer charge. R2 read/write operations are separate.
-At one $10 subscriber using the full 100 GB allowance, the earlier 78% figure
-falls to about **28% contribution before support, database/API, retries, and
-taxes** if the whole $5 Worker minimum is assigned to that customer. At ten
-such subscribers, the same fixed overhead is about $0.50 each and the
-corresponding contribution is roughly 73% before those omitted costs. These
-figures are illustrative, not observed invoices or final plan margins.
+The $5 minimum is shared across the account, but one subscriber could bear
+all of it. Do not report a storage-and-card-fee calculation as an all-in
+business margin: database/API, support, verification, retries, refunds, and
+taxes remain unmeasured. Earlier $10-tier contribution examples are obsolete
+after the September 29 business-market pricing direction.
 
 Sources: [R2 pricing](https://developers.cloudflare.com/r2/pricing/),
 [Vercel Blob pricing](https://vercel.com/docs/vercel-blob/usage-and-pricing/),
@@ -151,29 +150,31 @@ the customer opts in; a later subscription must work on its own economics.
 
 `cost + 50%` is not a fat-margin plan: a 50% markup on cost creates only a
 33.3% margin *before* Stripe and all non-storage costs. A single unlimited
-price also makes light histories subsidize very large ones. The current
-**unapproved proposal** is $10/month including 50 GB, then $0.08 per
-additional GB-month of actual retained encrypted bytes across all of a
-customer's Vaults. At 72 GB this is about $11.76/month; 200 GB is $22;
-500 GB is $46; 1 TB is $86. These are illustrative charges, not published
-prices, and do not include taxes or the first included hosted month. R2
-Standard storage is $0.015/GB-month before operations; the $0.08 incremental
-rate leaves 81.25% gross *storage-only* margin before payment fees, Worker,
-database, support, and other costs. The $10 base covers those fixed service
-costs only as subscriber count grows; one subscriber alone does not prove
-healthy unit economics.
+price also makes light histories subsidize very large ones. On September 29,
+the Founder rejected the $10/month plus $0.08/GB-month proposal as too low,
+rejected a customer-set spending cap, and directed us toward businesses that
+need durable Codex work records. Doubling that proposal to $20/month including
+50 GB plus $0.16 per additional GB-month is only a **modeling floor**, not an
+approved price or a business offer. At 75 GB, that floor would bill $24/month
+and leave approximately $21.71 (90%) after published domestic-card Stripe
+Payments/Billing fees and R2 Standard storage, **before** Workers, operations,
+database/API, support, refunds, and taxes. The business price must reflect
+verified recovery, service obligations, and buyer evidence rather than merely
+marking up object storage. Neither this example nor the old consumer proposal
+is a live subscription or checkout entitlement.
 
 The proposed billing unit is retained **encrypted object bytes**, not raw
 Codex-folder size, upload volume, thread count, snapshot count, or number of
 Macs. A reused object is counted once within its Vault; separate Vaults are
 counted together at the account level, with no unproved cross-Vault dedupe.
-Use average daily retained bytes for the monthly GB-month charge, matching
-R2's published daily-peak averaging convention. Show the current retained
-size, estimated second-month bill, and the customer's chosen hard spending
-ceiling before the first upload. Translate that ceiling conservatively to a
-maximum instantaneous byte allowance: when full, new uploads pause while the
-last verified snapshot remains intact and the UI clearly marks protection
-stale. Self-managed backups remain available without hosting fees.
+If usage-based billing is selected, use average daily retained bytes for the
+monthly GB-month charge, matching R2's published daily-peak averaging
+convention. Show the current retained size and estimated next bill before and
+after the first upload; do not invent a customer-set spending ceiling. Any
+server-side safety limit needed to prevent abusive or accidental unbounded
+resource use is a separate, disclosed product decision. Do not silently pause
+protection, delete the last verified snapshot, or add unapproved charges.
+Self-managed backups remain available without hosting fees.
 
 The promised first hosted month included with a $49 app purchase needs a
 published maximum capacity. **1 TB is a candidate ceiling, not an approved
@@ -185,9 +186,10 @@ must be approved before any customer-facing checkout or invoice changes.
 
 The current SQL prototype enforces a byte allowance, **not metered billing**.
 No subscription, rate, or allowance is approved or live. Before charging,
-prove the daily-average meter and cap mapping against real provider storage,
+prove the billing meter and its reconciliation against real provider storage,
 measure incremental growth, and recheck verification, support, and restore
-costs.
+costs. For a business offer, price discovery must also test the buyer's
+recovery requirements and willingness to pay for a managed service.
 
 ## Still to prove
 

@@ -15,16 +15,43 @@ Vault format:
    cloud-sync provider. A detected cloud folder is not proof that its remote
    copy has synced; a local-only folder does not insure against Mac loss.
 2. **Segeren-hosted backup.** A buyer may opt in after buying the $49 Mac app.
-   Their **first hosted month is free**. The earlier $10/month flat-price
-   direction is under capacity review: a limited $10 tier and a higher tier
-   are candidates, but exact allowances and higher-tier price are not approved
-   or live. It uploads client-encrypted transcript objects and required
+   Their **first hosted month is free**. The earlier $10/month direction was
+   rejected as too low. Business pricing, allowances, and billing are not
+   approved or live. It uploads client-encrypted transcript objects and required
    non-content Vault metadata to operated object storage, then reports the last
    remotely verified snapshot. Existing Mac-app buyers retain their local
    edition, must not repurchase it to add hosting, and receive the same one-time
    free hosted month when they first opt in. The trial and subsequent renewal
    must be clear before enrollment opens. A subscription is not needed to
    browse/search current local history or backups the customer controls.
+
+## Business customer path — not yet a shipping claim
+
+The target buyer is a business with valuable Codex work records and a real
+cost of losing them. Sell proven recovery of those records, not raw object
+storage. Do not assert that OpenAI stores no Codex threads, promise recovery
+of work created before the first verified backup, or describe a synthetic R2
+test as disaster-recovery certification. A paid business pilot must show a
+successful off-device backup and a clean-Mac restore of representative data,
+with a visible last-good receipt and failed-run alerting.
+
+For multiple seats, investigate an organization owner/admin view with seat
+enrollment, backup health by device, last verified backup, failed-run alerts,
+retention policy, recovery-drill status, and an auditable restore request. A
+small assisted pilot may provide these receipts manually; do not build a
+decorative dashboard before the backup/recovery loop works. The admin can see
+health metadata but must not automatically see employee conversation content.
+The current per-user Keychain plus recovery-key model means that a company
+cannot recover an employee's ciphertext if both employee-held keys are lost.
+Business recovery therefore requires a separately reviewed, explicit company-
+controlled key-custody design and offboarding procedure; do not silently
+escrow a key with Segeren Studio or imply the admin interface alone solves it.
+
+The Founder rejected a customer-set spending cap and directed pricing toward
+a substantially higher-value business offer. Any $20/month plus usage example
+is only an economics floor, not approved business pricing. Publish no hosted
+price or enterprise protection claim until product proof, service scope,
+retention, billing behavior, and customer-facing terms are approved.
 
 The hosted tier protects the supported Codex active and archived conversation
 transcripts that Vault currently snapshots. It is not a whole-Mac backup, a
@@ -357,13 +384,14 @@ $7.50/month. These are pricing scenarios, not measurements of a complete
 encrypted backup. Source-folder size does not establish stored size after
 compression and version retention; measure actual encrypted bytes on both Macs
 before locking an allowance. A $10 flat *unlimited* plan is not defensible. A
-**250 GB at $10** is no longer a defensible initial allowance. Candidate
-capacity tiers are recorded in the linked economics note, not launched
-entitlements: measure incremental version growth and worst-case operations,
-then approve the exact allowances and prices before publishing a subscription.
-Near the limit, warn and stop new uploads without deleting the last good
-snapshot or adding an unapproved overage charge. A second capacity tier
-requires a visible choice.
+**250 GB at $10** is no longer a defensible initial allowance. Earlier
+capacity tiers in the linked economics note are superseded pricing scenarios,
+not launched entitlements: measure incremental version growth and worst-case
+operations, then approve the business offer and exact billing behavior before
+publishing a subscription. Do not replace usage pricing with a customer-set
+spending cap. If a disclosed service-side safety or plan limit is eventually
+necessary, warn before it stops new uploads, preserve the last good snapshot,
+and clearly mark protection stale; do not silently add charges.
 
 Backblaze B2 remains a fallback candidate. It charges for storage, provides
 free upload and usually free egress up to three times average monthly storage,
