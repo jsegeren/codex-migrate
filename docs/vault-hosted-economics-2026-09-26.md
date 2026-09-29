@@ -68,6 +68,38 @@ Do not count shared free allowances as a per-customer subsidy.
 
 ### Thirty-minute business cadence is an incremental-engine gate
 
+The working policy is a **30-minute check while the Mac is awake**, not a
+30-minute full upload. A quiet check should read only bounded local metadata,
+confirm the authenticated service pointer, and reuse the last verified
+snapshot. A changed check should publish a new recovery point using only novel
+encrypted chunks plus its manifest. A missed, failed, or overdue check must be
+visible; it must never silently extend the advertised protection window. This
+is a product target, not a certified recovery-point guarantee: sleep, offline
+time, a changing source, upload duration, and failed verification can make the
+last verified copy older than 30 minutes.
+
+Storage COGS depend on **unique retained ciphertext**, not the number of checks
+or nominal snapshots. Thirty days of twice-hourly checks is up to 1,440
+checks; the same schedule must not turn 100 GB of unchanged history into
+144 TB of uploads or 1,440 separately billable full copies. R2 Standard's
+published $0.015/GB-month means 100 GB retained for a full month is about
+$1.50 in storage, while 1 TB is about $15, before operation, Worker, database,
+support, and payment costs. A rewritten large transcript or a long retention
+window can increase unique retained bytes despite chunk reuse. Therefore both
+the customer's storage charge and our margin model must use measured retained
+encrypted GB-month, including version growth, with a disclosed included
+allowance and usage rate rather than an unlimited flat storage promise.
+
+Before setting the final business cadence or price, record per-check elapsed
+time, source bytes read, novel encrypted bytes and object writes, remote
+verification reads, retained bytes, last verified snapshot age, failures, and
+restore cost on both physical Macs for at least seven days. Model quiet,
+ordinary-change, large-rewrite, initial-upload, and full-restore cases. Do not
+claim a 30-minute recovery point or a fat *all-in* margin from storage rates
+alone; prove the end-to-end figures first. If a safety limit is required, show
+it to customers and preserve the last verified snapshot rather than silently
+stopping protection.
+
 The measured two-Mac baseline has 36,356 unique encrypted chunks and about
 140.57 GB of stable raw transcripts. A naive 30-minute run that HEAD-checks
 every retained chunk would make about **52.35 million Class B reads per
