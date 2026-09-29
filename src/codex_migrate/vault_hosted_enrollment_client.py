@@ -245,3 +245,24 @@ class HostedEnrollmentClient:
         return HostedRecoveryClient(
             self._origin, token, identity["vaultId"], timeout=self._timeout,
             allow_loopback_http=self._allow_loopback_http)
+
+    def backup_clients(self, device_id: str, *,
+                       crypto_helper: Optional[str] = None) -> tuple:
+        """Bind both adapters to one device and the service's Worker origin.
+
+        An unattended backup must not take its transfer origin from an
+        editable schedule file or command line. The authenticated recovery
+        pointer supplies it, even when this Vault has no snapshot yet.
+        """
+        token, identity = self._session(device_id, crypto_helper)
+        recovery = HostedRecoveryClient(
+            self._origin, token, identity["vaultId"], timeout=self._timeout,
+            allow_loopback_http=self._allow_loopback_http)
+        account_id, worker_origin, _ = recovery._latest()
+        if account_id != identity["accountId"]:
+            raise MigrationError("The hosted backup account changed.")
+        upload = HostedUploadClient(
+            self._origin, worker_origin, token, identity["accountId"],
+            identity["vaultId"], timeout=self._timeout,
+            allow_loopback_http=self._allow_loopback_http)
+        return upload, recovery

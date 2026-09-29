@@ -185,6 +185,9 @@ def parser() -> argparse.ArgumentParser:
     vault_scheduled_run = vault_commands.add_parser(
         "scheduled-run", help=argparse.SUPPRESS)
     vault_scheduled_run.add_argument("--config", required=True)
+    vault_hosted_scheduled_run = vault_commands.add_parser(
+        "hosted-scheduled-run", help=argparse.SUPPRESS)
+    vault_hosted_scheduled_run.add_argument("--config", required=True)
 
     return root
 
@@ -280,6 +283,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             return 0
         if args.command == "vault":
             from codex_migrate.vault import inspect as inspect_vault, search as search_vault
+            if args.vault_command == "hosted-scheduled-run":
+                from codex_migrate.vault_hosted_schedule import run_hosted_scheduled_backup
+                return run_hosted_scheduled_backup(args.config)
             if args.vault_command in (
                     "schedule", "schedule-status", "schedule-remove", "scheduled-run"):
                 from codex_migrate.vault_schedule import (

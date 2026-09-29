@@ -27,11 +27,21 @@ class _Handler(BaseHTTPRequestHandler):
         pass
 
     def do_POST(self):
-        if self.path != "/api/hosted-enrollment":
+        if self.path not in ("/api/hosted-enrollment", "/api/hosted-recovery"):
             self.send_error(404)
             return
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         self.server.calls.append((body, self.headers.get("Authorization")))
+        if self.path == "/api/hosted-recovery":
+            result = {"accountId": self.server.recovery_account,
+                      "workerOrigin": self.server.worker_origin, "latest": None}
+            raw = json.dumps(result).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+            return
         if body["action"] in ("claim", "claim_recovery") and self.server.lose_claim_reply:
             # The server has acted, but the client cannot know if it did.
             self.close_connection = True
@@ -60,6 +70,8 @@ class HostedEnrollmentClientTests(unittest.TestCase):
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
         self.server.calls = []
         self.server.lose_claim_reply = False
+        self.server.recovery_account = ACCOUNT
+        self.server.worker_origin = "http://127.0.0.1:54321"
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
         self.helper_calls = []
@@ -143,6 +155,32 @@ class HostedEnrollmentClientTests(unittest.TestCase):
         self.assertEqual(self.helper_calls, [
             ["hosted-device-read", "--device-id", DEVICE],
             ["hosted-device-read", "--device-id", DEVICE]])
+
+    def test_backup_clients_use_authenticated_worker_origin_and_one_keychain_read(self):
+        with patch("codex_migrate.vault_hosted_enrollment_client._helper_path",
+                   return_value=Path("/synthetic/helper")), \
+                patch("codex_migrate.vault_hosted_enrollment_client._run_helper",
+                      side_effect=self.fake_helper):
+            upload, recovery = self.client().backup_clients(DEVICE)
+        self.assertEqual(upload._worker_origin, self.server.worker_origin)
+        self.assertEqual(upload._account_id, ACCOUNT)
+        self.assertEqual(recovery._vault_id, VAULT)
+        self.assertEqual(self.helper_calls,
+                         [["hosted-device-read", "--device-id", DEVICE]])
+        self.assertEqual([body["action"] for body, _ in self.server.calls],
+                         ["resolve", "latest"])
+        self.assertTrue(all(auth == "Bearer " + TOKEN
+                            for _, auth in self.server.calls))
+        self.assertNotIn(TOKEN, repr(upload) + repr(recovery))
+
+    def test_backup_clients_refuse_account_substitution(self):
+        self.server.recovery_account = DEVICE
+        with patch("codex_migrate.vault_hosted_enrollment_client._helper_path",
+                   return_value=Path("/synthetic/helper")), \
+                patch("codex_migrate.vault_hosted_enrollment_client._run_helper",
+                      side_effect=self.fake_helper):
+            with self.assertRaisesRegex(MigrationError, "account changed"):
+                self.client().backup_clients(DEVICE)
 
     def test_lost_mac_pairs_new_device_to_existing_vault(self):
         with patch("codex_migrate.vault_hosted_enrollment_client._helper_path",

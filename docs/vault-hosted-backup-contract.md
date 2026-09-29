@@ -86,10 +86,20 @@ do not count as content changes. A read-only preflight now compares the current
 source against the authenticated last-published index, sealed manifest, and
 live service pointer. An exact match reports a check against the existing
 last-good snapshot without reserving storage or publishing a redundant
-version; any uncertainty uses the normal backup path or fails closed. This is
-**not** a scheduled or production backup: neither physical Mac's 30-minute
+version; any uncertainty uses the normal backup path or fails closed. This
+preflight alone is **not** a production backup: neither physical Mac's 30-minute
 runtime or change rate has been measured, and a skipped run is not a new
 verified recovery point.
+
+A separate **dark** macOS LaunchAgent path now checks hosted history every
+30 minutes (including after login). It installs only after the same device
+can open an already published, non-at-risk snapshot with its Keychain key.
+The agent stores no bearer or recovery key; each run obtains the Worker origin
+from the authenticated service, records unchanged checks separately from
+verified publications, and preserves the prior green receipt on a failed or
+at-risk run. It has synthetic safety tests, but is not wired to enrollment or
+the signed customer's UI and has not run a 30-minute physical-Mac acceptance
+cycle. It is not a customer backup service or a recovery-window claim yet.
 
 The sandbox recovery API now has an account-scoped, device-authenticated
 read-only usage query for server-accounted retained and reserved encrypted
