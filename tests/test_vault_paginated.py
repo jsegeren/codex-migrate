@@ -1,6 +1,7 @@
 import json
 from contextlib import closing
 from pathlib import Path
+import shutil
 import sqlite3
 import tempfile
 import unittest
@@ -115,6 +116,60 @@ class PaginatedSourceTests(unittest.TestCase):
             self.assertTrue(present)
             self.assertEqual(count, 1)
             self.assertGreaterEqual(size, len(before))
+
+    def test_live_wal_read_cannot_change_codex_sidecars(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            database = fixture(home)
+            writer = sqlite3.connect(database)
+            try:
+                writer.execute("PRAGMA wal_autocheckpoint=0")
+                writer.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                               (THREAD_ID, "turn-2", "item-2", 2, 101,
+                                json.dumps({"id": "item-2", "type": "agentMessage",
+                                            "text": "uncheckpointed synthetic reply"}),
+                                "agentMessage", 2))
+                writer.commit()
+                paths = [database, Path(str(database) + "-wal"),
+                         Path(str(database) + "-shm")]
+                self.assertTrue(all(path.is_file() for path in paths))
+                before = [(path.read_bytes(), path.stat().st_mtime_ns) for path in paths]
+                with open_paginated_source(str(home)) as source:
+                    self.assertEqual([item.item_id for item in source.items(THREAD_ID)],
+                                     ["item-1", "item-2"])
+                self.assertEqual(
+                    [(path.read_bytes(), path.stat().st_mtime_ns) for path in paths], before)
+            finally:
+                writer.close()
+
+    def test_wal_without_shared_memory_fails_without_creating_it(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            source.mkdir()
+            database = fixture(source)
+            writer = sqlite3.connect(database)
+            try:
+                writer.execute("PRAGMA wal_autocheckpoint=0")
+                writer.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                               (THREAD_ID, "turn-2", "item-2", 2, 101,
+                                json.dumps({"id": "item-2", "type": "agentMessage",
+                                            "text": "uncheckpointed synthetic reply"}),
+                                "agentMessage", 2))
+                writer.commit()
+                target = root / "target" / ".codex"
+                target.mkdir(parents=True)
+                staged = target / database.name
+                shutil.copyfile(database, staged)
+                shutil.copyfile(Path(str(database) + "-wal"),
+                                Path(str(staged) + "-wal"))
+                self.assertFalse(Path(str(staged) + "-shm").exists())
+                with self.assertRaises(MigrationError):
+                    with open_paginated_source(str(target.parent)):
+                        pass
+                self.assertFalse(Path(str(staged) + "-shm").exists())
+            finally:
+                writer.close()
 
     def test_ordinal_ranges_bound_live_and_restored_items(self):
         with tempfile.TemporaryDirectory() as temporary:
