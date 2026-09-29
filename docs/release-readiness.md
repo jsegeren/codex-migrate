@@ -7,6 +7,17 @@ distribution decision; the dated entries below preserve their original status.
 
 ## September 28 paginated-history coverage hold
 
+An opt-in source-interpreter search benchmark used only a disposable SQLite
+history with 200 threads, 100,000 items, and 1 KiB of deterministic,
+high-trigram-variety base64 text per item. The 142,303,232-byte source database
+took 0.547 s for one exact hit and 0.549 s for a miss without an index. The
+optional index built in 19.205 s, occupied 41,885,696 bytes, and then took
+0.210 s for the same hit and 0.116 s for the miss. Exact results matched the
+direct scan. This is a synthetic sensitivity check, not customer prose, a
+packaged-app benchmark, a full-size history, or a performance promise. Cache
+size and speed vary markedly with text diversity, which is why indexing
+remains opt-in and reports its disk/privacy cost.
+
 Exact pushed source `fff67ffb9758ec25d7d3c2377116935cb8997d77` produced an
 arm64 local-test-only build 20 with ZIP SHA-256
 `0710d30e686009ac8765d5b1520be97ca112bea352271580638022e9386497f0`.
