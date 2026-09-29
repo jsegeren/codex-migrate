@@ -437,11 +437,40 @@ synthetic Codex thread. Record the installed app and CLI versions and test:
 4. Repeat with a clean OS user or second Mac only after the same-profile test
    is understood. Preserve separate accounts and credentials throughout.
 
-Until that evidence exists, the defensible Vault guarantee is encrypted
-preservation plus independent find, read, and export of captured local work.
+### Controlled same-profile result (September 28, 2026)
+
+The Founder completed a disposable-macOS-profile test using two separately
+authorized OpenAI logins and one harmless synthetic Codex chat. The installed
+ChatGPT/Codex desktop app was `26.924.51851`; its bundled CLI was
+`0.158.0-alpha.2.1`. Account A created a thread, then left and reopened it and
+completed a second turn. After switching only that macOS profile to account B,
+the Founder saw the same thread in Desktop's list. They fully quit and
+relaunched Codex, reopened the thread under B, and completed a third turn.
+After returning to A, they reopened it again and completed a fourth turn.
+Read-only verification found all four completed turns and their distinct
+synthetic markers appended to the same rollout file and embedded thread ID;
+neither authentication material nor conversation text was copied into this
+receipt. The last verification found no `encrypted_content` field in this
+particular rollout.
+
+This proves **same-macOS-user Desktop visibility and native continuation on
+this exact tested build** across those two OpenAI logins, including after a
+full Desktop restart and return to A. It does not prove CLI listing or
+continuation under B, encrypted reasoning-state portability, account-specific
+cloud permissions, a second macOS user or Mac, historical Codex versions, or
+all thread shapes. No repo/worktree or Vault snapshot was created in the
+disposable profile, so those parts of the broader matrix remain untested.
+The result is also a privacy warning: local thread visibility did not isolate
+by the active OpenAI login in this test. A macOS user/profile boundary and
+local data protections still matter.
+
+The defensible Vault guarantee remains encrypted preservation plus
+independent find, read, and export of captured local work. Do not market
+cross-account portability from this one same-profile result.
 An explicitly labelled new-thread handoff could later use an export with the
 user's consent. Native continuation under another account is an open proof
-gate, not a marketed capability. Cross-account access must never be enabled
+gate outside the exact tested build and profile, not a marketed capability.
+Cross-account access must never be enabled
 by copying credentials or rewriting account identifiers.
 
 ## Acceptance and boundaries
