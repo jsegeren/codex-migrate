@@ -65,6 +65,10 @@ def recover_hosted_snapshot(
     if (account_id != upload._account_id or
             worker_origin != upload._worker_origin or latest is None):
         raise MigrationError("The hosted recovery authority changed.")
+    if snapshot_id is None and latest["sourceCoverage"] != "complete":
+        raise MigrationError(
+            "The newest hosted backup has incomplete or unknown source coverage. "
+            "Inspect hosted-backups and select a published version explicitly.")
     selected = (latest if snapshot_id is None or
                 snapshot_id == latest["snapshotId"] else
                 recovery.published_snapshot(snapshot_id,

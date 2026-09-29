@@ -104,10 +104,24 @@ class HostedDisasterRecoveryTests(unittest.TestCase):
         helper, enrollment, download = self._patches()
         with helper, enrollment, download:
             result = recover_hosted_snapshot(
-                self.home, self.output, DEVICE, max_bytes=400, apply=True)
+                self.home, self.output, DEVICE, max_bytes=400,
+                snapshot_id=SNAPSHOT, apply=True)
         self.assertTrue(result["needs_attention"])
         self.assertEqual(result["at_risk_sources"], 0)
         self.assertEqual(result["source_coverage"], "unknown")
+
+    def test_incomplete_latest_requires_explicit_selection_before_download(self):
+        self.pointer[2]["sourceCoverage"] = "needs_attention"
+        helper, enrollment, download = self._patches()
+        with helper, enrollment, download as receiver:
+            with self.assertRaisesRegex(MigrationError, "select a published version"):
+                recover_hosted_snapshot(
+                    self.home, self.output, DEVICE, max_bytes=400, apply=True)
+            receiver.assert_not_called()
+            result = recover_hosted_snapshot(
+                self.home, self.output, DEVICE, max_bytes=400,
+                snapshot_id=SNAPSHOT, apply=True)
+        self.assertTrue(result["needs_attention"])
 
     def test_recovery_options_offer_older_complete_without_choosing_it_silently(self):
         older = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
