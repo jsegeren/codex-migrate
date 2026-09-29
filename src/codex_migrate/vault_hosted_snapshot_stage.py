@@ -205,6 +205,13 @@ def stage_hosted_snapshot(
         files = _source_files(source_home)
         if len(files) > 100_000:
             raise MigrationError("The hosted snapshot has too many transcripts.")
+        if (any(item.get("collection") in ("active", "archived")
+                for item in previous_catalog) and
+                not any(folder in ("sessions", "archived_sessions")
+                        for folder, _, _ in files)):
+            raise MigrationError(
+                "Codex transcript history disappeared since the prior backup. "
+                "No new hosted snapshot was staged; review the source.")
         attachment_paths = {relative for folder, _, relative in files
                             if folder == "attachments"}
         previous_attachment_paths = {item.get("path") for item in previous_catalog

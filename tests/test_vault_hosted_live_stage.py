@@ -9,6 +9,7 @@ from codex_migrate.errors import MigrationError
 from codex_migrate.vault_hosted_chunk_journal import HostedChunkJournal
 from codex_migrate.vault_hosted_live_stage import stage_reserved_hosted_snapshot
 from codex_migrate.vault_hosted_recovery_client import HostedRecoveryClient
+from codex_migrate.vault_hosted_snapshot_stage import stage_hosted_snapshot
 from codex_migrate.vault_hosted_upload_client import HostedUploadClient
 
 
@@ -48,6 +49,30 @@ class HostedLiveStageTests(unittest.TestCase):
             "/unused-home", self.metadata, journal, self.upload, self.recovery,
             crypto_helper="/unused-helper", max_prior_bytes=5_000_000,
             apply=True, **changes)
+
+    def test_wiped_transcript_source_cannot_replace_prior_hosted_snapshot(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "source"
+            source.mkdir(mode=0o700)
+            (source / ".codex").mkdir(mode=0o700)
+            journal_dir = Path(temporary) / "journal"
+            journal_dir.mkdir(mode=0o700)
+            with HostedChunkJournal(
+                    journal_dir, account_id=ACCOUNT, vault_id=VAULT,
+                    reservation_id=RESERVATION, snapshot_id=SNAPSHOT,
+                    key_id=KEY, base_snapshot_id=BASE) as journal, patch(
+                    "codex_migrate.vault_hosted_snapshot_stage.source_fingerprint",
+                    return_value=None), patch(
+                    "codex_migrate.vault_hosted_snapshot_stage.stage_hosted_snapshot_tail"
+                    ) as upload:
+                with self.assertRaisesRegex(MigrationError,
+                                            "transcript history disappeared"):
+                    stage_hosted_snapshot(
+                        str(source), self.metadata,
+                        [{"collection": "active", "path": "lost.jsonl"}],
+                        journal, object(), crypto_helper="/unused-helper",
+                        apply=True)
+                upload.assert_not_called()
 
     def test_prior_catalog_precedes_transcript_stage_and_binds_base(self):
         catalog = [{"thread_id": "example"}]
