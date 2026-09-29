@@ -119,8 +119,10 @@ Keychain device, account, Vault, reservation, and byte allowance; each object
 still receives exact classification, quota/grant, and independent publication
 checks. The native client refreshes the lease after at most 40 seconds and
 never stores it on disk. It prepares up to four exact objects per service
-request with 30-second Worker grants; slow transfers retry with fresh grants.
-This bounds entitlement-revocation lag to one minute and reduces service
+request with Worker grants valid for at most 30 seconds and never past their
+parent lease; slow transfers retry with fresh grants. New authorizations stop
+when that lease expires, though an already accepted upload may finish later.
+This reduces service
 round trips on a fast first backup without weakening exact-object checks.
 Real large-history latency, slow-network fallback, database/API cost, and
 physical-Mac recovery proof remain release gates. See the economics note.

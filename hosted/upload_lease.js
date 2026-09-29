@@ -77,7 +77,7 @@ function verifyUploadLease(token, secret, now = Date.now()) {
         value.e <= now) throw new HostedUploadLeaseError();
     return Object.freeze({ accountId: value.a, vaultId: value.t,
       reservationId: value.r, deviceHash: value.d,
-      allowanceBytes: value.b });
+      allowanceBytes: value.b, expiresAt: value.e });
   } catch { throw new HostedUploadLeaseError(); }
 }
 

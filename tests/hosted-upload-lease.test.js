@@ -15,8 +15,9 @@ const claim = Object.freeze({
 test('upload lease is exact, signed and valid for at most one minute', () => {
   const now = 1_790_000_000_000;
   const lease = mintUploadLease({ ...claim, secret, now });
-  assert.deepEqual(verifyUploadLease(lease, secret, now), claim);
-  assert.deepEqual(verifyUploadLease(lease, secret, now + 59_999), claim);
+  const verified = { ...claim, expiresAt: now + 60_000 };
+  assert.deepEqual(verifyUploadLease(lease, secret, now), verified);
+  assert.deepEqual(verifyUploadLease(lease, secret, now + 59_999), verified);
   assert.throws(() => verifyUploadLease(lease, secret, now + 60_000),
     /hosted_upload_lease_denied/);
   assert.throws(() => verifyUploadLease(lease, secret, now - 1),

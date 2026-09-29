@@ -3,7 +3,8 @@
 // records each distinct object under an active byte reservation before this
 // function returns a short-lived storage token. Not an HTTP endpoint.
 const { consumeAuthorizedScope } = require('./access');
-const { validItem, signObjectCapability } = require('./object_capability');
+const { validItem, signObjectCapability, grantAgeForScope } =
+  require('./object_capability');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const GRANT_SQL = `SELECT hosted.reserve_object_grant_elastic_current(
@@ -25,7 +26,9 @@ async function issuePutCapability({ scope, reservationId, item, secret, query })
     if (result?.rows?.length !== 1 || result.rows[0].allowed !== true) {
       throw new HostedUploadGrantError();
     }
-    return await signObjectCapability('PUT', item, secret, Date.now(), 30_000);
+    const now = Date.now();
+    return await signObjectCapability('PUT', item, secret, now,
+      grantAgeForScope(scope, now));
   } catch {
     // Do not expose tenant IDs, the reservation, Stripe state, SQL, or the
     // storage signing key through the API error boundary.

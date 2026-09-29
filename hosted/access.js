@@ -120,7 +120,8 @@ async function authorizeLeasedUploadScope({ sessionToken, vaultId,
     if (result?.rows?.length !== 1 || row.vault_id !== vaultId ||
         row.account_id !== claim.accountId) throw new HostedAccessError();
     const scope = Object.freeze({ accountId: claim.accountId, vaultId,
-      allowanceBytes: claim.allowanceBytes });
+      allowanceBytes: claim.allowanceBytes,
+      leaseExpiresAt: claim.expiresAt });
     authorizedScopes.set(scope, Date.now());
     return scope;
   } catch { throw new HostedAccessError(); }

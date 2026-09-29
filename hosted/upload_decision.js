@@ -2,7 +2,8 @@
 // that the object is absent; it means HEAD is not authorized yet. A separate
 // fresh scope and durable grant ledger are required before an immutable PUT.
 const { consumeAuthorizedScope } = require('./access');
-const { validItem, signObjectCapability } = require('./object_capability');
+const { validItem, signObjectCapability, grantAgeForScope } =
+  require('./object_capability');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const DECIDE_SQL = `SELECT hosted.classify_upload_object_current(
@@ -26,7 +27,9 @@ async function decideUploadObject({ scope, reservationId, item, secret, query })
       return Object.freeze({ action: 'put_required' });
     }
     if (result.rows[0].decision !== 'head') throw new HostedUploadDecisionError();
-    const grant = await signObjectCapability('HEAD', item, secret, Date.now(), 30_000);
+    const now = Date.now();
+    const grant = await signObjectCapability('HEAD', item, secret, now,
+      grantAgeForScope(scope, now));
     return Object.freeze({ action: 'head', grant });
   } catch { throw new HostedUploadDecisionError(); }
 }

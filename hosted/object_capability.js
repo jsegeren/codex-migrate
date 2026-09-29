@@ -65,6 +65,14 @@ async function signObjectCapability(method, item, secret, now = Date.now(), ageM
   return `${encode(payload)}.${encode(signature)}`;
 }
 
+function grantAgeForScope(scope, now) {
+  const expiry = scope?.leaseExpiresAt;
+  if (expiry === undefined) return 30_000;
+  if (!Number.isSafeInteger(expiry) || !Number.isSafeInteger(now) ||
+      expiry <= now) throw new ObjectCapabilityError();
+  return Math.min(30_000, expiry - now);
+}
+
 async function verifyObjectCapability(token, method, pathKey, secret, now = Date.now()) {
   if (typeof token !== 'string' || token.length > 2048 ||
       !Number.isSafeInteger(now) || !['PUT', 'GET', 'HEAD', 'DELETE'].includes(method) ||
@@ -156,5 +164,5 @@ async function verifyBatchVerification(token, body, secret, now = Date.now()) {
 }
 
 module.exports = { ObjectCapabilityError, decodeSecret, validItem,
-  signObjectCapability, verifyObjectCapability, signBatchVerification,
+  signObjectCapability, grantAgeForScope, verifyObjectCapability, signBatchVerification,
   verifyBatchVerification, MAX_BATCH_BODY_BYTES };

@@ -79,9 +79,10 @@ case, that converts the 109,068 per-object service calls into about **9,089
 four-object batch calls**, plus lease refreshes and other snapshot requests.
 It does **not** remove per-object database checks, Worker PUT/HEAD requests,
 or the need for independent server publication verification. These counts are
-code-path projections, **not measured throughput**. Cancellation or refund
-may remain effective up to one minute later than a per-request Stripe check;
-device revocation remains checked on every batch. A realistic large-history
+code-path projections, **not measured throughput**. New authorizations after
+cancellation or refund can continue only until the one-minute lease expires;
+Worker grants never outlive that lease, though an already accepted upload may
+finish later. Device revocation remains checked on every batch. A realistic large-history
 upload, slow-network fallback rate, request/DB latency, provider limits, and
 all-in service cost remain release gates.
 

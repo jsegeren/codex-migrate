@@ -2,13 +2,13 @@
 // lease. This amortizes client/service round trips without granting a bucket,
 // waiving per-object SQL quota checks, or treating a grant as backup proof.
 const { consumeAuthorizedScope } = require('./access');
-const { validItem, signObjectCapability } = require('./object_capability');
+const { validItem, signObjectCapability, grantAgeForScope } =
+  require('./object_capability');
 const { DECIDE_SQL } = require('./upload_decision');
 const { GRANT_SQL } = require('./upload_grant');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const MAX_ITEMS = 4;
-const GRANT_AGE_MS = 30_000;
 
 class HostedUploadBatchError extends Error {
   constructor() { super('hosted_upload_batch_denied'); }
@@ -45,12 +45,13 @@ async function prepareUploadBatch({ scope, reservationId, items, secret,
         }
       }
       const now = Date.now();
+      const age = grantAgeForScope(scope, now);
       const headGrant = await signObjectCapability('HEAD', item, secret,
-        now, GRANT_AGE_MS);
+        now, age);
       prepared.push(Object.freeze(state === 'head' ?
         { action: 'head', grant: headGrant } :
         { action: 'put_required', putGrant: await signObjectCapability(
-          'PUT', item, secret, now, GRANT_AGE_MS), headGrant }));
+          'PUT', item, secret, now, age), headGrant }));
     }
     return Object.freeze(prepared);
   } catch { throw new HostedUploadBatchError(); }

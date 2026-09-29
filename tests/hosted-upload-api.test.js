@@ -289,6 +289,44 @@ test('a failed batch returns no partial grants and an exact retry succeeds', asy
     ['head', 'put_required']);
 });
 
+test('batch object grants cannot outlive the entitlement lease', async () => {
+  const f = fixture();
+  f.req.headers['x-hosted-upload-lease'] = mintUploadLease({
+    accountId, vaultId, reservationId, deviceHash: f.session.tokenHash,
+    allowanceBytes: 100_000_000, secret, now: Date.now() - 50_000,
+  });
+  f.req.body = { action: 'batch', vaultId, reservationId, items: [item] };
+  const result = await f.send();
+  assert.equal(result.statusCode, 200);
+  const key = `accounts/${accountId}/vaults/${vaultId}/${item.key}`;
+  const grant = result.body.objects[0].putGrant;
+  assert.deepEqual(await verifyObjectCapability(grant, 'PUT', key, secret,
+    Date.now() + 5_000), { key, bytes: item.bytes, sha256: item.sha256 });
+  await assert.rejects(verifyObjectCapability(grant, 'PUT', key, secret,
+    Date.now() + 11_000), /hosted_object_access_denied/);
+});
+
+test('single-object PUT and HEAD grants also expire with the lease', async () => {
+  const f = fixture();
+  f.req.headers['x-hosted-upload-lease'] = mintUploadLease({
+    accountId, vaultId, reservationId, deviceHash: f.session.tokenHash,
+    allowanceBytes: 100_000_000, secret, now: Date.now() - 50_000,
+  });
+  f.req.body = { action: 'put', vaultId, reservationId, item };
+  const put = await f.send();
+  assert.equal(put.statusCode, 200);
+  f.req.body.action = 'decide';
+  const head = await f.send();
+  assert.equal(head.statusCode, 200);
+  assert.equal(head.body.action, 'head');
+  const key = `accounts/${accountId}/vaults/${vaultId}/${item.key}`;
+  for (const [method, grant] of [['PUT', put.body.grant],
+    ['HEAD', head.body.grant]]) {
+    await assert.rejects(verifyObjectCapability(grant, method, key, secret,
+      Date.now() + 11_000), /hosted_object_access_denied/);
+  }
+});
+
 test('lapsed subscription cannot reserve or grant any object', async () => {
   const f = fixture();
   f.setEntitlement('past_due');
