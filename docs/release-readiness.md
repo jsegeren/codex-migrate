@@ -7,6 +7,15 @@ distribution decision; the dated entries below preserve their original status.
 
 ## September 28 paginated-history coverage hold
 
+The draft local Vault search now keeps intact matches visible when a JSONL
+conversation header or record is unreadable. Browser and CLI searches identify
+the result set as incomplete; the browser opens its separate read-only damaged-
+file inspection panel. Direct callers without a warnings channel still fail
+closed. Synthetic corrupt-header and corrupt-record tests, a browser warning
+test, and an API partial-results test pass. This does not repair the file,
+guarantee recovery of the missing record, or clear the release hold. The
+public build 16 has not received this change.
+
 A synthetic 1,001-snapshot regression found and removed a separate long-term
 history failure: the local Vault browser previously refused all history once
 the folder held more than 1,000 references. Bounded CLI/browser requests remain

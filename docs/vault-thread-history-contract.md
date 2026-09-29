@@ -248,6 +248,13 @@ storage; useful full-text search performance at this scale remains an open
 product acceptance concern. No private transcript content, paths, IDs, or
 hashes were recorded in this receipt.
 
+A separate draft search guard skips an unreadable JSONL header or record while
+returning matches from healthy files and marking results incomplete. The
+damaged file remains unchanged; read-only salvage inspection is a separate,
+possibly incomplete path. A caller without a warnings channel still receives
+an error. Synthetic malformed-header and malformed-record tests cover this
+behavior; it is not evidence that every damaged real conversation is recoverable.
+
 The optional local FTS cache now also indexes rendered text from supported
 SQLite-backed items. Its database stamp includes the main file and write log;
 if either changes during or after indexing, live search scans the database
