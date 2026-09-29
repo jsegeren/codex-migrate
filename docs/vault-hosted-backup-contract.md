@@ -1024,6 +1024,13 @@ egress allowance. Do not claim that B2 restores are always free. See its
    paginated-history database vanishes or becomes empty. The earlier readable
    version remains current and the scheduled run must surface the failure;
    an empty replacement cannot silently become a green backup on the next run.
+   Hosted staging also refuses an empty transcript tree after a prior transcript
+   backup, or the disappearance of any previously verified thread ID across
+   current transcript and paginated sources. An archive move retaining the ID
+   is not a deletion. This conservative stop protects against accidental source
+   cleanup, but intentional deletion needs a reviewed rebaseline that preserves
+   the older recoverable version. Partial disappearance of unverified-ID files
+   still needs a separate safe policy before release.
    A legitimate intentional reset will need an explicit reviewed rebaseline
    path before customer release; silently treating it as a fresh first backup
    would discard the only evidence of the gap.

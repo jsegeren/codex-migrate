@@ -124,6 +124,22 @@ def _reusable_paginated(prior: Sequence[dict], count: int):
     return rows
 
 
+def _missing_verified_threads(previous: Sequence[dict], current: Sequence[dict]) -> bool:
+    """Do not promote a smaller history without an explicit deletion decision.
+
+    A thread may move between transcript trees or into paginated history; its
+    verified ID, not its path or collection, determines whether it survived.
+    """
+    history = ("active", "archived", "paginated")
+    before = {item.get("thread_id") for item in previous
+              if item.get("collection") in history and
+              item.get("identity_state") == "verified" and item.get("thread_id")}
+    after = {item.get("thread_id") for item in current
+             if item.get("collection") in history and
+             item.get("identity_state") == "verified" and item.get("thread_id")}
+    return bool(before - after)
+
+
 def _reuse_candidates(files: list, prior: Sequence[dict],
                       fingerprints: dict) -> Dict[Tuple[str, str], dict]:
     """A stat match is useful only with an authenticated prior manifest row."""
@@ -415,6 +431,10 @@ def stage_hosted_snapshot(
             if _identity(check_info(path.lstat())) != source_facts[(folder, relative)]:
                 raise MigrationError("A conversation changed after hosted staging.")
             require_local(path)
+        if _missing_verified_threads(previous_catalog, manifest_files):
+            raise MigrationError(
+                "A previously verified Codex thread disappeared since the prior "
+                "backup. No new hosted snapshot was published; review the source.")
         manifest = {
             "format": "codex-vault-snapshot",
             "version": (4 if any(item["collection"] == "attachments"

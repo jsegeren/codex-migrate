@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -9,7 +10,9 @@ from codex_migrate.errors import MigrationError
 from codex_migrate.vault_hosted_chunk_journal import HostedChunkJournal
 from codex_migrate.vault_hosted_live_stage import stage_reserved_hosted_snapshot
 from codex_migrate.vault_hosted_recovery_client import HostedRecoveryClient
-from codex_migrate.vault_hosted_snapshot_stage import stage_hosted_snapshot
+from codex_migrate.vault_hosted_snapshot_stage import (
+    _missing_verified_threads, stage_hosted_snapshot,
+)
 from codex_migrate.vault_hosted_upload_client import HostedUploadClient
 
 
@@ -73,6 +76,53 @@ class HostedLiveStageTests(unittest.TestCase):
                         journal, object(), crypto_helper="/unused-helper",
                         apply=True)
                 upload.assert_not_called()
+
+    def test_partial_deletion_requires_review_but_archive_move_does_not(self):
+        original = {"collection": "active", "path": "old.jsonl",
+                    "thread_id": BASE, "identity_state": "verified"}
+        other = {"collection": "active", "path": "other.jsonl",
+                 "thread_id": OTHER, "identity_state": "verified"}
+        self.assertTrue(_missing_verified_threads([original, other], [other]))
+        self.assertFalse(_missing_verified_threads(
+            [original], [{**original, "collection": "archived",
+                          "path": "moved.jsonl"}]))
+        self.assertFalse(_missing_verified_threads(
+            [original], [{**original, "collection": "paginated",
+                          "path": BASE + ".jsonl"}]))
+        self.assertTrue(_missing_verified_threads(
+            [original], [{**original, "identity_state": "needs_review"}]))
+
+    def test_partial_wipe_does_not_publish_a_new_hosted_snapshot(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "source"
+            active = source / ".codex/sessions/current.jsonl"
+            active.parent.mkdir(parents=True, mode=0o700)
+            active.write_text(
+                '{"type":"session_meta","payload":{"id":"' + OTHER + '"}}\n',
+                encoding="utf-8")
+            journal_dir = Path(temporary) / "journal"
+            journal_dir.mkdir(mode=0o700)
+            staged = SimpleNamespace(size=active.stat().st_size,
+                                     sha256="a" * 64, chunks=[])
+            with HostedChunkJournal(
+                    journal_dir, account_id=ACCOUNT, vault_id=VAULT,
+                    reservation_id=RESERVATION, snapshot_id=SNAPSHOT,
+                    key_id=KEY, base_snapshot_id=BASE) as journal, patch(
+                    "codex_migrate.vault_hosted_snapshot_stage.published_source_facts",
+                    return_value=({}, None)), patch(
+                    "codex_migrate.vault_hosted_snapshot_stage.stage_remote_aware_file_windowed",
+                    return_value=staged), patch(
+                    "codex_migrate.vault_hosted_snapshot_stage.stage_hosted_snapshot_tail"
+                    ) as publish:
+                with self.assertRaisesRegex(MigrationError,
+                                            "verified Codex thread disappeared"):
+                    stage_hosted_snapshot(
+                        str(source), self.metadata,
+                        [{"collection": "active", "path": "lost.jsonl",
+                          "thread_id": BASE, "identity_state": "verified"}],
+                        journal, object(), crypto_helper="/unused-helper",
+                        apply=True)
+                publish.assert_not_called()
 
     def test_prior_catalog_precedes_transcript_stage_and_binds_base(self):
         catalog = [{"thread_id": "example"}]
