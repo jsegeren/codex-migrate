@@ -991,6 +991,10 @@ egress allowance. Do not claim that B2 restores are always free. See its
    on the lost Mac's receipt; test this with a missing attachment and a
    shortened paginated thread. Do not treat a client-reported coverage flag as
    independent server verification of encrypted conversation content.
+   The dark recovery command now inspects the authenticated restored catalog
+   and warns when that selected version contains at-risk sources. This is a
+   post-download warning, not durable server health metadata or a clean-Mac
+   selection of the older complete version; this gate remains open.
 4. **Prove commerce and operations:** separate Stripe *subscription* checkout
    and webhook state from the existing one-time purchase; enforce active,
    past-due, cancellation, refund, and dispute states; publish no entitlement

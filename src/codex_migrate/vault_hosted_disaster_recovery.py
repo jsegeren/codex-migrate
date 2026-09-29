@@ -14,6 +14,7 @@ from codex_migrate.vault_backup import _helper_path
 from codex_migrate.vault_hosted_enrollment_client import HostedEnrollmentClient
 from codex_migrate.vault_hosted_schedule import SERVICE_ORIGIN
 from codex_migrate.vault_remote_recovery import download_encrypted_snapshot
+from codex_migrate.vault_recovery import snapshot_catalog
 from codex_migrate.vault_schedule import _home
 
 
@@ -46,8 +47,17 @@ def recover_hosted_snapshot(
     result = download_encrypted_snapshot(
         home, output, store, receipt, max_bytes=max_bytes,
         crypto_helper=str(helper))
+    catalog = snapshot_catalog(result.vault, snapshot=result.snapshot_id,
+                               crypto_helper=str(helper))
+    at_risk = {
+        (item["collection"], item["thread_id"] or item["path"])
+        for item in catalog
+        if item["collection"] != "attachments" and item["at_risk"]
+    }
     return {"vault": result.vault, "snapshot_id": result.snapshot_id,
             "downloaded_files": result.downloaded_files,
             "reused_files": result.reused_files,
             "encrypted_bytes_checked": result.encrypted_bytes_checked,
-            "transcript_files": result.transcript_files}
+            "transcript_files": result.transcript_files,
+            "needs_attention": bool(at_risk),
+            "at_risk_sources": len(at_risk)}

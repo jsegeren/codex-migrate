@@ -1,10 +1,12 @@
+from contextlib import redirect_stderr, redirect_stdout
+import io
 from pathlib import Path
 import tempfile
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from codex_migrate.cli import parser
+from codex_migrate.cli import main, parser
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_hosted_disaster_recovery import recover_hosted_snapshot
 
@@ -36,6 +38,11 @@ class HostedDisasterRecoveryTests(unittest.TestCase):
                                         prepare=prepare)
         self.enrollment = SimpleNamespace(
             backup_clients=lambda *_args, **_kw: (self.upload, self.recovery))
+        catalog = patch("codex_migrate.vault_hosted_disaster_recovery.snapshot_catalog",
+                        return_value=[{"collection": "active", "thread_id": None,
+                                       "path": "synthetic.jsonl", "at_risk": False}])
+        self.catalog = catalog.start()
+        self.addCleanup(catalog.stop)
 
     def _patches(self):
         return (patch("codex_migrate.vault_hosted_disaster_recovery._helper_path",
@@ -57,6 +64,10 @@ class HostedDisasterRecoveryTests(unittest.TestCase):
         self.assertEqual(result["vault"], self.output)
         self.assertEqual(result["snapshot_id"], SNAPSHOT)
         self.assertEqual(result["transcript_files"], 1)
+        self.assertFalse(result["needs_attention"])
+        self.assertEqual(result["at_risk_sources"], 0)
+        self.catalog.assert_called_once_with(self.output, snapshot=SNAPSHOT,
+                                             crypto_helper="/synthetic/helper")
         self.assertEqual(self.prepared, [{
             "max_bytes": 400, "expected_pointer": self.pointer,
             "selected_snapshot_id": SNAPSHOT}])
@@ -64,6 +75,22 @@ class HostedDisasterRecoveryTests(unittest.TestCase):
                          (str(Path(self.home).resolve()), self.output))
         self.assertEqual(receiver.call_args.kwargs["max_bytes"], 400)
         self.assertFalse((Path(self.home) / ".codex").exists())
+
+    def test_recovered_ciphertext_does_not_hide_incomplete_conversations(self):
+        self.catalog.return_value = [
+            {"collection": "active", "thread_id": SNAPSHOT,
+             "path": "current.jsonl", "at_risk": True},
+            {"collection": "paginated", "thread_id": SNAPSHOT,
+             "path": SNAPSHOT + ".jsonl", "at_risk": True},
+            {"collection": "attachments", "thread_id": None,
+             "path": "pasted-text.txt", "at_risk": False},
+        ]
+        helper, enrollment, download = self._patches()
+        with helper, enrollment, download:
+            result = recover_hosted_snapshot(
+                self.home, self.output, DEVICE, max_bytes=400, apply=True)
+        self.assertTrue(result["needs_attention"])
+        self.assertEqual(result["at_risk_sources"], 2)
 
     def test_plan_and_bad_limit_do_not_open_credentials(self):
         with patch("codex_migrate.vault_hosted_disaster_recovery.HostedEnrollmentClient") as client:
@@ -98,6 +125,21 @@ class HostedDisasterRecoveryTests(unittest.TestCase):
         self.assertEqual(options.vault_command, "hosted-recover")
         self.assertTrue(options.apply)
         self.assertEqual(options.snapshot, SNAPSHOT)
+
+    def test_cli_distinguishes_verified_ciphertext_from_complete_history(self):
+        printed = io.StringIO()
+        warning = io.StringIO()
+        with patch("codex_migrate.vault_hosted_disaster_recovery.recover_hosted_snapshot",
+                   return_value={"vault": self.output, "needs_attention": True,
+                                 "at_risk_sources": 2}), redirect_stdout(printed), \
+                redirect_stderr(warning):
+            self.assertEqual(main([
+                "vault", "--source-home", self.home, "hosted-recover",
+                "--device-id", DEVICE, "--output", self.output,
+                "--max-bytes", "400", "--apply"]), 0)
+        self.assertIn("Encrypted hosted snapshot verified", printed.getvalue())
+        self.assertIn("2 conversation source(s) have missing or changed content",
+                      warning.getvalue())
 
 
 if __name__ == "__main__":
