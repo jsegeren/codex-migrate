@@ -2,12 +2,11 @@
 
 ## September 29 physical two-Mac synthetic restore — narrow pass
 
-The second Mac (`Joshuas-MacBook-Pro-128.local`, user `joshuasegeren`)
-successfully ran the corrected one-file receiver against the disposable Vault
-bundle under `/tmp/codex-vault-physical.BZ6uiT`. It imported the synthetic
-recovery key, verified the encrypted snapshot contained one transcript,
-restored it into a separate empty temporary home, and compared the restored
-conversation byte-for-byte with the fixture. The receiver reported
+The second physical Mac successfully ran the corrected one-file receiver
+against a disposable Vault bundle outside the real Codex home. It imported
+the synthetic recovery key, verified the encrypted snapshot contained one
+transcript, restored it into a separate empty temporary home, and compared
+the restored conversation byte-for-byte with the fixture. The receiver reported
 `Physical cross-Mac synthetic recovery: PASS` on September 29 at about
 22:36 UTC. Its cleanup path deleted the disposable imported Keychain key;
 the successful exit confirms that cleanup did not fail. The real Codex home
