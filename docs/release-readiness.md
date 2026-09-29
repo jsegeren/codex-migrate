@@ -1,5 +1,20 @@
 # Desktop release readiness
 
+## September 29 current-source portability proof — draft only
+
+At source commit `578b4d6`, [CI run 36633107207](https://github.com/jsegeren/codex-migrate/actions/runs/36633107207)
+passed both synthetic Mac-to-Mac pairs: `vault-portability-export` / `vault-portability-import`
+and `hosted-portability-export` / `hosted-portability-import`. Each importer ran
+on an independent fresh macOS runner, imported the saved test recovery key,
+and checked decrypted/restored content. The helper was compiled from that
+source in test-only Keychain mode. The temporary branch push trigger was
+removed after the proof; routine CI policy is unchanged.
+
+This validates current-source format portability, including the hosted
+encrypted-object fixture. It does **not** certify the installed signed app,
+production R2, customer enrollment, a business recovery key, or recovery of
+either Founder's real Codex history. Those release gates remain open.
+
 The Founder authorized a **self-service paid beta** on September 7 while the
 remaining acceptance checks continue. This is not full release certification.
 The [paid-beta launch record](paid-beta-launch-2026-09-07.md) controls the current
