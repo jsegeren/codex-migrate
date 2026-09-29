@@ -73,6 +73,10 @@ key-use trail are release requirements. A backup is not “protected” merely
 because an upload succeeded: the service must verify the published snapshot,
 surface missed or failed schedules, and pass an independent clean-Mac restore
 drill using the organization's recovery route.
+The ciphertext objects, published-snapshot catalog, audit records, and
+organization-held recovery material must not share one unrecoverable failure
+domain. Define deletion protection, service-metadata backup, and restoration
+from provider/account failure before claiming redundancy or disaster recovery.
 
 Do not market this as Microsoft 365-equivalent governance, zero-knowledge,
 SOC 2-certified, HIPAA-compliant, or enterprise-ready until the corresponding
