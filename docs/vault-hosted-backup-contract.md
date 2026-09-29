@@ -868,8 +868,12 @@ egress allowance. Do not claim that B2 restores are always free. See its
   device-held credential with the current service pointer, requests the exact
   selected-version object inventory, and invokes the existing interrupted-
   download-safe verifier into a separate folder. It does not write into live
-  Codex. The clean Mac still needs an organization-owned enrollment and an
-  imported recovery key; this code is not a completed disaster drill.
+  Codex. A synthetic service test now exercises that entry point after key
+  import, selects an older published version while a newer version exists,
+  and safely reuses ciphertext left by a failed pre-import attempt.
+  This is still not a clean-account or real-R2 acceptance test. The clean Mac
+  still needs organization-owned enrollment and an imported recovery key;
+  this code is not a completed disaster drill.
 - The staging client now emits a version-1, content-free receipt with the
   snapshot ID and each remote object's key, byte count, and SHA-256. The
   provider-neutral service validator rejects malformed paths, missing required

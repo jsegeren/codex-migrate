@@ -8,8 +8,11 @@ import subprocess
 import tempfile
 import threading
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from codex_migrate.errors import MigrationError
+from codex_migrate.vault_hosted_disaster_recovery import recover_hosted_snapshot
 from codex_migrate.vault_hosted_recovery_client import HostedRecoveryClient
 from codex_migrate.vault_backup import backup
 from codex_migrate.vault_recovery import import_recovery_key, restore_snapshot
@@ -20,6 +23,7 @@ from tests.portable_vault_roundtrip import delete_test_key
 
 ACCOUNT = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 VAULT = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+DEVICE = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
 SNAPSHOT = "11111111-1111-4111-8111-111111111111"
 OLDER = "22222222-2222-4222-8222-222222222222"
 TOKEN = "hv1_" + "a" * 43
@@ -473,13 +477,22 @@ class HostedRecoveryClientTests(unittest.TestCase):
                                                 crypto_helper=str(helper))
                 key_id = import_recovery_key(str(recovered), saved.recovery_key,
                                              crypto_helper=str(helper))
-                result = download_encrypted_snapshot(
-                    str(empty_home), str(recovered), read_store, receipt,
-                    max_bytes=5_000_000, crypto_helper=str(helper))
+                enrollment = SimpleNamespace(backup_clients=lambda *_args, **_kwargs: (
+                    SimpleNamespace(_account_id=ACCOUNT,
+                                    _worker_origin=self.server.origin), self.client()))
+                with patch("codex_migrate.vault_hosted_disaster_recovery."
+                           "HostedEnrollmentClient", return_value=enrollment):
+                    result = recover_hosted_snapshot(
+                        str(empty_home), str(recovered), DEVICE,
+                        max_bytes=5_000_000, snapshot_id=staged.snapshot_id,
+                        crypto_helper=str(helper), apply=True)
                 restored = root / "restored"
                 restore_snapshot(str(empty_home), str(recovered), str(restored),
                                  crypto_helper=str(helper))
-                self.assertEqual(result.snapshot_id, saved.snapshot_id)
+                self.assertEqual(result["snapshot_id"], saved.snapshot_id)
+                # The failed pre-import attempt may have left exact ciphertext
+                # in staging; the retry must verify and reuse it safely.
+                self.assertGreater(result["reused_files"], 0)
                 self.assertEqual((restored / "sessions/2026/09/27/fixture.jsonl").read_bytes(),
                                  content)
             finally:
