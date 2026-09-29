@@ -32,6 +32,16 @@ class VaultScheduleTests(unittest.TestCase):
         verified = SimpleNamespace(vault=str(vault.resolve()))
         return home, vault, helper, verified
 
+    def test_no_schedule_still_reports_paginated_history_coverage_gap(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary) / "home"
+            codex = home / ".codex"
+            codex.mkdir(parents=True)
+            (codex / "thread_history_1.sqlite").write_bytes(b"synthetic marker")
+            result = schedule_status(str(home))
+            self.assertFalse(result["enabled"])
+            self.assertTrue(result["paginated_history_unprotected"])
+
     def test_plan_verifies_existing_vault_without_installing_anything(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -106,6 +116,14 @@ class VaultScheduleTests(unittest.TestCase):
             self.assertTrue(result["healthy"])
             self.assertEqual(result["interval_hours"], 24)
             self.assertEqual(result["last_run"]["status"], "completed")
+            codex = home / ".codex"
+            codex.mkdir()
+            (codex / "thread_history_1.sqlite").write_bytes(b"synthetic marker")
+            with patch("codex_migrate.vault_schedule._loaded", return_value=True):
+                changed = schedule_status(str(home))
+            self.assertFalse(changed["healthy"])
+            self.assertTrue(changed["paginated_history_unprotected"])
+            self.assertEqual(changed["last_run"]["status"], "completed")
 
     def test_status_does_not_call_an_overdue_backup_healthy(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -249,6 +267,38 @@ class VaultScheduleTests(unittest.TestCase):
             self.assertEqual(last_run["snapshot_id"], "safe-snapshot")
             self.assertNotIn("key_id", last_run)
             self.assertNotIn("recovery_key", last_run)
+
+    def test_scheduled_run_preserves_paginated_coverage_warning(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            home, vault, helper, verified = self.fixture(root)
+            engine = root / "engine"
+            engine.write_text("fixture", encoding="utf-8")
+            engine.chmod(0o700)
+            with patch("codex_migrate.vault_schedule.verify_snapshot",
+                       return_value=verified), \
+                    patch("codex_migrate.vault_schedule._loaded", return_value=False), \
+                    patch("codex_migrate.vault_schedule._launchctl"):
+                install_schedule(str(home), str(vault), crypto_helper=str(helper),
+                                 engine_command=[str(engine)])
+            config_path = home / "Library/Application Support/Codex Vault/schedule.json"
+            result = BackupResult(
+                destination=str(vault), snapshot_id="incomplete-snapshot",
+                transcript_files=1, transcript_bytes=99, chunks=1,
+                key_id="private-key-id", recovery_key=None,
+                needs_attention=True, paginated_history_unprotected=True,
+            )
+            with patch("codex_migrate.vault_schedule.backup", return_value=result):
+                self.assertEqual(run_scheduled_backup(str(config_path)), 0)
+            receipt = json.loads((config_path.parent / "last-run.json").read_text(
+                encoding="utf-8"))
+            self.assertEqual(receipt["status"], "needs_attention")
+            self.assertTrue(receipt["paginated_history_unprotected"])
+            self.assertEqual(receipt["at_risk_threads"], 0)
+            with patch("codex_migrate.vault_schedule._loaded", return_value=True):
+                status = schedule_status(str(home))
+            self.assertFalse(status["healthy"])
+            self.assertTrue(status["last_run"]["paginated_history_unprotected"])
 
     def test_failed_run_exposes_no_exception_or_customer_content(self):
         with tempfile.TemporaryDirectory() as temporary:

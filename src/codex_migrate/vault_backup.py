@@ -59,6 +59,7 @@ class BackupResult:
     recovery_key: Optional[str]
     needs_attention: bool = False
     at_risk_threads: int = 0
+    paginated_history_unprotected: bool = False
     applied: bool = True
 
     def as_dict(self) -> Dict[str, object]:
@@ -324,6 +325,35 @@ def plan(source_home: str, destination: str) -> BackupPlan:
     return BackupPlan(str(root), len(files), total)
 
 
+def _paginated_history_unprotected(source_home: str) -> bool:
+    """Flag a Codex history source that this Vault version does not capture.
+
+    Presence alone is enough: JSONL files may not contain every message in
+    this database. Never open or change the Codex-owned database to decide.
+    """
+    codex = _canonical_macos_path(Path(source_home) / ".codex")
+    try:
+        codex.lstat()
+    except FileNotFoundError:
+        return False
+    except OSError as error:
+        raise MigrationError("Codex history could not be inspected safely.") from error
+    _require_unlinked_path(codex)
+    database = codex / "thread_history_1.sqlite"
+    try:
+        info = database.lstat()
+    except FileNotFoundError:
+        return False
+    except OSError as error:
+        raise MigrationError("Codex paginated history could not be inspected safely.") from error
+    _require_unlinked_path(database)
+    require_local(database)
+    if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+            or info.st_nlink != 1):
+        raise MigrationError("Codex paginated history is not a private regular file.")
+    return True
+
+
 def backup(
     source_home: str,
     destination: str,
@@ -356,6 +386,7 @@ def _backup_unlocked(
     if not root.is_dir():
         raise MigrationError("The Vault destination is not a folder.")
     helper = _helper_path(crypto_helper)
+    paginated_history_unprotected = _paginated_history_unprotected(source_home)
     files = _source_files(source_home)
     titles = title_index(source_home)
     expected_bytes = sum(check_info(path.lstat()).st_size for _, path, _ in files)
@@ -446,6 +477,7 @@ def _backup_unlocked(
 
         mark_simultaneous_conflicts(manifest_files)
         at_risk = set(loss_warnings(previous_files, manifest_files))
+        paginated_history_unprotected |= _paginated_history_unprotected(source_home)
         for item in manifest_files:
             if item["identity_state"] == "needs_review":
                 at_risk.add(item["collection"] + "/" + item["path"])
@@ -493,6 +525,7 @@ def _backup_unlocked(
             chunks=total_chunks,
             key_id=key_id,
             recovery_key=recovery_key,
-            needs_attention=bool(at_risk),
+            needs_attention=bool(at_risk) or paginated_history_unprotected,
             at_risk_threads=len(at_risk),
+            paginated_history_unprotected=paginated_history_unprotected,
         )
