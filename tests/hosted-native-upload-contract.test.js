@@ -122,6 +122,13 @@ test('native client reserves, renews, reads and abandons through the sandbox rou
         '    "reservationId": reservation, "item": item})',
         'assert put["workerOrigin"] == "http://127.0.0.1:49112"',
         'assert isinstance(put["grant"], str) and len(put["grant"]) > 20',
+        'batch = client._post({"action": "batch", "vaultId": os.environ["VAULT_ID"],',
+        '    "reservationId": reservation, "items": [item]})',
+        'assert batch["workerOrigin"] == "http://127.0.0.1:49112"',
+        'assert len(batch["objects"]) == 1',
+        'assert batch["objects"][0]["action"] == "put_required"',
+        'assert len(batch["objects"][0]["headGrant"]) > 20',
+        'assert len(batch["objects"][0]["putGrant"]) > 20',
         'before = client.reservation_status(reservation)',
         'client.abandon(reservation, apply=True)',
         'after = client.reservation_status(reservation)',
@@ -145,7 +152,7 @@ test('native client reserves, renews, reads and abandons through the sandbox rou
       assert.deepEqual(JSON.parse(output), { reservation: reservationId,
         before: 'active', after: 'cleanup_pending' });
       assert.equal(purchaseChecks, 3);
-      assert.equal(readChecks, 5);
+      assert.equal(readChecks, 6);
     } finally {
       const closed = once(server, 'close');
       server.close();

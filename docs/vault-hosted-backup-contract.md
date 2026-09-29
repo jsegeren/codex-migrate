@@ -113,16 +113,17 @@ No production subscription or customer UI invokes this yet. A visible
 re-enrollment path after a Mac has been offline past expiry, physical-Mac
 unattended acceptance, and clean-Mac recovery remain release gates.
 
-The dark upload client now obtains a signed, one-minute authorization lease
-after a fresh server-side purchase and subscription check. The lease is bound
-to its Keychain device, account, Vault, reservation, and byte allowance; each
-object request still checks the active device session, exact object identity,
-reservation, and quota. The native client refreshes after at most 40 seconds
-and never stores the lease on disk. This bounds entitlement-revocation lag to
-one minute while avoiding a Stripe call for each object. It does **not**
-reduce the first backup's many first-party object requests; bounded batching
-or an equivalent large-history transfer design and real latency/COGS proof
-remain release gates. See the economics note for the measured-size scenario.
+The dark upload client obtains a signed, one-minute authorization lease after
+a fresh server-side purchase and subscription check. The lease is bound to its
+Keychain device, account, Vault, reservation, and byte allowance; each object
+still receives exact classification, quota/grant, and independent publication
+checks. The native client refreshes the lease after at most 40 seconds and
+never stores it on disk. It prepares up to four exact objects per service
+request with 30-second Worker grants; slow transfers retry with fresh grants.
+This bounds entitlement-revocation lag to one minute and reduces service
+round trips on a fast first backup without weakening exact-object checks.
+Real large-history latency, slow-network fallback, database/API cost, and
+physical-Mac recovery proof remain release gates. See the economics note.
 
 The sandbox recovery API now has an account-scoped, device-authenticated
 read-only usage query for server-accounted retained and reserved encrypted

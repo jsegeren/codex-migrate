@@ -25,7 +25,7 @@ function fixture() {
   let loads = 0;
   let writes = 0;
   let reads = 0;
-  let decision = 'put';
+  const granted = new Set();
   let entitlement = 'active';
   let purchaseChecks = 0;
   let subscriptionChecks = 0;
@@ -73,11 +73,11 @@ function fixture() {
         return { rows: [{ allowed: true }] };
       }
       if (sql.includes('classify_upload_object_current')) {
-        assert.equal(values[3], `accounts/${accountId}/vaults/${vaultId}/${item.key}`);
-        return { rows: [{ decision }] };
+        assert.ok(values[3].startsWith(`accounts/${accountId}/vaults/${vaultId}/`));
+        return { rows: [{ decision: granted.has(values[3]) ? 'head' : 'put' }] };
       }
       if (sql.includes('reserve_object_grant_elastic_current')) {
-        decision = 'head';
+        granted.add(values[3]);
         return { rows: [{ allowed: true }] };
       }
       throw Error('unexpected SQL');
@@ -227,6 +227,43 @@ test('expired lease and revoked device cannot authorize an object', async () => 
   f.req.headers['x-hosted-upload-lease'] = issued.body.lease;
   assert.equal((await f.send()).statusCode, 403);
   assert.equal(f.writes(), 0);
+});
+
+test('a bounded batch issues exact PUT and HEAD grants with one service call', async () => {
+  const f = fixture();
+  f.req.body = { action: 'lease', vaultId, reservationId };
+  const lease = await f.send();
+  assert.equal(lease.statusCode, 200);
+  f.req.headers['x-hosted-upload-lease'] = lease.body.lease;
+  const another = { ...item, key: 'objects/bb/' + 'b'.repeat(62) + '.cvchunk' };
+  f.req.body = { action: 'batch', vaultId, reservationId,
+    items: [item, another] };
+  const prepared = await f.send();
+  assert.equal(prepared.statusCode, 200);
+  assert.equal(prepared.body.workerOrigin, 'https://r2.fixture.test');
+  assert.equal(prepared.body.objects.length, 2);
+  for (const [index, source] of [item, another].entries()) {
+    const row = prepared.body.objects[index];
+    assert.deepEqual(Object.keys(row).sort(),
+      ['action', 'headGrant', 'putGrant']);
+    assert.equal(row.action, 'put_required');
+    const key = `accounts/${accountId}/vaults/${vaultId}/${source.key}`;
+    assert.deepEqual(await verifyObjectCapability(row.putGrant,
+      'PUT', key, secret), { key, bytes: source.bytes, sha256: source.sha256 });
+    assert.deepEqual(await verifyObjectCapability(row.headGrant,
+      'HEAD', key, secret), { key, bytes: source.bytes, sha256: source.sha256 });
+  }
+  assert.equal(f.purchaseChecks(), 1);
+  assert.equal(f.subscriptionChecks(), 1);
+  assert.equal(f.writes(), 4);
+  f.req.body.items = [item, item];
+  assert.equal((await f.send()).statusCode, 400);
+  f.req.body.items = Array.from({ length: 5 }, (_, index) => ({ ...item,
+    key: `objects/${String(index).padStart(2, '0')}/` + 'a'.repeat(62) + '.cvchunk' }));
+  assert.equal((await f.send()).statusCode, 400);
+  f.req.body.items = [item];
+  delete f.req.headers['x-hosted-upload-lease'];
+  assert.equal((await f.send()).statusCode, 403);
 });
 
 test('lapsed subscription cannot reserve or grant any object', async () => {

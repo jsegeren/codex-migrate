@@ -136,9 +136,27 @@ class _Handler(BaseHTTPRequestHandler):
                                     "expiresAt": EXPIRY})
         if action == "lease":
             return self._json(200, {"lease": "synthetic.valid"})
-        if action in ("decide", "put") and self.headers.get(
+        if action in ("decide", "put", "batch") and self.headers.get(
                 "X-Hosted-Upload-Lease") != "synthetic.valid":
             return self._json(403, {"error": "access_denied"})
+        if action == "batch":
+            items = request.get("items")
+            if not isinstance(items, list) or not 1 <= len(items) <= 4:
+                return self._json(400, {"error": "invalid_request"})
+            rows = []
+            for item in items:
+                key = item["key"]
+                if (key not in self.server.expected or
+                        self.server.expected[key] != (item["bytes"], item["sha256"])):
+                    return self._json(403, {"error": "access_denied"})
+                if key in self.server.granted:
+                    rows.append({"action": "head", "grant": GRANT})
+                else:
+                    self.server.granted.add(key)
+                    rows.append({"action": "put_required", "putGrant": GRANT,
+                                 "headGrant": GRANT})
+            return self._json(200, {"workerOrigin": self.server.origin,
+                                    "objects": rows})
         item = request["item"]
         key = item["key"]
         if (key not in self.server.expected or
@@ -187,7 +205,10 @@ class _Handler(BaseHTTPRequestHandler):
         else:
             size, digest = self.server.expected[key]
             body = self.rfile.read(int(self.headers.get("Content-Length", "0")))
-            if len(body) != size or hashlib.sha256(body).hexdigest() != digest:
+            if key == self.server.fail_worker_put_key:
+                self.server.fail_worker_put_key = None
+                status = 503
+            elif len(body) != size or hashlib.sha256(body).hexdigest() != digest:
                 status = 409
             elif key in self.server.objects and self.server.objects[key] != body:
                 status = 409
@@ -225,6 +246,7 @@ class HostedUploadClientTests(unittest.TestCase):
         self.server.first_verify_count = 3
         self.server.verified_ready = False
         self.server.drop_next_put_response = False
+        self.server.fail_worker_put_key = None
         self.server.pages = []
         self.server.published = {}
         self.server.expected = {
@@ -346,18 +368,10 @@ class HostedUploadClientTests(unittest.TestCase):
             reservation = self.client.reserve(apply=True)
             store = self.client.object_store(reservation, self.server.expected,
                                              apply=True)
-            self.server.fail_next_put = False
             # Interrupt after the first encrypted object is stored.
-            original_post = self.client._post
-
-            def interrupted(claim):
-                if claim["action"] == "put" and claim["item"]["key"] == SECOND_KEY:
-                    raise MigrationError("Synthetic interruption")
-                return original_post(claim)
-
-            with patch.object(self.client, "_post", side_effect=interrupted):
-                with self.assertRaises(MigrationError):
-                    self._stage(directory, store)
+            self.server.fail_worker_put_key = SECOND_KEY
+            with self.assertRaises(MigrationError):
+                self._stage(directory, store)
             self.assertEqual(set(self.server.objects), {FIRST_KEY})
             self.assertEqual(self.client.renew(reservation, apply=True), reservation)
             resumed = self._stage(directory, store)
@@ -388,7 +402,7 @@ class HostedUploadClientTests(unittest.TestCase):
                          self.server.expected[FIRST_KEY])
         # A retry need not issue another PUT grant for the already verified
         # immutable object, and neither attempt publishes a latest pointer.
-        self.assertEqual(self.server.actions.count("put"), 1)
+        self.assertEqual(self.server.actions.count("put"), 0)
         self.assertNotIn("publish", self.server.actions)
 
     def test_one_short_lived_lease_covers_object_checks_and_refreshes(self):
@@ -399,17 +413,58 @@ class HostedUploadClientTests(unittest.TestCase):
         self.assertEqual(store.checked_metadata(FIRST_KEY),
                          self.server.expected[FIRST_KEY])
         self.assertEqual(self.server.actions.count("lease"), 1)
-        self.assertEqual(self.server.actions.count("decide"), 2)
-        self.assertEqual(self.server.actions.count("put"), 1)
+        self.assertEqual(self.server.actions.count("batch"), 1)
+        self.assertEqual(self.server.actions.count("decide"), 0)
+        self.assertEqual(self.server.actions.count("put"), 0)
         self.client._object_lease_until = 0
+        row, _ = store._prepared[SECOND_KEY]
+        store._prepared[SECOND_KEY] = (row, 0)
         self.assertIsNone(store.checked_metadata(SECOND_KEY))
         self.assertEqual(self.server.actions.count("lease"), 2)
+
+    def test_expired_batch_grants_fall_back_to_fresh_exact_object_grants(self):
+        store = self.client.object_store(RESERVATION, self.server.expected,
+                                         apply=True)
+        self.assertIsNone(store.checked_metadata(FIRST_KEY))
+        row, _ = store._prepared[FIRST_KEY]
+        store._prepared[FIRST_KEY] = (row, 0)
+        store.put_if_absent(FIRST_KEY, io.BytesIO(FIRST), len(FIRST))
+        self.assertEqual(store.checked_metadata(FIRST_KEY),
+                         self.server.expected[FIRST_KEY])
+        self.assertEqual(self.server.actions.count("batch"), 1)
+        self.assertEqual(self.server.actions.count("put"), 1)
+        self.assertEqual(self.server.actions.count("decide"), 1)
+
+    def test_malformed_batch_never_becomes_an_upload_grant(self):
+        store = self.client.object_store(RESERVATION, self.server.expected,
+                                         apply=True)
+        with patch.object(self.client, "_post", return_value={
+                "workerOrigin": self.server.origin,
+                "objects": [{"action": "put_required", "putGrant": GRANT}]}):
+            with self.assertRaisesRegex(MigrationError, "batch response is invalid"):
+                store.checked_metadata(FIRST_KEY)
+        self.assertIsNone(store.checked_metadata(FIRST_KEY))
+
+    def test_five_new_objects_use_two_bounded_preparation_requests(self):
+        for index in range(3):
+            key = f"objects/{index:02x}/" + f"{index:02x}" * 31 + ".cvchunk"
+            body = f"encrypted-{index}".encode()
+            self.server.expected[key] = (len(body), hashlib.sha256(body).hexdigest())
+        store = self.client.object_store(RESERVATION, self.server.expected,
+                                         apply=True)
+        for key in self.server.expected:
+            self.assertIsNone(store.checked_metadata(key))
+        self.assertEqual(self.server.actions.count("batch"), 2)
+        self.assertEqual(self.server.actions.count("decide"), 0)
+        self.assertEqual(self.server.actions.count("put"), 0)
+        self.assertEqual(self.client.service_request_counts(),
+                         {"lease": 1, "batch": 2})
 
     def test_long_transfer_renews_before_next_object_and_fails_closed(self):
         store = self.client.object_store(RESERVATION, self.server.expected, apply=True)
         store._last_renewal -= 25 * 60 + 1
         self.assertIsNone(store.checked_metadata(FIRST_KEY))
-        self.assertEqual(self.server.actions[:3], ["renew", "lease", "decide"])
+        self.assertEqual(self.server.actions[:3], ["renew", "lease", "batch"])
         self.server.fail_renew = True
         store._last_renewal -= 25 * 60 + 1
         with self.assertRaises(MigrationError):
@@ -574,7 +629,8 @@ class HostedUploadClientTests(unittest.TestCase):
                     "uploadedFiles": 0, "reusedFiles": 3,
                     "encryptedBytes": inventory.transfer_bytes,
                 })
-        self.assertEqual(self.server.actions.count("put"), 3)
+        self.assertEqual(self.server.actions.count("put"), 0)
+        self.assertGreaterEqual(self.server.actions.count("batch"), 1)
         self.assertEqual(self.server.actions.count("reserve"), 1)
         self.assertEqual(self.server.actions.count("publish_checkpointed"), 2)
 
@@ -623,7 +679,7 @@ class HostedUploadClientTests(unittest.TestCase):
                 self.assertEqual(receipt["uploadedFiles"], 0)
                 self.assertIsNone(relaunched.pending())
         self.assertEqual(self.server.actions.count("reserve"), 1)
-        self.assertEqual(self.server.actions.count("put"), 3)
+        self.assertEqual(self.server.actions.count("put"), 0)
 
     def test_mutation_requires_apply_and_server_origin_is_pinned(self):
         with self.assertRaises(MigrationError):

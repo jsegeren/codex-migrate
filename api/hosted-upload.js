@@ -12,6 +12,7 @@ const { createUploadReservation, renewUploadReservation,
   require('../hosted/reservation');
 const { decideUploadObject } = require('../hosted/upload_decision');
 const { issuePutCapability } = require('../hosted/upload_grant');
+const { prepareUploadBatch, MAX_ITEMS } = require('../hosted/upload_batch');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const UUID_PATH = '[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
@@ -19,15 +20,26 @@ const BEARER = /^Bearer (hv1_[A-Za-z0-9_-]{43})$/;
 const RELATIVE = new RegExp(`^(?:metadata/${UUID_PATH}\\.json|objects/[0-9a-f]{2}/[0-9a-f]{62}\\.cvchunk|manifests/${UUID_PATH}\\.cvmanifest|refs/${UUID_PATH}\\.json)$`);
 const HEX = /^[0-9a-f]{64}$/;
 const MAX_BODY = 700;
+const MAX_BATCH_BODY = 2_000;
+
+function validRequestItem(item) {
+  return item && typeof item === 'object' && !Array.isArray(item) &&
+    Object.keys(item).sort().join(',') === 'bytes,key,sha256' &&
+    typeof item.key === 'string' && RELATIVE.test(item.key) &&
+    Number.isSafeInteger(item.bytes) && item.bytes >= 1 &&
+    item.bytes <= 100_000_000 &&
+    typeof item.sha256 === 'string' && HEX.test(item.sha256);
+}
 
 function requestBody(req) {
   if (req.headers.origin && req.headers.origin !== 'https://migrate.segeren.com') {
     throw Error('invalid_request');
   }
+  const limit = req.body?.action === 'batch' ? MAX_BATCH_BODY : MAX_BODY;
   if ((req.headers['content-type'] || '').split(';')[0] !== 'application/json' ||
-      Number(req.headers['content-length']) > MAX_BODY ||
+      Number(req.headers['content-length']) > limit ||
       !req.body || typeof req.body !== 'object' || Array.isArray(req.body) ||
-      Buffer.byteLength(JSON.stringify(req.body)) > MAX_BODY) {
+      Buffer.byteLength(JSON.stringify(req.body)) > limit) {
     throw Error('invalid_request');
   }
   const data = req.body;
@@ -36,6 +48,7 @@ function requestBody(req) {
     (keys === 'action,bytes,reservationId,vaultId' ? keys : 'action,bytes,vaultId') :
     ['renew', 'abandon', 'status', 'lease'].includes(data.action) ?
       'action,reservationId,vaultId' :
+    data.action === 'batch' ? 'action,items,reservationId,vaultId' :
     ['decide', 'put'].includes(data.action) ?
       'action,item,reservationId,vaultId' : null;
   if (keys !== expected || !UUID.test(data.vaultId)) {
@@ -49,13 +62,13 @@ function requestBody(req) {
     }
   } else if (!UUID.test(data.reservationId)) throw Error('invalid_request');
   if (data.action === 'decide' || data.action === 'put') {
-    const item = data.item;
-    if (!item || typeof item !== 'object' || Array.isArray(item) ||
-        Object.keys(item).sort().join(',') !== 'bytes,key,sha256' ||
-        typeof item.key !== 'string' || !RELATIVE.test(item.key) ||
-        !Number.isSafeInteger(item.bytes) || item.bytes < 1 ||
-        item.bytes > 100_000_000 ||
-        typeof item.sha256 !== 'string' || !HEX.test(item.sha256)) {
+    if (!validRequestItem(data.item)) throw Error('invalid_request');
+  }
+  if (data.action === 'batch') {
+    if (!Array.isArray(data.items) || data.items.length < 1 ||
+        data.items.length > MAX_ITEMS ||
+        data.items.some(item => !validRequestItem(item)) ||
+        new Set(data.items.map(item => item.key)).size !== data.items.length) {
       throw Error('invalid_request');
     }
   }
@@ -77,7 +90,7 @@ function makeHandler(load = uploadRuntime, env = process.env) {
     catch { return reply(res, 400, { error: 'invalid_request' }); }
     const token = BEARER.exec(req.headers.authorization || '')?.[1];
     if (!token) return reply(res, 403, { error: 'access_denied' });
-    const scopedObject = ['decide', 'put'].includes(data.action);
+    const scopedObject = ['decide', 'put', 'batch'].includes(data.action);
     if (scopedObject &&
         (typeof req.headers['x-hosted-upload-lease'] !== 'string' ||
          req.headers['x-hosted-upload-lease'].length > 750)) {
@@ -118,6 +131,14 @@ function makeHandler(load = uploadRuntime, env = process.env) {
       if (data.action === 'renew') {
         return reply(res, 200, await renewUploadReservation({ scope,
           reservationId: data.reservationId, query }));
+      }
+      if (data.action === 'batch') {
+        const prefix = `accounts/${scope.accountId}/vaults/${scope.vaultId}/`;
+        const items = data.items.map(item => ({ ...item,
+          key: prefix + item.key }));
+        return reply(res, 200, { workerOrigin,
+          objects: await prepareUploadBatch({ scope,
+            reservationId: data.reservationId, items, secret, query }) });
       }
       const item = { key: `accounts/${scope.accountId}/vaults/${scope.vaultId}/` +
         data.item.key, bytes: data.item.bytes, sha256: data.item.sha256 };

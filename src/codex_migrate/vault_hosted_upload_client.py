@@ -62,6 +62,11 @@ class HostedUploadClient:
         self._object_lease_token = None
         self._object_lease_reservation = None
         self._object_lease_until = 0.0
+        self._service_request_counts: dict[str, int] = {}
+
+    def service_request_counts(self) -> dict[str, int]:
+        """Content-free attempted request counts for cost/latency acceptance."""
+        return dict(self._service_request_counts)
 
     def _object_lease(self, reservation_id: str) -> str:
         if (self._object_lease_token is not None and
@@ -91,7 +96,8 @@ class HostedUploadClient:
                 checkpointed_publication, published_lookup)) > 1:
             raise MigrationError("The hosted upload request is invalid.")
         body = json.dumps(claim, separators=(",", ":")).encode("utf-8")
-        request_limit = 256 * 1024 if receipt_page else 18_000 if published_lookup else 700
+        request_limit = (256 * 1024 if receipt_page else 18_000 if published_lookup
+                         else 2_000 if claim.get("action") == "batch" else 700)
         if len(body) > request_limit:
             raise MigrationError("The hosted upload request is too large.")
         path = ("/api/hosted-receipt-page" if receipt_page else
@@ -103,11 +109,16 @@ class HostedUploadClient:
         headers = {"Authorization": "Bearer " + self._device_token,
                    "Content-Type": "application/json",
                    "Content-Length": str(len(body))}
-        if claim.get("action") in ("decide", "put"):
+        if claim.get("action") in ("decide", "put", "batch"):
             headers["X-Hosted-Upload-Lease"] = self._object_lease(
                 claim["reservationId"])
         request = Request(self._service_origin + path, data=body,
                           headers=headers, method="POST")
+        action = claim.get("action") if not published_lookup else "published_lookup"
+        if not isinstance(action, str):
+            action = "unknown"
+        self._service_request_counts[action] = (
+            self._service_request_counts.get(action, 0) + 1)
         try:
             with self._opener.open(request, timeout=self._timeout) as response:
                 if (response.status != 200 or
@@ -115,7 +126,9 @@ class HostedUploadClient:
                         response.headers.get("Content-Type", "").split(";")[0] !=
                         "application/json"):
                     raise MigrationError("The hosted upload service response is invalid.")
-                response_limit = 50_000 if published_lookup else _MAX_RESPONSE
+                response_limit = (50_000 if published_lookup else
+                                  20_000 if claim.get("action") == "batch"
+                                  else _MAX_RESPONSE)
                 data = response.read(response_limit + 1)
                 if len(data) > response_limit:
                     raise MigrationError("The hosted upload service response is too large.")
@@ -496,6 +509,48 @@ class HostedUploadObjectStore:
         self._reservation_id = reservation_id
         self._expected = expected
         self._last_renewal = time.monotonic()
+        self._ordered_keys = tuple(expected)
+        self._positions = {key: index for index, key in enumerate(self._ordered_keys)}
+        self._prepared_once: set[str] = set()
+        self._prepared: dict[str, Tuple[dict, float]] = {}
+        self._uploaded: set[str] = set()
+
+    def _prefetch(self, key: str) -> None:
+        if key in self._prepared_once:
+            return
+        start = self._positions[key]
+        keys = [candidate for candidate in self._ordered_keys[start:start + 4]
+                if candidate not in self._prepared_once]
+        items = [self._client._item(self._expected, candidate) for candidate in keys]
+        started = time.monotonic()
+        result = self._client._post({"action": "batch",
+                                     "vaultId": self._client._vault_id,
+                                     "reservationId": self._reservation_id,
+                                     "items": items})
+        rows = result.get("objects")
+        if (set(result) != {"workerOrigin", "objects"} or
+                result["workerOrigin"] != self._client._worker_origin or
+                not isinstance(rows, list) or len(rows) != len(keys)):
+            raise MigrationError("The hosted object batch response is invalid.")
+        checked = {}
+        for candidate, row in zip(keys, rows):
+            if not isinstance(row, dict):
+                raise MigrationError("The hosted object batch response is invalid.")
+            action = row.get("action")
+            grants = (("grant",) if action == "head" else
+                      ("putGrant", "headGrant") if action == "put_required" else ())
+            if (not grants or set(row) != {"action", *grants} or
+                    any(not isinstance(row[name], str) or
+                        not _GRANT.fullmatch(row[name]) or len(row[name]) > 2048
+                        for name in grants)):
+                raise MigrationError("The hosted object batch response is invalid.")
+            checked[candidate] = (row, started + 20.0)
+        self._prepared.update(checked)
+        self._prepared_once.update(keys)
+
+    def _cached(self, key: str) -> Optional[dict]:
+        entry = self._prepared.get(key)
+        return entry[0] if entry and time.monotonic() < entry[1] else None
 
     def _ensure_lease(self) -> None:
         # A 55-minute reservation cannot cover a slow first backup. Renew
@@ -527,6 +582,13 @@ class HostedUploadObjectStore:
     def checked_metadata(self, key: str):
         item = self._client._item(self._expected, key)
         self._ensure_lease()
+        self._prefetch(key)
+        cached = self._cached(key)
+        if cached is not None:
+            if cached["action"] == "put_required" and key not in self._uploaded:
+                return None
+            grant = cached["grant"] if cached["action"] == "head" else cached["headGrant"]
+            return self._transport("HEAD", key, grant).checked_metadata(key)
         result = self._client._post({"action": "decide",
                                      "vaultId": self._client._vault_id,
                                      "reservationId": self._reservation_id,
@@ -539,9 +601,20 @@ class HostedUploadObjectStore:
     def put_if_absent(self, key, source, length):
         item = self._client._item(self._expected, key)
         self._ensure_lease()
-        result = self._client._post({"action": "put",
-                                     "vaultId": self._client._vault_id,
-                                     "reservationId": self._reservation_id,
-                                     "item": item})
-        grant = self._client._grant(result)
-        self._transport("PUT", key, grant).put_if_absent(key, source, length)
+        cached = self._cached(key)
+        if cached is not None and cached["action"] == "put_required":
+            grant = cached["putGrant"]
+        else:
+            result = self._client._post({"action": "put",
+                                         "vaultId": self._client._vault_id,
+                                         "reservationId": self._reservation_id,
+                                         "item": item})
+            grant = self._client._grant(result)
+        try:
+            self._transport("PUT", key, grant).put_if_absent(key, source, length)
+        except Exception:
+            # A lost response may mean the immutable PUT succeeded. Never
+            # keep treating this object as absent from a cached preflight.
+            self._prepared.pop(key, None)
+            raise
+        self._uploaded.add(key)

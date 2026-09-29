@@ -66,23 +66,24 @@ Repeating an unchanged backup should reuse existing chunks; a
 rewritten or compacted transcript can create new chunks and must be measured.
 Do not count shared free allowances as a per-customer subsidy.
 
-The dark client checks a novel object before uploading, requests its PUT
-grant, then checks it again after upload: three first-party requests per
-chunk. For the measured 36,356 novel chunks, a first backup could make
-roughly **109,068 first-party object requests** before manifests, retries,
-and other steps. Previously each request also rechecked the purchase and
-subscription with Stripe. A new dark, native-only authorization lease reduces
-those provider checks to a fresh check at most every 40 seconds while an
-upload is active. The signed lease expires server-side after 60 seconds and
-is bound to one device, account, Vault, reservation, and allowance; every
-object request still checks the active device session and its exact SQL
-reservation/quota before receiving a short-lived Worker grant. Cancellation
-or refund may therefore remain effective up to one minute later than a
-per-request Stripe check. This is a bounded tradeoff, not customer release
-proof. **The roughly 109,000 first-party requests and their latency remain a
-release gate**: batch or otherwise reduce them without relaxing exact-object
-verification, then measure first-upload time, provider request counts, and
-all-in service cost on representative large histories.
+The original dark client checked a novel object before uploading, requested
+its PUT grant, then checked it again after upload: three first-party requests
+per chunk, or roughly **109,068 requests** for the measured 36,356 novel
+chunks before manifests and retries. Each request also rechecked Stripe. The
+dark native path now uses a one-minute device/reservation-bound authorization
+lease, refreshed after at most 40 seconds, and prepares at most four exact
+objects in one service request. The batch performs classification and durable
+quota/grant checks for each object and returns short-lived PUT and HEAD grants;
+slow transfers fall back to fresh individual grants. In the ideal fast-upload
+case, that converts the 109,068 per-object service calls into about **9,089
+four-object batch calls**, plus lease refreshes and other snapshot requests.
+It does **not** remove per-object database checks, Worker PUT/HEAD requests,
+or the need for independent server publication verification. These counts are
+code-path projections, **not measured throughput**. Cancellation or refund
+may remain effective up to one minute later than a per-request Stripe check;
+device revocation remains checked on every batch. A realistic large-history
+upload, slow-network fallback rate, request/DB latency, provider limits, and
+all-in service cost remain release gates.
 
 ### Thirty-minute business cadence is an incremental-engine gate
 

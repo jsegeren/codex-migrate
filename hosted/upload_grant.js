@@ -33,4 +33,4 @@ async function issuePutCapability({ scope, reservationId, item, secret, query })
   }
 }
 
-module.exports = { HostedUploadGrantError, issuePutCapability };
+module.exports = { HostedUploadGrantError, issuePutCapability, GRANT_SQL };

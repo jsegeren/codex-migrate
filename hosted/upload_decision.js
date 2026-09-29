@@ -31,4 +31,4 @@ async function decideUploadObject({ scope, reservationId, item, secret, query })
   } catch { throw new HostedUploadDecisionError(); }
 }
 
-module.exports = { HostedUploadDecisionError, decideUploadObject };
+module.exports = { HostedUploadDecisionError, decideUploadObject, DECIDE_SQL };
