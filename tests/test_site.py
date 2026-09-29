@@ -122,6 +122,8 @@ class SiteTests(unittest.TestCase):
         self.assertIn("Talk to Joshua about a pilot", text)
         self.assertIn("mailto:joshua@segeren.com?subject=Codex%20Backup", source)
         self.assertNotIn("/api/checkout", source)
+        self.assertIn("[business backup design partners](https://migrate.segeren.com/codex-backup-for-teams)",
+                      (ROOT / "README.md").read_text())
 
     def test_comparison_distinguishes_search_backup_and_migration(self):
         source = (SITE / "compare-codex-migration-tools.html").read_text()
