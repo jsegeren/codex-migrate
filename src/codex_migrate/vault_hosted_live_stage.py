@@ -48,7 +48,7 @@ def stage_reserved_hosted_snapshot(
     observed, catalog = recovery.prior_catalog(
         key_id=journal.key_id, crypto_helper=crypto_helper,
         max_bytes=max_prior_bytes, expected_snapshot_id=base,
-        expected_account_id=journal.account_id)
+        expected_account_id=journal.account_id, include_chunks=True)
     if observed != base:
         raise MigrationError("The hosted backup changed after reservation.")
     return stage_hosted_snapshot(

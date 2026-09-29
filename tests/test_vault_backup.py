@@ -20,6 +20,7 @@ from codex_migrate.vault_hosted_manifest import stage_hosted_manifest
 from codex_migrate.vault_hosted_recovery_client import HostedRecoveryClient
 from codex_migrate.vault_hosted_snapshot_tail import stage_hosted_snapshot_tail
 from codex_migrate.vault_hosted_snapshot_stage import stage_hosted_snapshot
+from codex_migrate.vault_hosted_source_index import promote_source_facts
 from codex_migrate.vault_hosted_upload_client import HostedUploadClient
 from codex_migrate.vault import markdown_chunks, markdown_source_stamp, read_thread_page, search
 from codex_migrate.vault_backup import backup, plan
@@ -429,6 +430,99 @@ class VaultBackupTests(unittest.TestCase):
                     subprocess.run([str(self.helper), "delete-key", "--key-id", key_id],
                                    check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
+    def test_published_index_reuses_unchanged_transcripts_but_reads_changed_ones(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            source.mkdir(mode=0o700)
+            self.fixture(source)
+            runs = root / "runs"
+            runs.mkdir(mode=0o700)
+            created = subprocess.run([str(self.helper), "create-key"], check=True,
+                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            key_id = json.loads(created.stdout)["key_id"]
+            metadata = {"format": "codex-vault", "version": 1,
+                        "key_id": key_id,
+                        "created_at": "2026-09-27T00:00:00+00:00"}
+            account_id, vault_id = str(uuid.uuid4()), str(uuid.uuid4())
+
+            class Client:
+                def __init__(self):
+                    self.store = MetadataObjectStore()
+
+                def published_chunks(self, ids):
+                    result = {}
+                    for identifier in ids:
+                        key = "objects/" + identifier[:2] + "/" + identifier[2:] + ".cvchunk"
+                        data = self.store.objects.get(key)
+                        if data is not None:
+                            result[identifier] = (len(data), hashlib.sha256(data).hexdigest())
+                    return result
+
+                def object_store(self, reservation_id, expected, *, apply=False):
+                    self_outer.assertTrue(apply)
+                    return self.store
+
+            self_outer = self
+            client = Client()
+
+            def snapshot(base, prior):
+                snapshot_id = str(uuid.uuid4())
+                reservation_id = str(uuid.uuid4())
+                journal_dir = runs / ("snapshot-" + snapshot_id)
+                journal_dir.mkdir(mode=0o700)
+                with HostedChunkJournal(
+                        journal_dir, account_id=account_id, vault_id=vault_id,
+                        reservation_id=reservation_id, snapshot_id=snapshot_id,
+                        key_id=key_id, base_snapshot_id=base) as journal:
+                    staged = stage_hosted_snapshot(
+                        str(source), metadata, prior, journal, client,
+                        crypto_helper=str(self.helper), chunk_size=64 * 1024,
+                        window_bytes=64 * 1024, apply=True)
+                sealed = runs / (snapshot_id + ".cvmanifest")
+                sealed.write_bytes(client.store.objects[
+                    "manifests/" + snapshot_id + ".cvmanifest"])
+                catalog = vault_backup._run_helper(self.helper, [
+                    "staging-catalog", "--key-id", key_id,
+                    "--snapshot-id", snapshot_id, "--manifest", str(sealed)])
+                promote_source_facts(runs, {
+                    "accountId": account_id, "vaultId": vault_id,
+                    "keyId": key_id, "snapshotId": snapshot_id})
+                return staged, catalog["files"], snapshot_id
+
+            try:
+                first, prior, base = snapshot(None, [])
+                writes = client.store.writes
+                with patch.object(vault_hosted_snapshot_stage, "scan_transcript",
+                                  side_effect=AssertionError("unchanged transcript was read")), \
+                     patch.object(vault_hosted_snapshot_stage,
+                                  "stage_remote_aware_file_windowed",
+                                  side_effect=AssertionError("unchanged transcript was staged")):
+                    second, prior, base = snapshot(base, prior)
+                self.assertEqual(second.transcript_files, first.transcript_files)
+                self.assertEqual(second.transcript_bytes, first.transcript_bytes)
+                self.assertEqual(client.store.writes - writes, 3)
+
+                changed = source / ".codex/sessions/2026/09/17/active.jsonl"
+                with changed.open("a", encoding="utf-8") as handle:
+                    handle.write(json.dumps({"type": "response_item",
+                                             "payload": {"role": "user"}}) + "\n")
+                original = vault_hosted_snapshot_stage.stage_remote_aware_file_windowed
+                reread = []
+
+                def track(path, *args, **kwargs):
+                    reread.append(path)
+                    return original(path, *args, **kwargs)
+
+                with patch.object(vault_hosted_snapshot_stage,
+                                  "stage_remote_aware_file_windowed", side_effect=track):
+                    third, _, _ = snapshot(base, prior)
+                self.assertEqual(reread, [changed])
+                self.assertGreater(third.transcript_bytes, second.transcript_bytes)
+            finally:
+                subprocess.run([str(self.helper), "delete-key", "--key-id", key_id],
+                               check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
     def test_hosted_snapshot_encrypts_paginated_items_without_plaintext_staging(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -665,9 +759,11 @@ class VaultBackupTests(unittest.TestCase):
                     self.base_id = None
 
                 def prior_catalog(self, *, key_id, crypto_helper, max_bytes,
-                                  expected_snapshot_id, expected_account_id):
+                                  expected_snapshot_id, expected_account_id,
+                                  include_chunks=False):
                     assert expected_snapshot_id == self.base_id
                     assert expected_account_id == account_id
+                    assert include_chunks is True
                     return self.base_id, []
 
             upload = Upload()

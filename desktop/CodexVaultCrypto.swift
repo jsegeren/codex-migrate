@@ -1113,6 +1113,36 @@ private func catalogCommand(_ arguments: [String]) throws {
                           version: manifest.version, files: files))
 }
 
+private func stagingCatalogCommand(_ arguments: [String]) throws {
+    // Hosted incremental staging needs the prior authenticated chunk map.
+    // This is a local helper response, never an upload or an unencrypted file.
+    let (manifest, _, _, _, _) = try openedManifest(arguments)
+    try printJSON(manifest)
+}
+
+private func sourceIndexMACCommand(_ arguments: [String]) throws {
+    let keyID = try canonicalKeyID(argument("--key-id", in: arguments))
+    let limit = 32 * 1024 * 1024
+    var input = Data()
+    while true {
+        let next = try FileHandle.standardInput.read(
+            upToCount: min(64 * 1024, limit + 1 - input.count)) ?? Data()
+        if next.isEmpty { break }
+        input.append(next)
+        guard input.count <= limit else {
+            throw VaultError.message("the hosted source index is too large")
+        }
+    }
+    let master = try loadKey(keyID)
+    let key = HKDF<SHA256>.deriveKey(
+        inputKeyMaterial: master,
+        salt: Data("codex-vault-hosted-v1".utf8),
+        info: Data("source-index-authentication".utf8),
+        outputByteCount: 32)
+    try printJSON(["hmac_sha256": hex(HMAC<SHA256>.authenticationCode(
+        for: input, using: key))])
+}
+
 private func prepareEmptyRestoreRoot(_ path: String) throws -> URL {
     let root = URL(fileURLWithPath: path, isDirectory: true)
     let manager = FileManager.default
@@ -1217,6 +1247,8 @@ private func run() throws {
     case "verify": try verifyCommand(arguments)
     case "encrypted-inventory": try encryptedInventoryCommand(arguments)
     case "catalog": try catalogCommand(arguments)
+    case "staging-catalog": try stagingCatalogCommand(arguments)
+    case "source-index-mac": try sourceIndexMACCommand(arguments)
     case "restore": try restoreCommand(arguments)
     default: throw VaultError.message("the requested command is not supported")
     }

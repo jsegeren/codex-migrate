@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import os
 from pathlib import Path
+import re
 from typing import Dict, List, Sequence, Tuple
 
 from codex_migrate.errors import MigrationError
@@ -19,6 +20,9 @@ from codex_migrate.vault_backup import (
 )
 from codex_migrate.vault_hosted_chunk_journal import HostedChunkJournal
 from codex_migrate.vault_hosted_snapshot_tail import stage_hosted_snapshot_tail
+from codex_migrate.vault_hosted_source_index import (
+    published_source_facts, record_source_facts,
+)
 from codex_migrate.vault_identity import (
     TranscriptChanged, loss_warnings, mark_simultaneous_conflicts,
     scan_transcript, title_index,
@@ -51,6 +55,74 @@ class HostedSnapshotStage:
 def _identity(info: os.stat_result) -> tuple[int, int, int, int, int]:
     return (info.st_dev, info.st_ino, info.st_size,
             info.st_mtime_ns, info.st_ctime_ns)
+
+
+_HEX = re.compile(r"[0-9a-f]{64}\Z")
+
+
+def _published_objects(client: RemoteAwareClient, ids: set[str]
+                       ) -> Dict[str, StagedObject]:
+    """Resolve reusable ciphertext from service authority, not a local hint."""
+    found: Dict[str, StagedObject] = {}
+    ordered = sorted(ids)
+    for start in range(0, len(ordered), 256):
+        page = ordered[start:start + 256]
+        observed = client.published_chunks(page)
+        if not isinstance(observed, dict) or set(observed) != set(page):
+            raise MigrationError("A previously published Codex chunk is unavailable.")
+        for identifier, facts in observed.items():
+            if (not _HEX.fullmatch(identifier) or not isinstance(facts, tuple) or
+                    len(facts) != 2 or type(facts[0]) is not int or
+                    not 1 <= facts[0] <= 100_000_000 or
+                    not isinstance(facts[1], str) or
+                    not _HEX.fullmatch(facts[1])):
+                raise MigrationError("The published Codex chunk facts are invalid.")
+            key = "objects/" + identifier[:2] + "/" + identifier[2:] + ".cvchunk"
+            found[identifier] = StagedObject(key, facts[0], facts[1])
+    return found
+
+
+def _reuse_candidates(files: list, prior: Sequence[dict],
+                      fingerprints: dict) -> Dict[Tuple[str, str], dict]:
+    """A stat match is useful only with an authenticated prior manifest row."""
+    prior_by_path: Dict[Tuple[str, str], dict] = {}
+    duplicates = set()
+    for item in prior:
+        identity = (item.get("collection"), item.get("path"))
+        if identity in prior_by_path:
+            duplicates.add(identity)
+        prior_by_path[identity] = item
+    reusable: Dict[Tuple[str, str], dict] = {}
+    for folder, path, relative in files:
+        identity = ("active" if folder == "sessions" else "archived", relative)
+        previous = prior_by_path.get(identity)
+        chunks = previous.get("chunks") if isinstance(previous, dict) else None
+        if (identity in duplicates or not isinstance(previous, dict) or
+                previous.get("identity_state") == "needs_review" or
+                previous.get("identity_state") not in ("verified", "unverified") or
+                type(previous.get("size")) is not int or
+                not isinstance(chunks, list) or
+                any(not isinstance(row, dict) or
+                    set(row) not in ({"id", "size"}, {"id", "size", "encoding"}) or
+                    not isinstance(row.get("id"), str) or
+                    not _HEX.fullmatch(row["id"]) or
+                    type(row.get("size")) is not int or row["size"] <= 0 or
+                    row["size"] > 64 * 1024 * 1024 or
+                    ("encoding" in row and row["encoding"] != "lzfse")
+                    for row in chunks) or
+                type(previous.get("mtime_ns")) is not int or
+                not isinstance(previous.get("sha256"), str) or
+                not _HEX.fullmatch(previous["sha256"]) or
+                type(previous.get("records")) is not int or
+                type(previous.get("assistant_messages")) is not int or
+                type(previous.get("user_messages")) is not int):
+            continue
+        info = check_info(path.lstat())
+        if (fingerprints.get(identity) == _identity(info) and
+                previous["size"] == info.st_size and
+                previous["mtime_ns"] == info.st_mtime_ns):
+            reusable[identity] = previous
+    return reusable
 
 
 def stage_hosted_snapshot(
@@ -90,6 +162,16 @@ def stage_hosted_snapshot(
         if len(files) > 100_000:
             raise MigrationError("The hosted snapshot has too many transcripts.")
         titles = title_index(source_home)
+        reuse = _reuse_candidates(files, previous_catalog,
+                                  published_source_facts(
+                                      journal, crypto_helper=crypto_helper))
+        prior_ids = {row.get("id") for item in reuse.values()
+                     for row in item["chunks"] if isinstance(row, dict)}
+        if (None in prior_ids or any(not isinstance(identifier, str) or
+                                     not _HEX.fullmatch(identifier)
+                                     for identifier in prior_ids)):
+            raise MigrationError("The prior hosted chunk map is invalid.")
+        prior_objects = _published_objects(client, prior_ids)
         created_at = journal.snapshot_time()
         manifest_files: List[dict] = []
         stages: Dict[Tuple[str, str], StagedRemoteFile] = {}
@@ -98,27 +180,45 @@ def stage_hosted_snapshot(
         for folder, path, relative in files:
             before = check_info(path.lstat())
             identity = (folder, relative)
-            try:
-                signals = scan_transcript(path, relative, titles)
-            except TranscriptChanged:
-                raise MigrationError(
-                    "A conversation changed during hosted backup; retry after it settles.") from None
-            if _identity(check_info(path.lstat())) != _identity(before):
-                raise MigrationError("A conversation changed during hosted identity inspection.")
-            staged = stage_remote_aware_file_windowed(
-                path, journal.key_id, client, journal.reservation_id, journal,
-                crypto_helper=crypto_helper, chunk_size=chunk_size,
-                window_bytes=window_bytes, apply=True)
+            collection = "active" if folder == "sessions" else "archived"
+            previous = reuse.get((collection, relative))
+            if previous is not None:
+                ids = {row["id"] for row in previous["chunks"]}
+                staged = StagedRemoteFile(
+                    previous["sha256"], previous["size"],
+                    tuple(previous["chunks"]),
+                    tuple(prior_objects[identifier] for identifier in sorted(ids)))
+                signals_fields = {
+                    "thread_id": previous.get("thread_id"),
+                    "identity_state": previous.get("identity_state"),
+                    "titles": list(titles.get(previous.get("thread_id"), [])),
+                    "records": previous.get("records"),
+                    "assistant_messages": previous.get("assistant_messages"),
+                    "user_messages": previous.get("user_messages"),
+                }
+            else:
+                try:
+                    signals = scan_transcript(path, relative, titles)
+                except TranscriptChanged:
+                    raise MigrationError(
+                        "A conversation changed during hosted backup; retry after it settles.") from None
+                if _identity(check_info(path.lstat())) != _identity(before):
+                    raise MigrationError("A conversation changed during hosted identity inspection.")
+                staged = stage_remote_aware_file_windowed(
+                    path, journal.key_id, client, journal.reservation_id, journal,
+                    crypto_helper=crypto_helper, chunk_size=chunk_size,
+                    window_bytes=window_bytes, apply=True)
+                signals_fields = signals.manifest_fields()
             if (_identity(check_info(path.lstat())) != _identity(before) or
                     staged.size != before.st_size):
                 raise MigrationError("A conversation changed during hosted backup.")
             source_facts[identity] = _identity(before)
-            stages[("active" if folder == "sessions" else "archived", relative)] = staged
+            stages[(collection, relative)] = staged
             manifest_files.append({
-                "collection": "active" if folder == "sessions" else "archived",
+                "collection": collection,
                 "path": relative, "size": staged.size,
                 "mtime_ns": before.st_mtime_ns, "sha256": staged.sha256,
-                "chunks": list(staged.chunks), **signals.manifest_fields(),
+                "chunks": list(staged.chunks), **signals_fields,
             })
             total_bytes += staged.size
         current = _source_files(source_home)
@@ -201,5 +301,9 @@ def stage_hosted_snapshot(
         objects = stage_hosted_snapshot_tail(
             metadata, manifest, stages, journal, client,
             crypto_helper=crypto_helper, apply=True)
+        record_source_facts(journal, {
+            ("active" if folder == "sessions" else "archived", relative): facts
+            for (folder, relative), facts in source_facts.items()
+        }, crypto_helper=crypto_helper)
         return HostedSnapshotStage(journal.snapshot_id, journal.reservation_id, objects,
                                    len(manifest_files), total_bytes, len(at_risk))

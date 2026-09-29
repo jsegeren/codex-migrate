@@ -3,7 +3,10 @@
 Status: approved direction with local and synthetic live-R2 transport tests, **not a hosted
 service or for sale**. This document does not authorize a production bucket, a
 live subscription checkout, or changing the current $49 one-time checkout.
-Codex Migrate remains the product name.
+The working customer-facing name for the new offer is **Codex Backup**.
+Codex Migrate remains the name of the currently shipped Mac beta until a
+separately reviewed release. `Vault` remains a format/CLI identifier for
+compatibility, not the new hosted offer's customer-facing name.
 
 ## Customer choice
 
@@ -40,15 +43,17 @@ its audit records are not a demonstrated restore of complete local history.
 
 The intended business experience is: install the signed Mac app, enroll the
 device under the company's account, make the first encrypted off-device backup
-during setup, then back up changed Codex history automatically without
+during setup, then check for changed Codex history automatically without
 requiring the employee to reopen the app. Target a **30-minute default
-checkpoint interval** for an active Mac, subject to measured runtime and cost
+check interval** for an active Mac, subject to measured runtime and cost
 on both physical test Macs before it becomes a customer promise. After the
 first complete version, the scheduled path must identify changed history,
 reuse already published encrypted chunks, and upload only new encrypted
 chunks plus a small new manifest/reference; it must not rescan every unchanged
-transcript byte or HEAD every retained remote object twice an hour. Preserve
-the last independently verified snapshot and periodically audit older remote
+transcript byte or HEAD every retained remote object twice an hour. Keep
+"last checked" distinct from "last verified off-device backup"; if no
+supported content or relevant metadata changed, do not create a redundant
+version. Preserve the last independently verified snapshot and periodically audit older remote
 objects without putting a full object scrub on every checkpoint's critical
 path. A changed source or an uncertain remote receipt must fail closed and be
 retried, never be called a successful backup. A missed run, offline Mac,
@@ -60,6 +65,17 @@ attempt Codex re-import without the original employee's Keychain or device.
 This is scheduled backup with an explicit recovery-point window, **not**
 zero-loss continuous sync or a whole-Mac backup. Git repository backup does
 not include local Codex chats and discussions.
+
+The dark client now has a first incremental staging path: after a snapshot is
+published, it promotes an owner-only, Keychain-authenticated source fingerprint
+index bound to that exact snapshot. The next run obtains the prior encrypted
+manifest and published ciphertext facts from the service; unchanged
+transcripts avoid body reads and encryption, while changed transcripts retain
+the full scan/stage checks. Tests cover a changed transcript, unchanged reuse,
+stale and tampered hints, and exact-base binding. This is **not** a scheduled
+or production backup: the server still HEAD-checks every retained object on
+every new snapshot, paginated database history is still restaged, and neither
+physical Mac's 30-minute runtime or change rate has been measured.
 
 The current hosted prototype is **not a business enrollment model**. Its
 account, device, subscription, and recovery paths all depend on one person's

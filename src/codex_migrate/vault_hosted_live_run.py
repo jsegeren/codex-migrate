@@ -26,6 +26,7 @@ from codex_migrate.vault_backup import (
 from codex_migrate.vault_hosted_chunk_journal import HostedChunkJournal
 from codex_migrate.vault_hosted_live_stage import stage_reserved_hosted_snapshot
 from codex_migrate.vault_hosted_recovery_client import HostedRecoveryClient
+from codex_migrate.vault_hosted_source_index import promote_source_facts
 from codex_migrate.vault_hosted_upload_client import HostedUploadClient, _UUID
 from codex_migrate.vault_schedule import _ensure_owned_directory, _home
 
@@ -297,7 +298,8 @@ class HostedLiveBackupRun:
             if _read_json(header) != expected:
                 raise MigrationError("The published hosted journal belongs to another run.")
         allowed_files = {"journal.json", "journal.lock", "chunks.jsonl",
-                         "manifest-binding.json", "snapshot-time.json", "vault.json"}
+                         "manifest-binding.json", "snapshot-time.json", "vault.json",
+                         "source-index-candidate.json"}
         file_paths = []
         directory_paths = []
         for child in root.iterdir():
@@ -342,6 +344,10 @@ class HostedLiveBackupRun:
             raise MigrationError("The published hosted journal needs local cleanup.") from error
 
     def _finish(self, snapshot_id: str) -> None:
+        state = self._pending()
+        if state is None or state["snapshotId"] != snapshot_id:
+            raise MigrationError("The hosted publication changed before source-index promotion.")
+        promote_source_facts(self._directory, state)
         try:
             self._retire_published_journal(snapshot_id)
         except OSError as error:

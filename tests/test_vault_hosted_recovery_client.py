@@ -385,10 +385,18 @@ class HostedRecoveryClientTests(unittest.TestCase):
                 self.assertEqual(prior_id, staged.snapshot_id)
                 self.assertEqual(len(files), 1)
                 self.assertEqual(files[0]["path"], "2026/09/27/fixture.jsonl")
+                prior_id, staging_files = self.client().prior_catalog(
+                    key_id=key_id, crypto_helper=str(helper),
+                    max_bytes=manifest_bytes, include_chunks=True)
+                self.assertEqual(prior_id, staged.snapshot_id)
+                self.assertEqual(staging_files[0]["sha256"], files[0]["sha256"])
+                self.assertEqual(staging_files[0]["mtime_ns"],
+                                 transcript.stat().st_mtime_ns)
+                self.assertTrue(staging_files[0]["chunks"])
                 self.assertEqual([request["action"] for request in self.server.requests],
-                                 ["latest", "manifest"])
+                                 ["latest", "manifest", "latest", "manifest"])
                 self.assertEqual(self.server.get_requests,
-                                 [PREFIX + f"manifests/{staged.snapshot_id}.cvmanifest"])
+                                 [PREFIX + f"manifests/{staged.snapshot_id}.cvmanifest"] * 2)
                 self.server.mutate_get = lambda key, body: (
                     bytes([body[0] ^ 1]) + body[1:]
                     if key.startswith("manifests/") else body)

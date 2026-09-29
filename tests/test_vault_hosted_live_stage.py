@@ -61,7 +61,8 @@ class HostedLiveStageTests(unittest.TestCase):
         self.assertEqual(events, ["prior", "stage"])
         prior.assert_called_once_with(
             key_id=KEY, crypto_helper="/unused-helper", max_bytes=5_000_000,
-            expected_snapshot_id=BASE, expected_account_id=ACCOUNT)
+            expected_snapshot_id=BASE, expected_account_id=ACCOUNT,
+            include_chunks=True)
         self.assertEqual(stage.call_args.args[2], catalog)
         self.assertEqual(stage.call_args.args[3], journal)
 

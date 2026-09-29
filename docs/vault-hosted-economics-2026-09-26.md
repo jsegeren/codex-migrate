@@ -76,8 +76,14 @@ metered rate before account-wide free allowance and billable-unit rounding.
 Re-reading every raw transcript on that cadence would move about **202 TB
 through the two local machines per month**. These are extrapolations from one
 owner's measured baseline, not observed invoices or customer averages.
-They make the present whole-history staging loop unsuitable as a 30-minute
-default. The release path needs a trustworthy changed-source inventory,
+They make the original whole-history staging loop unsuitable as a 30-minute
+default. The dark client now has a Keychain-authenticated, published-snapshot-
+bound source index that skips reading unchanged transcript bodies and obtains
+prior chunk facts from the service. This is a code-and-synthetic-test result,
+not a physical-Mac cadence measurement; database-backed history still takes
+the full path. The server still HEADs every retained object for each newly
+published snapshot, so the **52.35 million read-operation extrapolation is
+not yet eliminated**. The release path needs a trustworthy changed-source inventory,
 reuse of published ciphertext, upload of only new encrypted chunks and the
 new manifest/reference, and periodic—not per-checkpoint—full remote scrubs.
 Record actual per-run bytes read, novel bytes uploaded, object operations,

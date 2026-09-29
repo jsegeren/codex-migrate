@@ -297,7 +297,8 @@ class HostedRecoveryClient:
 
     def prior_catalog(self, *, key_id: str, crypto_helper: str, max_bytes: int,
                       expected_snapshot_id: object = _UNSPECIFIED,
-                      expected_account_id: Optional[str] = None
+                      expected_account_id: Optional[str] = None,
+                      include_chunks: bool = False,
                       ) -> Tuple[Optional[str], List[dict]]:
         """Read only the authenticated prior manifest for hosted loss warnings.
 
@@ -369,7 +370,8 @@ class HostedRecoveryClient:
             with stream:
                 _copy_to_file(stream, descriptor, _Object(key, size, digest))
             catalog = _run_helper(helper, [
-                "catalog", "--key-id", key_id, "--snapshot-id", snapshot_id,
+                "staging-catalog" if include_chunks else "catalog",
+                "--key-id", key_id, "--snapshot-id", snapshot_id,
                 "--manifest", path,
             ])
         files = catalog.get("files")
