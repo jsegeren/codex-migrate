@@ -50,9 +50,9 @@ class PackagedVaultCompressionTests(unittest.TestCase):
         app = Path(os.environ["CODEX_MIGRATE_PACKAGED_APP"])
         resources = app / "Contents/Resources"
         engine = resources / "engine/codex-migrate-engine"
-        helper = resources / "CodexVaultCrypto"
+        helper = app / "Contents/Helpers/CodexVaultCrypto.app/Contents/MacOS/CodexVaultCrypto"
         if not helper.is_file():
-            helper = app / "Contents/Helpers/CodexVaultCrypto.app/Contents/MacOS/CodexVaultCrypto"
+            helper = resources / "CodexVaultCrypto"
         self.assertTrue(engine.is_file() and helper.is_file())
         thread_id = "66666666-6666-4666-8666-666666666666"
         attachment_id = "77777777-7777-4777-8777-777777777777"
@@ -109,9 +109,9 @@ class PackagedVaultCompressionTests(unittest.TestCase):
         app = Path(os.environ["CODEX_MIGRATE_PACKAGED_APP"])
         resources = app / "Contents/Resources"
         engine = resources / "engine/codex-migrate-engine"
-        helper = resources / "CodexVaultCrypto"
+        helper = app / "Contents/Helpers/CodexVaultCrypto.app/Contents/MacOS/CodexVaultCrypto"
         if not helper.is_file():
-            helper = app / "Contents/Helpers/CodexVaultCrypto.app/Contents/MacOS/CodexVaultCrypto"
+            helper = resources / "CodexVaultCrypto"
         self.assertTrue(engine.is_file() and helper.is_file())
         thread_id = "44444444-4444-4444-8444-444444444444"
         marker = "packaged-database-only-marker-qzmx"
@@ -456,9 +456,9 @@ class PackagedVaultCompressionTests(unittest.TestCase):
         app = Path(os.environ["CODEX_MIGRATE_PACKAGED_APP"])
         resources = app / "Contents/Resources"
         engine = resources / "engine/codex-migrate-engine"
-        helper = resources / "CodexVaultCrypto"
+        helper = app / "Contents/Helpers/CodexVaultCrypto.app/Contents/MacOS/CodexVaultCrypto"
         if not helper.is_file():
-            helper = app / "Contents/Helpers/CodexVaultCrypto.app/Contents/MacOS/CodexVaultCrypto"
+            helper = resources / "CodexVaultCrypto"
         self.assertTrue(engine.is_file() and helper.is_file())
         with tempfile.TemporaryDirectory(prefix="vault-package-test-") as temporary:
             root = Path(temporary)

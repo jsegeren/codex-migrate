@@ -22,9 +22,21 @@ The packaged engine/helper passed six opt-in synthetic tests covering exact
 restore bytes, database-only history, pasted-prompt attachments, and search
 index behavior; two unrelated optional cases were skipped. A separate opt-in
 real LaunchAgent test added a database item, produced a second encrypted
-snapshot marked `needs_attention`, and restored both versions. It removed its disposable agent and
-Keychain key afterward. The package is **not Developer ID signed or notarized**,
+snapshot marked `needs_attention`, and restored both versions. It removed its
+disposable agent and Keychain key afterward. The package is **not Developer ID signed or notarized**,
 was not installed for a buyer, and did not back up either real Codex home.
+
+A separate **Developer ID signed but not notarized** local-test build 20 from
+clean source `a587f4ced42bb86ba3f142adc97387961aca2e5f` has ZIP SHA-256
+`fdd088a2f6b11cb9b4ba400aee080a186714832e8e28fbd33732960600589243`.
+Strict app-signature validation passed; the bundled Vault helper carried its
+provisioned Keychain access group. Six packaged synthetic Vault tests and the
+disposable real LaunchAgent/database-append test passed with that signed
+helper. The test harness initially selected the separately bundled *legacy*
+helper for one scheduled run and failed; it now selects the current helper
+when both are present, then the same signed package passed. The test removed
+its LaunchAgent and disposable Keychain key. This is not Apple-notarized,
+buyer-installed, or real-history backup evidence.
 
 The Founder authorized a **self-service paid beta** on September 7 while the
 remaining acceptance checks continue. This is not full release certification.
