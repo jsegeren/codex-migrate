@@ -400,6 +400,10 @@ class HostedUploadClientTests(unittest.TestCase):
         self.assertEqual(self.server.objects[FIRST_KEY], FIRST)
         self.assertEqual(store.checked_metadata(FIRST_KEY),
                          self.server.expected[FIRST_KEY])
+        self.assertEqual(self.client.worker_attempt_counts(), {
+            "head": 1, "put": 1, "put_bytes": len(FIRST),
+            "put_confirmed": 0, "put_confirmed_bytes": 0,
+        })
         # A retry need not issue another PUT grant for the already verified
         # immutable object, and neither attempt publishes a latest pointer.
         self.assertEqual(self.server.actions.count("put"), 0)
@@ -412,6 +416,10 @@ class HostedUploadClientTests(unittest.TestCase):
         store.put_if_absent(FIRST_KEY, io.BytesIO(FIRST), len(FIRST))
         self.assertEqual(store.checked_metadata(FIRST_KEY),
                          self.server.expected[FIRST_KEY])
+        self.assertEqual(self.client.worker_attempt_counts(), {
+            "head": 1, "put": 1, "put_bytes": len(FIRST),
+            "put_confirmed": 1, "put_confirmed_bytes": len(FIRST),
+        })
         self.assertEqual(self.server.actions.count("lease"), 1)
         self.assertEqual(self.server.actions.count("batch"), 1)
         self.assertEqual(self.server.actions.count("decide"), 0)

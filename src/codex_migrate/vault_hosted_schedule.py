@@ -16,6 +16,7 @@ import plistlib
 import pwd
 import re
 import subprocess
+import time
 from typing import Optional
 
 from codex_migrate.errors import MigrationError
@@ -24,6 +25,7 @@ from codex_migrate.vault_backup import (
 )
 from codex_migrate.vault_hosted_enrollment_client import HostedEnrollmentClient
 from codex_migrate.vault_hosted_live_run import HostedLiveBackupRun
+from codex_migrate.vault_hosted_upload_client import HostedUploadClient
 from codex_migrate.vault_schedule import (
     _atomic_bytes, _engine_command, _ensure_owned_directory, _home,
     _launchctl, _pending_update, _safe_file, _safe_json, _timestamp,
@@ -44,6 +46,15 @@ _FAILED = ("Hosted backup stopped safely. The last verified remote snapshot "
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _cost_metrics(started: float, upload: object = None) -> dict:
+    """Private counts only; never persist an object key, token, or transcript."""
+    result = {"elapsed_ms": max(0, int((time.monotonic() - started) * 1000))}
+    if isinstance(upload, HostedUploadClient):
+        result["upload_service_attempts"] = upload.service_request_counts()
+        result["worker_attempts"] = upload.worker_attempt_counts()
+    return result
 
 
 def _paths(source_home: str) -> tuple:
@@ -238,6 +249,8 @@ def install_hosted_schedule(source_home: str, device_id: str, metadata: dict, *,
 
 def run_hosted_scheduled_backup(config_path: str) -> int:
     """One unattended check; failures are visible and leave last-good intact."""
+    started = time.monotonic()
+    upload = None
     try:
         path = Path(config_path).expanduser()
         if not path.is_absolute():
@@ -252,7 +265,9 @@ def run_hosted_scheduled_backup(config_path: str) -> int:
             if marker is not None:
                 _atomic_json(marker_path, {**marker, "deferred": True}, replace=True)
                 _atomic_json(status_path, {"status": "failed", "checked_at": _now(),
-                                           "error": _FAILED}, replace=True)
+                                           "error": _FAILED,
+                                           "cost_metrics": _cost_metrics(started)},
+                             replace=True)
                 return 0
             _atomic_json(status_path, {"status": "running", "checked_at": _now()},
                          replace=True)
@@ -281,13 +296,17 @@ def run_hosted_scheduled_backup(config_path: str) -> int:
                 _atomic_json(good_path, {"snapshot_id": snapshot_id,
                                          "observed_at": _now()}, replace=True)
             _atomic_json(status_path, {"status": state, "checked_at": _now(),
-                                       "snapshot_id": snapshot_id}, replace=True)
+                                       "snapshot_id": snapshot_id,
+                                       "cost_metrics": _cost_metrics(started, upload)},
+                         replace=True)
             return 0
     except Exception:
         try:
             if "status_path" in locals():
                 _atomic_json(status_path, {"status": "failed", "checked_at": _now(),
-                                           "error": _FAILED}, replace=True)
+                                           "error": _FAILED,
+                                           "cost_metrics": _cost_metrics(started, upload)},
+                             replace=True)
         except Exception:
             pass
         return 1

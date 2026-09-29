@@ -63,10 +63,18 @@ class HostedUploadClient:
         self._object_lease_reservation = None
         self._object_lease_until = 0.0
         self._service_request_counts: dict[str, int] = {}
+        self._worker_attempt_counts = {
+            "head": 0, "put": 0, "put_bytes": 0,
+            "put_confirmed": 0, "put_confirmed_bytes": 0,
+        }
 
     def service_request_counts(self) -> dict[str, int]:
         """Content-free attempted request counts for cost/latency acceptance."""
         return dict(self._service_request_counts)
+
+    def worker_attempt_counts(self) -> dict[str, int]:
+        """Content-free Worker attempts; confirmed PUTs exclude uncertain replies."""
+        return dict(self._worker_attempt_counts)
 
     def _object_lease(self, reservation_id: str) -> str:
         if (self._object_lease_token is not None and
@@ -579,6 +587,11 @@ class HostedUploadObjectStore:
             timeout=self._client._timeout,
             allow_loopback_http=self._client._allow_loopback_http)
 
+    def _checked_metadata(self, key: str, grant: str):
+        transport = self._transport("HEAD", key, grant)
+        self._client._worker_attempt_counts["head"] += 1
+        return transport.checked_metadata(key)
+
     def checked_metadata(self, key: str):
         item = self._client._item(self._expected, key)
         self._ensure_lease()
@@ -588,7 +601,7 @@ class HostedUploadObjectStore:
             if cached["action"] == "put_required" and key not in self._uploaded:
                 return None
             grant = cached["grant"] if cached["action"] == "head" else cached["headGrant"]
-            return self._transport("HEAD", key, grant).checked_metadata(key)
+            return self._checked_metadata(key, grant)
         result = self._client._post({"action": "decide",
                                      "vaultId": self._client._vault_id,
                                      "reservationId": self._reservation_id,
@@ -596,7 +609,7 @@ class HostedUploadObjectStore:
         if result == {"action": "put_required"}:
             return None
         grant = self._client._grant(result, head=True)
-        return self._transport("HEAD", key, grant).checked_metadata(key)
+        return self._checked_metadata(key, grant)
 
     def put_if_absent(self, key, source, length):
         item = self._client._item(self._expected, key)
@@ -610,11 +623,17 @@ class HostedUploadObjectStore:
                                          "reservationId": self._reservation_id,
                                          "item": item})
             grant = self._client._grant(result)
+        transport = self._transport("PUT", key, grant)
+        bytes_attempted = self._expected[key][0]
+        self._client._worker_attempt_counts["put"] += 1
+        self._client._worker_attempt_counts["put_bytes"] += bytes_attempted
         try:
-            self._transport("PUT", key, grant).put_if_absent(key, source, length)
+            transport.put_if_absent(key, source, length)
         except Exception:
             # A lost response may mean the immutable PUT succeeded. Never
             # keep treating this object as absent from a cached preflight.
             self._prepared.pop(key, None)
             raise
+        self._client._worker_attempt_counts["put_confirmed"] += 1
+        self._client._worker_attempt_counts["put_confirmed_bytes"] += bytes_attempted
         self._uploaded.add(key)

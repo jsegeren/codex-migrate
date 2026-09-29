@@ -120,6 +120,16 @@ alone; prove the end-to-end figures first. If a safety limit is required, show
 it to customers and preserve the last verified snapshot rather than silently
 stopping protection.
 
+The dark scheduler now writes elapsed milliseconds, attempted upload-service
+request counts, and attempted/confirmed Worker HEAD and PUT counts and bytes to
+its owner-only last-run receipt. These are content-free diagnostics, not a
+provider bill: a lost PUT acknowledgement can be billed even when the client
+cannot confirm it, and a confirmed immutable retry does not necessarily add
+retained bytes. The receipt is overwritten at each run, so a seven-day
+measurement still needs a separate bounded collection and reconciliation with
+other service reads, database and R2 usage. Source-read bytes, verified unique growth,
+retention cost, and restore/support cost remain unmeasured.
+
 The measured two-Mac baseline has 36,356 unique encrypted chunks and about
 140.57 GB of stable raw transcripts. A naive 30-minute run that HEAD-checks
 every retained chunk would make about **52.35 million Class B reads per

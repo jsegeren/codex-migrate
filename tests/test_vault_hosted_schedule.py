@@ -13,6 +13,7 @@ from codex_migrate.vault_hosted_schedule import (
     LABEL, _paths, _rotation_path, hosted_schedule_status, install_hosted_schedule,
     remove_hosted_schedule, run_hosted_scheduled_backup,
 )
+from codex_migrate.vault_hosted_upload_client import HostedUploadClient
 from codex_migrate.vault_schedule import prepare_update, resume_after_update
 
 
@@ -142,6 +143,27 @@ class HostedScheduleTests(unittest.TestCase):
                          return_value=fake_run):
             self.assertEqual(run_hosted_scheduled_backup(str(config_path)), 0)
         self.assertEqual(len(self.rotation_calls), 1)
+
+    def test_private_run_receipt_records_content_free_cost_counts(self):
+        self._install()
+        self.upload = HostedUploadClient(
+            "http://127.0.0.1:49111", "http://127.0.0.1:49112",
+            "hv1_" + "a" * 43, ACCOUNT, VAULT, allow_loopback_http=True)
+        config_path, status_path, _, _ = _paths(self.home)
+        fake_run = SimpleNamespace(back_up_live_history=lambda *_args, **_kw: {
+            "unchanged": True, "lastGoodSnapshotId": SNAPSHOT})
+        a, b, _, _ = self._patches()
+        with a, b, patch("codex_migrate.vault_hosted_schedule.HostedLiveBackupRun",
+                         return_value=fake_run):
+            self.assertEqual(run_hosted_scheduled_backup(str(config_path)), 0)
+        status = json.loads(status_path.read_text())
+        self.assertGreaterEqual(status["cost_metrics"]["elapsed_ms"], 0)
+        self.assertEqual(status["cost_metrics"]["upload_service_attempts"], {})
+        self.assertEqual(status["cost_metrics"]["worker_attempts"], {
+            "head": 0, "put": 0, "put_bytes": 0,
+            "put_confirmed": 0, "put_confirmed_bytes": 0,
+        })
+        self.assertNotIn("hv1_", status_path.read_text())
 
     def test_ambiguous_rotation_preserves_pending_id_and_last_good(self):
         self._install()
