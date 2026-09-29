@@ -674,7 +674,31 @@ $("copy-recovery").onclick=async()=>{try{await navigator.clipboard.writeText($("
 $("saved-recovery").onclick=async()=>{try{const result=await api("/api/vault/recovery-saved",{});backupView(result);if(result.status==="completed")$("backup-status").textContent="Recovery key acknowledged. The verified backup is ready."+(result.title_index_unavailable?" Codex’s title index could not be read, so saved title search may be incomplete.":"");else if(result.status!=="needs_attention")$("backup-status").textContent="Recovery key acknowledged. Retry the encrypted backup."}catch(error){$("backup-error").textContent=error.message}};
 let scheduleEnabled=false;
 function refreshScheduleButton(){$("schedule-controls").hidden=!verifiedBackup&&!scheduleEnabled;$("enable-schedule").hidden=scheduleEnabled;$("disable-schedule").hidden=!scheduleEnabled;$("enable-schedule").disabled=installRunning||!verifiedBackup||!$("vault-folder").value;$("disable-schedule").disabled=installRunning}
-function scheduleView(data){scheduleEnabled=Boolean(data.enabled);if(data.storage)storageView(data.storage);if(scheduleEnabled){$("backup-frequency-daily").checked=true;$("backup-frequency-manual").checked=false}if(data.vault&&!$("vault-folder").value){$("vault-folder").value=data.vault;if(!data.storage)refreshStorage(data.vault)}if(data.vault&&!$("restore-vault").value){$("restore-vault").value=data.vault;refreshSnapshots()}$("schedule-error").textContent=data.error||"";if(!data.enabled){$("schedule-status").textContent="Automatic backup is off."}else if(data.paginated_history_unprotected){let detail="Daily backup is on, but Codex's paginated history is not yet fully recoverable in Vault. This schedule is not complete protection.";if(data.last_run?.status==="failed")detail+=" The latest automatic backup failed. Check the Vault folder; do not assume new conversations are protected.";$("schedule-status").textContent=detail}else if(data.healthy){let detail="Daily encrypted backup is on.";if(data.last_run?.status==="completed"){detail+=" Last backup completed "+(data.last_run.completed_at||"")+".";if(data.last_run.title_index_unavailable)detail+=" Codex’s title index could not be read; saved title search may be incomplete."}$("schedule-status").textContent=detail}else{$("schedule-status").textContent="Automatic backup needs attention."}backupFrequencyView();refreshScheduleButton();refreshRestoreButton()}
+function scheduleView(data){
+  scheduleEnabled=Boolean(data.enabled);
+  if(data.storage)storageView(data.storage);
+  if(scheduleEnabled){$("backup-frequency-daily").checked=true;$("backup-frequency-manual").checked=false}
+  if(data.vault&&!$("vault-folder").value){$("vault-folder").value=data.vault;if(!data.storage)refreshStorage(data.vault)}
+  if(data.vault&&!$("restore-vault").value){$("restore-vault").value=data.vault;refreshSnapshots()}
+  $("schedule-error").textContent=data.error||"";
+  if(!data.enabled){
+    $("schedule-status").textContent="Automatic backup is off.";
+  }else if(data.paginated_history_unprotected){
+    let detail="Daily backup is on, but Codex's paginated history is not yet fully recoverable in Vault. This schedule is not complete protection.";
+    if(data.last_run?.status==="failed")detail+=" The latest automatic backup failed. Check the Vault folder; do not assume new conversations are protected.";
+    $("schedule-status").textContent=detail;
+  }else if(data.healthy){
+    let detail="Daily encrypted backup is on.";
+    if(data.last_run?.status==="completed"){
+      detail+=" Last backup completed "+(data.last_run.completed_at||"")+".";
+      if(data.last_run.title_index_unavailable)detail+=" Codex’s title index could not be read; saved title search may be incomplete.";
+    }else if(data.last_run?.status==="failed")detail+=" The last automatic backup needs attention.";
+    $("schedule-status").textContent=detail;
+  }else{
+    $("schedule-status").textContent="Automatic backup needs attention.";
+  }
+  backupFrequencyView();refreshScheduleButton();refreshRestoreButton();
+}
 async function refreshSchedule(){try{scheduleView(await api("/api/vault/schedule"))}catch(error){$("schedule-error").textContent=error.message}}
 async function enableDailySchedule(){try{$("schedule-error").textContent="";$("enable-schedule").disabled=true;scheduleView(await api("/api/vault/schedule",{destination:$("vault-folder").value,interval_hours:24,apply:true}))}catch(error){$("schedule-error").textContent=error.message+" The verified backup is safe; turn on daily backup again when ready.";refreshScheduleButton()}}
 async function enableRequestedSchedule(){pendingAutomaticBackup=false;$("schedule-status").textContent="Verified backup complete. Turning on daily backup…";await enableDailySchedule()}

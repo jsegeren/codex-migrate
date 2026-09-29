@@ -764,7 +764,9 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
             raise MigrationError("Choose a valid backup interval")
         result = install_vault_schedule(
             self.source_home, destination, interval_hours=interval_hours)
-        return {"enabled": True, "healthy": True, **result.as_dict()}
+        # Re-read the actual schedule and coverage state. Installation alone
+        # does not make a transcript-only backup complete protection.
+        return {**result.as_dict(), **self.vault_schedule()}
 
     def disable_vault_schedule(self):
         return remove_vault_schedule(self.source_home)

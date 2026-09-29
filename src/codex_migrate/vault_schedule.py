@@ -30,6 +30,7 @@ from codex_migrate.vault_backup import (
     _metadata,
     _paginated_history_unprotected,
     _read_json,
+    _paginated_history_unprotected,
     _require_unlinked_path,
     backup,
 )
@@ -502,11 +503,15 @@ def remove_schedule(source_home: str) -> Dict[str, object]:
 
 def schedule_status(source_home: str) -> Dict[str, object]:
     config_path, status_path, plist_path = _paths(source_home)
+    paginated_history_unprotected = _paginated_history_unprotected(source_home)
+    coverage = ({"paginated_history_unprotected": True}
+                if paginated_history_unprotected else {})
     if not config_path.exists() and not plist_path.exists():
-        return {"enabled": False}
+        return {"enabled": False, **coverage}
     if not config_path.exists() or not plist_path.exists():
         return {"enabled": False, "healthy": False,
-                "error": "Automatic backup setup is incomplete. Turn it on again."}
+                "error": "Automatic backup setup is incomplete. Turn it on again.",
+                **coverage}
     configuration = _configuration(config_path)
     if configuration["source_home"] != str(_home(source_home)):
         raise MigrationError("The automatic backup configuration belongs to another account.")
@@ -520,7 +525,8 @@ def schedule_status(source_home: str) -> Dict[str, object]:
         installed_at = _timestamp(configuration["installed_at"])
     except MigrationError:
         return {"enabled": True, "healthy": False,
-                "error": "Automatic backup setup has an invalid timestamp. Turn it on again."}
+                "error": "Automatic backup setup has an invalid timestamp. Turn it on again.",
+                **coverage}
     status = None
     if status_path.exists():
         try:
@@ -548,9 +554,9 @@ def schedule_status(source_home: str) -> Dict[str, object]:
         if status.get("status") in ("needs_attention", "failed", "unknown"):
             result["healthy"] = False
             result["error"] = "The latest automatic backup needs attention. Earlier snapshots remain available."
-    if _paginated_history_unprotected(source_home):
+    if paginated_history_unprotected:
         result["healthy"] = False
-        result["paginated_history_unprotected"] = True
+        result.update(coverage)
         coverage_error = "Codex's paginated history is not yet fully recoverable in Vault."
         if status and status.get("status") in ("failed", "unknown"):
             result["error"] = result.get("error", "") + " " + coverage_error

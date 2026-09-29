@@ -810,6 +810,22 @@ class SetupTests(unittest.TestCase):
             self.assertFalse(disabled["enabled"])
             remove.assert_called_once_with(str(self.home))
 
+    def test_enabling_schedule_does_not_claim_paginated_history_is_protected(self):
+        destination = str(self.home / "vault")
+        plan = SchedulePlan(destination, 24, applied=True)
+        with patch("codex_migrate.setup.vault_schedule_status", return_value={
+                "enabled": True, "healthy": False, "vault": destination,
+                "interval_hours": 24, "paginated_history_unprotected": True,
+                "error": "Codex's paginated history is not included in this Vault backup.",
+        }), patch("codex_migrate.setup.install_vault_schedule", return_value=plan):
+            code, enabled = self.request("/api/vault/schedule", {
+                "destination": destination, "interval_hours": 24, "apply": True,
+            })
+        self.assertEqual(code, 200)
+        self.assertTrue(enabled["enabled"])
+        self.assertFalse(enabled["healthy"])
+        self.assertTrue(enabled["paginated_history_unprotected"])
+
     def test_vault_backup_runs_off_request_thread_and_recovery_key_is_acknowledged(self):
         destination = str(self.home / "vault")
         planned = BackupPlan(destination, 2, 100)

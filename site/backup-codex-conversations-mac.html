@@ -38,7 +38,7 @@
       <p>Each snapshot is published only after every encrypted object verifies. New versions do not silently replace the last good copy. The encryption key stays in macOS Keychain, and the first backup displays a recovery key once for you to save in a password manager.</p>
 
       <h2>What gets backed up</h2>
-      <p>Vault protects supported active and archived local Codex conversation transcript trees. It deliberately excludes authentication, installation identity, SSH keys, repositories, settings, logs, caches, and runtime locks. Use the <a href="/moving-to-a-new-mac">migration workflow</a> when you need the broader working environment.</p>
+      <p>Vault protects supported active and archived local Codex conversation transcript trees. The current build does not capture content stored only in Codex’s separate paginated-history database. It deliberately excludes authentication, installation identity, SSH keys, repositories, settings, logs, caches, and runtime locks. Use the <a href="/moving-to-a-new-mac">migration workflow</a> when you need the broader working environment.</p>
 
       <p class="notice"><strong>Important:</strong> Vault can protect only content Codex actually wrote to disk. It cannot reconstruct turns that were never persisted. Keep an independent backup until you have verified your setup.</p>
       <div class="actions"><a class="button button-primary" href="/codex-vault">See Codex Vault</a><a class="button button-secondary" href="/recover-missing-codex-chats">How recovery works</a></div>
