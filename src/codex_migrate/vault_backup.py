@@ -39,6 +39,13 @@ DEFAULT_CHUNK_SIZE = 4 * 1024 * 1024
 METADATA_NAME = "vault.json"
 STORAGE_CODEC = "lzfse-v1"
 MAX_CHANGED_TRANSCRIPT_ATTEMPTS = 3
+_KEYCHAIN_APPROVAL_MESSAGE = (
+    "Vault could not access its key without interactive Keychain approval. "
+    "No backup was published. Contact support if this persists"
+)
+_KEYCHAIN_APPROVAL_STDERR = (
+    "Codex Vault crypto: " + _KEYCHAIN_APPROVAL_MESSAGE + "\n"
+).encode("utf-8")
 
 
 @dataclass(frozen=True)
@@ -172,6 +179,10 @@ def _run_helper(
     except OSError as error:
         raise MigrationError("The authenticated backup helper could not start.") from error
     if result.returncode:
+        # Never relay arbitrary helper stderr: it may contain paths or private
+        # data. This one exact, static helper error is safe and actionable.
+        if result.stderr == _KEYCHAIN_APPROVAL_STDERR:
+            raise MigrationError(_KEYCHAIN_APPROVAL_MESSAGE)
         raise MigrationError(
             "Authenticated backup failed; no new snapshot was published."
         )

@@ -7,6 +7,7 @@ import platform
 import sqlite3
 import subprocess
 import tempfile
+from types import SimpleNamespace
 import unittest
 import uuid
 from datetime import datetime, timezone
@@ -71,6 +72,25 @@ class MetadataObjectStore(MemoryObjectStore):
     def checked_metadata(self, key):
         value = self.objects.get(key)
         return None if value is None else (len(value), hashlib.sha256(value).hexdigest())
+
+
+class BackupHelperDiagnosticTests(unittest.TestCase):
+    def test_exact_keychain_approval_error_is_actionable(self):
+        failure = SimpleNamespace(returncode=70, stdout=b"", stderr=(
+            b"Codex Vault crypto: Vault could not access its key without interactive "
+            b"Keychain approval. No backup was published. Contact support if this persists\n"))
+        with patch.object(vault_backup.subprocess, "run", return_value=failure):
+            with self.assertRaisesRegex(MigrationError, "interactive Keychain approval"):
+                vault_backup._run_helper(Path("/synthetic/helper"), ["create-key"])
+
+    def test_unrecognized_helper_error_never_reveals_stderr(self):
+        failure = SimpleNamespace(returncode=70, stdout=b"", stderr=(
+            b"Codex Vault crypto: private synthetic content CV1-DO-NOT-PRINT\n"))
+        with patch.object(vault_backup.subprocess, "run", return_value=failure):
+            with self.assertRaises(MigrationError) as caught:
+                vault_backup._run_helper(Path("/synthetic/helper"), ["create-key"])
+        self.assertEqual(str(caught.exception),
+                         "Authenticated backup failed; no new snapshot was published.")
 
 
 @unittest.skipUnless(platform.system() == "Darwin", "CryptoKit backup helper requires macOS")
