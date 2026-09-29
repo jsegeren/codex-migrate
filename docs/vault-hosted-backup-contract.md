@@ -40,6 +40,11 @@ with a visible last-good receipt and failed-run alerting.
 OpenAI's [Codex local-use guidance](https://learn.chatgpt.com/docs/hipaa-configuration)
 assigns workstation and local-retention responsibility to the organization;
 its audit records are not a demonstrated restore of complete local history.
+OpenAI also [documents local transcript persistence](https://learn.chatgpt.com/docs/config-file/config-advanced#history-persistence)
+and [now advertises conversation-content search](https://learn.chatgpt.com/docs/changelog).
+Neither fact establishes that signing into a replacement Mac restores every
+local record. Lead with independently verified, customer-controlled recovery;
+do not claim that OpenAI has no server copy or that Codex has no search.
 
 The intended business experience is: install the signed Mac app, enroll the
 device under the company's account, make the first encrypted off-device backup
