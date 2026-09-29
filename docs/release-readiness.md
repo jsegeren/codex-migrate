@@ -7,6 +7,15 @@ distribution decision; the dated entries below preserve their original status.
 
 ## September 28 paginated-history coverage hold
 
+A low-priority, read-only Vault title search on the second Mac found a real
+thread by a former title in 0.17 seconds and displayed its different current
+title from Codex state. A synthetic regression now preserves that behavior
+without storing the private title or thread ID in the repository. The probe
+did not read conversation bodies, create a backup, or change Codex state; its
+temporary code copy was removed. This establishes one renamed-title retrieval
+case, not complete history coverage, packaged-app behavior, or a recovery
+receipt.
+
 A read-only dogfood search on this Mac returned ten capped results in 2.34 s:
 nine from the paginated-history source and one from an active transcript. No
 conversation text was included in the receipt and no backup was created. A
