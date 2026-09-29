@@ -80,6 +80,15 @@ class HostedSourceIndexTests(unittest.TestCase):
             self.assertEqual(published_source_facts(
                 second, crypto_helper="/unused", include_paginated=True),
                 ({}, None))
+        changed["version"] = 3
+        unsigned = {key: item for key, item in changed.items() if key != "mac"}
+        changed["mac"] = hashlib.sha256(
+            json.dumps(unsigned, sort_keys=True).encode()).hexdigest()
+        hint.write_text(json.dumps(changed))
+        with self.journal(SECOND, FIRST) as second:
+            self.assertEqual(published_source_facts(
+                second, crypto_helper="/unused", include_paginated=True),
+                ({}, None))
         changed["version"] = 1
         del changed["paginated"]
         del changed["attachments_covered"]

@@ -25,7 +25,7 @@ import uuid
 from codex_migrate.errors import MigrationError
 from codex_migrate.source_availability import check_info, require_local
 from codex_migrate.vault import _transcripts, inspect as inspect_vault
-from codex_migrate.vault_attachments import attachment_files
+from codex_migrate.vault_attachments import attachment_files, pasted_references
 from codex_migrate.vault_identity import (
     TranscriptChanged, loss_warnings, mark_simultaneous_conflicts,
     scan_transcript, title_index,
@@ -185,19 +185,24 @@ def _run_helper(
 
 
 def _store_paginated_thread(helper: Path, objects: Path, chunk_size: int,
-                            key_id: str, source: object, thread_id: str
-                            ) -> Tuple[Dict[str, object], int, int, int]:
+                            key_id: str, source: object, thread_id: str,
+                            attachment_paths: set
+                            ) -> Tuple[Dict[str, object], int, int, int, bool]:
     """Encrypt a SQLite thread through a pipe, without plaintext staging files."""
     from codex_migrate.vault_paginated import encoded_item
 
     read_fd, write_fd = os.pipe()
     failure: List[BaseException] = []
     counts = [0, 0, 0]
+    missing_attachment = [False]
 
     def produce() -> None:
         try:
             with os.fdopen(write_fd, "wb") as output:
                 for item in source.items(thread_id):
+                    if any(attachment_id + "/pasted-text.txt" not in attachment_paths
+                           for attachment_id in pasted_references(item.item_json)):
+                        missing_attachment[0] = True
                     output.write(encoded_item(item))
                     counts[0] += 1
                     counts[1] += item.item_type == "userMessage"
@@ -222,7 +227,7 @@ def _store_paginated_thread(helper: Path, objects: Path, chunk_size: int,
         if isinstance(error, MigrationError):
             raise error
         raise MigrationError("Codex paginated history changed or could not be encrypted safely.") from error
-    return stored, *counts
+    return stored, *counts, missing_attachment[0]
 
 
 def _json_bytes(value: object) -> bytes:
@@ -610,6 +615,7 @@ def _backup_unlocked(
         # Keep the database projection separate from the JSONL rollout. Equal
         # thread IDs across these two sources are not a simultaneous-file
         # conflict and are never treated as proof that their bodies agree.
+        missing_paginated_attachments = set()
         if paginated_history_unprotected:
             from codex_migrate.vault_paginated import open_paginated_source
             with open_paginated_source(source_home) as source:
@@ -618,8 +624,11 @@ def _backup_unlocked(
                 if progress is not None:
                     progress(len(files), progress_total_files, total_bytes, 0)
                 for thread_id in thread_ids:
-                    stored, records, users, assistants = _store_paginated_thread(
-                        helper, objects, chunk_size, key_id, source, thread_id)
+                    stored, records, users, assistants, missing_attachment = _store_paginated_thread(
+                        helper, objects, chunk_size, key_id, source, thread_id,
+                        attachment_paths)
+                    if missing_attachment:
+                        missing_paginated_attachments.add(thread_id)
                     size = stored.get("size")
                     digest = stored.get("sha256")
                     chunks = stored.get("chunks")
@@ -662,6 +671,7 @@ def _backup_unlocked(
             (item for item in previous_files if item.get("collection") == "paginated"),
             (item for item in manifest_files if item.get("collection") == "paginated"),
         ))
+        paginated_at_risk.update(missing_paginated_attachments)
         for item in manifest_files:
             if item["collection"] == "paginated":
                 item["at_risk"] = item["thread_id"] in paginated_at_risk

@@ -85,7 +85,7 @@ def pasted_references(text: str) -> Iterator[str]:
     """
     if not isinstance(text, str):
         return
-    for match in _PASTED_PATH.finditer(text):
+    for match in _PASTED_PATH.finditer(text.replace("\\/", "/")):
         yield match.group(1).lower()
 
 

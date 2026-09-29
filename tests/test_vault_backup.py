@@ -773,8 +773,11 @@ class VaultBackupTests(unittest.TestCase):
             thread_id = "44444444-4444-4444-8444-444444444444"
             item = {"id": "item-1", "type": "userMessage",
                     "text": "SYNTHETIC-HOSTED-DATABASE-TURN-" + "X" * 130000}
+            missing_attachment_id = str(uuid.uuid4())
             later_item = {"id": "item-2", "type": "userMessage",
-                          "text": "SYNTHETIC-HOSTED-SECOND-TURN"}
+                          "text": ("SYNTHETIC-HOSTED-SECOND-TURN "
+                                   "/Users/old/.codex/attachments/" +
+                                   missing_attachment_id + "/pasted-text.txt")}
             with sqlite3.connect(database) as connection:
                 connection.execute("CREATE TABLE thread_items (thread_id TEXT, turn_id TEXT, "
                                    "item_id TEXT, rollout_ordinal INTEGER, created_at_ms INTEGER, "
@@ -832,6 +835,7 @@ class VaultBackupTests(unittest.TestCase):
                         crypto_helper=str(self.helper), chunk_size=64 * 1024,
                         window_bytes=64 * 1024, apply=True)
                     self.assertEqual(staged.transcript_files, 1)
+                    self.assertEqual(staged.at_risk_threads, 1)
                     self.assertEqual(database.read_bytes(), original)
                     self.assertFalse(list((directory / "scratch").rglob("*.cvchunk")))
                     ciphertext = b"".join(client.store.objects.values())
@@ -866,6 +870,7 @@ class VaultBackupTests(unittest.TestCase):
                 self.assertEqual(json.loads(json.loads(lines[0])["item_json"]), item)
                 self.assertEqual(json.loads(json.loads(lines[1])["item_json"]), later_item)
                 catalog = snapshot_catalog(str(recovered), crypto_helper=str(self.helper))
+                self.assertTrue(catalog[0]["at_risk"])
                 found = search(str(root / "browse"), "SYNTHETIC-HOSTED-DATABASE-TURN",
                                catalog=catalog)
                 self.assertEqual([(match.collection, match.transcript) for match in found],
@@ -2395,6 +2400,39 @@ class VaultBackupTests(unittest.TestCase):
                            chunk_size=64 * 1024)
                 self.assertEqual(json.loads((destination / "latest.json").read_text())
                                  ["snapshot_id"], repeated.snapshot_id)
+            finally:
+                self.delete_key(destination)
+
+    def test_paginated_reference_to_missing_pasted_text_is_at_risk(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            destination = root / "vault"
+            codex = source / ".codex"
+            codex.mkdir(parents=True)
+            database = codex / "thread_history_1.sqlite"
+            thread_id = str(uuid.uuid4())
+            attachment_id = str(uuid.uuid4())
+            with sqlite3.connect(database) as connection:
+                connection.execute("CREATE TABLE thread_items (thread_id TEXT, turn_id TEXT, "
+                                   "item_id TEXT, rollout_ordinal INTEGER, created_at_ms INTEGER, "
+                                   "item_json TEXT, item_type TEXT, updated_at_ordinal INTEGER)")
+                connection.execute("CREATE TABLE thread_history_projection_state ("
+                                   "thread_id TEXT, next_rollout_byte_offset INTEGER, "
+                                   "next_rollout_ordinal INTEGER)")
+                connection.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                   (thread_id, "turn-1", "item-1", 1, 100,
+                                    json.dumps({"id": "item-1", "type": "userMessage",
+                                                "text": ("/Users/old/.codex/attachments/" +
+                                                         attachment_id + "/pasted-text.txt")}),
+                                    "userMessage", 1))
+            try:
+                result = backup(str(source), str(destination),
+                                crypto_helper=str(self.helper))
+                self.assertTrue(result.needs_attention)
+                self.assertEqual(result.at_risk_threads, 1)
+                catalog = snapshot_catalog(str(destination), crypto_helper=str(self.helper))
+                self.assertTrue(catalog[0]["at_risk"])
             finally:
                 self.delete_key(destination)
 

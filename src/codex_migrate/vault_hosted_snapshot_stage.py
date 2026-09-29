@@ -13,6 +13,7 @@ import re
 from typing import Dict, List, Sequence, Tuple
 
 from codex_migrate.errors import MigrationError
+from codex_migrate.vault_attachments import pasted_references
 from codex_migrate.source_availability import check_info, require_local
 from codex_migrate.vault_backup import (
     DEFAULT_CHUNK_SIZE, _canonical_macos_path, _metadata,
@@ -204,6 +205,7 @@ def stage_hosted_snapshot(
         previous_attachment_paths = {item.get("path") for item in previous_catalog
                                      if item.get("collection") == "attachments"}
         missing_attachments = set()
+        missing_paginated_attachments = set()
         titles = title_index(source_home)
         fingerprints, previous_paginated = published_source_facts(
             journal, crypto_helper=crypto_helper, include_paginated=True)
@@ -215,6 +217,7 @@ def stage_hosted_snapshot(
         reusable_paginated = (
             _reusable_paginated(previous_catalog, paginated_count)
             if has_paginated and paginated_stable and
+               attachment_paths == previous_attachment_paths and
                previous_paginated == paginated_before else None)
         prior_ids = {row.get("id") for item in reuse.values()
                      for row in item["chunks"] if isinstance(row, dict)}
@@ -346,6 +349,9 @@ def stage_hosted_snapshot(
 
                         def records():
                             for item in paginated.items(thread_id):
+                                if any(attachment_id + "/pasted-text.txt" not in attachment_paths
+                                       for attachment_id in pasted_references(item.item_json)):
+                                    missing_paginated_attachments.add(thread_id)
                                 counts[0] += 1
                                 counts[1] += item.item_type == "userMessage"
                                 counts[2] += item.item_type == "agentMessage"
@@ -384,6 +390,7 @@ def stage_hosted_snapshot(
              if item.get("collection") == "paginated"),
             (item for item in manifest_files
              if item["collection"] == "paginated")))
+        paginated_risk.update(missing_paginated_attachments)
         for item in manifest_files:
             if item["collection"] == "paginated":
                 item["at_risk"] = item["thread_id"] in paginated_risk
