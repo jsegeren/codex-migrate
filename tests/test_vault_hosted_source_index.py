@@ -23,6 +23,7 @@ RESERVATION = "66666666-6666-4666-8666-666666666666"
 THIRD = "77777777-7777-4777-8777-777777777777"
 FOURTH = "88888888-8888-4888-8888-888888888888"
 FACTS = {("active", "2026/09/29/thread.jsonl"): (1, 2, 3, 4, 5)}
+PAGINATED = ((6, 7, 8, 9, 10), None, None)
 
 
 class HostedSourceIndexTests(unittest.TestCase):
@@ -61,6 +62,34 @@ class HostedSourceIndexTests(unittest.TestCase):
             promote_source_facts(self.root, self.state(FIRST))
             self.assertEqual(published_source_facts(second, crypto_helper="/unused"), FACTS)
         self.assertTrue((self.root / "source-index.json").is_file())
+
+    def test_paginated_hint_is_authenticated_and_old_index_remains_readable(self):
+        with self.journal(FIRST, None) as first:
+            record_source_facts(first, FACTS, crypto_helper="/unused",
+                                paginated=PAGINATED)
+        promote_source_facts(self.root, self.state(FIRST))
+        with self.journal(SECOND, FIRST) as second:
+            self.assertEqual(published_source_facts(
+                second, crypto_helper="/unused", include_paginated=True),
+                (FACTS, PAGINATED))
+        hint = self.root / "source-index.json"
+        changed = json.loads(hint.read_text())
+        changed["paginated"][0][-1] += 1
+        hint.write_text(json.dumps(changed))
+        with self.journal(SECOND, FIRST) as second:
+            self.assertEqual(published_source_facts(
+                second, crypto_helper="/unused", include_paginated=True),
+                ({}, None))
+        changed["version"] = 1
+        del changed["paginated"]
+        unsigned = {key: item for key, item in changed.items() if key != "mac"}
+        changed["mac"] = hashlib.sha256(
+            json.dumps(unsigned, sort_keys=True).encode()).hexdigest()
+        hint.write_text(json.dumps(changed))
+        with self.journal(SECOND, FIRST) as second:
+            self.assertEqual(published_source_facts(
+                second, crypto_helper="/unused", include_paginated=True),
+                (FACTS, None))
 
     def test_stale_base_key_or_vault_never_reuses_a_hint(self):
         with self.journal(FIRST, None) as first:

@@ -139,7 +139,13 @@ two Vaults entails about 36,356 object requests. A naive daily retry of every
 unchanged object through the upload route would create about 1.09 million
 Worker requests/month for this one customer; do not ship that behavior. The
 dark server now carries forward exact ciphertext proofs from the latest
-published same-Vault snapshot for at most 24 hours. At the measured 36,356-chunk size,
+published same-Vault snapshot for at most 24 hours. The dark client also now
+reuses authenticated paginated-thread entries when the SQLite database, WAL,
+and rollback journal file identities have not changed; changed sources still
+take the full read path. On the older physical Mac, the required sandboxed
+SQLite schema/thread-count preflight took **0.60 seconds** against a 7.3 GB
+database on September 29; this is one warm local observation, not a 30-minute
+end-to-end runtime or a customer-cost measurement. At the measured 36,356-chunk size,
 a 30-minute run with changes needs about 18 bounded database/API reuse pages
 instead of 72 Worker batches and 36,356 R2 HEADs. When the oldest proof ages
 out, a complete remote check still needs about 29 + 43 = **72 Worker batch

@@ -13,7 +13,7 @@ from codex_migrate.vault import markdown_chunks, read_thread_page, search
 from codex_migrate.vault_paginated import (
     PaginatedItem, _canonical_macos_path, _sandbox_profile,
     encoded_item, open_paginated_source, restored_items,
-    source_footprint,
+    source_fingerprint, source_footprint,
 )
 
 
@@ -43,6 +43,32 @@ def fixture(root: Path) -> Path:
 
 
 class PaginatedSourceTests(unittest.TestCase):
+    def test_source_fingerprint_detects_database_change_and_unsafe_sidecar(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            database = fixture(home)
+            before = source_fingerprint(str(home))
+            self.assertIsNotNone(before)
+            with sqlite3.connect(database) as connection:
+                connection.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                   (THREAD_ID, "turn-2", "item-2", 2, 200,
+                                    json.dumps({"id": "item-2", "type": "userMessage"}),
+                                    "userMessage", 2))
+            self.assertNotEqual(source_fingerprint(str(home)), before)
+            sidecar = Path(str(database) + "-journal")
+            sidecar.symlink_to(home / "untrusted")
+            with self.assertRaises(MigrationError):
+                source_fingerprint(str(home))
+
+    def test_orphaned_wal_is_not_treated_as_empty_history(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            (home / ".codex").mkdir()
+            self.assertIsNone(source_fingerprint(str(home)))
+            (home / ".codex/thread_history_1.sqlite-wal").write_bytes(b"orphan")
+            with self.assertRaisesRegex(MigrationError, "orphaned"):
+                source_fingerprint(str(home))
+
     def test_sandbox_denies_source_writes_with_unicode_and_quotes_in_home(self):
         with tempfile.TemporaryDirectory() as temporary:
             codex = Path(temporary) / 'José "safe"' / ".codex"

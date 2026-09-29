@@ -77,10 +77,14 @@ forward a recent R2 proof for exact ciphertext chunks in the latest published
 snapshot of the same account and Vault. It keeps the original provider-check
 time, so the 24-hour publication gate still forces a new R2 check when that
 proof ages; metadata, manifests, refs, changed chunks, and unpublished chunks
-never qualify. This is **not** a scheduled or production backup: unchanged
-history still creates a redundant version, paginated database history is still
-restaged, and neither physical Mac's 30-minute runtime or change rate has been
-measured.
+never qualify. The source hint now also records the database, WAL, and rollback
+journal file identities after a published backup. An unchanged source can reuse
+its authenticated prior paginated-thread entries and published ciphertext
+without rereading every thread body; a changed or unsafe SQLite source takes
+the full read path or fails closed. Volatile SQLite shared-memory reader locks
+do not count as content changes. This is **not** a scheduled or production
+backup: unchanged history still creates a redundant version, and neither
+physical Mac's 30-minute runtime or change rate has been measured.
 
 The current hosted prototype is **not a business enrollment model**. Its
 account, device, subscription, and recovery paths all depend on one person's

@@ -16,16 +16,17 @@ from codex_migrate.errors import MigrationError
 from codex_migrate.source_availability import check_info, require_local
 from codex_migrate.vault_backup import (
     DEFAULT_CHUNK_SIZE, _canonical_macos_path, _metadata,
-    _paginated_history_unprotected, _source_files,
+    _source_files,
 )
 from codex_migrate.vault_hosted_chunk_journal import HostedChunkJournal
 from codex_migrate.vault_hosted_snapshot_tail import stage_hosted_snapshot_tail
 from codex_migrate.vault_hosted_source_index import (
     published_source_facts, record_source_facts,
 )
+from codex_migrate.vault_paginated import source_fingerprint
 from codex_migrate.vault_identity import (
     TranscriptChanged, loss_warnings, mark_simultaneous_conflicts,
-    scan_transcript, title_index,
+    canonical_id, scan_transcript, title_index,
 )
 from codex_migrate.vault_local_lock import local_history_lock
 from codex_migrate.vault_remote_transfer import StageResult, StagedObject
@@ -82,6 +83,46 @@ def _published_objects(client: RemoteAwareClient, ids: set[str]
     return found
 
 
+def _valid_prior_chunks(previous: dict) -> bool:
+    chunks = previous.get("chunks")
+    return (isinstance(chunks, list) and
+            all(isinstance(row, dict) and
+                set(row) in ({"id", "size"}, {"id", "size", "encoding"}) and
+                isinstance(row.get("id"), str) and
+                _HEX.fullmatch(row["id"]) and
+                type(row.get("size")) is int and 0 < row["size"] <= 64 * 1024 * 1024 and
+                ("encoding" not in row or row["encoding"] == "lzfse")
+                for row in chunks))
+
+
+def _reusable_paginated(prior: Sequence[dict], count: int):
+    """Use only complete, uniquely identified rows from the sealed manifest."""
+    rows = [item for item in prior if item.get("collection") == "paginated"]
+    if len(rows) != count:
+        return None
+    seen = set()
+    for item in rows:
+        thread_id = item.get("thread_id")
+        if (not isinstance(thread_id, str) or
+                canonical_id(thread_id) != thread_id or thread_id in seen or
+                item.get("path") != thread_id + ".jsonl" or
+                item.get("identity_state") != "verified" or
+                type(item.get("size")) is not int or item["size"] <= 0 or
+                item.get("mtime_ns") != 0 or
+                not isinstance(item.get("sha256"), str) or
+                not _HEX.fullmatch(item["sha256"]) or
+                any(type(item.get(key)) is not int or item[key] < 0 for key in
+                    ("records", "user_messages", "assistant_messages")) or
+                item["records"] == 0 or
+                item["user_messages"] > item["records"] or
+                item["assistant_messages"] > item["records"] or
+                not _valid_prior_chunks(item) or not item["chunks"] or
+                sum(chunk["size"] for chunk in item["chunks"]) != item["size"]):
+            return None
+        seen.add(thread_id)
+    return rows
+
+
 def _reuse_candidates(files: list, prior: Sequence[dict],
                       fingerprints: dict) -> Dict[Tuple[str, str], dict]:
     """A stat match is useful only with an authenticated prior manifest row."""
@@ -96,20 +137,11 @@ def _reuse_candidates(files: list, prior: Sequence[dict],
     for folder, path, relative in files:
         identity = ("active" if folder == "sessions" else "archived", relative)
         previous = prior_by_path.get(identity)
-        chunks = previous.get("chunks") if isinstance(previous, dict) else None
         if (identity in duplicates or not isinstance(previous, dict) or
                 previous.get("identity_state") == "needs_review" or
                 previous.get("identity_state") not in ("verified", "unverified") or
                 type(previous.get("size")) is not int or
-                not isinstance(chunks, list) or
-                any(not isinstance(row, dict) or
-                    set(row) not in ({"id", "size"}, {"id", "size", "encoding"}) or
-                    not isinstance(row.get("id"), str) or
-                    not _HEX.fullmatch(row["id"]) or
-                    type(row.get("size")) is not int or row["size"] <= 0 or
-                    row["size"] > 64 * 1024 * 1024 or
-                    ("encoding" in row and row["encoding"] != "lzfse")
-                    for row in chunks) or
+                not _valid_prior_chunks(previous) or
                 type(previous.get("mtime_ns")) is not int or
                 not isinstance(previous.get("sha256"), str) or
                 not _HEX.fullmatch(previous["sha256"]) or
@@ -151,22 +183,34 @@ def stage_hosted_snapshot(
     if journal.directory == codex_root or codex_root in journal.directory.parents:
         raise MigrationError("Hosted backup state cannot be inside Codex history.")
     with local_history_lock(source_home):
-        has_paginated = _paginated_history_unprotected(source_home)
+        paginated_before = source_fingerprint(source_home)
+        has_paginated = paginated_before is not None
+        paginated_count = 0
+        paginated_stable = True
         if has_paginated:
             # Fail before the first remote PUT when the separate history
             # database or one of SQLite's sidecars cannot be read safely.
             from codex_migrate.vault_paginated import source_footprint
-            if not source_footprint(source_home)[2]:
+            paginated_count, _, available = source_footprint(source_home)
+            if not available:
                 raise MigrationError("Codex paginated history changed before hosted staging.")
+            paginated_stable = source_fingerprint(source_home) == paginated_before
         files = _source_files(source_home)
         if len(files) > 100_000:
             raise MigrationError("The hosted snapshot has too many transcripts.")
         titles = title_index(source_home)
-        reuse = _reuse_candidates(files, previous_catalog,
-                                  published_source_facts(
-                                      journal, crypto_helper=crypto_helper))
+        fingerprints, previous_paginated = published_source_facts(
+            journal, crypto_helper=crypto_helper, include_paginated=True)
+        reuse = _reuse_candidates(files, previous_catalog, fingerprints)
+        reusable_paginated = (
+            _reusable_paginated(previous_catalog, paginated_count)
+            if has_paginated and paginated_stable and
+               previous_paginated == paginated_before else None)
         prior_ids = {row.get("id") for item in reuse.values()
                      for row in item["chunks"] if isinstance(row, dict)}
+        if reusable_paginated is not None:
+            prior_ids.update(row.get("id") for item in reusable_paginated
+                             for row in item["chunks"])
         if (None in prior_ids or any(not isinstance(identifier, str) or
                                      not _HEX.fullmatch(identifier)
                                      for identifier in prior_ids)):
@@ -241,27 +285,14 @@ def stage_hosted_snapshot(
                                item["collection"] + "/" + item["path"] in at_risk)
         if has_paginated:
             from codex_migrate.vault_paginated import encoded_item, open_paginated_source
-            with open_paginated_source(source_home) as paginated:
-                thread_ids = paginated.thread_ids()
-                if len(manifest_files) + len(thread_ids) > 100_000:
-                    raise MigrationError("The hosted snapshot has too many history entries.")
-                for thread_id in thread_ids:
-                    counts = [0, 0, 0]
-
-                    def records():
-                        for item in paginated.items(thread_id):
-                            counts[0] += 1
-                            counts[1] += item.item_type == "userMessage"
-                            counts[2] += item.item_type == "agentMessage"
-                            yield encoded_item(item)
-
-                    staged = stage_remote_aware_records(
-                        records(), journal.key_id, client, journal.reservation_id,
-                        journal, crypto_helper=crypto_helper,
-                        chunk_size=chunk_size, window_bytes=window_bytes,
-                        apply=True)
-                    if not counts[0]:
-                        raise MigrationError("Codex paginated history changed during hosted backup.")
+            if reusable_paginated is not None:
+                for previous in reusable_paginated:
+                    thread_id = previous["thread_id"]
+                    ids = {row["id"] for row in previous["chunks"]}
+                    staged = StagedRemoteFile(
+                        previous["sha256"], previous["size"],
+                        tuple(previous["chunks"]),
+                        tuple(prior_objects[identifier] for identifier in sorted(ids)))
                     relative = thread_id + ".jsonl"
                     stages[("paginated", relative)] = staged
                     manifest_files.append({
@@ -270,10 +301,55 @@ def stage_hosted_snapshot(
                         "sha256": staged.sha256, "chunks": list(staged.chunks),
                         "thread_id": thread_id, "identity_state": "verified",
                         "titles": list(titles.get(thread_id, [])),
-                        "records": counts[0], "user_messages": counts[1],
-                        "assistant_messages": counts[2], "at_risk": False,
+                        "records": previous["records"],
+                        "user_messages": previous["user_messages"],
+                        "assistant_messages": previous["assistant_messages"],
+                        "at_risk": False,
                     })
                     total_bytes += staged.size
+            else:
+                with open_paginated_source(source_home) as paginated:
+                    thread_ids = paginated.thread_ids()
+                    if len(manifest_files) + len(thread_ids) > 100_000:
+                        raise MigrationError("The hosted snapshot has too many history entries.")
+                    for thread_id in thread_ids:
+                        counts = [0, 0, 0]
+
+                        def records():
+                            for item in paginated.items(thread_id):
+                                counts[0] += 1
+                                counts[1] += item.item_type == "userMessage"
+                                counts[2] += item.item_type == "agentMessage"
+                                yield encoded_item(item)
+
+                        staged = stage_remote_aware_records(
+                            records(), journal.key_id, client, journal.reservation_id,
+                            journal, crypto_helper=crypto_helper,
+                            chunk_size=chunk_size, window_bytes=window_bytes,
+                            apply=True)
+                        if not counts[0]:
+                            raise MigrationError("Codex paginated history changed during hosted backup.")
+                        relative = thread_id + ".jsonl"
+                        stages[("paginated", relative)] = staged
+                        manifest_files.append({
+                            "collection": "paginated", "path": relative,
+                            "size": staged.size, "mtime_ns": 0,
+                            "sha256": staged.sha256, "chunks": list(staged.chunks),
+                            "thread_id": thread_id, "identity_state": "verified",
+                            "titles": list(titles.get(thread_id, [])),
+                            "records": counts[0], "user_messages": counts[1],
+                            "assistant_messages": counts[2], "at_risk": False,
+                        })
+                        total_bytes += staged.size
+            paginated_after = source_fingerprint(source_home)
+            if reusable_paginated is not None and paginated_after != paginated_before:
+                raise MigrationError("Codex paginated history changed during hosted backup.")
+            paginated_hint = (paginated_before if paginated_stable and
+                              paginated_after == paginated_before else None)
+        else:
+            if source_fingerprint(source_home) is not None:
+                raise MigrationError("Codex paginated history appeared during hosted backup.")
+            paginated_hint = None
         paginated_risk = set(loss_warnings(
             (item for item in previous_catalog
              if item.get("collection") == "paginated"),
@@ -304,6 +380,6 @@ def stage_hosted_snapshot(
         record_source_facts(journal, {
             ("active" if folder == "sessions" else "archived", relative): facts
             for (folder, relative), facts in source_facts.items()
-        }, crypto_helper=crypto_helper)
+        }, crypto_helper=crypto_helper, paginated=paginated_hint)
         return HostedSnapshotStage(journal.snapshot_id, journal.reservation_id, objects,
                                    len(manifest_files), total_bytes, len(at_risk))

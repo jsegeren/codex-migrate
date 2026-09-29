@@ -26,6 +26,7 @@ _MAX_BYTES = 32 * 1024 * 1024
 _MAX_FILES = 100_000
 _HEX = re.compile(r"[0-9a-f]{64}\Z")
 SourceFacts = Dict[Tuple[str, str], Tuple[int, int, int, int, int]]
+PaginatedFacts = Optional[Tuple[Optional[Tuple[int, int, int, int, int]], ...]]
 
 
 class SourceIndexInvalid(MigrationError):
@@ -59,15 +60,18 @@ def _read_private(path: Path) -> Optional[dict]:
 
 
 def _header(journal: HostedChunkJournal, snapshot_id: str) -> dict:
-    return {"format": _FORMAT, "version": 1,
+    return {"format": _FORMAT, "version": 2,
             "accountId": journal.account_id, "vaultId": journal.vault_id,
             "keyId": journal.key_id, "snapshotId": snapshot_id}
 
 
 def _facts(value: dict) -> SourceFacts:
     rows = value.get("files")
-    if (set(value) != {"format", "version", "accountId", "vaultId",
-                       "keyId", "snapshotId", "files", "mac"} or
+    version = value.get("version")
+    keys = {"format", "version", "accountId", "vaultId",
+            "keyId", "snapshotId", "files", "mac"}
+    if (type(version) is not int or version not in (1, 2) or
+            set(value) != (keys | ({"paginated"} if version == 2 else set())) or
             not isinstance(value.get("mac"), str) or
             not _HEX.fullmatch(value["mac"]) or
             not isinstance(rows, list) or len(rows) > _MAX_FILES):
@@ -85,7 +89,23 @@ def _facts(value: dict) -> SourceFacts:
         if identity in result:
             raise SourceIndexInvalid("The hosted source index has duplicate files.")
         result[identity] = tuple(row[2:])
+    _paginated(value)
     return result
+
+
+def _paginated(value: dict) -> PaginatedFacts:
+    if value.get("version") == 1:
+        return None
+    rows = value.get("paginated")
+    if rows is None:
+        return None
+    if (not isinstance(rows, list) or len(rows) != 3 or rows[0] is None or
+            any(row is not None and
+                (not isinstance(row, list) or len(row) != 5 or
+                 any(type(number) is not int or number < 0 for number in row))
+                for row in rows)):
+        raise SourceIndexInvalid("The hosted paginated source hint is invalid.")
+    return tuple(None if row is None else tuple(row) for row in rows)
 
 
 def _authenticate(value: dict, key_id: str, crypto_helper: str) -> str:
@@ -101,42 +121,47 @@ def _authenticate(value: dict, key_id: str, crypto_helper: str) -> str:
 
 
 def published_source_facts(journal: HostedChunkJournal, *,
-                           crypto_helper: str) -> SourceFacts:
+                           crypto_helper: str, include_paginated: bool = False):
     """Use only the index whose snapshot is this reservation's exact base."""
     journal.ensure_private_directory()
+    empty = ({}, None) if include_paginated else {}
     try:
         base = journal.base_snapshot_id
     except MigrationError:
-        return {}  # Legacy direct staging has no safe published base to reuse.
+        return empty  # Legacy direct staging has no safe published base to reuse.
     if base is None:
-        return {}
+        return empty
     try:
         value = _read_private(journal.directory.parent / "source-index.json")
     except SourceIndexInvalid:
-        return {}
+        return empty
     if value is None:
-        return {}
-    if any(value.get(key) != expected for key, expected in
-           _header(journal, base).items()):
-        return {}  # Lost promotion or key rotation: scan the source instead.
+        return empty
+    if (value.get("version") not in (1, 2) or
+            any(value.get(key) != expected for key, expected in
+                _header(journal, base).items() if key != "version")):
+        return empty  # Lost promotion or key rotation: scan the source instead.
     try:
         facts = _facts(value)
     except SourceIndexInvalid:
-        return {}
+        return empty
     if value["mac"] != _authenticate(value, journal.key_id, crypto_helper):
-        return {}  # Tampering or corruption cannot suppress a source read.
-    return facts
+        return empty  # Tampering or corruption cannot suppress a source read.
+    return (facts, _paginated(value)) if include_paginated else facts
 
 
 def record_source_facts(journal: HostedChunkJournal, facts: SourceFacts, *,
-                        crypto_helper: str) -> None:
+                        crypto_helper: str,
+                        paginated: PaginatedFacts = None) -> None:
     """Save a candidate, never the published index, before server publication."""
     journal.ensure_private_directory()
     if len(facts) > _MAX_FILES:
         raise MigrationError("The hosted source index has too many files.")
     rows = [[collection, path, *identity]
             for (collection, path), identity in sorted(facts.items())]
-    value = {**_header(journal, journal.snapshot_id), "files": rows}
+    value = {**_header(journal, journal.snapshot_id), "files": rows,
+             "paginated": None if paginated is None else [
+                 None if row is None else list(row) for row in paginated]}
     value["mac"] = _authenticate(value, journal.key_id, crypto_helper)
     _facts(value)
     path = journal.directory / "source-index-candidate.json"
@@ -162,10 +187,11 @@ def promote_source_facts(directory: Path, state: dict) -> None:
         return
     if candidate is None:
         return  # A crash or older client costs a full scan, not protection.
-    expected = {"format": _FORMAT, "version": 1,
+    expected = {"format": _FORMAT,
                 "accountId": state["accountId"], "vaultId": state["vaultId"],
                 "keyId": state["keyId"], "snapshotId": state["snapshotId"]}
-    if any(candidate.get(key) != value for key, value in expected.items()):
+    if (candidate.get("version") not in (1, 2) or
+            any(candidate.get(key) != value for key, value in expected.items())):
         raise MigrationError("The hosted source index belongs to another backup.")
     try:
         _facts(candidate)

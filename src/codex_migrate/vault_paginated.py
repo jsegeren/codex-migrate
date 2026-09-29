@@ -540,6 +540,53 @@ def source_footprint(source_home: str):
     return count, size, True
 
 
+def source_fingerprint(source_home: str):
+    """Conservative file-state hint for avoiding unchanged hosted DB reads.
+
+    The authenticated published manifest remains content authority. Track the
+    database, WAL, and rollback journal; WAL can hold uncheckpointed turns.
+    Validate the shared-memory sidecar too, but do not fingerprint its volatile
+    reader locks, which change without any conversation change.
+    """
+    codex = _canonical_macos_path(Path(source_home) / ".codex")
+    try:
+        codex.lstat()
+    except FileNotFoundError:
+        return None
+    except OSError as error:
+        raise MigrationError("Codex paginated history could not be inspected safely.") from error
+    _require_unlinked_path(codex)
+    database = codex / "thread_history_1.sqlite"
+    paths = [database, *(Path(str(database) + suffix)
+                         for suffix in ("-wal", "-shm", "-journal"))]
+    result = []
+    present_sidecar = False
+    for index, path in enumerate(paths):
+        _require_unlinked_path(path, allow_missing_leaf=True)
+        try:
+            info = path.lstat()
+        except FileNotFoundError:
+            if index != 2:
+                result.append(None)
+            continue
+        except OSError as error:
+            raise MigrationError("Codex paginated history could not be inspected safely.") from error
+        require_local(path)
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                or info.st_nlink != 1):
+            raise MigrationError("Codex paginated history is not a private regular file.")
+        if index > 0:
+            present_sidecar = True
+        if index != 2:
+            result.append((info.st_dev, info.st_ino, info.st_size,
+                           info.st_mtime_ns, info.st_ctime_ns))
+    if result[0] is None:
+        if present_sidecar:
+            raise MigrationError("Codex paginated history has orphaned SQLite sidecars.")
+        return None
+    return tuple(result)
+
+
 if __name__ == "__main__":
     if len(sys.argv) != 3 or sys.argv[1] != _READER_FLAG:
         raise SystemExit(2)

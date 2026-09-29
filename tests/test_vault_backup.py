@@ -557,7 +557,7 @@ class VaultBackupTests(unittest.TestCase):
             metadata = {"format": "codex-vault", "version": 1,
                         "key_id": key_id,
                         "created_at": "2026-09-28T00:00:00+00:00"}
-            directory = root / "journal"
+            directory = root / ("snapshot-" + snapshot_id)
             directory.mkdir(mode=0o700)
             identity = {
                 "account_id": str(uuid.uuid4()), "vault_id": str(uuid.uuid4()),
@@ -630,15 +630,74 @@ class VaultBackupTests(unittest.TestCase):
                                catalog=catalog)
                 self.assertEqual([(match.collection, match.transcript) for match in found],
                                  [("paginated", thread_id + ".jsonl")])
+                sealed = root / "prior.cvmanifest"
+                sealed.write_bytes(client.store.objects[
+                    "manifests/" + snapshot_id + ".cvmanifest"])
+                staging_catalog = vault_backup._run_helper(self.helper, [
+                    "staging-catalog", "--key-id", key_id,
+                    "--snapshot-id", snapshot_id, "--manifest", str(sealed)])["files"]
+                self.assertIsNotNone(json.loads(
+                    (directory / "source-index-candidate.json").read_text())["paginated"])
+                promote_source_facts(root, {
+                    "accountId": identity["account_id"], "vaultId": identity["vault_id"],
+                    "keyId": key_id, "snapshotId": snapshot_id})
+                identity = {**identity, "reservation_id": str(uuid.uuid4()),
+                            "snapshot_id": str(uuid.uuid4())}
+                reuse_directory = root / ("snapshot-" + identity["snapshot_id"])
+                reuse_directory.mkdir(mode=0o700)
+                with HostedChunkJournal(reuse_directory, **identity,
+                                        base_snapshot_id=snapshot_id) as journal:
+                    _, previous_db = vault_hosted_snapshot_stage.published_source_facts(
+                        journal, crypto_helper=str(self.helper), include_paginated=True)
+                    self.assertEqual(previous_db,
+                                     vault_hosted_snapshot_stage.source_fingerprint(str(source)))
+                    self.assertIsNotNone(
+                        vault_hosted_snapshot_stage._reusable_paginated(staging_catalog, 1))
+                    with patch.object(vault_hosted_snapshot_stage,
+                                      "stage_remote_aware_records",
+                                      side_effect=AssertionError("unchanged database reread")):
+                        unchanged = stage_hosted_snapshot(
+                            str(source), metadata, staging_catalog, journal, client,
+                            crypto_helper=str(self.helper), chunk_size=64 * 1024,
+                            window_bytes=64 * 1024, apply=True)
+                    self.assertEqual(unchanged.transcript_files, 1)
+                    self.assertEqual(unchanged.transcript_bytes, staged.transcript_bytes)
+                identity = {**identity, "reservation_id": str(uuid.uuid4()),
+                            "snapshot_id": str(uuid.uuid4())}
+                race_directory = root / ("snapshot-" + identity["snapshot_id"])
+                race_directory.mkdir(mode=0o700)
+                published_objects = vault_hosted_snapshot_stage._published_objects
+
+                def append_during_reuse(remote_client, ids):
+                    result = published_objects(remote_client, ids)
+                    with sqlite3.connect(database) as connection:
+                        connection.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                           (thread_id, "turn-3", "item-3", 3, 300,
+                                            json.dumps({"id": "item-3", "type": "userMessage"}),
+                                            "userMessage", 3))
+                    return result
+
+                with HostedChunkJournal(race_directory, **identity,
+                                        base_snapshot_id=snapshot_id) as journal:
+                    with patch.object(vault_hosted_snapshot_stage, "_published_objects",
+                                      side_effect=append_during_reuse):
+                        with self.assertRaisesRegex(MigrationError,
+                                                    "paginated history changed"):
+                            stage_hosted_snapshot(
+                                str(source), metadata, staging_catalog, journal,
+                                client, crypto_helper=str(self.helper),
+                                chunk_size=64 * 1024, window_bytes=64 * 1024,
+                                apply=True)
                 with sqlite3.connect(database) as connection:
-                    connection.execute("DELETE FROM thread_items WHERE item_id='item-2'")
+                    connection.execute("DELETE FROM thread_items WHERE item_id IN ('item-2', 'item-3')")
                 identity = {**identity, "reservation_id": str(uuid.uuid4()),
                             "snapshot_id": str(uuid.uuid4())}
                 next_directory = root / "next-journal"
                 next_directory.mkdir(mode=0o700)
-                with HostedChunkJournal(next_directory, **identity) as journal:
+                with HostedChunkJournal(next_directory, **identity,
+                                        base_snapshot_id=snapshot_id) as journal:
                     smaller = stage_hosted_snapshot(
-                        str(source), metadata, catalog, journal, client,
+                        str(source), metadata, staging_catalog, journal, client,
                         crypto_helper=str(self.helper), chunk_size=64 * 1024,
                         window_bytes=64 * 1024, apply=True)
                     self.assertEqual(smaller.at_risk_threads, 1)
