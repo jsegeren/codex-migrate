@@ -14,9 +14,23 @@ last 60 seconds:
 This is now an **incomplete product-cost baseline**: draft snapshot format 4
 also protects Codex-owned attachments and paginated conversation items. A
 September 29 read-only inventory found 132 attachment files totaling 1,914,216
-bytes on the older Mac. The encrypted retained size and version growth of the
-paginated source have not been measured, so do not use the transcript-only
-figures below as a customer allowance or all-in gross-margin forecast.
+bytes on the older Mac. The estimator now has a separate
+`--storage-only --extra-sources-only` mode that counts those sources using the
+same encoded paginated records and 4 MiB compression boundaries as the draft
+backup. It reports only aggregates and marks a live-changing SQLite source
+incomplete. An attempted full-scope scan on the active Mac stopped safely when
+source state changed; it produced no figure. A separate extra-sources-only scan
+read a pinned SQLite view and counted **1,615 paginated threads**, **7,003,946,701
+encoded record bytes**, and the **132 attachments / 1,914,216 raw bytes**. It
+estimated **3,228,869,786 encrypted chunk bytes across 3,234 unique chunks**
+for those extra sources in an empty Vault. Its `estimate_complete` flag is
+**false** because the live database changed during the scan. Relative to the
+older transcript-only estimate below, this is roughly another 11% of first-
+backup object bytes, not an exact combined snapshot measurement: the scans
+were at different times and cross-source duplicate chunks were not reconciled.
+Do not use either figure as a customer allowance or all-in gross-margin
+forecast. Neither first-backup estimate measures retained version growth or
+fully loaded COGS.
 
 | Measure | Result |
 | --- | ---: |
