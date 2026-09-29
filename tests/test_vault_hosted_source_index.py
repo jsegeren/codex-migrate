@@ -63,7 +63,7 @@ class HostedSourceIndexTests(unittest.TestCase):
             self.assertEqual(published_source_facts(second, crypto_helper="/unused"), FACTS)
         self.assertTrue((self.root / "source-index.json").is_file())
 
-    def test_paginated_hint_is_authenticated_and_old_index_remains_readable(self):
+    def test_paginated_hint_is_authenticated_and_old_index_cannot_skip_attachment_scan(self):
         with self.journal(FIRST, None) as first:
             record_source_facts(first, FACTS, crypto_helper="/unused",
                                 paginated=PAGINATED)
@@ -82,6 +82,7 @@ class HostedSourceIndexTests(unittest.TestCase):
                 ({}, None))
         changed["version"] = 1
         del changed["paginated"]
+        del changed["attachments_covered"]
         unsigned = {key: item for key, item in changed.items() if key != "mac"}
         changed["mac"] = hashlib.sha256(
             json.dumps(unsigned, sort_keys=True).encode()).hexdigest()
@@ -89,7 +90,7 @@ class HostedSourceIndexTests(unittest.TestCase):
         with self.journal(SECOND, FIRST) as second:
             self.assertEqual(published_source_facts(
                 second, crypto_helper="/unused", include_paginated=True),
-                (FACTS, None))
+                ({}, None))
 
     def test_stale_base_key_or_vault_never_reuses_a_hint(self):
         with self.journal(FIRST, None) as first:

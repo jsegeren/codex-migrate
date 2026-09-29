@@ -20,7 +20,7 @@ Vault format:
 2. **Segeren-hosted backup for the current individual path.** A buyer may opt in after buying the $49 Mac app.
    Their **first hosted month is free**. The earlier $10/month direction was
    rejected as too low. Business pricing, allowances, and billing are not
-   approved or live. It uploads client-encrypted transcript objects and required
+   approved or live. It uploads client-encrypted history and attachment objects and required
    non-content Vault metadata to operated object storage, then reports the last
    remotely verified snapshot. Existing Mac-app buyers retain their local
    edition, must not repurchase it to add hosting, and receive the same one-time

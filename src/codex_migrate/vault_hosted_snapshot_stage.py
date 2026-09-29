@@ -135,7 +135,8 @@ def _reuse_candidates(files: list, prior: Sequence[dict],
         prior_by_path[identity] = item
     reusable: Dict[Tuple[str, str], dict] = {}
     for folder, path, relative in files:
-        identity = ("active" if folder == "sessions" else "archived", relative)
+        identity = ("active" if folder == "sessions" else
+                    "archived" if folder == "archived_sessions" else "attachments", relative)
         previous = prior_by_path.get(identity)
         if (identity in duplicates or not isinstance(previous, dict) or
                 previous.get("identity_state") == "needs_review" or
@@ -198,10 +199,19 @@ def stage_hosted_snapshot(
         files = _source_files(source_home)
         if len(files) > 100_000:
             raise MigrationError("The hosted snapshot has too many transcripts.")
+        attachment_paths = {relative for folder, _, relative in files
+                            if folder == "attachments"}
+        previous_attachment_paths = {item.get("path") for item in previous_catalog
+                                     if item.get("collection") == "attachments"}
+        missing_attachments = set()
         titles = title_index(source_home)
         fingerprints, previous_paginated = published_source_facts(
             journal, crypto_helper=crypto_helper, include_paginated=True)
         reuse = _reuse_candidates(files, previous_catalog, fingerprints)
+        if attachment_paths != previous_attachment_paths:
+            # Re-read wrappers when an attachment appeared or vanished: an
+            # unchanged rollout could now reference missing content.
+            reuse = {}
         reusable_paginated = (
             _reusable_paginated(previous_catalog, paginated_count)
             if has_paginated and paginated_stable and
@@ -224,7 +234,8 @@ def stage_hosted_snapshot(
         for folder, path, relative in files:
             before = check_info(path.lstat())
             identity = (folder, relative)
-            collection = "active" if folder == "sessions" else "archived"
+            collection = ("active" if folder == "sessions" else
+                          "archived" if folder == "archived_sessions" else "attachments")
             previous = reuse.get((collection, relative))
             if previous is not None:
                 ids = {row["id"] for row in previous["chunks"]}
@@ -241,18 +252,29 @@ def stage_hosted_snapshot(
                     "user_messages": previous.get("user_messages"),
                 }
             else:
-                try:
-                    signals = scan_transcript(path, relative, titles)
-                except TranscriptChanged:
-                    raise MigrationError(
-                        "A conversation changed during hosted backup; retry after it settles.") from None
+                if collection == "attachments":
+                    signals_fields = {
+                        "thread_id": None, "identity_state": "unverified",
+                        "titles": [], "records": 0,
+                        "assistant_messages": 0, "user_messages": 0,
+                    }
+                else:
+                    try:
+                        signals = scan_transcript(path, relative, titles)
+                    except TranscriptChanged:
+                        raise MigrationError(
+                            "A conversation changed during hosted backup; retry after it settles.") from None
+                    signals_fields = signals.manifest_fields()
+                    if any(attachment_id + "/pasted-text.txt" not in attachment_paths
+                           for attachment_id in signals.pasted_attachment_ids):
+                        missing_attachments.add(
+                            signals.thread_id or collection + "/" + relative)
                 if _identity(check_info(path.lstat())) != _identity(before):
                     raise MigrationError("A conversation changed during hosted identity inspection.")
                 staged = stage_remote_aware_file_windowed(
                     path, journal.key_id, client, journal.reservation_id, journal,
                     crypto_helper=crypto_helper, chunk_size=chunk_size,
                     window_bytes=window_bytes, apply=True)
-                signals_fields = signals.manifest_fields()
             if (_identity(check_info(path.lstat())) != _identity(before) or
                     staged.size != before.st_size):
                 raise MigrationError("A conversation changed during hosted backup.")
@@ -277,12 +299,19 @@ def stage_hosted_snapshot(
             (item for item in previous_catalog
              if item.get("collection") in ("active", "archived")),
             manifest_files))
+        at_risk.update(missing_attachments)
+        at_risk.update(
+            item.get("thread_id") or item["collection"] + "/" + item["path"]
+            for item in previous_catalog
+            if item.get("collection") in ("active", "archived") and
+               item.get("at_risk") is True)
         for item in manifest_files:
-            if item["identity_state"] == "needs_review":
+            if item["collection"] != "attachments" and item["identity_state"] == "needs_review":
                 at_risk.add(item["collection"] + "/" + item["path"])
         for item in manifest_files:
-            item["at_risk"] = (item.get("thread_id") in at_risk or
-                               item["collection"] + "/" + item["path"] in at_risk)
+            item["at_risk"] = (item["collection"] != "attachments" and
+                               (item.get("thread_id") in at_risk or
+                                item["collection"] + "/" + item["path"] in at_risk))
         if has_paginated:
             from codex_migrate.vault_paginated import encoded_item, open_paginated_source
             if reusable_paginated is not None:
@@ -369,8 +398,10 @@ def stage_hosted_snapshot(
             require_local(path)
         manifest = {
             "format": "codex-vault-snapshot",
-            "version": 3 if any(item["collection"] == "paginated"
-                                for item in manifest_files) else 2,
+            "version": (4 if any(item["collection"] == "attachments"
+                                 for item in manifest_files) else
+                        3 if any(item["collection"] == "paginated"
+                                 for item in manifest_files) else 2),
             "snapshot_id": journal.snapshot_id, "created_at": created_at,
             "files": manifest_files,
         }
@@ -378,7 +409,8 @@ def stage_hosted_snapshot(
             metadata, manifest, stages, journal, client,
             crypto_helper=crypto_helper, apply=True)
         record_source_facts(journal, {
-            ("active" if folder == "sessions" else "archived", relative): facts
+            ("active" if folder == "sessions" else
+             "archived" if folder == "archived_sessions" else "attachments", relative): facts
             for (folder, relative), facts in source_facts.items()
         }, crypto_helper=crypto_helper, paginated=paginated_hint)
         return HostedSnapshotStage(journal.snapshot_id, journal.reservation_id, objects,

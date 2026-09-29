@@ -16,6 +16,9 @@ import stat
 from typing import Dict, Iterable, Iterator, List, Optional, Tuple
 
 from codex_migrate.errors import MigrationError
+from codex_migrate.vault_attachments import (
+    attachment_files, pasted_references, read_pasted_text,
+)
 from codex_migrate.source_availability import check_info, require_local
 from codex_migrate.vault_identity import MAX_RECORD_BYTES, canonical_id, filename_id, title_index
 
@@ -41,6 +44,8 @@ class VaultSummary:
     paginated_threads: int = 0
     paginated_database_bytes: int = 0
     paginated_database_present: bool = False
+    attachment_files: int = 0
+    attachment_bytes: int = 0
 
     def as_dict(self) -> Dict[str, int]:
         return asdict(self)
@@ -364,8 +369,10 @@ def inspect(source_home: str) -> VaultSummary:
     from codex_migrate.vault_paginated import source_footprint
 
     paginated_threads, paginated_bytes, paginated_present = source_footprint(source_home)
+    attachments = attachment_files(source_home)
     return VaultSummary(active, archived, total, paginated_threads,
-                        paginated_bytes, paginated_present)
+                        paginated_bytes, paginated_present, len(attachments),
+                        sum(check_info(path.lstat()).st_size for _, path, _ in attachments))
 
 
 def _strings(value: object, key: str = "") -> Iterable[str]:
@@ -381,6 +388,20 @@ def _strings(value: object, key: str = "") -> Iterable[str]:
         for child_key, child in value.items():
             if isinstance(child_key, str):
                 yield from _strings(child, child_key)
+
+
+def _record_texts(source_home: str, record: object) -> Iterable[str]:
+    """Include pasted prompts that Codex stored outside the JSONL message."""
+    seen_attachments = set()
+    for text in _strings(record):
+        yield text
+        for attachment_id in pasted_references(text):
+            if attachment_id in seen_attachments:
+                continue
+            seen_attachments.add(attachment_id)
+            body = read_pasted_text(source_home, attachment_id)
+            yield ("Pasted text attachment:\n" + body if body is not None else
+                   "Referenced pasted text attachment is missing from this source.")
 
 
 def _timestamp(record: object) -> Optional[str]:
@@ -604,7 +625,7 @@ def search(
                             continue
                         items = (item for rollout_id, start, end in ranges
                                  for item in source.items_range(rollout_id, start, end))
-                        for index, group in _paginated_item_entries(items):
+                        for index, group in _paginated_item_entries(source_home, items):
                             for entry in group:
                                 position = entry.text.casefold().find(needle)
                                 if position >= 0:
@@ -645,7 +666,7 @@ def search(
         try:
             for record, cursor, line_number in _lineage_records(segments):
                 seen = set()
-                for text in _strings(record):
+                for text in _record_texts(source_home, record):
                     if text in seen:
                         continue
                     seen.add(text)
@@ -690,7 +711,7 @@ def _find_transcript(source_home: str, collection: str, transcript: str) -> Path
     raise ValueError("conversation was not found")
 
 
-def _paginated_item_entries(items):
+def _paginated_item_entries(source_home, items):
     """Render database items as message-like text without synthetic rollouts."""
     for index, item in enumerate(items):
         record = json.loads(item.item_json)
@@ -703,7 +724,7 @@ def _paginated_item_entries(items):
             item.item_type, item.item_type)
         seen = set()
         entries = []
-        for body in _strings(record):
+        for body in _record_texts(source_home, record):
             if body in seen:
                 continue
             seen.add(body)
@@ -740,7 +761,7 @@ def _paginated_entries(source_home: str, transcript: str, live: bool = False,
         with open_paginated_source(source_home) as source:
             items = (item for rollout_id, start, end in ranges
                      for item in source.items_range(rollout_id, start, end))
-            yield from _paginated_item_entries(items)
+            yield from _paginated_item_entries(source_home, items)
     else:
         if available is None:
             available = _paginated_catalog_ids(catalog)
@@ -749,7 +770,7 @@ def _paginated_entries(source_home: str, transcript: str, live: bool = False,
         items = (item for rollout_id, start, end in ranges
                  if available is None or rollout_id in available
                  for item in restored_items(source_home, rollout_id, start, end))
-        yield from _paginated_item_entries(items)
+        yield from _paginated_item_entries(source_home, items)
 
 
 def read_thread(
@@ -777,7 +798,7 @@ def read_thread(
     total = 0
     for record, _, _ in _lineage_records(_lineage_segments(source_home, path)):
         seen = set()
-        for text in _strings(record):
+        for text in _record_texts(source_home, record):
             if text in seen:
                 continue
             seen.add(text)
@@ -862,12 +883,12 @@ def read_thread_page(
         for record, start, _ in records:
             if expected_query and start == cursor and not any(
                     expected_query.casefold() in body.casefold()
-                    for body in _strings(record)):
+                    for body in _record_texts(source_home, record)):
                 raise MigrationError("This conversation changed since the search. Search again.")
             seen = set()
             new_entries = []
             new_bytes = 0
-            for body in _strings(record):
+            for body in _record_texts(source_home, record):
                 if body in seen:
                     continue
                 seen.add(body)
@@ -950,7 +971,7 @@ def markdown_chunks(source_home: str, collection: str, transcript: str,
             ranges = _paginated_ranges(source_home, thread_id)
             items = (item for rollout_id, start, end in ranges
                      for item in live_paginated_source.items_range(rollout_id, start, end))
-            groups = _paginated_item_entries(items)
+            groups = _paginated_item_entries(source_home, items)
         else:
             groups = _paginated_entries(source_home, transcript, catalog=catalog)
         label = "live Codex paginated source" if live_paginated_source is not None else "saved paginated source"
@@ -972,7 +993,7 @@ def markdown_chunks(source_home: str, collection: str, transcript: str,
     index = 0
     for record, _, _ in _lineage_records(segments, stable=True):
         seen = set()
-        for body in _strings(record):
+        for body in _record_texts(source_home, record):
             if body in seen:
                 continue
             seen.add(body)

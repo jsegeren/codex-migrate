@@ -28,7 +28,8 @@ def _transcript_state(source_home: str):
     for folder, path, relative in files:
         info = check_info(path.lstat())
         require_local(path)
-        key = ("active" if folder == "sessions" else "archived", relative)
+        key = ("active" if folder == "sessions" else
+               "archived" if folder == "archived_sessions" else "attachments", relative)
         if key in state:
             raise MigrationError("Codex history has a duplicate source path.")
         state[key] = (info.st_dev, info.st_ino, info.st_size,
@@ -75,7 +76,7 @@ def unchanged_published_history(
         paginated_ids = set()
         for item in catalog:
             collection, path = item.get("collection"), item.get("path")
-            if collection in ("active", "archived"):
+            if collection in ("active", "archived", "attachments"):
                 identity = (collection, path)
                 if identity in transcript_rows:
                     return None
@@ -100,7 +101,8 @@ def unchanged_published_history(
         titles = title_index(source_home)
         for identity, item in transcript_rows.items():
             if (item.get("size") != before[identity][2] or
-                    item.get("titles") != list(titles.get(item.get("thread_id"), []))):
+                    (identity[0] != "attachments" and
+                     item.get("titles") != list(titles.get(item.get("thread_id"), [])))):
                 return None
         for item in catalog:
             if item.get("collection") == "paginated" and item.get("titles") != list(

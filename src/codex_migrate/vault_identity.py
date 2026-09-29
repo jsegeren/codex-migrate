@@ -21,6 +21,7 @@ from urllib.parse import quote
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.source_availability import require_local
+from codex_migrate.vault_attachments import pasted_references
 
 
 ROLLOUT_ID = re.compile(r"(?:rollout-)?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$", re.I)
@@ -223,6 +224,7 @@ class ThreadSignals:
     records: int
     assistant_messages: int
     user_messages: int
+    pasted_attachment_ids: Tuple[str, ...] = ()
 
     def manifest_fields(self) -> Dict[str, object]:
         return {
@@ -244,6 +246,7 @@ def scan_transcript(path: Path, relative: str, titles: Dict[str, List[str]]) -> 
             if not stat.S_ISREG(before.st_mode):
                 raise MigrationError("A conversation changed before identity inspection.")
             embedded_ids = set()
+            pasted_attachment_ids = set()
             records = assistant = user = 0
             for raw in handle:
                 if len(raw) > MAX_RECORD_BYTES:
@@ -262,6 +265,15 @@ def scan_transcript(path: Path, relative: str, titles: Dict[str, List[str]]) -> 
                     continue
                 records += 1
                 payload = record.get("payload")
+                stack = [payload]
+                while stack:
+                    value = stack.pop()
+                    if isinstance(value, str):
+                        pasted_attachment_ids.update(pasted_references(value))
+                    elif isinstance(value, dict):
+                        stack.extend(value.values())
+                    elif isinstance(value, list):
+                        stack.extend(value)
                 if record.get("type") == "session_meta" and isinstance(payload, dict):
                     found = canonical_id(payload.get("id"))
                     if found:
@@ -283,14 +295,17 @@ def scan_transcript(path: Path, relative: str, titles: Dict[str, List[str]]) -> 
         raise TranscriptChanged("A conversation changed during identity inspection.")
     named = filename_id(relative)
     if len(embedded_ids) > 1:
-        return ThreadSignals(None, "needs_review", [], records, assistant, user)
+        return ThreadSignals(None, "needs_review", [], records, assistant, user,
+                             tuple(sorted(pasted_attachment_ids)))
     embedded = next(iter(embedded_ids), None)
     if embedded and named and embedded != named:
-        return ThreadSignals(None, "needs_review", [], records, assistant, user)
+        return ThreadSignals(None, "needs_review", [], records, assistant, user,
+                             tuple(sorted(pasted_attachment_ids)))
     thread_id = embedded or named
     # A filename by itself is a discovery hint, not a verified identity.
     state = "verified" if embedded and (not named or named == embedded) else "unverified"
-    return ThreadSignals(thread_id, state, list(titles.get(thread_id, [])), records, assistant, user)
+    return ThreadSignals(thread_id, state, list(titles.get(thread_id, [])), records,
+                         assistant, user, tuple(sorted(pasted_attachment_ids)))
 
 
 def mark_simultaneous_conflicts(files: List[Dict[str, object]]) -> None:

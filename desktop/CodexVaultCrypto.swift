@@ -9,7 +9,7 @@ private let keychainService = "com.segeren.codex-vault"
 private let hostedDeviceService = "com.segeren.codex-vault-hosted-device"
 private let keychainInteractionError = "Vault could not access its key without interactive Keychain approval. No backup was published. Contact support if this persists"
 private let formatVersion = 1
-private let snapshotFormatVersion = 3
+private let snapshotFormatVersion = 4
 
 private struct Chunk: Codable {
     let id: String
@@ -1008,7 +1008,7 @@ private func validatedSnapshot(_ arguments: [String]) throws ->
     var seenPaths = Set<String>()
     var chunkSHA256 = [String: String]()
     for file in manifest.files {
-        guard ["active", "archived", "paginated"].contains(file.collection),
+        guard ["active", "archived", "paginated", "attachments"].contains(file.collection),
               !file.path.isEmpty, !file.path.hasPrefix("/"), !file.path.contains("\\"),
               file.path.split(separator: "/", omittingEmptySubsequences: false).allSatisfy({
                   !$0.isEmpty && $0 != "." && $0 != ".."
@@ -1040,6 +1040,14 @@ private func validatedSnapshot(_ arguments: [String]) throws ->
                   file.identity_state == "verified", file.path == id + ".jsonl",
                   file.size > 0, file.mtime_ns == 0 else {
                 throw VaultError.message("the decrypted manifest has an invalid paginated source")
+            }
+        }
+        if file.collection == "attachments" {
+            guard manifest.version >= 4, file.thread_id == nil,
+                  file.identity_state == "unverified", file.titles == [],
+                  file.records == 0, file.assistant_messages == 0,
+                  file.user_messages == 0 else {
+                throw VaultError.message("the decrypted manifest has an invalid attachment")
             }
         }
         let logicalPath = file.collection + "/" + file.path
@@ -1167,7 +1175,8 @@ private func restoreCommand(_ arguments: [String]) throws {
                          isDirectory: true)
     for file in manifest.files {
         let collection = file.collection == "active" ? "sessions" :
-            (file.collection == "archived" ? "archived_sessions" : "paginated_history")
+            (file.collection == "archived" ? "archived_sessions" :
+             file.collection == "paginated" ? "paginated_history" : "attachments")
         let target = output.appendingPathComponent(collection, isDirectory: true)
             .appendingPathComponent(file.path, isDirectory: false)
         let parent = target.deletingLastPathComponent()

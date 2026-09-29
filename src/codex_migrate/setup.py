@@ -831,7 +831,13 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                     if old is not None:
                         old.cleanup()
                 with self._vault_lock:
-                    self._browse_status = {"status": "ready", **result.as_dict()}
+                    self._browse_status = {
+                        "status": "ready", **result.as_dict(),
+                        "conversation_files": sum(
+                            item["collection"] != "attachments" for item in catalog),
+                        "attachment_files": sum(
+                            item["collection"] == "attachments" for item in catalog),
+                    }
             except Exception:
                 temporary.cleanup()
                 with self._vault_lock:
@@ -1214,10 +1220,11 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                 "destination": planned.destination,
                 "storage": storage,
                 "completed_files": 0,
-                "total_files": planned.transcript_files + planned.paginated_threads,
+                "total_files": (planned.transcript_files + planned.paginated_threads +
+                                planned.attachment_files),
                 "completed_bytes": 0,
                 "total_bytes": (0 if planned.paginated_threads
-                                else planned.transcript_bytes),
+                                else planned.transcript_bytes + planned.attachment_bytes),
             }
             self._vault_thread = worker
             worker.start()

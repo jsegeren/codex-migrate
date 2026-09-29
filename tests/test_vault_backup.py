@@ -14,6 +14,7 @@ from unittest.mock import patch
 
 from codex_migrate.errors import MigrationError
 from codex_migrate import vault_backup
+from codex_migrate.vault_attachments import read_pasted_text
 from codex_migrate.vault_hosted_chunk_journal import HostedChunkJournal
 from codex_migrate.vault_hosted_live_run import HostedLiveBackupRun
 from codex_migrate.vault_hosted_manifest import stage_hosted_manifest
@@ -133,6 +134,245 @@ class VaultBackupTests(unittest.TestCase):
             self.assertTrue(result.encrypted)
             self.assertEqual(result.transcript_files, 2)
             self.assertFalse(destination.exists())
+
+    def test_pasted_prompt_attachment_is_encrypted_and_restored(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            destination = root / "vault"
+            self.fixture(source)
+            attachment_id = str(uuid.uuid4())
+            attachments = source / ".codex/attachments"
+            prompt = attachments / attachment_id / "pasted-text.txt"
+            prompt.parent.mkdir(parents=True)
+            prompt.write_text("PRIVATE-ATTACHMENT-ONLY-PROMPT", encoding="utf-8")
+            active = source / ".codex/sessions/2026/09/17/active.jsonl"
+            with active.open("a", encoding="utf-8") as output:
+                output.write(json.dumps({
+                    "type": "response_item", "payload": {
+                        "role": "user", "content": [{"type": "input_text", "text":
+                            "# Files mentioned by the user:\n\n"
+                            "## Pasted text.txt: /Users/old/.codex/attachments/" +
+                            attachment_id + "/pasted-text.txt\n\n"
+                            "## My request for Codex:\n"}]}}) + "\n")
+            registry = attachments / "pasted-text-attachments.json"
+            registry.write_text(json.dumps({"attachmentPaths": [str(prompt)]}),
+                                encoding="utf-8")
+            planned = plan(str(source), str(destination))
+            self.assertEqual(planned.transcript_files, 2)
+            self.assertEqual(planned.attachment_files, 2)
+            result = None
+            try:
+                result = backup(str(source), str(destination),
+                                crypto_helper=str(self.helper))
+                self.assertEqual(result.transcript_files, 2)
+                self.assertEqual(result.attachment_files, 2)
+                catalog = snapshot_catalog(str(destination), crypto_helper=str(self.helper))
+                self.assertEqual([item["path"] for item in catalog
+                                  if item["collection"] == "attachments"],
+                                 [attachment_id + "/pasted-text.txt",
+                                  "pasted-text-attachments.json"])
+                self.assertEqual(verify_snapshot(str(destination),
+                                 crypto_helper=str(self.helper)).transcript_files, 4)
+                ciphertext = b"".join(path.read_bytes() for path in
+                                      (destination / "objects").rglob("*.cvchunk"))
+                self.assertNotIn(b"PRIVATE-ATTACHMENT-ONLY-PROMPT", ciphertext)
+                self.assertEqual(search(str(source), "PRIVATE-ATTACHMENT-ONLY-PROMPT")[0].collection,
+                                 "active")
+                browse = root / "browse"
+                browse.mkdir()
+                restored = browse / ".codex"
+                restore_snapshot(str(source), str(destination), str(restored),
+                                 crypto_helper=str(self.helper))
+                self.assertEqual((restored / "attachments" / attachment_id /
+                                  "pasted-text.txt").read_bytes(), prompt.read_bytes())
+                self.assertEqual((restored / "attachments" /
+                                  "pasted-text-attachments.json").read_bytes(),
+                                 registry.read_bytes())
+                matches = search(str(browse), "PRIVATE-ATTACHMENT-ONLY-PROMPT",
+                                 catalog=catalog)
+                self.assertEqual(len(matches), 1)
+                self.assertEqual(matches[0].collection, "active")
+                exported = b"".join(markdown_chunks(
+                    str(browse), "active", "2026/09/17/active.jsonl"))
+                self.assertIn(b"PRIVATE-ATTACHMENT-ONLY-PROMPT", exported)
+                with self.assertRaisesRegex(MigrationError, "cannot be installed"):
+                    plan_install(str(source), str(destination),
+                                 crypto_helper=str(self.helper))
+                prompt.unlink()
+                incomplete = backup(str(source), str(destination),
+                                    crypto_helper=str(self.helper))
+                self.assertTrue(incomplete.needs_attention)
+                self.assertEqual(incomplete.at_risk_threads, 1)
+                current_catalog = snapshot_catalog(str(destination),
+                                                   crypto_helper=str(self.helper))
+                self.assertTrue(next(item for item in current_catalog
+                                     if item["collection"] == "active")["at_risk"])
+                self.assertEqual((restored / "attachments" / attachment_id /
+                                  "pasted-text.txt").read_text(encoding="utf-8"),
+                                 "PRIVATE-ATTACHMENT-ONLY-PROMPT")
+            finally:
+                if result is not None:
+                    self.delete_key(destination)
+
+    def test_linked_attachment_is_not_silently_omitted(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            self.fixture(source)
+            attachments = source / ".codex/attachments"
+            attachments.mkdir()
+            outside = root / "outside.txt"
+            outside.write_text("PRIVATE-OUTSIDE-FILE", encoding="utf-8")
+            (attachments / "pasted-text.txt").symlink_to(outside)
+            with self.assertRaisesRegex(MigrationError, "attachment file needs review"):
+                plan(str(source), str(root / "vault"))
+
+    def test_pasted_prompt_browse_refuses_linked_folder(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            attachments = source / ".codex/attachments"
+            attachments.mkdir(parents=True)
+            attachment_id = str(uuid.uuid4())
+            outside = root / "outside"
+            outside.mkdir()
+            (outside / "pasted-text.txt").write_text("outside", encoding="utf-8")
+            (attachments / attachment_id).symlink_to(outside)
+            with self.assertRaisesRegex(MigrationError, "opened or read safely"):
+                read_pasted_text(str(source), attachment_id)
+
+    def test_new_attachment_during_backup_does_not_publish_incomplete_snapshot(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            destination = root / "vault"
+            self.fixture(source)
+            original = vault_backup._run_helper
+            added = False
+
+            def add_during_encryption(helper, arguments, **kwargs):
+                nonlocal added
+                result = original(helper, arguments, **kwargs)
+                if arguments[0] == "store-chunks" and not added:
+                    added = True
+                    attachment = (source / ".codex/attachments" / str(uuid.uuid4()) /
+                                  "pasted-text.txt")
+                    attachment.parent.mkdir(parents=True)
+                    attachment.write_text("NEW-UNPROTECTED-PROMPT", encoding="utf-8")
+                return result
+
+            try:
+                with patch.object(vault_backup, "_run_helper",
+                                  side_effect=add_during_encryption):
+                    with self.assertRaisesRegex(MigrationError, "changed during backup"):
+                        backup(str(source), str(destination),
+                               crypto_helper=str(self.helper))
+                self.assertFalse((destination / "latest.json").exists())
+            finally:
+                self.delete_key(destination)
+
+    def test_hosted_snapshot_includes_attachment_only_prompt(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            self.fixture(source)
+            attachment_id = str(uuid.uuid4())
+            prompt = (source / ".codex/attachments" / attachment_id /
+                      "pasted-text.txt")
+            prompt.parent.mkdir(parents=True)
+            prompt.write_text("PRIVATE-HOSTED-ATTACHMENT-PROMPT", encoding="utf-8")
+            active = source / ".codex/sessions/2026/09/17/active.jsonl"
+            with active.open("a", encoding="utf-8") as output:
+                output.write(json.dumps({"type": "response_item", "payload": {
+                    "role": "user", "content": [{"type": "input_text", "text":
+                        "/Users/old/.codex/attachments/" + attachment_id +
+                        "/pasted-text.txt"}]}}) + "\n")
+            key = json.loads(subprocess.run(
+                [str(self.helper), "create-key"], check=True,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout)
+            key_id = key["key_id"]
+            snapshot_id = str(uuid.uuid4())
+            directory = root / "journal"
+            directory.mkdir(mode=0o700)
+            identity = {"account_id": str(uuid.uuid4()),
+                        "vault_id": str(uuid.uuid4()),
+                        "reservation_id": str(uuid.uuid4()),
+                        "snapshot_id": snapshot_id, "key_id": key_id}
+            metadata = {"format": "codex-vault", "version": 1,
+                        "key_id": key_id,
+                        "created_at": "2026-09-29T00:00:00+00:00"}
+
+            class Client:
+                def __init__(self):
+                    self.store = MemoryObjectStore()
+
+                def published_chunks(self, ids):
+                    return {}
+
+                def object_store(self, reservation_id, expected, *, apply=False):
+                    if reservation_id != identity["reservation_id"] or apply is not True:
+                        raise AssertionError("wrong hosted reservation")
+                    return self.store
+
+            client = Client()
+            try:
+                with HostedChunkJournal(directory, **identity) as journal:
+                    staged = stage_hosted_snapshot(
+                        str(source), metadata, [], journal, client,
+                        crypto_helper=str(self.helper), apply=True)
+                self.assertEqual(staged.transcript_files, 3)
+                self.assertNotIn(b"PRIVATE-HOSTED-ATTACHMENT-PROMPT",
+                                 b"".join(client.store.objects.values()))
+                subprocess.run([str(self.helper), "delete-key", "--key-id", key_id],
+                               check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                key_id = None
+                recovered = root / "recovered-vault"
+                home = root / "recovery-home"
+                home.mkdir(mode=0o700)
+                with self.assertRaises(MigrationError):
+                    vault_remote_recovery.download_encrypted_snapshot(
+                        str(home), str(recovered), client.store,
+                        staged.upload_claim().receipt(), max_bytes=5_000_000,
+                        crypto_helper=str(self.helper))
+                key_id = import_recovery_key(str(recovered), key["recovery_key"],
+                                             crypto_helper=str(self.helper))
+                vault_remote_recovery.download_encrypted_snapshot(
+                    str(home), str(recovered), client.store,
+                    staged.upload_claim().receipt(), max_bytes=5_000_000,
+                    crypto_helper=str(self.helper))
+                catalog = snapshot_catalog(str(recovered), crypto_helper=str(self.helper))
+                self.assertEqual([item["path"] for item in catalog
+                                  if item["collection"] == "attachments"],
+                                 [attachment_id + "/pasted-text.txt"])
+                browse_home = root / "browse-home"
+                browse_home.mkdir()
+                output = browse_home / ".codex"
+                restore_snapshot(str(home), str(recovered), str(output),
+                                 crypto_helper=str(self.helper))
+                self.assertEqual((output / "attachments" / attachment_id /
+                                  "pasted-text.txt").read_bytes(), prompt.read_bytes())
+                self.assertEqual(len(search(str(browse_home),
+                                            "PRIVATE-HOSTED-ATTACHMENT-PROMPT",
+                                            catalog=catalog)), 1)
+                prompt.unlink()
+                second_id = str(uuid.uuid4())
+                identity["reservation_id"] = str(uuid.uuid4())
+                identity["snapshot_id"] = second_id
+                second_directory = root / "second-journal"
+                second_directory.mkdir(mode=0o700)
+                second_client = Client()
+                with HostedChunkJournal(second_directory, **identity,
+                                        base_snapshot_id=snapshot_id) as journal:
+                    incomplete = stage_hosted_snapshot(
+                        str(source), metadata, catalog, journal, second_client,
+                        crypto_helper=str(self.helper), apply=True)
+                self.assertEqual(incomplete.at_risk_threads, 1)
+            finally:
+                if key_id is not None:
+                    subprocess.run([str(self.helper), "delete-key", "--key-id", key_id],
+                                   check=True, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE)
 
     def test_manifest_fingerprint_authenticates_exact_sealed_bytes(self):
         with tempfile.TemporaryDirectory() as temporary:

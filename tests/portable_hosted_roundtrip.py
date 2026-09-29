@@ -35,6 +35,9 @@ _KEY = re.compile(
     rf"(?:metadata/{_UUID}\.json|manifests/{_UUID}\.cvmanifest|"
     rf"refs/{_UUID}\.json|objects/[0-9a-f]{{2}}/[0-9a-f]{{62}}\.cvchunk)\Z")
 NEW_TRANSCRIPT = TRANSCRIPT + b'{"type":"response_item","payload":{"content":"later synthetic work"}}\n'
+ATTACHMENT_PATH = "attachments/55555555-5555-4555-8555-555555555555/pasted-text.txt"
+FIRST_ATTACHMENT = b"SYNTHETIC-ATTACHMENT-ONLY-FIRST-PROMPT"
+NEW_ATTACHMENT = b"SYNTHETIC-ATTACHMENT-ONLY-UPDATED-PROMPT"
 
 
 class SyntheticObjectStore:
@@ -220,6 +223,9 @@ def produce(bundle: Path, helper: Path) -> None:
     transcript = source / ".codex" / RELATIVE
     transcript.parent.mkdir(parents=True, exist_ok=False)
     transcript.write_bytes(TRANSCRIPT)
+    attachment = source / ".codex" / ATTACHMENT_PATH
+    attachment.parent.mkdir(parents=True)
+    attachment.write_bytes(FIRST_ATTACHMENT)
     (source / ".codex" / "auth.json").write_text("NEVER-COPY-AUTH", encoding="utf-8")
     store = SyntheticObjectStore(bundle / "encrypted-objects")
     key_id = None
@@ -234,6 +240,7 @@ def produce(bundle: Path, helper: Path) -> None:
             json.dumps(first.receipt(), sort_keys=True), encoding="utf-8")
 
         transcript.write_bytes(NEW_TRANSCRIPT)
+        attachment.write_bytes(NEW_ATTACHMENT)
         newer = backup(str(source), str(local_vault), crypto_helper=str(helper))
         if newer.snapshot_id == saved.snapshot_id or newer.key_id != saved.key_id:
             raise AssertionError("Synthetic scheduled snapshot was not distinct")
@@ -264,9 +271,10 @@ def produce(bundle: Path, helper: Path) -> None:
                            os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(key_file, "w", encoding="utf-8") as output:
             output.write(saved.recovery_key + "\n")
-        if any(b"NEVER-COPY-AUTH" in path.read_bytes()
+        if any(any(plain in path.read_bytes() for plain in
+                   (b"NEVER-COPY-AUTH", FIRST_ATTACHMENT, NEW_ATTACHMENT))
                for path in store.root.rglob("*") if path.is_file()):
-            raise AssertionError("Synthetic authentication material entered ciphertext artifact")
+            raise AssertionError("Synthetic plaintext entered ciphertext artifact")
         produce_live_paginated(bundle, helper, store)
         print("Two synthetic snapshots staged after interruption; local Vault excluded")
     finally:
@@ -307,6 +315,7 @@ def consume(bundle: Path, helper: Path) -> None:
                 verified.snapshot_id != result.snapshot_id or
                 restored_result.snapshot_id != result.snapshot_id or
                 (restored / RELATIVE).read_bytes() != TRANSCRIPT or
+                (restored / ATTACHMENT_PATH).read_bytes() != FIRST_ATTACHMENT or
                 (restored / "auth.json").exists()):
             raise AssertionError("Independent-Mac hosted-style recovery failed")
 
@@ -340,7 +349,9 @@ def consume(bundle: Path, helper: Path) -> None:
                          crypto_helper=str(helper))
         if (newer_result.snapshot_id != newer_receipt["snapshot_id"] or
                 (newer_restored / RELATIVE).read_bytes() != NEW_TRANSCRIPT or
-                (restored / RELATIVE).read_bytes() != TRANSCRIPT):
+                (newer_restored / ATTACHMENT_PATH).read_bytes() != NEW_ATTACHMENT or
+                (restored / RELATIVE).read_bytes() != TRANSCRIPT or
+                (restored / ATTACHMENT_PATH).read_bytes() != FIRST_ATTACHMENT):
             raise AssertionError("Independent-Mac retry or prior snapshot changed")
         consume_live_paginated(bundle, helper, store)
         print("Prior and newer synthetic snapshots recovered independently after corruption")

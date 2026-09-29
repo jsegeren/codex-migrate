@@ -35,7 +35,7 @@ def staged_snapshot_objects(
     metadata: StagedObject, sealed_manifest: StagedObject,
     reference: StagedObject,
 ) -> Tuple[StagedObject, ...]:
-    """Bind a v2/v3 manifest's exact chunks to staged ciphertext facts.
+    """Bind a v2–v4 manifest's exact chunks to staged ciphertext facts.
 
     The caller separately seals and stages the *same* manifest bytes. This
     check catches missing, extra, or conflicting chunk claims before receipt
@@ -48,7 +48,7 @@ def staged_snapshot_objects(
             set(manifest) != {"format", "version", "snapshot_id", "created_at", "files"} or
             manifest["format"] != "codex-vault-snapshot" or
             type(manifest["version"]) is not int or
-            manifest["version"] not in (2, 3) or
+            manifest["version"] not in (2, 3, 4) or
             manifest["snapshot_id"] != snapshot_id or
             not isinstance(manifest["created_at"], str) or
             not isinstance(manifest["files"], list) or
@@ -66,18 +66,25 @@ def staged_snapshot_objects(
         if not isinstance(file, dict):
             raise MigrationError("The hosted snapshot contains an invalid transcript.")
         collection, path = file.get("collection"), file.get("path")
-        if (collection not in ("active", "archived", "paginated") or
+        if (collection not in ("active", "archived", "paginated", "attachments") or
                 not isinstance(path, str) or not path or path.startswith("/") or
                 "\\" in path or "\0" in path or
                 any(part in ("", ".", "..") for part in path.split("/"))):
             raise MigrationError("The hosted snapshot contains an unsafe transcript path.")
         thread_id = file.get("thread_id")
         if collection == "paginated" and (
-                manifest["version"] != 3 or canonical_id(thread_id) != thread_id or
+                manifest["version"] < 3 or canonical_id(thread_id) != thread_id or
                 path != thread_id + ".jsonl" or file.get("mtime_ns") != 0 or
                 file.get("identity_state") != "verified" or
                 type(file.get("records")) is not int or file["records"] < 1):
             raise MigrationError("The hosted snapshot has invalid paginated history.")
+        if collection == "attachments" and (
+                manifest["version"] < 4 or thread_id is not None or
+                file.get("identity_state") != "unverified" or
+                file.get("titles") != [] or file.get("records") != 0 or
+                file.get("assistant_messages") != 0 or
+                file.get("user_messages") != 0 or file.get("at_risk") is not False):
+            raise MigrationError("The hosted snapshot has invalid attachments.")
         if (set(file) != {"collection", "path", "size", "mtime_ns", "sha256",
                           "chunks", "thread_id", "identity_state", "titles",
                           "records", "assistant_messages", "user_messages", "at_risk"} or

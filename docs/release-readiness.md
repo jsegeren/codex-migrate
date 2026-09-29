@@ -5,6 +5,20 @@ remaining acceptance checks continue. This is not full release certification.
 The [paid-beta launch record](paid-beta-launch-2026-09-07.md) controls the current
 distribution decision; the dated entries below preserve their original status.
 
+## September 29 attachment coverage — draft, not released
+
+Some Codex pasted prompts are stored only in `~/.codex/attachments` while the
+conversation JSONL retains a path reference. A transcript-only backup can
+therefore miss user-authored text. Draft snapshot format 4 now encrypts the
+owned attachment files alongside the history; local and hosted synthetic
+roundtrips recover them after key import, and restored-history search/export
+resolves the old-Mac path by attachment ID. Missing referenced pasted text is
+marked at risk rather than called protected. Whole-history write-back to Codex
+is refused for attachment-bearing snapshots until reference repair is proven;
+read-only restore to a separate folder remains available. Older snapshots
+cannot recover an attachment they never captured. This work has not passed
+real R2 clean-Mac recovery or shipped in a signed customer build.
+
 ## September 28 paginated-history coverage hold
 
 On September 29, exact draft source `66ed54b59e7da4cf7ead58250c4e482fcfa049e5`

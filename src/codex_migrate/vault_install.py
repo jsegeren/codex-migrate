@@ -789,10 +789,11 @@ def recover_interrupted_install(source_home: str, *, apply: bool = False) -> Dic
 
 def _require_installable_snapshot(vault: str, snapshot_id: str,
                                   crypto_helper: Optional[str]) -> None:
-    if any(item["collection"] == "paginated" for item in snapshot_catalog(
+    if any(item["collection"] in ("paginated", "attachments") for item in snapshot_catalog(
             vault, snapshot=snapshot_id, crypto_helper=crypto_helper)):
         raise MigrationError(
-            "This backup includes paginated history that cannot be installed into Codex. "
+            "This backup includes paginated history or attachments that cannot be "
+            "installed into Codex safely. "
             "Open or export its saved conversations instead; whole-history install is refused.")
 
 

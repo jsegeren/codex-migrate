@@ -432,7 +432,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                     if result.applied:
                         print("Verified snapshot: %s" % result.snapshot_id)
                         print("Conversation files: %d" % result.transcript_files)
-                        print("Plaintext bytes protected: %d" % result.transcript_bytes)
+                        print("Attachment files: %d" % result.attachment_files)
+                        print("Plaintext bytes protected: %d" % (
+                            result.transcript_bytes + result.attachment_bytes))
                         print("Encrypted chunks: %d" % result.chunks)
                         print("Vault: %s" % result.destination)
                         if result.recovery_key:
@@ -441,6 +443,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                     else:
                         print("Would back up %d conversation file(s), %d byte(s)." % (
                             result.transcript_files, result.transcript_bytes))
+                        if result.attachment_files:
+                            print("Also found %d attachment file(s), %d byte(s)." % (
+                                result.attachment_files, result.attachment_bytes))
                         if result.paginated_database_bytes:
                             print("Also found %d database-backed thread(s), %d byte(s) of SQLite storage. "
                                   "Snapshot bytes may differ." % (
@@ -557,7 +562,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                     print(json.dumps(result.as_dict(), indent=2, sort_keys=True))
                 else:
                     print("Verified snapshot: %s" % result.snapshot_id)
-                    print("Conversation files: %d" % result.transcript_files)
+                    print("Protected files: %d" % result.transcript_files)
                     print("Plaintext bytes protected: %d" % result.transcript_bytes)
                     if result.applied:
                         print("Restored to staging folder: %s" % result.output)

@@ -60,7 +60,7 @@ def _read_private(path: Path) -> Optional[dict]:
 
 
 def _header(journal: HostedChunkJournal, snapshot_id: str) -> dict:
-    return {"format": _FORMAT, "version": 2,
+    return {"format": _FORMAT, "version": 3, "attachments_covered": True,
             "accountId": journal.account_id, "vaultId": journal.vault_id,
             "keyId": journal.key_id, "snapshotId": snapshot_id}
 
@@ -70,8 +70,11 @@ def _facts(value: dict) -> SourceFacts:
     version = value.get("version")
     keys = {"format", "version", "accountId", "vaultId",
             "keyId", "snapshotId", "files", "mac"}
-    if (type(version) is not int or version not in (1, 2) or
-            set(value) != (keys | ({"paginated"} if version == 2 else set())) or
+    extras = ({"paginated", "attachments_covered"} if version == 3 else
+              {"paginated"} if version == 2 else set())
+    if (type(version) is not int or version not in (1, 2, 3) or
+            set(value) != keys | extras or
+            (version == 3 and value.get("attachments_covered") is not True) or
             not isinstance(value.get("mac"), str) or
             not _HEX.fullmatch(value["mac"]) or
             not isinstance(rows, list) or len(rows) > _MAX_FILES):
@@ -79,7 +82,7 @@ def _facts(value: dict) -> SourceFacts:
     result: SourceFacts = {}
     for row in rows:
         if (not isinstance(row, list) or len(row) != 7 or
-                row[0] not in ("active", "archived") or
+                row[0] not in ("active", "archived", "attachments") or
                 not isinstance(row[1], str) or not row[1] or
                 row[1].startswith("/") or "\\" in row[1] or "\0" in row[1] or
                 any(part in ("", ".", "..") for part in row[1].split("/")) or
@@ -158,7 +161,7 @@ def published_source_index(directory: Path, *, account_id: str, vault_id: str,
     expected = {"format": _FORMAT, "accountId": account_id,
                 "vaultId": vault_id, "keyId": key_id,
                 "snapshotId": snapshot_id}
-    if (value.get("version") not in (1, 2) or
+    if (value.get("version") != 3 or
             any(value.get(key) != wanted for key, wanted in
                 expected.items())):
         return None  # Lost promotion or key rotation: scan the source instead.
@@ -211,7 +214,7 @@ def promote_source_facts(directory: Path, state: dict) -> None:
     expected = {"format": _FORMAT,
                 "accountId": state["accountId"], "vaultId": state["vaultId"],
                 "keyId": state["keyId"], "snapshotId": state["snapshotId"]}
-    if (candidate.get("version") not in (1, 2) or
+    if (candidate.get("version") != 3 or
             any(candidate.get(key) != value for key, value in expected.items())):
         raise MigrationError("The hosted source index belongs to another backup.")
     try:

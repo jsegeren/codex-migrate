@@ -25,6 +25,7 @@ import uuid
 from codex_migrate.errors import MigrationError
 from codex_migrate.source_availability import check_info, require_local
 from codex_migrate.vault import _transcripts, inspect as inspect_vault
+from codex_migrate.vault_attachments import attachment_files
 from codex_migrate.vault_identity import (
     TranscriptChanged, loss_warnings, mark_simultaneous_conflicts,
     scan_transcript, title_index,
@@ -33,7 +34,7 @@ from codex_migrate.vault_local_lock import local_history_lock
 
 
 FORMAT_VERSION = 1
-SNAPSHOT_FORMAT_VERSION = 3
+SNAPSHOT_FORMAT_VERSION = 4
 DEFAULT_CHUNK_SIZE = 4 * 1024 * 1024
 METADATA_NAME = "vault.json"
 STORAGE_CODEC = "lzfse-v1"
@@ -47,6 +48,8 @@ class BackupPlan:
     transcript_bytes: int
     paginated_threads: int = 0
     paginated_database_bytes: int = 0
+    attachment_files: int = 0
+    attachment_bytes: int = 0
     encrypted: bool = True
     applied: bool = False
 
@@ -67,6 +70,8 @@ class BackupResult:
     at_risk_threads: int = 0
     paginated_history_unprotected: bool = False
     title_index_unavailable: bool = False
+    attachment_files: int = 0
+    attachment_bytes: int = 0
     applied: bool = True
 
     def as_dict(self) -> Dict[str, object]:
@@ -337,7 +342,7 @@ def _prepare_repository(root: Path, helper: Path) -> Tuple[str, Optional[str]]:
 
 
 def _source_files(source_home: str) -> List[Tuple[str, Path, str]]:
-    files = list(_transcripts(source_home))
+    files = list(_transcripts(source_home)) + attachment_files(source_home)
     files.sort(key=lambda item: (item[0], item[2]))
     return files
 
@@ -376,7 +381,8 @@ def plan(source_home: str, destination: str) -> BackupPlan:
     summary = inspect_vault(source_home)
     return BackupPlan(str(root), summary.active_transcripts + summary.archived_transcripts,
                       summary.transcript_bytes, summary.paginated_threads,
-                      summary.paginated_database_bytes)
+                      summary.paginated_database_bytes, summary.attachment_files,
+                      summary.attachment_bytes)
 
 
 def _paginated_history_unprotected(source_home: str) -> bool:
@@ -448,6 +454,9 @@ def _backup_unlocked(
     helper = _helper_path(crypto_helper)
     paginated_history_unprotected = _paginated_history_unprotected(source_home)
     files = _source_files(source_home)
+    attachment_paths = {relative for folder, _, relative in files
+                        if folder == "attachments"}
+    missing_attachments = set()
     try:
         titles = title_index(source_home)
         title_index_unavailable = False
@@ -489,18 +498,35 @@ def _backup_unlocked(
         manifest_files = []
         total_chunks = 0
         total_bytes = 0
+        attachment_count = 0
+        attachment_bytes = 0
+        captured_sources = {}
         for folder, path, relative in files:
             require_local(path)
             for attempt in range(MAX_CHANGED_TRANSCRIPT_ATTEMPTS):
                 scanned = check_info(path.lstat())
-                try:
-                    signals = scan_transcript(path, relative, titles)
-                except TranscriptChanged:
-                    if attempt + 1 == MAX_CHANGED_TRANSCRIPT_ATTEMPTS:
-                        raise MigrationError(
-                            "A conversation changed during backup. Run backup again; no snapshot was published."
-                        ) from None
-                    continue
+                if folder == "attachments":
+                    signals_fields = {
+                        "thread_id": None, "identity_state": "unverified",
+                        "titles": [], "records": 0,
+                        "assistant_messages": 0, "user_messages": 0,
+                    }
+                else:
+                    try:
+                        signals = scan_transcript(path, relative, titles)
+                    except TranscriptChanged:
+                        if attempt + 1 == MAX_CHANGED_TRANSCRIPT_ATTEMPTS:
+                            raise MigrationError(
+                                "A conversation changed during backup. Run backup again; no snapshot was published."
+                            ) from None
+                        continue
+                    signals_fields = signals.manifest_fields()
+                    if any(attachment_id + "/pasted-text.txt" not in attachment_paths
+                           for attachment_id in signals.pasted_attachment_ids):
+                        missing_attachments.add(
+                            signals.thread_id or
+                            ("active" if folder == "sessions" else "archived") +
+                            "/" + relative)
                 descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
                 try:
                     before = os.fstat(descriptor)
@@ -529,6 +555,9 @@ def _backup_unlocked(
                     and before.st_ctime_ns == after.st_ctime_ns
                 )
                 if stable:
+                    captured_sources[(folder, relative)] = (
+                        after.st_dev, after.st_ino, after.st_size,
+                        after.st_mtime_ns, after.st_ctime_ns)
                     break
                 if attempt + 1 == MAX_CHANGED_TRANSCRIPT_ATTEMPTS:
                     raise MigrationError(
@@ -553,16 +582,20 @@ def _backup_unlocked(
                         or ("encoding" in chunk and chunk["encoding"] != "lzfse")):
                     raise MigrationError("The backup helper returned invalid chunk metadata.")
             manifest_files.append({
-                "collection": "active" if folder == "sessions" else "archived",
+                "collection": ("active" if folder == "sessions" else
+                               "archived" if folder == "archived_sessions" else "attachments"),
                 "path": relative,
                 "size": stored_size,
                 "mtime_ns": before.st_mtime_ns,
                 "sha256": digest,
                 "chunks": chunks,
-                **signals.manifest_fields(),
+                **signals_fields,
             })
             total_bytes += stored_size
             total_chunks += len(chunks)
+            if folder == "attachments":
+                attachment_count += 1
+                attachment_bytes += stored_size
             if progress is not None:
                 progress(len(manifest_files), progress_total_files,
                          total_bytes, progress_total_bytes)
@@ -573,6 +606,7 @@ def _backup_unlocked(
              if item.get("collection") in ("active", "archived")),
             manifest_files,
         ))
+        at_risk.update(missing_attachments)
         # Keep the database projection separate from the JSONL rollout. Equal
         # thread IDs across these two sources are not a simultaneous-file
         # conflict and are never treated as proof that their bodies agree.
@@ -642,10 +676,23 @@ def _backup_unlocked(
                 continue
             item["at_risk"] = (item.get("thread_id") in at_risk or
                                item["collection"] + "/" + item["path"] in at_risk)
+        # Codex can create a new transcript or attachment while an earlier
+        # file is being encrypted. A stable read of each old file alone does
+        # not prove that the captured source set is complete.
+        current_files = _source_files(source_home)
+        if {(folder, relative) for folder, _, relative in current_files} != set(captured_sources):
+            raise MigrationError("Codex history changed during backup. Run backup again; no snapshot was published.")
+        for folder, path, relative in current_files:
+            info = check_info(path.lstat())
+            if ((info.st_dev, info.st_ino, info.st_size,
+                 info.st_mtime_ns, info.st_ctime_ns) !=
+                    captured_sources[(folder, relative)]):
+                raise MigrationError("Codex history changed during backup. Run backup again; no snapshot was published.")
         manifest = {
             "format": "codex-vault-snapshot",
-            "version": (SNAPSHOT_FORMAT_VERSION if any(
-                item["collection"] == "paginated" for item in manifest_files) else 2),
+            "version": (SNAPSHOT_FORMAT_VERSION if attachment_count else
+                        3 if any(item["collection"] == "paginated"
+                                 for item in manifest_files) else 2),
             "snapshot_id": snapshot_id,
             "created_at": created_at,
             "files": manifest_files,
@@ -687,8 +734,8 @@ def _backup_unlocked(
         return BackupResult(
             destination=str(root),
             snapshot_id=snapshot_id,
-            transcript_files=len(manifest_files),
-            transcript_bytes=total_bytes,
+            transcript_files=len(manifest_files) - attachment_count,
+            transcript_bytes=total_bytes - attachment_bytes,
             chunks=total_chunks,
             key_id=key_id,
             recovery_key=recovery_key,
@@ -696,4 +743,6 @@ def _backup_unlocked(
             at_risk_threads=len(at_risk | paginated_at_risk),
             paginated_history_unprotected=paginated_history_unprotected,
             title_index_unavailable=title_index_unavailable,
+            attachment_files=attachment_count,
+            attachment_bytes=attachment_bytes,
         )

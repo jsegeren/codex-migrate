@@ -163,7 +163,7 @@ def snapshot_catalog(
          "--object-dir", str(objects), "--manifest", str(manifest)],
     )
     files = catalog.get("files")
-    if catalog.get("snapshot_id") != snapshot_id or catalog.get("version") not in (1, 2, 3) \
+    if catalog.get("snapshot_id") != snapshot_id or catalog.get("version") not in (1, 2, 3, 4) \
             or not isinstance(files, list) or len(files) > 100000:
         raise MigrationError("The Vault conversation catalog is invalid.")
     result: List[Dict[str, object]] = []
@@ -172,7 +172,7 @@ def snapshot_catalog(
         if not isinstance(file, dict):
             raise MigrationError("The Vault conversation catalog is invalid.")
         collection, path = file.get("collection"), file.get("path")
-        if (collection not in ("active", "archived", "paginated") or not isinstance(path, str)
+        if (collection not in ("active", "archived", "paginated", "attachments") or not isinstance(path, str)
                 or not path or len(path) > 4096 or path.startswith("/") or "\\" in path
                 or any(part in ("", ".", "..") for part in path.split("/"))):
             raise MigrationError("The Vault conversation catalog has an unsafe path.")
@@ -191,6 +191,9 @@ def snapshot_catalog(
         if collection == "paginated" and (catalog["version"] < 3 or
                                           thread_id is None or path != thread_id + ".jsonl"):
             raise MigrationError("The Vault paginated catalog has an invalid source identity.")
+        if collection == "attachments" and (catalog["version"] < 4 or
+                                             thread_id is not None):
+            raise MigrationError("The Vault attachment catalog has an invalid source identity.")
         state = file.get("identity_state") or "unverified"
         titles = file.get("titles") or []
         if (state not in ("verified", "unverified", "needs_review")

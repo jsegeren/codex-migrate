@@ -87,3 +87,19 @@ class HostedNoChangeTests(unittest.TestCase):
         self.recovery.pointer_reads = 0
         self.recovery.change_pointer_after_first = True
         self.assertIsNone(self.check())
+
+    def test_attachment_change_cannot_be_called_unchanged(self):
+        attachment = (self.home / ".codex/attachments" / OTHER /
+                      "pasted-text.txt")
+        attachment.parent.mkdir(parents=True)
+        attachment.write_bytes(b"synthetic attached prompt")
+        self.recovery.catalog.append({
+            "collection": "attachments", "path": OTHER + "/pasted-text.txt",
+            "size": attachment.stat().st_size, "thread_id": None, "titles": [],
+        })
+        self.hint = _transcript_state(str(self.home))
+        self.assertEqual(self.check()["lastGoodSnapshotId"], SNAPSHOT)
+        attachment.write_bytes(b"changed attached prompt")
+        self.assertIsNone(self.check())
+        attachment.unlink()
+        self.assertIsNone(self.check())

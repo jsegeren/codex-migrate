@@ -29,6 +29,8 @@ def _versions(vault: str, *, crypto_helper: Optional[str] = None) -> Iterator[Di
     for snapshot in list_snapshots(vault, limit=None):
         for file in snapshot_catalog(
                 vault, snapshot=snapshot.snapshot_id, crypto_helper=crypto_helper):
+            if file["collection"] == "attachments":
+                continue  # Supporting source files are not separate conversations.
             yield {
                 "key": _group_key(file),
                 "snapshot_id": snapshot.snapshot_id,
