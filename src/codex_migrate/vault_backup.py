@@ -371,33 +371,41 @@ def _previous_catalog(root: Path, key_id: str, helper: Path) -> List[Dict[str, o
     return files
 
 
-def _paginated_history_unprotected(source_home: str) -> bool:
-    """Hold complete-history claims while paginated read/export is unproved.
-
-    Its presence alone is enough: reading projection offsets cannot prove that
-    the JSONL files contain everything in the database. This presence check
-    never opens or mutates the Codex-owned SQLite file.
-    """
-    database = _canonical_macos_path(Path(source_home) / ".codex/thread_history_1.sqlite")
-    try:
-        info = database.lstat()
-    except FileNotFoundError:
-        return False  # Older Codex versions have no paginated projection.
-    except OSError as error:
-        raise MigrationError("Codex paginated history could not be inspected safely.") from error
-    _require_unlinked_path(database)
-    if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
-            or info.st_nlink != 1):
-        raise MigrationError("Codex paginated history is not a private regular file.")
-    return True
-
-
 def plan(source_home: str, destination: str) -> BackupPlan:
     root = _validate_destination(source_home, destination)
     summary = inspect_vault(source_home)
     return BackupPlan(str(root), summary.active_transcripts + summary.archived_transcripts,
                       summary.transcript_bytes, summary.paginated_threads,
                       summary.paginated_database_bytes)
+
+
+def _paginated_history_unprotected(source_home: str) -> bool:
+    """Flag a Codex history source that this Vault version does not capture.
+
+    Presence alone is enough: JSONL files may not contain every message in
+    this database. Never open or change the Codex-owned database to decide.
+    """
+    codex = _canonical_macos_path(Path(source_home) / ".codex")
+    try:
+        codex.lstat()
+    except FileNotFoundError:
+        return False
+    except OSError as error:
+        raise MigrationError("Codex history could not be inspected safely.") from error
+    _require_unlinked_path(codex)
+    database = codex / "thread_history_1.sqlite"
+    try:
+        info = database.lstat()
+    except FileNotFoundError:
+        return False
+    except OSError as error:
+        raise MigrationError("Codex paginated history could not be inspected safely.") from error
+    _require_unlinked_path(database)
+    require_local(database)
+    if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+            or info.st_nlink != 1):
+        raise MigrationError("Codex paginated history is not a private regular file.")
+    return True
 
 
 def backup(

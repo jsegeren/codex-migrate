@@ -87,6 +87,15 @@ class IdentityTests(unittest.TestCase):
                 _paginated_history_unprotected(str(root / "source"))
             self.assertEqual(outside.read_bytes(), b"private synthetic test content")
 
+    def test_linked_codex_folder_does_not_look_safe_when_database_is_absent(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "source").mkdir()
+            (root / "outside").mkdir()
+            (root / "source/.codex").symlink_to(root / "outside")
+            with self.assertRaises(MigrationError):
+                _paginated_history_unprotected(str(root / "source"))
+
     def test_static_malformed_record_is_not_retried_as_a_live_change(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "broken.jsonl"
