@@ -29,6 +29,15 @@ This is current-source packaging evidence, not a signed buyer release,
 natural daily wake, physical power/network interruption, clean-account
 recovery, a signed updater installation, or real-history protection proof.
 
+A read-only search with that exact packaged engine against this Mac's installed
+Codex history returned the requested 20 capped thread matches in 12.95 seconds:
+19 database-backed and one active transcript. The engine reported that
+ambiguous history copies were skipped, so the result is explicitly incomplete.
+The query and match text were not recorded. The check created no backup or
+search index and did not alter Codex state. It is one real-history packaged
+search observation, not a complete-recall or acceptable worst-case-latency
+proof.
+
 A low-priority, read-only Vault title search on the second Mac found a real
 thread by a former title in 0.17 seconds and displayed its different current
 title from Codex state. A synthetic regression now preserves that behavior
