@@ -99,7 +99,17 @@ from the authenticated service, records unchanged checks separately from
 verified publications, and preserves the prior green receipt on a failed or
 at-risk run. It has synthetic safety tests, but is not wired to enrollment or
 the signed customer's UI and has not run a 30-minute physical-Mac acceptance
-cycle. It is not a customer backup service or a recovery-window claim yet.
+  cycle. It is not a customer backup service or a recovery-window claim yet.
+
+Current sandbox device sessions expire after 29 days. Without a credential
+lifecycle, an unattended schedule would then lose access even on a healthy
+Mac. A dark database rotation primitive now replaces one active scoped device
+session with a different Keychain-held bearer and revokes the old session in
+one transaction; disposable PostgreSQL tests cover replay, wrong-device,
+expiry, and failed-insert rollback. No native rotation, ambiguous-response
+reconciliation, schedule handoff, or HTTP action is wired yet. Automated
+renewal/rotation and a visible re-enrollment path after prolonged offline time
+are release gates, not a hidden day-29 failure to ship.
 
 The sandbox recovery API now has an account-scoped, device-authenticated
 read-only usage query for server-accounted retained and reserved encrypted
@@ -948,8 +958,10 @@ egress allowance. Do not claim that B2 restores are always free. See its
    and webhook state from the existing one-time purchase; enforce active,
    past-due, cancellation, refund, and dispute states; publish no entitlement
    from a success redirect alone. Exercise a real paid or sandbox end-to-end
-   purchase without double-charge. Set provider spend caps/alerts and define
-   outage, customer-support, export, and deletion runbooks.
+   purchase without double-charge. Rotate the 29-day device credential without
+   stranding the schedule after a lost response, and make prolonged-offline
+   re-enrollment explicit. Set provider spend caps/alerts and define outage,
+   customer-support, export, and deletion runbooks.
 5. **Release truthful UX:** setup clearly distinguishes local-only,
    customer-sync-unverified, hosted-uploading, hosted-verified, and hosted-
    failed states. Show last good remote backup, bytes used/allowance, and a
