@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, codex/hosted-vault-service]
+    branches: [main]
   pull_request:
 
 permissions:
