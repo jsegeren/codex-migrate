@@ -10,8 +10,9 @@ from unittest.mock import patch
 from codex_migrate.cli import parser
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_hosted_schedule import (
-    LABEL, _paths, _rotation_path, hosted_schedule_status, install_hosted_schedule,
-    remove_hosted_schedule, run_hosted_scheduled_backup,
+    LABEL, _paths, _rotation_path, _write_run_status,
+    hosted_schedule_status, install_hosted_schedule, remove_hosted_schedule,
+    run_hosted_scheduled_backup,
 )
 from codex_migrate.vault_hosted_upload_client import HostedUploadClient
 from codex_migrate.vault_schedule import prepare_update, resume_after_update
@@ -166,6 +167,32 @@ class HostedScheduleTests(unittest.TestCase):
             "put_confirmed": 0, "put_confirmed_bytes": 0,
         })
         self.assertNotIn("hv1_", status_path.read_text())
+        history_path = status_path.with_name("hosted-cost-history.json")
+        history = json.loads(history_path.read_text())
+        self.assertEqual(len(history["runs"]), 1)
+        self.assertEqual(history["runs"][0]["status"], "unchanged")
+        self.assertNotIn("snapshot_id", history["runs"][0])
+        self.assertEqual(history_path.stat().st_mode & 0o077, 0)
+
+    def test_cost_history_is_bounded_and_cannot_block_backup_status(self):
+        path = Path(self.home) / "hosted-last-run.json"
+        with patch("codex_migrate.vault_hosted_schedule._COST_HISTORY_LIMIT", 3):
+            for index in range(5):
+                sample = {"status": "verified", "checked_at": str(index),
+                          "snapshot_id": SNAPSHOT,
+                          "cost_metrics": {"elapsed_ms": index}}
+                _write_run_status(path, sample)
+            history_path = path.with_name("hosted-cost-history.json")
+            history = json.loads(history_path.read_text())
+            self.assertEqual([row["checked_at"] for row in history["runs"]],
+                             ["2", "3", "4"])
+            self.assertNotIn(SNAPSHOT, history_path.read_text())
+            before = history_path.read_bytes()
+            history_path.chmod(0o644)
+            _write_run_status(path, {"status": "failed", "checked_at": "5",
+                                     "error": "synthetic", "cost_metrics": {"elapsed_ms": 5}})
+            self.assertEqual(history_path.read_bytes(), before)
+            self.assertEqual(json.loads(path.read_text())["status"], "failed")
 
     def test_ambiguous_rotation_preserves_pending_id_and_last_good(self):
         self._install()
@@ -218,6 +245,9 @@ class HostedScheduleTests(unittest.TestCase):
         status = json.loads(status_path.read_text())
         self.assertEqual(status["status"], "failed")
         self.assertNotIn("private data", status["error"])
+        history = status_path.with_name("hosted-cost-history.json").read_text()
+        self.assertEqual(json.loads(history)["runs"][0]["status"], "failed")
+        self.assertNotIn("private data", history)
 
     def test_new_verified_snapshot_and_ambiguous_risk_are_distinct(self):
         self._install()

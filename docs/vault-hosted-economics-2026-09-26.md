@@ -147,13 +147,15 @@ stopping protection.
 
 The dark scheduler now writes elapsed milliseconds, attempted upload-service
 request counts, and attempted/confirmed Worker HEAD and PUT counts and bytes to
-its owner-only last-run receipt. These are content-free diagnostics, not a
-provider bill: a lost PUT acknowledgement can be billed even when the client
-cannot confirm it, and a confirmed immutable retry does not necessarily add
-retained bytes. The receipt is overwritten at each run, so a seven-day
-measurement still needs a separate bounded collection and reconciliation with
-other service reads, database and R2 usage. Source-read bytes, verified unique growth,
-retention cost, and restore/support cost remain unmeasured.
+its owner-only last-run receipt. A separate owner-only, content-free rolling
+history retains at most 1,024 terminal-run samples; an unsafe or corrupt
+history never blocks the backup, so a measurement review must check for gaps.
+These are diagnostics, not a provider bill: a lost PUT acknowledgement can be
+billed even when the client cannot confirm it, and a confirmed immutable retry
+does not necessarily add retained bytes. The seven-day measurement still needs
+real scheduled runs and reconciliation with other service reads, database and
+R2 usage. Source-read bytes, verified unique growth, retention cost, and
+restore/support cost remain unmeasured.
 
 The measured two-Mac baseline has 36,356 unique encrypted chunks and about
 140.57 GB of stable raw transcripts. A naive 30-minute run that HEAD-checks

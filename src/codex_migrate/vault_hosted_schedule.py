@@ -42,6 +42,8 @@ _FORMAT = "codex-vault-hosted-schedule"
 _UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z")
 _FAILED = ("Hosted backup stopped safely. The last verified remote snapshot "
            "was not replaced; this Mac needs attention.")
+_COST_HISTORY_FORMAT = "codex-vault-hosted-cost-history"
+_COST_HISTORY_LIMIT = 1024
 
 
 def _now() -> str:
@@ -55,6 +57,45 @@ def _cost_metrics(started: float, upload: object = None) -> dict:
         result["upload_service_attempts"] = upload.service_request_counts()
         result["worker_attempts"] = upload.worker_attempt_counts()
     return result
+
+
+def _append_cost_history(status_path: Path, status: dict) -> None:
+    """Keep bounded private run evidence; diagnostics cannot block protection."""
+    try:
+        history_path = status_path.with_name("hosted-cost-history.json")
+        if history_path.exists():
+            if history_path.lstat().st_mode & 0o077:
+                raise MigrationError("The hosted cost history is not private.")
+            history = _safe_json(history_path)
+            if (set(history) != {"format", "version", "runs"} or
+                    history["format"] != _COST_HISTORY_FORMAT or
+                    history["version"] != 1 or type(history["version"]) is not int or
+                    not isinstance(history["runs"], list) or
+                    len(history["runs"]) > _COST_HISTORY_LIMIT):
+                raise MigrationError("The hosted cost history is invalid.")
+            runs = history["runs"]
+        else:
+            runs = []
+        sample = {"checked_at": status["checked_at"],
+                  "status": status["status"],
+                  "cost_metrics": status["cost_metrics"]}
+        if runs and runs[-1] == sample:
+            return
+        _atomic_json(history_path, {
+            "format": _COST_HISTORY_FORMAT, "version": 1,
+            "runs": (runs + [sample])[-_COST_HISTORY_LIMIT:],
+        }, replace=True)
+    except Exception:
+        # A corrupt or unavailable measurement file cannot stop a backup or
+        # overwrite its last-good remote receipt. Missing samples are visible
+        # as gaps during the separate economics acceptance review.
+        return
+
+
+def _write_run_status(path: Path, status: dict) -> None:
+    _atomic_json(path, status, replace=True)
+    if "cost_metrics" in status:
+        _append_cost_history(path, status)
 
 
 def _paths(source_home: str) -> tuple:
@@ -264,10 +305,10 @@ def run_hosted_scheduled_backup(config_path: str) -> int:
             marker = _pending_update(marker_path)
             if marker is not None:
                 _atomic_json(marker_path, {**marker, "deferred": True}, replace=True)
-                _atomic_json(status_path, {"status": "failed", "checked_at": _now(),
-                                           "error": _FAILED,
-                                           "cost_metrics": _cost_metrics(started)},
-                             replace=True)
+                _write_run_status(status_path, {
+                    "status": "failed", "checked_at": _now(), "error": _FAILED,
+                    "cost_metrics": _cost_metrics(started),
+                })
                 return 0
             _atomic_json(status_path, {"status": "running", "checked_at": _now()},
                          replace=True)
@@ -296,18 +337,19 @@ def run_hosted_scheduled_backup(config_path: str) -> int:
             if state == "verified":
                 _atomic_json(good_path, {"snapshot_id": snapshot_id,
                                          "observed_at": _now()}, replace=True)
-            _atomic_json(status_path, {"status": state, "checked_at": _now(),
-                                       "snapshot_id": snapshot_id,
-                                       "cost_metrics": _cost_metrics(started, upload)},
-                         replace=True)
+            _write_run_status(status_path, {
+                "status": state, "checked_at": _now(),
+                "snapshot_id": snapshot_id,
+                "cost_metrics": _cost_metrics(started, upload),
+            })
             return 0
     except Exception:
         try:
             if "status_path" in locals():
-                _atomic_json(status_path, {"status": "failed", "checked_at": _now(),
-                                           "error": _FAILED,
-                                           "cost_metrics": _cost_metrics(started, upload)},
-                             replace=True)
+                _write_run_status(status_path, {
+                    "status": "failed", "checked_at": _now(), "error": _FAILED,
+                    "cost_metrics": _cost_metrics(started, upload),
+                })
         except Exception:
             pass
         return 1
