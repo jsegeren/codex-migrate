@@ -191,6 +191,26 @@ class HostedLiveRunTests(unittest.TestCase):
             self.back_up(metadata={**self.metadata, "key_id": OTHER})
         self.assertEqual(self.run.pending(), pending)
 
+    def test_pending_state_isolated_between_vaults_and_accounts(self):
+        pending = self.interrupted_run()
+        other_vault_upload = HostedUploadClient(
+            ORIGIN, "http://127.0.0.1:49112", TOKEN, ACCOUNT, OTHER,
+            allow_loopback_http=True)
+        other_vault_recovery = HostedRecoveryClient(
+            ORIGIN, TOKEN, OTHER, allow_loopback_http=True)
+        other_vault = HostedLiveBackupRun(
+            other_vault_upload, other_vault_recovery, str(self.home))
+        self.assertIsNone(other_vault.pending())
+
+        other_account_upload = HostedUploadClient(
+            ORIGIN, "http://127.0.0.1:49112", TOKEN, OTHER, VAULT,
+            allow_loopback_http=True)
+        other_account = HostedLiveBackupRun(
+            other_account_upload, self.recovery, str(self.home))
+        with self.assertRaisesRegex(MigrationError, "does not match this Vault"):
+            other_account.pending()
+        self.assertEqual(self.run.pending(), pending)
+
     def test_retry_refuses_a_changed_reservation_base(self):
         bases = iter((BASE, OTHER))
         with patch.object(self.upload, "reserve_with_base",
