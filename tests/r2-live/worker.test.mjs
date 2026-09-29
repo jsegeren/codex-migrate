@@ -124,3 +124,28 @@ test('native fixture grants only narrow loopback object access', async () => {
   }), env)).status, 204);
   assert.equal(bucket.objects.size, 0);
 });
+
+test('encrypted roundtrip fixture grants only the four scoped object classes', async () => {
+  const env = { PROBE_ENABLED: '1', SANDBOX_BUCKET: new SyntheticBucket() };
+  const prefix = 'accounts/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/' +
+    'vaults/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/';
+  const snapshot = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const digest = 'a'.repeat(64);
+  const grant = async (key, bytes = 100) => {
+    const body = JSON.stringify({ method: 'HEAD', key, bytes, sha256: digest });
+    return worker.fetch(new Request('http://127.0.0.1/native-grant', {
+      method: 'POST', headers: { 'Content-Length': String(Buffer.byteLength(body)) },
+      body,
+    }), env);
+  };
+  for (const key of [
+    `metadata/${snapshot}.json`,
+    `objects/aa/${'a'.repeat(62)}.cvchunk`,
+    `manifests/${snapshot}.cvmanifest`,
+    `refs/${snapshot}.json`,
+  ]) {
+    assert.equal((await grant(prefix + key)).status, 200, key);
+  }
+  assert.equal((await grant(prefix + `auth/${snapshot}.json`)).status, 400);
+  assert.equal((await grant(prefix + `metadata/${snapshot}.json`, 1024 * 1024 + 1)).status, 400);
+});

@@ -9,8 +9,10 @@ const { putImmutableChecked, verifiedHead, readVerifiedBody,
 const { signObjectCapability } = capability;
 const ACCOUNT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const VAULT = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
-const NATIVE_KEY = new RegExp(`^accounts/${ACCOUNT}/vaults/${VAULT}/objects/` +
-  '[0-9a-f]{2}/[0-9a-f]{62}\\.cvchunk$');
+const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
+const NATIVE_KEY = new RegExp(`^accounts/${ACCOUNT}/vaults/${VAULT}/(?:` +
+  `metadata/${UUID}\\.json|objects/[0-9a-f]{2}/[0-9a-f]{62}\\.cvchunk|` +
+  `manifests/${UUID}\\.cvmanifest|refs/${UUID}\\.json)$`);
 let nativeSecret;
 
 function hex(bytes) {
@@ -157,7 +159,7 @@ async function nativeGrant(request, secret) {
       !['PUT', 'GET', 'HEAD', 'DELETE'].includes(value.method) ||
       typeof value.key !== 'string' || !NATIVE_KEY.test(value.key) ||
       !Number.isSafeInteger(value.bytes) || value.bytes < 1 ||
-      value.bytes > 64 * 1024 ||
+      value.bytes > 1024 * 1024 ||
       typeof value.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(value.sha256)) {
     return new Response(null, { status: 400 });
   }

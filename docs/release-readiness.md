@@ -160,6 +160,16 @@ transport receipt only: it did not connect to Cloudflare R2, publish an
 encrypted snapshot, exercise billing or enrollment, or prove clean-account
 recovery. The real-R2 sandbox and customer release gates remain open.
 
+A follow-up opt-in local test joined the real encrypted snapshot staging path
+to that loopback Worker, including one synthetic JSONL transcript and one
+database-only message. After removing its disposable Keychain key, the test
+imported the recovery key, downloaded the exact encrypted objects, verified
+and restored both sources, checked that remote bytes did not expose either
+synthetic message, and confirmed its scoped objects were deleted. The seven
+fixture unit tests also passed. Grants came from a test-only local issuer;
+this still does not prove an authenticated hosted service, actual Cloudflare
+R2, independent publication, scheduled backup, or clean-account recovery.
+
 An opt-in whole-run scale probe on the hosted branch passed in 53.454 s with
 2,048 additional synthetic transcript files and a roughly 72 MiB synthetic
 long thread. It exercised hosted-only staging, a second snapshot, remote-object

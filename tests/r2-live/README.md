@@ -11,6 +11,7 @@ npx --yes wrangler@4.141.0 dev --config tests/r2-live/wrangler.jsonc --local --i
 curl --fail --silent --show-error --request POST http://127.0.0.1:8789/probe
 curl --fail --silent --show-error --request POST http://127.0.0.1:8789/probe-transport
 PYTHONPATH=src python3 tests/r2-live/native_transport.py http://127.0.0.1:8789
+PYTHONPATH=src python3 tests/r2-live/encrypted_roundtrip.py http://127.0.0.1:8789
 ```
 
 All nine `/probe` flags and all eight `/probe-transport` flags must be `true`.
@@ -35,11 +36,23 @@ between Python's HTTP requests and the Worker runtime; it does not prove a
 customer enrollment, a full Vault snapshot, or publication. Its cleanup must
 succeed before treating the probe as passed.
 
+The encrypted-roundtrip probe compiles the test CryptoKit helper, creates a
+disposable synthetic transcript and paginated-history database, and sends a
+complete encrypted snapshot through the same capability-protected loopback
+Worker. It removes its test Keychain key, imports the one-time recovery key,
+downloads and verifies the exact encrypted objects, and restores both sources
+into a separate empty test home. It verifies that its own scoped remote objects
+are absent after cleanup. The fixture grants only metadata, chunk, manifest,
+and reference objects in its fixed synthetic account/Vault. This joins the
+client and Worker paths, but the fixture issues its own ephemeral grants: no
+authenticated hosted service, real R2, subscription, independent publication,
+scheduled wake, or separate macOS-account recovery is proved.
+
 To test against **real R2**, use `wrangler dev` without `--local` and with the
 same explicit `--var PROBE_ENABLED:1`; the config's
 `remote: true` binding then connects to the sandbox bucket while the Worker
 still runs locally. This requires a separate, authorized Cloudflare Wrangler
 credential. Do not use a production bucket, expose the local server, commit a
 credential, or run against actual Codex data. Verify the sandbox bucket is
-empty afterward in Cloudflare. Run both probe routes and the native transport
-proof; a local simulation alone is not a live-R2 receipt.
+empty afterward in Cloudflare. Run both probe routes and both native scripts;
+a local simulation alone is not a live-R2 receipt.
