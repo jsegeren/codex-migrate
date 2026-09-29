@@ -10,6 +10,11 @@ state that does not magically appear when you sign into Codex on a new Mac:
 conversations, project organization, configuration, skills, automations,
 repositories, branches, worktrees, stashes, and unfinished files.
 
+Responsible for local Codex history across a team? We are looking for
+[business backup design partners](https://migrate.segeren.com/codex-backup-for-teams)
+to help define verified off-device recovery. The hosted team service is not
+available or for sale yet; the $49 Mac beta below is a separate local product.
+
 ### Using Codex in the ChatGPT app?
 
 This project is for the local Codex work you want to keep when changing Macs,
