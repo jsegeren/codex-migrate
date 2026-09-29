@@ -188,6 +188,15 @@ def parser() -> argparse.ArgumentParser:
     vault_hosted_scheduled_run = vault_commands.add_parser(
         "hosted-scheduled-run", help=argparse.SUPPRESS)
     vault_hosted_scheduled_run.add_argument("--config", required=True)
+    vault_hosted_recover = vault_commands.add_parser(
+        "hosted-recover", help=argparse.SUPPRESS)
+    vault_hosted_recover.add_argument("--device-id", required=True)
+    vault_hosted_recover.add_argument("--output", required=True)
+    vault_hosted_recover.add_argument("--snapshot")
+    vault_hosted_recover.add_argument("--max-bytes", type=int, required=True)
+    vault_hosted_recover.add_argument("--crypto-helper")
+    vault_hosted_recover.add_argument("--apply", action="store_true")
+    vault_hosted_recover.add_argument("--json", action="store_true")
 
     return root
 
@@ -286,6 +295,17 @@ def main(argv: Optional[List[str]] = None) -> int:
             if args.vault_command == "hosted-scheduled-run":
                 from codex_migrate.vault_hosted_schedule import run_hosted_scheduled_backup
                 return run_hosted_scheduled_backup(args.config)
+            if args.vault_command == "hosted-recover":
+                from codex_migrate.vault_hosted_disaster_recovery import recover_hosted_snapshot
+                result = recover_hosted_snapshot(
+                    args.source_home, args.output, args.device_id,
+                    max_bytes=args.max_bytes, snapshot_id=args.snapshot,
+                    crypto_helper=args.crypto_helper, apply=args.apply)
+                if args.json:
+                    print(json.dumps(result, indent=2, sort_keys=True))
+                else:
+                    print("Verified hosted snapshot in: %s" % result["vault"])
+                return 0
             if args.vault_command in (
                     "schedule", "schedule-status", "schedule-remove", "scheduled-run"):
                 from codex_migrate.vault_schedule import (

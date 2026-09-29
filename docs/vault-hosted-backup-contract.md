@@ -864,6 +864,12 @@ egress allowance. Do not claim that B2 restores are always free. See its
   portability through the draft client staging/recovery modules, **not** the
   read path against R2, a real authenticated service, or first use of an
   installed buyer app in a clean account. Those remain release gates.
+  A hidden, explicitly confirmed native recovery entry point now pairs the
+  device-held credential with the current service pointer, requests the exact
+  selected-version object inventory, and invokes the existing interrupted-
+  download-safe verifier into a separate folder. It does not write into live
+  Codex. The clean Mac still needs an organization-owned enrollment and an
+  imported recovery key; this code is not a completed disaster drill.
 - The staging client now emits a version-1, content-free receipt with the
   snapshot ID and each remote object's key, byte count, and SHA-256. The
   provider-neutral service validator rejects malformed paths, missing required
