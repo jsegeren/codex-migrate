@@ -408,6 +408,13 @@ That issue's concrete reproduction is on Windows and includes custom
 providers, so it is not proof of the same failure on Mac with two OpenAI
 accounts. Together these reports justify testing both visibility and actual
 continuation, including a synthetic thread with encrypted model state.
+Separately, a [macOS Desktop report](https://github.com/openai/codex/issues/27601)
+describes old local threads becoming hidden or slow after account switching
+while the files remain, with a full app quit/reopen sometimes restoring them.
+This is one user's report on an older build, not a result for this test. It
+means the test must record both the immediate post-switch state and the state
+after a clean Desktop restart; a restart must not be mistaken for account
+portability or for recovery of missing source bytes.
 
 Before claiming account portability, run a controlled test with two separately
 authorized OpenAI accounts, a disposable macOS user/profile, and a harmless
@@ -419,9 +426,11 @@ synthetic Codex thread. Record the installed app and CLI versions and test:
    database rows without copying authentication material.
 2. Sign out only in the disposable profile, sign in as account B, then check
    list visibility, read behavior, and continuation separately in the desktop
-   app and CLI. Do not send account A's synthetic transcript as a new prompt
-   under B merely to make a test pass; distinguish true native continuation
-   from a new thread seeded with exported context.
+   app and CLI. Record the result before and after a normal full Desktop quit
+   and reopen, without modifying thread metadata or changing workspace roots.
+   Do not send account A's synthetic transcript as a new prompt under B merely
+   to make a test pass; distinguish true native continuation from a new thread
+   seeded with exported context.
 3. Sign out B and return to A. Verify A's thread, repo, worktree, and local
    Vault snapshot are unchanged. Confirm account-specific cloud work and
    connected services have not been silently mixed.
