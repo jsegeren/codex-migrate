@@ -991,10 +991,13 @@ egress allowance. Do not claim that B2 restores are always free. See its
    on the lost Mac's receipt; test this with a missing attachment and a
    shortened paginated thread. Do not treat a client-reported coverage flag as
    independent server verification of encrypted conversation content.
-   The dark recovery command now inspects the authenticated restored catalog
-   and warns when that selected version contains at-risk sources. This is a
-   post-download warning, not durable server health metadata or a clean-Mac
-   selection of the older complete version; this gate remains open.
+   Draft migration 0031 now stores the authenticated source device's coverage
+   claim atomically with publication, leaves historical versions `unknown`,
+   and exposes the claim in recovery history. The dark recovery command also
+   inspects the authenticated restored catalog and warns when a selected
+   version contains at-risk sources. This is not independent server proof of
+   encrypted content. Selecting an older complete version in the installed
+   buyer UI and proving that recovery on a clean Mac remain open gates.
 4. **Prove commerce and operations:** separate Stripe *subscription* checkout
    and webhook state from the existing one-time purchase; enforce active,
    past-due, cancellation, refund, and dispute states; publish no entitlement
