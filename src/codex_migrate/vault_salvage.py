@@ -101,9 +101,10 @@ def find_transcripts(source_home: str, query: str = "", *, offset: int = 0,
 def _drain_record(handle) -> bool:
     """Discard one oversized line within the scan budget; return if it ended."""
     while True:
-        if handle.tell() >= MAX_SCAN_BYTES:
+        remaining = MAX_SCAN_BYTES - handle.tell()
+        if remaining <= 0:
             return False
-        block = handle.readline(1024 * 1024)
+        block = handle.readline(min(1024 * 1024, remaining))
         if not block or block.endswith(b"\n"):
             return True
 
@@ -136,8 +137,15 @@ def preview_damaged_thread(source_home: str, collection: str, transcript: str,
                 if handle.tell() >= MAX_SCAN_BYTES:
                     scan_truncated = handle.tell() < before.st_size
                     break
-                raw = handle.readline(MAX_SALVAGE_RECORD_BYTES + 1)
+                raw = handle.readline(min(MAX_SALVAGE_RECORD_BYTES + 1,
+                                          MAX_SCAN_BYTES - handle.tell()))
                 if not raw:
+                    break
+                if (not raw.endswith(b"\n") and handle.tell() >= MAX_SCAN_BYTES
+                        and handle.tell() < before.st_size):
+                    # This is an incomplete record, not an intact message to
+                    # expose just because the scan ended mid-line.
+                    scan_truncated = True
                     break
                 if len(raw) > MAX_SALVAGE_RECORD_BYTES:
                     skipped += 1

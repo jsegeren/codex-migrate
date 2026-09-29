@@ -157,6 +157,35 @@ class VaultSalvageTests(unittest.TestCase):
             self.assertEqual([entry.text for entry in result.entries], ["First"])
             self.assertTrue(result.scan_truncated)
 
+    def test_scan_budget_never_parses_a_record_past_the_limit(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            path = self.fixture(home)
+            original = record("Long surviving record") + record("Past the limit")
+            path.write_bytes(original)
+            with patch.object(vault_salvage, "MAX_SCAN_BYTES", 20):
+                result = vault_salvage.preview_damaged_thread(
+                    str(home), "active", "damaged.jsonl")
+            self.assertEqual(result.entries, [])
+            self.assertEqual(result.parsed_records, 0)
+            self.assertTrue(result.scan_truncated)
+            self.assertEqual(path.read_bytes(), original)
+
+    def test_oversized_drain_respects_the_scan_budget(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            path = self.fixture(home)
+            original = b"x" * 100 + b"\n" + record("After oversized record")
+            path.write_bytes(original)
+            with patch.object(vault_salvage, "MAX_SCAN_BYTES", 50), patch.object(
+                    vault_salvage, "MAX_SALVAGE_RECORD_BYTES", 8):
+                result = vault_salvage.preview_damaged_thread(
+                    str(home), "active", "damaged.jsonl")
+            self.assertEqual(result.entries, [])
+            self.assertEqual(result.skipped_records, 1)
+            self.assertTrue(result.scan_truncated)
+            self.assertEqual(path.read_bytes(), original)
+
     def test_discovery_finds_old_title_without_parsing_damaged_body(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
