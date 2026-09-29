@@ -966,6 +966,19 @@ class VaultBackupTests(unittest.TestCase):
                         crypto_helper=str(self.helper), chunk_size=64 * 1024,
                         window_bytes=64 * 1024, apply=True)
                     self.assertEqual(smaller.at_risk_threads, 1)
+                database.unlink()
+                identity = {**identity, "reservation_id": str(uuid.uuid4()),
+                            "snapshot_id": str(uuid.uuid4())}
+                missing_directory = root / "missing-db-journal"
+                missing_directory.mkdir(mode=0o700)
+                with HostedChunkJournal(missing_directory, **identity,
+                                        base_snapshot_id=snapshot_id) as journal:
+                    missing = stage_hosted_snapshot(
+                        str(source), metadata, staging_catalog, journal, client,
+                        crypto_helper=str(self.helper), chunk_size=64 * 1024,
+                        window_bytes=64 * 1024, apply=True)
+                    self.assertEqual(missing.at_risk_threads, 1)
+                    self.assertEqual(missing.transcript_files, 0)
             finally:
                 subprocess.run([str(self.helper), "delete-key", "--key-id", key_id],
                                check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -2420,6 +2433,15 @@ class VaultBackupTests(unittest.TestCase):
                            chunk_size=64 * 1024)
                 self.assertEqual(json.loads((destination / "latest.json").read_text())
                                  ["snapshot_id"], repeated.snapshot_id)
+                database.unlink()
+                missing = backup(str(source), str(destination), crypto_helper=str(self.helper),
+                                 chunk_size=64 * 1024)
+                self.assertTrue(missing.needs_attention)
+                self.assertEqual(missing.at_risk_threads, 1)
+                self.assertEqual(missing.transcript_files, 0)
+                self.assertEqual(snapshot_catalog(str(destination),
+                    snapshot=repeated.snapshot_id, crypto_helper=str(self.helper))[0]
+                    ["thread_id"], thread_id)
             finally:
                 self.delete_key(destination)
 

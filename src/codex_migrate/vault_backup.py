@@ -682,6 +682,10 @@ def _backup_unlocked(
             (item for item in previous_files if item.get("collection") == "paginated"),
             (item for item in manifest_files if item.get("collection") == "paginated"),
         ))
+        if not paginated_history_unprotected:
+            paginated_at_risk.update(
+                item["thread_id"] for item in previous_files
+                if item.get("collection") == "paginated" and item.get("thread_id"))
         paginated_at_risk.update(missing_paginated_attachments)
         for item in manifest_files:
             if item["collection"] == "paginated":
