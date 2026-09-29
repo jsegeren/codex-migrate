@@ -238,8 +238,9 @@ obsolete economics floor, not approved business pricing. Publish no hosted
 price or enterprise protection claim until product proof, service scope,
 retention, billing behavior, and customer-facing terms are approved.
 
-The hosted tier protects the supported Codex active and archived conversation
-transcripts that Vault currently snapshots. It is not a whole-Mac backup, a
+The hosted draft snapshots supported active and archived transcripts,
+paginated conversation items, and Codex-owned attachments. These sources are
+still subject to the release and restore gates below. It is not a whole-Mac backup, a
 backup of selected repository folders, a continuous two-Mac sync or merge
 service, or a way to make Codex display every restored thread. Read/export of a
 verified snapshot is the guarantee; Codex resume remains best-effort.

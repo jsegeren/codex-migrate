@@ -11,6 +11,13 @@ It reports aggregate numbers without paths, titles, content, or digests and
 does not create a backup. On the older Mac, excluding files modified in the
 last 60 seconds:
 
+This is now an **incomplete product-cost baseline**: draft snapshot format 4
+also protects Codex-owned attachments and paginated conversation items. A
+September 29 read-only inventory found 132 attachment files totaling 1,914,216
+bytes on the older Mac. The encrypted retained size and version growth of the
+paginated source have not been measured, so do not use the transcript-only
+figures below as a customer allowance or all-in gross-margin forecast.
+
 | Measure | Result |
 | --- | ---: |
 | Stable transcripts | 2,052 |
