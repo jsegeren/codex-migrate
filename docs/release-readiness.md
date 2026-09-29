@@ -7,6 +7,18 @@ distribution decision; the dated entries below preserve their original status.
 
 ## September 28 paginated-history coverage hold
 
+On September 29, exact draft source `66ed54b59e7da4cf7ead58250c4e482fcfa049e5`
+produced an unsigned local-test arm64 build 20 (ZIP SHA-256
+`c26a20baaa0d62b731d98562dc1b73290a6aa779a388e853fad1d10d46446742`).
+Its bundled engine passed five synthetic Vault package tests, including
+database-only search, encrypted backup, restore, and stale-index fallback;
+two optional tests were skipped. The separately opted-in real macOS
+LaunchAgent test captured an appended database item in a second verified
+snapshot, then removed its temporary service, plist, and test Keychain key.
+The package and build environment were moved to Trash after verification.
+This is current-source packaging evidence, not a signed buyer release,
+natural daily wake, clean-account recovery, or real-history protection proof.
+
 A low-priority, read-only Vault title search on the second Mac found a real
 thread by a former title in 0.17 seconds and displayed its different current
 title from Codex state. A synthetic regression now preserves that behavior
