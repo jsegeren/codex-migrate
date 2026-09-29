@@ -19,6 +19,16 @@ read-only restore to a separate folder remains available. Older snapshots
 cannot recover an attachment they never captured. This work has not passed
 real R2 clean-Mac recovery or shipped in a signed customer build.
 
+On September 29, exact committed source `2fccfd3f9a8ed49fe68bf0a61982d6c6c90aa2ca`
+produced an unsigned local-test arm64 build 20 (ZIP SHA-256
+`ad61e9651d6c9d5485570d43e80d35adf52b6706fecc6664cb5aae09d922b512`).
+The bundled engine captured a disposable pasted-prompt attachment, verified
+and restored the encrypted snapshot, and found the attachment-only marker by
+searching the restored history. The complete opt-in packaged Vault test file
+passed six tests with two optional tests skipped. This establishes package
+inclusion for the attachment path, not a signed buyer release, real-history
+backup, or clean-account/real-R2 disaster recovery.
+
 ## September 28 paginated-history coverage hold
 
 On September 29, exact draft source `66ed54b59e7da4cf7ead58250c4e482fcfa049e5`

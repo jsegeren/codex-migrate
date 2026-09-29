@@ -46,6 +46,65 @@ def run_packaged(command, timeout=30):
 @unittest.skipUnless(os.environ.get("CODEX_MIGRATE_PACKAGED_APP"),
                      "requires an explicit packaged app path")
 class PackagedVaultCompressionTests(unittest.TestCase):
+    def test_bundled_engine_restores_pasted_prompt_attachment(self):
+        app = Path(os.environ["CODEX_MIGRATE_PACKAGED_APP"])
+        resources = app / "Contents/Resources"
+        engine = resources / "engine/codex-migrate-engine"
+        helper = resources / "CodexVaultCrypto"
+        if not helper.is_file():
+            helper = app / "Contents/Helpers/CodexVaultCrypto.app/Contents/MacOS/CodexVaultCrypto"
+        self.assertTrue(engine.is_file() and helper.is_file())
+        thread_id = "66666666-6666-4666-8666-666666666666"
+        attachment_id = "77777777-7777-4777-8777-777777777777"
+        marker = "packaged-attachment-only-prompt-qzmx"
+        with tempfile.TemporaryDirectory(prefix="vault-package-attachment-test-") as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            codex = source / ".codex"
+            transcript = codex / "sessions/2026/09/29/active.jsonl"
+            transcript.parent.mkdir(parents=True)
+            attachment = codex / "attachments" / attachment_id / "pasted-text.txt"
+            attachment.parent.mkdir(parents=True)
+            attachment.write_text(marker, encoding="utf-8")
+            transcript.write_text("\n".join((
+                json.dumps({"type": "session_meta", "payload": {"id": thread_id}}),
+                json.dumps({"type": "response_item", "payload": {
+                    "role": "user", "content": [{"type": "input_text", "text":
+                        "# Files mentioned by the user:\n\n"
+                        "## Pasted text.txt: /Users/old/.codex/attachments/" +
+                        attachment_id + "/pasted-text.txt\n\n"
+                        "## My request for Codex:\n"}]}}),
+            )) + "\n", encoding="utf-8")
+            vault = root / "vault"
+            restored_home = root / "restored"
+            restored_home.mkdir()
+            key_id = None
+            try:
+                saved = json.loads(run_packaged([
+                    str(engine), "vault", "--source-home", str(source), "backup",
+                    "--destination", str(vault), "--apply", "--json",
+                ], timeout=120))
+                self.assertEqual(saved["attachment_files"], 1)
+                key_id = json.loads((vault / "vault.json").read_text())["key_id"]
+                run_packaged([str(engine), "vault", "verify", "--vault", str(vault),
+                              "--json"], timeout=120)
+                run_packaged([str(engine), "vault", "--source-home", str(source),
+                              "restore", "--vault", str(vault),
+                              "--output", str(restored_home / ".codex"),
+                              "--apply", "--json"], timeout=120)
+                self.assertEqual((restored_home / ".codex/attachments" / attachment_id /
+                                  "pasted-text.txt").read_text(encoding="utf-8"), marker)
+                matches = json.loads(run_packaged([
+                    str(engine), "vault", "--source-home", str(restored_home),
+                    "search", marker, "--json",
+                ]))
+                self.assertTrue(any(item["collection"] == "active" for item in matches))
+            finally:
+                if key_id is None and (vault / "vault.json").is_file():
+                    key_id = json.loads((vault / "vault.json").read_text())["key_id"]
+                if key_id is not None:
+                    run_packaged([str(helper), "delete-key", "--key-id", key_id])
+
     def test_bundled_engine_recovers_database_only_paginated_item(self):
         app = Path(os.environ["CODEX_MIGRATE_PACKAGED_APP"])
         resources = app / "Contents/Resources"
