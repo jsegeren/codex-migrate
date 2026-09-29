@@ -79,8 +79,10 @@ bug: Workerd can expose Python's empty request as a non-null stream. The
 Worker now accepts that stream only after checking that it contains no bytes.
 The test-only loopback grant fixture is not customer authority and must never
 be deployed.
-The combined transport has **not** been rerun against real R2, and this is not
-a complete snapshot/publication/recovery proof.
+The combined transport has since passed against a remote binding to real R2,
+including the synthetic encrypted snapshot/recovery roundtrip described in
+the release-readiness receipt. This is still not an authenticated customer
+snapshot/publication/recovery proof or a deployed service.
 The real Worker path uses Cloudflare's
 [FixedLengthStream](https://developers.cloudflare.com/workers/runtime-apis/streams/transformstream/)
 so R2 accepts the bounded stream without buffering the object in Worker
