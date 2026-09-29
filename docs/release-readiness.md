@@ -16,8 +16,18 @@ two optional tests were skipped. The separately opted-in real macOS
 LaunchAgent test captured an appended database item in a second verified
 snapshot, then removed its temporary service, plist, and test Keychain key.
 The package and build environment were moved to Trash after verification.
+An opt-in test of the same packaged engine then killed a disposable backup
+after it stored a new encrypted chunk. The previous snapshot still verified;
+retry published and verified a new snapshot, and its restored transcript
+matched the synthetic source bytes. Its test Keychain key was removed.
+Another opt-in test of that packaged engine restored a disposable 128 MiB
+transcript through the loopback dashboard. While restore was active, both the
+updater idle check and shutdown request refused the update; after restore
+completed, the recovered bytes matched the source and shutdown succeeded.
+The test removed its temporary Vault key and dashboard process.
 This is current-source packaging evidence, not a signed buyer release,
-natural daily wake, clean-account recovery, or real-history protection proof.
+natural daily wake, physical power/network interruption, clean-account
+recovery, a signed updater installation, or real-history protection proof.
 
 A low-priority, read-only Vault title search on the second Mac found a real
 thread by a former title in 0.17 seconds and displayed its different current
