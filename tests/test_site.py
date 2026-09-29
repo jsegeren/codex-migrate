@@ -116,6 +116,8 @@ class SiteTests(unittest.TestCase):
         self.assertIn("https://migrate.segeren.com/codex-backup-for-teams",
                       (SITE / "sitemap.xml").read_text())
         self.assertIn("This hosted team service is not available yet", text)
+        self.assertIn("Protect the Codex work your team can’t afford to lose", text)
+        self.assertIn("Loss, theft, hardware failure, or accidental deletion can put that work at risk", text)
         self.assertIn("Account-saved ChatGPT-app chats are another case", text)
         self.assertIn("current backup can miss history held only", text)
         self.assertIn("there is no pre-order or charge here", text)
