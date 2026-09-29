@@ -794,6 +794,15 @@ class VaultScheduleTests(unittest.TestCase):
             last_run = (config_path.parent / "last-run.json").read_text(encoding="utf-8")
             self.assertIn("stopped safely", last_run)
             self.assertNotIn("PRIVATE CUSTOMER CONTENT", last_run)
+            (home / ".codex").mkdir(exist_ok=True)
+            (home / ".codex/thread_history_1.sqlite").write_bytes(b"synthetic marker")
+            with patch("codex_migrate.vault_schedule._loaded", return_value=True):
+                status = schedule_status(str(home))
+            self.assertFalse(status["healthy"])
+            self.assertEqual(status["last_run"]["status"], "failed")
+            self.assertIn("latest automatic backup needs attention", status["error"])
+            self.assertIn("paginated history is not yet fully recoverable", status["error"])
+            self.assertNotIn("PRIVATE CUSTOMER CONTENT", status["error"])
 
     def test_remove_unloads_service_but_preserves_vault(self):
         with tempfile.TemporaryDirectory() as temporary:

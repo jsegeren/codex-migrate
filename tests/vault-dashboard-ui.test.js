@@ -40,6 +40,10 @@ test('schedule view explicitly disclaims incomplete paginated coverage', () => {
   context.scheduleView({ enabled: true, healthy: false,
     paginated_history_unprotected: true });
   assert.match(elements.get('schedule-status').textContent, /not complete protection/);
+  context.scheduleView({ enabled: true, healthy: false,
+    paginated_history_unprotected: true, last_run: { status: 'failed' } });
+  assert.match(elements.get('schedule-status').textContent, /latest automatic backup failed/);
+  assert.match(elements.get('schedule-status').textContent, /do not assume new conversations are protected/);
 });
 
 test('backup view names missing paginated coverage without inventing an earlier safe version', () => {
