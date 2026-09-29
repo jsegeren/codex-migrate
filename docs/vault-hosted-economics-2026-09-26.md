@@ -224,8 +224,17 @@ counted together at the account level, with no unproved cross-Vault dedupe.
 If usage-based billing is selected, use average daily retained bytes for the
 monthly GB-month charge, matching R2's published daily-peak averaging
 convention. Show the current retained size and estimated next bill before and
-after the first upload; do not invent a customer-set spending ceiling. Any
-server-side safety limit needed to prevent abusive or accidental unbounded
+after the first upload; do not invent a customer-set spending ceiling.
+
+Internal SQL now records transactional retained-byte changes and calculates a
+UTC daily peak from the opening balance plus that day's changes. It returns
+unknown, not zero, for a day before its first recorded event. This is a cost
+model input only: the event history starts at its migration baseline, and the
+SQL ledger does not prove that R2 holds every object or account for orphaned
+objects. No invoice should use it until provider reconciliation, billing-period
+coverage, and an approved customer entitlement are proven.
+
+Any server-side safety limit needed to prevent abusive or accidental unbounded
 resource use is a separate, disclosed product decision. Do not silently pause
 protection, delete the last verified snapshot, or add unapproved charges.
 Self-managed backups remain available without hosting fees.
