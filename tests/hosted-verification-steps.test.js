@@ -16,6 +16,9 @@ function queryWith(rows, events) {
         declared_count: 3, declared_bytes: '30', state: 'active',
         lease_valid: true }] };
     }
+    if (sql.includes('reuse_recent_published_chunk_proofs_current')) {
+      return { rows: [{ reused: 0 }] };
+    }
     if (sql.includes('FROM hosted.staged_receipt_objects')) {
       assert.deepEqual(values, [reservationId]);
       return { rows };
@@ -52,6 +55,36 @@ test('empty next page is only ready for a separate guarded publication', async (
   assert.deepEqual(events, []);
 });
 
+test('a bounded published proof page skips R2 without claiming publication', async () => {
+  const calls = [];
+  const result = await verifyNextPage({ scope: await freshScope(),
+    reservationId, snapshotId,
+    verifyBatch: async () => { throw Error('no repeated provider check'); },
+    query: async (sql, values) => {
+      if (sql.includes('FROM hosted.upload_reservations')) {
+        return { rows: [{ staged_count: 3, staged_bytes: '30',
+          declared_count: 3, declared_bytes: '30', state: 'active',
+          lease_valid: true }] };
+      }
+      assert.match(sql, /reuse_recent_published_chunk_proofs_current/);
+      assert.deepEqual(values.slice(2, 4), [reservationId, snapshotId]);
+      calls.push('reuse');
+      return { rows: [{ reused: 2 }] };
+    } });
+  assert.deepEqual(result, { verifiedObjects: 2, ready: false });
+  assert.deepEqual(calls, ['reuse']);
+});
+
+test('malformed proof-reuse result fails closed before any provider work', async () => {
+  await assert.rejects(verifyNextPage({ scope: await freshScope(),
+    reservationId, snapshotId,
+    verifyBatch: async () => { throw Error('should not run'); },
+    query: async sql => sql.includes('FROM hosted.upload_reservations')
+      ? { rows: [{ staged_count: 3, staged_bytes: '30', declared_count: 3,
+        declared_bytes: '30', state: 'active', lease_valid: true }] }
+      : { rows: [{ reused: 2049 }] } }), /hosted_verification_step_failed/);
+});
+
 test('an already-published reservation can reconcile a lost final response', async () => {
   const result = await verifyNextPage({ scope: await freshScope(),
     reservationId, snapshotId, verifyBatch: async () => {
@@ -76,6 +109,9 @@ test('provider failure, mismatched rows, and incomplete declarations record noth
           return { rows: [{ staged_count: 3, staged_bytes: '30',
             declared_count: failure === 'incomplete' ? 4 : 3,
             declared_bytes: '30', state: 'active', lease_valid: true }] };
+        }
+        if (sql.includes('reuse_recent_published_chunk_proofs_current')) {
+          return { rows: [{ reused: 0 }] };
         }
         if (sql.includes('FROM hosted.staged_receipt_objects')) {
           assert.deepEqual(values, [reservationId]);

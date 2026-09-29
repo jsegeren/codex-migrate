@@ -72,10 +72,15 @@ index bound to that exact snapshot. The next run obtains the prior encrypted
 manifest and published ciphertext facts from the service; unchanged
 transcripts avoid body reads and encryption, while changed transcripts retain
 the full scan/stage checks. Tests cover a changed transcript, unchanged reuse,
-stale and tampered hints, and exact-base binding. This is **not** a scheduled
-or production backup: the server still HEAD-checks every retained object on
-every new snapshot, paginated database history is still restaged, and neither
-physical Mac's 30-minute runtime or change rate has been measured.
+stale and tampered hints, and exact-base binding. The dark server can now carry
+forward a recent R2 proof for exact ciphertext chunks in the latest published
+snapshot of the same account and Vault. It keeps the original provider-check
+time, so the 24-hour publication gate still forces a new R2 check when that
+proof ages; metadata, manifests, refs, changed chunks, and unpublished chunks
+never qualify. This is **not** a scheduled or production backup: unchanged
+history still creates a redundant version, paginated database history is still
+restaged, and neither physical Mac's 30-minute runtime or change rate has been
+measured.
 
 The current hosted prototype is **not a business enrollment model**. Its
 account, device, subscription, and recovery paths all depend on one person's
@@ -397,9 +402,11 @@ route now admits bounded, idempotent claim pages, but there is no asynchronous
 provider-verification/publication job, real-scale R2 run, or clean-account
 recovery proof. A page ACK must never appear as a protected backup.
 The draft now has a resumable alternative to verifying the whole staged set
-inside one web request. A dark sandbox endpoint checks at most 128 exact
-objects through the authenticated R2 batch verifier, then records those
-specific object facts in PostgreSQL under the active reservation. A failed
+inside one web request. A dark sandbox endpoint first carries at most 2,048
+recent, previously published same-Vault chunk proofs forward with their
+original provider timestamp, or checks at most 128 exact objects through the
+authenticated R2 batch verifier. It records only those specific object facts
+in PostgreSQL under the active reservation. A failed
 request can retry; an incomplete, mismatched, or older-than-24-hours proof
 cannot publish. A separate dark publication endpoint rechecks that every
 declared staged object has a fresh matching proof before it atomically moves

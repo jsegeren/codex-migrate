@@ -5,11 +5,15 @@ const { consumeAuthorizedScope } = require('./access');
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const HEX = /^[0-9a-f]{64}$/;
 const PAGE_SIZE = 128;
+const REUSE_PAGE_SIZE = 2048;
 const SCOPE_SQL = `SELECT staged_count, staged_bytes, declared_count,
     declared_bytes, state, expires_at > clock_timestamp() AS lease_valid
   FROM hosted.upload_reservations
   WHERE account_id = $1::uuid AND vault_id = $2::uuid
     AND reservation_id = $3::uuid AND staged_snapshot_id = $4::uuid`;
+const REUSE_SQL = `SELECT hosted.reuse_recent_published_chunk_proofs_current(
+  $1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::bigint
+) AS reused`;
 const NEXT_SQL = `SELECT so.object_key, so.object_bytes, so.sha256
   FROM hosted.staged_receipt_objects AS so
   LEFT JOIN hosted.verified_receipt_objects AS verified
@@ -54,6 +58,15 @@ async function verifyNextPage({ scope, reservationId, snapshotId,
     if (row.state === 'published') {
       return Object.freeze({ verifiedObjects: 0, ready: true });
     }
+    // Carry forward only a recent R2 proof for exact ciphertext in an already
+    // published snapshot of this Vault. SQL preserves its original proof time;
+    // the existing 24-hour publication gate will still demand a fresh HEAD.
+    const carried = await query(REUSE_SQL, [scope.accountId, scope.vaultId,
+      reservationId, snapshotId, scope.allowanceBytes]);
+    const reused = Number(carried?.rows?.[0]?.reused);
+    if (carried?.rows?.length !== 1 || !Number.isSafeInteger(reused) ||
+        reused < 0 || reused > REUSE_PAGE_SIZE) throw new HostedVerificationStepError();
+    if (reused > 0) return Object.freeze({ verifiedObjects: reused, ready: false });
     const next = await query(NEXT_SQL, [reservationId]);
     const rows = next?.rows;
     if (!Array.isArray(rows) || rows.length > PAGE_SIZE) {

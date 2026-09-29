@@ -138,11 +138,16 @@ Workers Free allows 100,000 requests/day. One initial upload of this user's
 two Vaults entails about 36,356 object requests. A naive daily retry of every
 unchanged object through the upload route would create about 1.09 million
 Worker requests/month for this one customer; do not ship that behavior. The
-draft bounded proof instead needs about 29 + 43 = **72 Worker batch requests**
-to check both unchanged Vaults, while still making roughly 36,356 R2 HEAD
-subrequests per daily proof. Over 30 daily proofs that is about 2,160 Worker
-requests and 1.09 million R2 Class B HEADs (about $0.39 at the unrounded
-metered rate, before the account-wide allowance). New or changed chunks still
+dark server now carries forward exact ciphertext proofs from the latest
+published same-Vault snapshot for at most 24 hours. At the measured 36,356-chunk size,
+a 30-minute run with changes needs about 18 bounded database/API reuse pages
+instead of 72 Worker batches and 36,356 R2 HEADs. When the oldest proof ages
+out, a complete remote check still needs about 29 + 43 = **72 Worker batch
+requests** and 36,356 R2 HEAD subrequests. Thirty daily checks would be about
+2,160 Worker requests and 1.09 million R2 Class B HEADs (about $0.39 at the
+unrounded metered rate, before the account-wide allowance). This is a model,
+not a measured customer bill: the database/API page cost and unchanged-run
+skip remain to be proven. New or changed chunks still
 need individual upload requests. A few initial uploads on one day can exceed
 the Free daily request ceiling; do not build the offer around it. The batch
 network endpoint and actual provider behavior remain unproved. Workers Paid has a **$5/month account

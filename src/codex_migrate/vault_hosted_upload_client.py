@@ -330,7 +330,7 @@ class HostedUploadClient:
 
     def verify_next(self, reservation_id: str, snapshot_id: str, *,
                     apply: bool = False) -> Tuple[int, bool]:
-        """Checkpoint at most 128 provider-verified objects; not protection."""
+        """Checkpoint provider proofs or bounded recent published proofs; not protection."""
         if apply is not True:
             raise MigrationError("Hosted upload changes require explicit confirmation.")
         self._require_reservation(reservation_id)
@@ -342,7 +342,7 @@ class HostedUploadClient:
         count = result.get("verifiedObjects")
         ready = result.get("ready")
         if (set(result) != {"verifiedObjects", "ready"} or
-                type(count) is not int or not 0 <= count <= 128 or
+                type(count) is not int or not 0 <= count <= 2048 or
                 type(ready) is not bool or ready != (count == 0)):
             raise MigrationError("The hosted verification response is invalid.")
         return count, ready

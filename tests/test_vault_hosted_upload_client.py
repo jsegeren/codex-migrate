@@ -78,7 +78,9 @@ class _Handler(BaseHTTPRequestHandler):
                 return self._json(503, {"error": "temporarily_unavailable"})
             if self.server.verify_calls == 0:
                 self.server.verify_calls += 1
-                return self._json(200, {"verifiedObjects": 3, "ready": False})
+                return self._json(200, {"verifiedObjects":
+                                       self.server.first_verify_count,
+                                       "ready": False})
             self.server.verified_ready = True
             return self._json(200, {"verifiedObjects": 0, "ready": True})
         if self.path == "/api/hosted-publish-checkpointed":
@@ -215,6 +217,7 @@ class HostedUploadClientTests(unittest.TestCase):
         self.server.fail_next_checkpoint_publish = False
         self.server.stale_next_checkpoint_publish = False
         self.server.verify_calls = 0
+        self.server.first_verify_count = 3
         self.server.verified_ready = False
         self.server.drop_next_put_response = False
         self.server.pages = []
@@ -487,6 +490,12 @@ class HostedUploadClientTests(unittest.TestCase):
         self.assertEqual(self.client.publish_checkpointed(
             RESERVATION, SNAPSHOT, apply=True), 3)
         self.assertEqual(self.server.actions.count("publish_checkpointed"), 2)
+
+    def test_large_carried_proof_page_is_bounded_and_not_publication(self):
+        self.server.first_verify_count = 2048
+        self.assertEqual(self.client.verify_next(RESERVATION, SNAPSHOT,
+                                                 apply=True), (2048, False))
+        self.assertFalse(self.server.verified_ready)
 
     def test_verification_loop_retries_ambiguous_final_response_safely(self):
         with self.assertRaises(MigrationError):
