@@ -105,7 +105,8 @@ class SiteTests(unittest.TestCase):
         self.assertIn("does not require uploading your conversation history", search)
         self.assertIn("It does not search ordinary ChatGPT cloud chats", search)
         self.assertIn("recover one missing local Codex conversation without replacing unrelated history", (SITE / "recover-missing-codex-chats.html").read_text())
-        self.assertIn("No tool can recover data that was never saved", recovery)
+        self.assertIn("paginated-history database", recovery)
+        self.assertIn("Vault cannot reconstruct them", recovery)
         self.assertIn("preserving the new Mac’s authentication and installation identity", recovery)
 
     def test_comparison_distinguishes_search_backup_and_migration(self):
@@ -446,6 +447,8 @@ class SiteTests(unittest.TestCase):
         self.assertIn("30-day refund policy", text)
         self.assertIn('src="/assets/codex-vault-demo-build14-poster.jpg"', source)
         self.assertIn("daily automatic backup selected by default", source)
+        self.assertIn("The current Mac beta is signed", source)
+        self.assertNotIn("Build 14 is signed", source)
         self.assertTrue((SITE / "assets" / "codex-vault-demo-build14-poster.jpg").is_file())
 
     def test_comparison_guide_is_disclosed_and_fair(self):
