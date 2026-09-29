@@ -193,6 +193,27 @@ Business recovery therefore requires a separately reviewed, explicit company-
 controlled key-custody design and offboarding procedure; do not silently
 escrow a key with Segeren Studio or imply the admin interface alone solves it.
 
+Founder decision (September 29, 2026): both the worker and the company must
+retain a way to recover a business Vault. The enrolled Mac keeps its device-
+bound Keychain key for unattended backups; the worker may hold an off-device
+recovery credential for their own authorized history; and the company must
+hold an independently stored recovery credential under its own access policy.
+The company's credential must survive loss of the worker's Mac, macOS account,
+and employment, and must pass a clean-account or clean-Mac import-and-decrypt
+drill before the seat is called protected. Segeren Studio holds neither
+credential. Company recovery is an exceptional, authorized, audited operation,
+not routine admin access to employee content.
+
+The current `CV1-` recovery string is a copy of the same raw Vault master key.
+Handing that string to two custodians gives both continuity, but **not**
+independent revocation, attribution, or rotation. Do not describe that as
+separate worker/company keys. A business release needs separately attributable
+recovery credentials wrapping the same data key, with an explicit rotation and
+offboarding procedure; retain read compatibility with existing individual
+Vaults. Until that implementation and its recovery drill are verified, a
+company-held copy of `CV1-` may be used only as a disclosed, assisted-pilot
+limitation, not as a completed business key-custody feature.
+
 ### Business privacy and recovery boundary
 
 The business outcome is organizational continuity of Codex work, not employee
