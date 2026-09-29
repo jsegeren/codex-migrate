@@ -36,6 +36,7 @@ DECLARE
   v_objects jsonb;
   v_bad jsonb;
   v_retained bigint;
+  v_usage_events bigint[];
   v_reserved bigint;
   v_last uuid;
   v_message text;
@@ -53,6 +54,11 @@ BEGIN
   IF v_retained <> 140 OR v_reserved <> 0 OR v_last <> v_first THEN
     RAISE EXCEPTION 'first publication counters or pointer wrong';
   END IF;
+  SELECT array_agg(retained_bytes ORDER BY event_id) INTO v_usage_events
+    FROM hosted.retained_usage_events WHERE account_id = v_account;
+  IF v_usage_events <> ARRAY[0, 140]::bigint[] THEN
+    RAISE EXCEPTION 'first publication usage event missing';
+  END IF;
 
   -- An exact replay is idempotent; it may not change counters or the pointer.
   PERFORM hosted.publish_verified_snapshot(v_account, v_vault,
@@ -60,6 +66,11 @@ BEGIN
   SELECT retained_bytes, reserved_bytes INTO v_retained, v_reserved
     FROM hosted.accounts WHERE account_id = v_account;
   IF v_retained <> 140 OR v_reserved <> 0 THEN RAISE EXCEPTION 'replay charged twice'; END IF;
+  SELECT array_agg(retained_bytes ORDER BY event_id) INTO v_usage_events
+    FROM hosted.retained_usage_events WHERE account_id = v_account;
+  IF v_usage_events <> ARRAY[0, 140]::bigint[] THEN
+    RAISE EXCEPTION 'publication replay changed storage usage';
+  END IF;
 
   -- The next snapshot reuses one chunk; only its three new control objects
   -- consume storage. A retry of the older snapshot cannot roll it backward.
@@ -85,6 +96,11 @@ BEGIN
     v_third_reservation, v_third, pg_temp.fixture_objects(v_other_vault, v_third));
   SELECT retained_bytes INTO v_retained FROM hosted.accounts WHERE account_id = v_account;
   IF v_retained <> 320 THEN RAISE EXCEPTION 'cross-Vault accounting wrong'; END IF;
+  SELECT array_agg(retained_bytes ORDER BY event_id) INTO v_usage_events
+    FROM hosted.retained_usage_events WHERE account_id = v_account;
+  IF v_usage_events <> ARRAY[0, 140, 180, 320]::bigint[] THEN
+    RAISE EXCEPTION 'cross-Vault storage usage history wrong';
+  END IF;
 
   -- A conflicting replay must be refused without changing last good.
   v_bad := jsonb_set(v_objects, '{1,sha256}', to_jsonb(repeat('e', 64)));

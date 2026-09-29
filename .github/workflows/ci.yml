@@ -59,6 +59,9 @@ jobs:
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0025_reservation_base_receipt.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0026_idempotent_reservation.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0027_reuse_recent_chunk_proofs.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-retained-usage-before-migration.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0028_retained_usage_events.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-retained-usage-events.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-quota.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-publication-base.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-publication.sql

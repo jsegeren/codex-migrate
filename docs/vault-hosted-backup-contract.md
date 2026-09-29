@@ -96,9 +96,11 @@ read-only usage query for server-accounted retained and reserved encrypted
 bytes. It returns neither conversation content nor a billing amount. Retained
 bytes are the current database ledger, not a reconciled R2 inventory or a
 GB-month invoice; reserved bytes are pending capacity, not stored data.
-No customer UI or production route uses this query yet. Before billing,
-reconcile the ledger to actual provider storage and record daily retained
-usage across the billing period.
+An account-scoped transactional event ledger now records retained-byte
+changes, including a non-retroactive baseline for existing accounts. No
+customer UI or production route uses this query yet. Before billing,
+calculate the daily-peak GB-month usage across a full period and reconcile
+the ledger to actual provider storage.
 
 The current hosted prototype is **not a business enrollment model**. Its
 account, device, subscription, and recovery paths all depend on one person's
