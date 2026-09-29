@@ -134,6 +134,11 @@ class _Handler(BaseHTTPRequestHandler):
                 return self._json(403, {"error": "access_denied"})
             return self._json(200, {"reservationId": RESERVATION,
                                     "expiresAt": EXPIRY})
+        if action == "lease":
+            return self._json(200, {"lease": "synthetic.valid"})
+        if action in ("decide", "put") and self.headers.get(
+                "X-Hosted-Upload-Lease") != "synthetic.valid":
+            return self._json(403, {"error": "access_denied"})
         item = request["item"]
         key = item["key"]
         if (key not in self.server.expected or
@@ -386,11 +391,25 @@ class HostedUploadClientTests(unittest.TestCase):
         self.assertEqual(self.server.actions.count("put"), 1)
         self.assertNotIn("publish", self.server.actions)
 
+    def test_one_short_lived_lease_covers_object_checks_and_refreshes(self):
+        store = self.client.object_store(RESERVATION, self.server.expected,
+                                         apply=True)
+        self.assertIsNone(store.checked_metadata(FIRST_KEY))
+        store.put_if_absent(FIRST_KEY, io.BytesIO(FIRST), len(FIRST))
+        self.assertEqual(store.checked_metadata(FIRST_KEY),
+                         self.server.expected[FIRST_KEY])
+        self.assertEqual(self.server.actions.count("lease"), 1)
+        self.assertEqual(self.server.actions.count("decide"), 2)
+        self.assertEqual(self.server.actions.count("put"), 1)
+        self.client._object_lease_until = 0
+        self.assertIsNone(store.checked_metadata(SECOND_KEY))
+        self.assertEqual(self.server.actions.count("lease"), 2)
+
     def test_long_transfer_renews_before_next_object_and_fails_closed(self):
         store = self.client.object_store(RESERVATION, self.server.expected, apply=True)
         store._last_renewal -= 25 * 60 + 1
         self.assertIsNone(store.checked_metadata(FIRST_KEY))
-        self.assertEqual(self.server.actions[:2], ["renew", "decide"])
+        self.assertEqual(self.server.actions[:3], ["renew", "lease", "decide"])
         self.server.fail_renew = True
         store._last_renewal -= 25 * 60 + 1
         with self.assertRaises(MigrationError):

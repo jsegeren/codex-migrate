@@ -66,18 +66,23 @@ Repeating an unchanged backup should reuse existing chunks; a
 rewritten or compacted transcript can create new chunks and must be measured.
 Do not count shared free allowances as a per-customer subsidy.
 
-The current **dark** upload API separately authorizes each object decision
-and PUT grant. Each authorization rechecks the app purchase and hosted
-subscription with Stripe. For the measured 36,356 novel chunks, a first
-backup could make roughly **72,712 first-party authorization requests and
-corresponding provider checks** before manifests, retries, and other steps.
-That is an unacceptable latency, provider-rate-limit, availability, and
-service-COGS risk even if R2 object operations are cheap. Before customer
-release, replace this request amplification with bounded, account-scoped
-batch/run authorization that preserves timely revocation and exact-object
-immutable checks; measure actual initial-upload latency and per-buyer service
-cost. Do not solve this by silently trusting a stale purchase or unbounded
-client-supplied object list.
+The dark client checks a novel object before uploading, requests its PUT
+grant, then checks it again after upload: three first-party requests per
+chunk. For the measured 36,356 novel chunks, a first backup could make
+roughly **109,068 first-party object requests** before manifests, retries,
+and other steps. Previously each request also rechecked the purchase and
+subscription with Stripe. A new dark, native-only authorization lease reduces
+those provider checks to a fresh check at most every 40 seconds while an
+upload is active. The signed lease expires server-side after 60 seconds and
+is bound to one device, account, Vault, reservation, and allowance; every
+object request still checks the active device session and its exact SQL
+reservation/quota before receiving a short-lived Worker grant. Cancellation
+or refund may therefore remain effective up to one minute later than a
+per-request Stripe check. This is a bounded tradeoff, not customer release
+proof. **The roughly 109,000 first-party requests and their latency remain a
+release gate**: batch or otherwise reduce them without relaxing exact-object
+verification, then measure first-upload time, provider request counts, and
+all-in service cost on representative large histories.
 
 ### Thirty-minute business cadence is an incremental-engine gate
 

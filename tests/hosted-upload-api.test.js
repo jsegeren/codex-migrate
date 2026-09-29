@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const { randomBytes } = require('node:crypto');
 const { makeHandler } = require('../api/hosted-upload');
 const { verifyObjectCapability } = require('../hosted/object_capability');
+const { mintUploadLease } = require('../hosted/upload_lease');
 const { mintSessionSecret } = require('./hosted-device-fixture');
 const { accountId, vaultId } = require('./hosted-subscriber-fixture');
 
@@ -26,7 +27,11 @@ function fixture() {
   let reads = 0;
   let decision = 'put';
   let entitlement = 'active';
+  let purchaseChecks = 0;
+  let subscriptionChecks = 0;
   let reservationState = 'cleanup_pending';
+  let leaseActive = true;
+  let deviceActive = true;
   const handler = makeHandler(async received => {
     assert.equal(received, env);
     loads++;
@@ -38,7 +43,12 @@ function fixture() {
       }
       if (sql.includes('FROM hosted.device_sessions\n')) {
         assert.deepEqual(values, [session.tokenHash, vaultId]);
-        return { rows: [{ account_id: accountId, vault_id: vaultId }] };
+        return { rows: deviceActive ?
+          [{ account_id: accountId, vault_id: vaultId }] : [] };
+      }
+      if (sql.includes('SELECT 1 AS active FROM hosted.upload_reservations')) {
+        assert.deepEqual(values, [accountId, vaultId, reservationId]);
+        return { rows: leaseActive ? [{ active: 1 }] : [] };
       }
       if (sql.includes('FROM hosted.upload_reservations')) {
         assert.deepEqual(values, [accountId, vaultId, reservationId]);
@@ -72,8 +82,12 @@ function fixture() {
       }
       throw Error('unexpected SQL');
     }, workerOrigin: 'https://r2.fixture.test', secret,
-    verifyPurchase: async () => ({ sessionId: 'cs_test_fixture', mode: 'sandbox' }),
+    verifyPurchase: async () => {
+      purchaseChecks++;
+      return { sessionId: 'cs_test_fixture', mode: 'sandbox' };
+    },
     getEntitlement: async id => {
+      subscriptionChecks++;
       assert.equal(id, accountId);
       return { enrollment: { accountId, subscriptionId: 'sub_fixture',
         customerId: 'cus_fixture', priceId: 'price_fixture' },
@@ -89,9 +103,12 @@ function fixture() {
   const req = { method: 'POST', headers: {
     authorization: `Bearer ${session.token}`, 'content-type': 'application/json',
   }, body: { action: 'reserve', vaultId, bytes: 20 } };
-  return { env, req, loads: () => loads, writes: () => writes,
-    reads: () => reads,
+  return { env, req, session, loads: () => loads, writes: () => writes,
+    reads: () => reads, purchaseChecks: () => purchaseChecks,
+    subscriptionChecks: () => subscriptionChecks,
     setEntitlement: value => { entitlement = value; },
+    setLeaseActive: value => { leaseActive = value; },
+    setDeviceActive: value => { deviceActive = value; },
     setReservationState: value => { reservationState = value; },
     send: async () => { const res = response(); await handler(req, res); return res; } };
 }
@@ -124,6 +141,11 @@ test('paid sandbox device can reserve, renew, decide and get exact PUT/HEAD gran
   assert.equal(reserve.headers['Cache-Control'], 'no-store');
   f.req.body = { action: 'renew', vaultId, reservationId };
   assert.equal((await f.send()).statusCode, 200);
+  f.req.body = { action: 'lease', vaultId, reservationId };
+  const lease = await f.send();
+  assert.equal(lease.statusCode, 200);
+  assert.deepEqual(Object.keys(lease.body), ['lease']);
+  f.req.headers['x-hosted-upload-lease'] = lease.body.lease;
   f.req.body = { action: 'decide', vaultId, reservationId, item };
   assert.deepEqual((await f.send()).body, { action: 'put_required' });
   f.req.body = { action: 'put', vaultId, reservationId, item };
@@ -140,6 +162,8 @@ test('paid sandbox device can reserve, renew, decide and get exact PUT/HEAD gran
     'HEAD', key, secret), { key, bytes: item.bytes, sha256: item.sha256 });
   assert.equal(JSON.stringify(head.body).includes('hv1_'), false);
   assert.equal(f.writes(), 5);
+  assert.equal(f.purchaseChecks(), 3);
+  assert.equal(f.subscriptionChecks(), 3);
 });
 
 test('pre-recorded reservation ID survives a repeated request', async () => {
@@ -153,6 +177,56 @@ test('pre-recorded reservation ID survives a repeated request', async () => {
   assert.equal(second.body.reservationId, reservationId);
   f.req.body.reservationId = 'bad';
   assert.equal((await f.send()).statusCode, 400);
+});
+
+test('object lease refuses missing, tampered, cross-reservation and wrong-device use', async () => {
+  const f = fixture();
+  f.req.body = { action: 'lease', vaultId, reservationId };
+  const issued = await f.send();
+  assert.equal(issued.statusCode, 200);
+  const lease = issued.body.lease;
+  f.req.body = { action: 'decide', vaultId, reservationId, item };
+  assert.equal((await f.send()).statusCode, 403);
+  assert.equal(f.loads(), 1);
+  f.req.headers['x-hosted-upload-lease'] = lease;
+  f.req.body.reservationId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+  assert.equal((await f.send()).statusCode, 403);
+  f.req.body.reservationId = reservationId;
+  f.req.headers['x-hosted-upload-lease'] = lease.slice(0, -1) +
+    (lease.endsWith('A') ? 'B' : 'A');
+  assert.equal((await f.send()).statusCode, 403);
+  f.req.headers['x-hosted-upload-lease'] = lease;
+  f.req.headers.authorization = 'Bearer hv1_' + 'a'.repeat(43);
+  assert.equal((await f.send()).statusCode, 403);
+  assert.equal(f.writes(), 0);
+  assert.equal(f.purchaseChecks(), 1);
+  assert.equal(f.subscriptionChecks(), 1);
+});
+
+test('lease cannot be issued for an inactive reservation', async () => {
+  const f = fixture();
+  f.setLeaseActive(false);
+  f.req.body = { action: 'lease', vaultId, reservationId };
+  assert.deepEqual((await f.send()).body, { error: 'access_denied' });
+  assert.equal(f.writes(), 0);
+});
+
+test('expired lease and revoked device cannot authorize an object', async () => {
+  const f = fixture();
+  f.req.body = { action: 'decide', vaultId, reservationId, item };
+  f.req.headers['x-hosted-upload-lease'] = mintUploadLease({
+    accountId, vaultId, reservationId, deviceHash: f.session.tokenHash,
+    allowanceBytes: 100_000_000, secret, now: Date.now() - 60_001,
+  });
+  assert.equal((await f.send()).statusCode, 403);
+  f.req.body = { action: 'lease', vaultId, reservationId };
+  const issued = await f.send();
+  assert.equal(issued.statusCode, 200);
+  f.setDeviceActive(false);
+  f.req.body = { action: 'decide', vaultId, reservationId, item };
+  f.req.headers['x-hosted-upload-lease'] = issued.body.lease;
+  assert.equal((await f.send()).statusCode, 403);
+  assert.equal(f.writes(), 0);
 });
 
 test('lapsed subscription cannot reserve or grant any object', async () => {
@@ -195,6 +269,7 @@ test('invalid item, foreign Vault, or unavailable runtime reveal no internals', 
   f.req.body = { action: 'put', vaultId:
     'ffffffff-ffff-4fff-8fff-ffffffffffff', reservationId, item };
   assert.equal((await f.send()).statusCode, 403);
+  f.req.headers['x-hosted-upload-lease'] = 'synthetic.valid';
   const broken = makeHandler(async () => {
     throw Error('private Stripe and database details');
   }, f.env);

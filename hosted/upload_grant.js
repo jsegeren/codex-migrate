@@ -1,5 +1,5 @@
 // Server-only authorization of one immutable PUT. A caller must first mint a
-// fresh scope from the device, purchase, and live subscription checks. SQL
+// valid scope from the device and its one-minute entitlement lease. SQL
 // records each distinct object under an active byte reservation before this
 // function returns a short-lived storage token. Not an HTTP endpoint.
 const { consumeAuthorizedScope } = require('./access');

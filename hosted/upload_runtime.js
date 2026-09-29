@@ -1,6 +1,8 @@
 // Default runtime for the dark sandbox upload route. The server loads the
-// subscription enrollment from its pinned database and rechecks Stripe each
-// time; client input, webhooks, and checkout redirects are never entitlement.
+// subscription enrollment from its pinned database and rechecks Stripe for
+// each full authorization. Object requests use only a freshly signed,
+// one-minute lease plus a live device-session check; client input, webhooks,
+// and checkout redirects are never entitlement.
 const { runtime: commerceRuntime } = require('../commerce/runtime');
 const { sandboxDatabaseRuntime, storageConfiguration } =
   require('./recovery_runtime');

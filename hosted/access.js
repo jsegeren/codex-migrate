@@ -1,8 +1,10 @@
 // Server-only authorization boundary for hosted Vault operations. A purchase
-// download link is not a storage credential. Call this for every operation;
-// do not cache its result across requests or accept account IDs from clients.
+// download link is not a storage credential. A full purchase/subscription check
+// mints a one-minute upload lease; each object still checks the active
+// device session and its exact reservation. Never accept client account IDs.
 const { createHash } = require('node:crypto');
 const { uploadAllowance } = require('./stripe_entitlement');
+const { verifyUploadLease } = require('./upload_lease');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const SESSION_TOKEN = /^hv1_[A-Za-z0-9_-]{43}$/;
@@ -104,6 +106,26 @@ async function authorizeReadScope({ sessionToken, vaultId, query }) {
   return scope;
 }
 
+async function authorizeLeasedUploadScope({ sessionToken, vaultId,
+  reservationId, lease, secret, query }) {
+  if (!UUID.test(vaultId) || !UUID.test(reservationId) ||
+      typeof query !== 'function') throw new HostedAccessError();
+  try {
+    const digest = tokenHash(sessionToken);
+    const claim = verifyUploadLease(lease, secret);
+    if (claim.deviceHash !== digest || claim.vaultId !== vaultId ||
+        claim.reservationId !== reservationId) throw new HostedAccessError();
+    const result = await query(READ_SQL, [digest, vaultId]);
+    const row = result?.rows?.[0];
+    if (result?.rows?.length !== 1 || row.vault_id !== vaultId ||
+        row.account_id !== claim.accountId) throw new HostedAccessError();
+    const scope = Object.freeze({ accountId: claim.accountId, vaultId,
+      allowanceBytes: claim.allowanceBytes });
+    authorizedScopes.set(scope, Date.now());
+    return scope;
+  } catch { throw new HostedAccessError(); }
+}
+
 function isAuthorizedReadScope(scope) {
   const issuedAt = scope !== null && typeof scope === 'object' &&
     authorizedReadScopes.get(scope);
@@ -118,5 +140,6 @@ function consumeAuthorizedReadScope(scope) {
 }
 
 module.exports = { HostedAccessError, authorizeUploadScope,
-  isAuthorizedScope, consumeAuthorizedScope, authorizeReadScope,
+  isAuthorizedScope, consumeAuthorizedScope, authorizeLeasedUploadScope,
+  authorizeReadScope,
   isAuthorizedReadScope, consumeAuthorizedReadScope, tokenHash };

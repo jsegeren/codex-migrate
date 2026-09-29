@@ -14,6 +14,8 @@ test('native client reserves, renews, reads and abandons through the sandbox rou
   { timeout: 30_000 }, async () => {
     const session = mintSessionSecret();
     const reservationId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+    const item = { key: 'objects/aa/' + 'a'.repeat(62) + '.cvchunk',
+      bytes: 20, sha256: 'b'.repeat(64) };
     let state = 'active';
     let purchaseChecks = 0;
     let readChecks = 0;
@@ -31,6 +33,10 @@ test('native client reserves, renews, reads and abandons through the sandbox rou
           assert.deepEqual(values, [session.tokenHash, vaultId]);
           return { rows: [{ account_id: accountId, vault_id: vaultId }] };
         }
+        if (sql.includes('SELECT 1 AS active FROM hosted.upload_reservations')) {
+          assert.deepEqual(values, [accountId, vaultId, reservationId]);
+          return { rows: [{ active: 1 }] };
+        }
         if (sql.includes('reserve_upload_idempotent_current')) {
           assert.deepEqual(values.slice(0, 4), [accountId, vaultId, reservationId, 1]);
           return { rows: [{ allowed: true, base_snapshot_id: null,
@@ -38,6 +44,16 @@ test('native client reserves, renews, reads and abandons through the sandbox rou
         }
         if (sql.includes('renew_upload_reservation_current')) {
           assert.deepEqual(values.slice(0, 3), [accountId, vaultId, reservationId]);
+          return { rows: [{ allowed: true }] };
+        }
+        if (sql.includes('classify_upload_object_current')) {
+          assert.deepEqual(values.slice(0, 4), [accountId, vaultId,
+            reservationId, `accounts/${accountId}/vaults/${vaultId}/${item.key}`]);
+          return { rows: [{ decision: 'put' }] };
+        }
+        if (sql.includes('reserve_object_grant_elastic_current')) {
+          assert.deepEqual(values.slice(0, 4), [accountId, vaultId,
+            reservationId, `accounts/${accountId}/vaults/${vaultId}/${item.key}`]);
           return { rows: [{ allowed: true }] };
         }
         if (sql.includes('abandon_upload_reservation')) {
@@ -97,6 +113,15 @@ test('native client reserves, renews, reads and abandons through the sandbox rou
         '    reservation_id=os.environ["RESERVATION_ID"], apply=True)',
         'assert base is None',
         'assert client.renew(reservation, apply=True) == reservation',
+        'item = {"key": "objects/aa/" + "a" * 62 + ".cvchunk",',
+        '    "bytes": 20, "sha256": "b" * 64}',
+        'decision = client._post({"action": "decide", "vaultId": os.environ["VAULT_ID"],',
+        '    "reservationId": reservation, "item": item})',
+        'assert decision == {"action": "put_required"}',
+        'put = client._post({"action": "put", "vaultId": os.environ["VAULT_ID"],',
+        '    "reservationId": reservation, "item": item})',
+        'assert put["workerOrigin"] == "http://127.0.0.1:49112"',
+        'assert isinstance(put["grant"], str) and len(put["grant"]) > 20',
         'before = client.reservation_status(reservation)',
         'client.abandon(reservation, apply=True)',
         'after = client.reservation_status(reservation)',
@@ -119,8 +144,8 @@ test('native client reserves, renews, reads and abandons through the sandbox rou
       assert.equal(code, 0, error.slice(0, 2000));
       assert.deepEqual(JSON.parse(output), { reservation: reservationId,
         before: 'active', after: 'cleanup_pending' });
-      assert.equal(purchaseChecks, 2);
-      assert.equal(readChecks, 3);
+      assert.equal(purchaseChecks, 3);
+      assert.equal(readChecks, 5);
     } finally {
       const closed = once(server, 'close');
       server.close();

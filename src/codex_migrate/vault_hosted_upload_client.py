@@ -59,6 +59,29 @@ class HostedUploadClient:
         self._timeout = timeout
         self._allow_loopback_http = allow_loopback_http
         self._opener = build_opener(_NoRedirect())
+        self._object_lease_token = None
+        self._object_lease_reservation = None
+        self._object_lease_until = 0.0
+
+    def _object_lease(self, reservation_id: str) -> str:
+        if (self._object_lease_token is not None and
+                self._object_lease_reservation == reservation_id and
+                time.monotonic() < self._object_lease_until):
+            return self._object_lease_token
+        started = time.monotonic()
+        result = self._post({"action": "lease", "vaultId": self._vault_id,
+                             "reservationId": reservation_id})
+        lease = result.get("lease")
+        if (set(result) != {"lease"} or not isinstance(lease, str) or
+                len(lease) > 750 or
+                not re.fullmatch(r"[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", lease)):
+            raise MigrationError("The hosted object authorization is invalid.")
+        # Server validity is 60 seconds. Refresh well before expiry even if
+        # the lease response itself took time to reach this client.
+        self._object_lease_token = lease
+        self._object_lease_reservation = reservation_id
+        self._object_lease_until = started + 40.0
+        return lease
 
     def _post(self, claim: dict, *, receipt_page: bool = False,
               publication: bool = False, verification: bool = False,
@@ -77,10 +100,14 @@ class HostedUploadClient:
                 "/api/hosted-publish-checkpointed" if checkpointed_publication
                 else "/api/hosted-published-chunks" if published_lookup
                 else "/api/hosted-upload")
+        headers = {"Authorization": "Bearer " + self._device_token,
+                   "Content-Type": "application/json",
+                   "Content-Length": str(len(body))}
+        if claim.get("action") in ("decide", "put"):
+            headers["X-Hosted-Upload-Lease"] = self._object_lease(
+                claim["reservationId"])
         request = Request(self._service_origin + path, data=body,
-                          headers={"Authorization": "Bearer " + self._device_token,
-                                   "Content-Type": "application/json",
-                                   "Content-Length": str(len(body))}, method="POST")
+                          headers=headers, method="POST")
         try:
             with self._opener.open(request, timeout=self._timeout) as response:
                 if (response.status != 200 or

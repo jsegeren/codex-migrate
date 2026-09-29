@@ -1,9 +1,12 @@
 // Dark sandbox-only upload control plane. This route never accepts bytes or
 // storage credentials: it reserves quota and issues exact, short-lived grants
-// only after a fresh device, app-purchase, and Stripe Subscription check.
+// after either a fresh Stripe check or a one-minute, device-bound lease.
 const { reply } = require('../commerce/http');
 const { uploadRuntime } = require('../hosted/upload_runtime');
-const { authorizeUploadScope, authorizeReadScope, HostedAccessError } = require('../hosted/access');
+const { authorizeUploadScope, authorizeLeasedUploadScope, authorizeReadScope,
+  consumeAuthorizedScope, tokenHash, HostedAccessError } = require('../hosted/access');
+const { HostedUploadLeaseError, mintUploadLease,
+  requireActiveReservation } = require('../hosted/upload_lease');
 const { createUploadReservation, renewUploadReservation,
   abandonUploadReservation, readUploadReservationStatus } =
   require('../hosted/reservation');
@@ -31,7 +34,7 @@ function requestBody(req) {
   const keys = Object.keys(data).sort().join(',');
   const expected = data.action === 'reserve' ?
     (keys === 'action,bytes,reservationId,vaultId' ? keys : 'action,bytes,vaultId') :
-    ['renew', 'abandon', 'status'].includes(data.action) ?
+    ['renew', 'abandon', 'status', 'lease'].includes(data.action) ?
       'action,reservationId,vaultId' :
     ['decide', 'put'].includes(data.action) ?
       'action,item,reservationId,vaultId' : null;
@@ -74,6 +77,12 @@ function makeHandler(load = uploadRuntime, env = process.env) {
     catch { return reply(res, 400, { error: 'invalid_request' }); }
     const token = BEARER.exec(req.headers.authorization || '')?.[1];
     if (!token) return reply(res, 403, { error: 'access_denied' });
+    const scopedObject = ['decide', 'put'].includes(data.action);
+    if (scopedObject &&
+        (typeof req.headers['x-hosted-upload-lease'] !== 'string' ||
+         req.headers['x-hosted-upload-lease'].length > 750)) {
+      return reply(res, 403, { error: 'access_denied' });
+    }
     try {
       const { query, getEntitlement, verifyPurchase, live, priceCatalog,
         workerOrigin, secret } = await load(env);
@@ -85,9 +94,23 @@ function makeHandler(load = uploadRuntime, env = process.env) {
           abandonUploadReservation : readUploadReservationStatus)({ scope,
             reservationId: data.reservationId, query }));
       }
-      const scope = await authorizeUploadScope({ sessionToken: token,
+      const scope = scopedObject ? await authorizeLeasedUploadScope({
+        sessionToken: token, vaultId: data.vaultId,
+        reservationId: data.reservationId,
+        lease: req.headers['x-hosted-upload-lease'], secret, query,
+      }) : await authorizeUploadScope({ sessionToken: token,
         vaultId: data.vaultId, query, getEntitlement, verifyPurchase,
         live, priceCatalog });
+      if (data.action === 'lease') {
+        await requireActiveReservation({ accountId: scope.accountId,
+          vaultId: scope.vaultId, reservationId: data.reservationId, query });
+        if (!consumeAuthorizedScope(scope)) throw Error('upload_scope_expired');
+        return reply(res, 200, { lease: mintUploadLease({
+          accountId: scope.accountId, vaultId: scope.vaultId,
+          reservationId: data.reservationId, deviceHash: tokenHash(token),
+          allowanceBytes: scope.allowanceBytes, secret,
+        }) });
+      }
       if (data.action === 'reserve') {
         return reply(res, 200, await createUploadReservation({ scope,
           bytes: data.bytes, reservationId: data.reservationId, query }));
@@ -108,8 +131,10 @@ function makeHandler(load = uploadRuntime, env = process.env) {
         reservationId: data.reservationId, item, secret, query });
       return reply(res, 200, { workerOrigin, grant });
     } catch (error) {
-      return reply(res, error instanceof HostedAccessError ? 403 : 503,
-        { error: error instanceof HostedAccessError ? 'access_denied' :
+      const denied = error instanceof HostedAccessError ||
+        error instanceof HostedUploadLeaseError;
+      return reply(res, denied ? 403 : 503,
+        { error: denied ? 'access_denied' :
           'temporarily_unavailable' });
     }
   };
