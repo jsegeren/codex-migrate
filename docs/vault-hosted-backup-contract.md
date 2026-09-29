@@ -37,9 +37,13 @@ of work created before the first verified backup, or describe a synthetic R2
 test as disaster-recovery certification. A paid business pilot must show a
 successful off-device backup and a clean-Mac restore of representative data,
 with a visible last-good receipt and failed-run alerting.
-OpenAI's [Codex local-use guidance](https://learn.chatgpt.com/docs/hipaa-configuration)
-assigns workstation and local-retention responsibility to the organization;
-its audit records are not a demonstrated restore of complete local history.
+OpenAI's [Codex security whitepaper](https://d2xo500swnpgl1.cloudfront.net/slide-upload/oaiacademy/Codex-Security-Whitepaper-a9d6a446-3e82-4783-8c2f-3a15287f70d1-1778256939604.pdf)
+distinguishes local CLI/IDE/app history saved on the developer's computer for
+session resume from persistent Codex Cloud conversation data. It describes
+Compliance API audit-log retention of up to 30 days for the local signed-in
+environment; those logs are not a demonstrated restore of complete local
+history. This is the specific business recovery gap to qualify, not a claim
+that OpenAI retains no Codex information at all.
 OpenAI also [documents local transcript persistence](https://learn.chatgpt.com/docs/config-file/config-advanced#history-persistence)
 and [now advertises conversation-content search](https://learn.chatgpt.com/docs/changelog).
 An [OpenAI engineer stated](https://github.com/openai/codex/discussions/13251)
