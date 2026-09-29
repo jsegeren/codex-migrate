@@ -23,6 +23,7 @@ DECLARE
   v_old uuid := 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
   v_new uuid := 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
   v_second uuid := 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+  v_third uuid := 'ffffffff-ffff-4fff-8fff-ffffffffffff';
   v_rotated_account uuid;
   v_rotated_vault uuid;
 BEGIN
@@ -66,9 +67,13 @@ BEGIN
     (token_hash, account_id, vault_id, device_id, expires_at)
     VALUES (repeat('c', 64), v_account, v_vault, v_second,
       clock_timestamp() + interval '2 days');
+  IF EXISTS (SELECT 1 FROM hosted.rotate_device_session(
+      repeat('b', 64), v_new, repeat('d', 64), v_second)) THEN
+    RAISE EXCEPTION 'existing device identity was reused';
+  END IF;
   BEGIN
     PERFORM hosted.rotate_device_session(
-      repeat('b', 64), v_new, repeat('c', 64), v_old);
+      repeat('b', 64), v_new, repeat('c', 64), v_third);
     RAISE EXCEPTION 'duplicate new bearer was accepted';
   EXCEPTION WHEN unique_violation THEN NULL; END;
   IF NOT EXISTS (SELECT 1 FROM hosted.device_sessions

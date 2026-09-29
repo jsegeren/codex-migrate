@@ -39,6 +39,8 @@ BEGIN
   v_now := clock_timestamp();
   IF v_old.account_id <> v_account OR
      v_old.revoked_at IS NOT NULL OR v_old.expires_at <= v_now OR
+     EXISTS (SELECT 1 FROM hosted.device_sessions AS session
+       WHERE session.device_id = p_new_device_id) OR
      (SELECT count(*) FROM hosted.device_sessions AS session
        WHERE session.account_id = v_account
          AND session.vault_id = v_old.vault_id
