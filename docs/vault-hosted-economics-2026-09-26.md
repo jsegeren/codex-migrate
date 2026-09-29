@@ -28,6 +28,10 @@ for those extra sources in an empty Vault. Its `estimate_complete` flag is
 older transcript-only estimate below, this is roughly another 11% of first-
 backup object bytes, not an exact combined snapshot measurement: the scans
 were at different times and cross-source duplicate chunks were not reconciled.
+On a synthetic v4 fixture containing transcripts, an attachment, and paginated
+history, the full-scope estimate matched the actual encrypted chunk bytes
+written by the native CryptoKit helper. This checks the estimator's format
+model, not the changing live-history figure or any future retention policy.
 Do not use either figure as a customer allowance or all-in gross-margin
 forecast. Neither first-backup estimate measures retained version growth or
 fully loaded COGS.

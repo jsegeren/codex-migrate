@@ -143,6 +143,12 @@ jobs:
           python tests/keychain_ci_smoke.py "$RUNNER_TEMP/CodexVaultCryptoSmoke"
       - name: Test
         run: PYTHONPATH=src python -m unittest discover -s tests -v
+      - name: Compare full-scope size estimate with encrypted Vault objects
+        if: matrix.python-version == '3.12'
+        run: |
+          CODEX_MIGRATE_TEST_VAULT_HELPER="$RUNNER_TEMP/CodexVaultCryptoSmoke" \
+            PYTHONPATH=src python -m unittest \
+            tests.test_vault_size_estimate.VaultSizeEstimateTests.test_compressed_object_bytes_match_packaged_helper -v
       - name: Check CLI
         run: PYTHONPATH=src python -m codex_migrate --version
       - name: Check native Mac shell
