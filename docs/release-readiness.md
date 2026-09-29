@@ -15,6 +15,17 @@ encrypted-object fixture. It does **not** certify the installed signed app,
 production R2, customer enrollment, a business recovery key, or recovery of
 either Founder's real Codex history. Those release gates remain open.
 
+The same clean source at `bf9e06b40d00cc415a089754049ab6591001ffd0`
+produced a disposable, ad-hoc-signed **local-test build 20** on this Mac. Its
+ZIP SHA-256 is `6404b331f4394edc6b0e436008f9ce09056f4b14e84d7ac8cba6b1442ba268ef`.
+The packaged engine/helper passed six opt-in synthetic tests covering exact
+restore bytes, database-only history, pasted-prompt attachments, and search
+index behavior; two unrelated optional cases were skipped. A separate opt-in
+real LaunchAgent test added a database item, produced a second encrypted
+snapshot marked `needs_attention`, and restored both versions. It removed its disposable agent and
+Keychain key afterward. The package is **not Developer ID signed or notarized**,
+was not installed for a buyer, and did not back up either real Codex home.
+
 The Founder authorized a **self-service paid beta** on September 7 while the
 remaining acceptance checks continue. This is not full release certification.
 The [paid-beta launch record](paid-beta-launch-2026-09-07.md) controls the current
