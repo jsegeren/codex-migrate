@@ -4,7 +4,7 @@
 const { reply } = require('../commerce/http');
 const { recoveryRuntime } = require('../hosted/recovery_runtime');
 const { authorizeReadScope, HostedAccessError } = require('../hosted/access');
-const { getLastGoodSnapshot, getPublishedSnapshot,
+const { getAccountStorageUsage, getLastGoodSnapshot, getPublishedSnapshot,
   listPublishedSnapshots, listPublishedObjects } = require('../hosted/read_inventory');
 const { issuePublishedGet, issueLastGoodManifest } = require('../hosted/read_grant');
 
@@ -23,7 +23,8 @@ function requestBody(req) {
   const raw = JSON.stringify(req.body);
   if (Buffer.byteLength(raw) > MAX_BODY) throw Error('invalid_request');
   const { action } = req.body;
-  const allowed = action === 'latest' ? ['action', 'vaultId'] :
+  const allowed = action === 'usage' ? ['action', 'vaultId'] :
+    action === 'latest' ? ['action', 'vaultId'] :
     action === 'history' ? ['action', 'vaultId', 'beforeAt', 'beforeSnapshotId'] :
     action === 'snapshot' ? ['action', 'vaultId', 'snapshotId'] :
     action === 'objects' ? ['action', 'vaultId', 'snapshotId', 'afterKey'] :
@@ -31,7 +32,7 @@ function requestBody(req) {
     action === 'get' ? ['action', 'vaultId', 'snapshotId', 'relativeKey'] : [];
   if (!allowed.length || Object.keys(req.body).some(key => !allowed.includes(key)) ||
       typeof req.body.vaultId !== 'string') throw Error('invalid_request');
-  if (!['latest', 'history'].includes(action) &&
+  if (!['usage', 'latest', 'history'].includes(action) &&
       typeof req.body.snapshotId !== 'string') {
     throw Error('invalid_request');
   }
@@ -72,6 +73,10 @@ function makeHandler(load = recoveryRuntime, env = process.env) {
       const { query, workerOrigin, secret } = await load(env);
       const scope = await authorizeReadScope({ sessionToken: token,
         vaultId: data.vaultId, query });
+      if (data.action === 'usage') {
+        return reply(res, 200, { accountId: scope.accountId,
+          ...await getAccountStorageUsage({ scope, query }) });
+      }
       if (data.action === 'latest') {
         return reply(res, 200, { accountId: scope.accountId, workerOrigin,
           latest: await getLastGoodSnapshot({ scope, query }) });

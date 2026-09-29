@@ -227,7 +227,11 @@ Cancellation, proration, taxes, retention, and the exact first-month limit
 must be approved before any customer-facing checkout or invoice changes.
 
 The current SQL prototype enforces a byte allowance, **not metered billing**.
-No subscription, rate, or allowance is approved or live. Before charging,
+The dark recovery route can now return its exact account-ledger retained and
+reserved byte counters to an authenticated device, but that is only a
+point-in-time server figure: it has no daily GB-month meter and has not been
+reconciled against provider storage. No subscription, rate, or allowance is
+approved or live. Before charging,
 prove the billing meter and its reconciliation against real provider storage,
 measure incremental growth, and recheck verification, support, and restore
 costs. For a business offer, price discovery must also test the buyer's

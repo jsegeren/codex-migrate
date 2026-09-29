@@ -106,6 +106,22 @@ test('owned last-good and inventory responses contain no secret', async () => {
   assert.equal(page.headers['Cache-Control'], 'no-store');
 });
 
+test('usage exposes account-retained bytes only to an authenticated device', async () => {
+  const f = fixture(async (sql, values) => {
+    assert.match(sql, /FROM hosted\.accounts WHERE account_id = \$1::uuid/);
+    assert.deepEqual(values, [accountId]);
+    return { rows: [{ retained_bytes: '75000000000', reserved_bytes: '0' }] };
+  });
+  f.req.body = { action: 'usage', vaultId };
+  const answer = await f.send();
+  assert.equal(answer.statusCode, 200);
+  assert.deepEqual(answer.body, { accountId,
+    retainedBytes: 75000000000, reservedBytes: 0 });
+  assert.equal(JSON.stringify(answer.body).includes('hv1_'), false);
+  f.req.body.snapshotId = snapshotId;
+  assert.equal((await f.send()).statusCode, 400);
+});
+
 test('an authenticated device discovers and selects only its published versions', async () => {
   const older = '22222222-2222-4222-8222-222222222222';
   const at = '2026-09-28T20:00:00.123456Z';

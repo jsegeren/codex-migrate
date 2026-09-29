@@ -132,6 +132,22 @@ class HostedRecoveryClient:
             raise MigrationError("The hosted recovery account changed.")
         return latest
 
+    def account_storage_usage(self, *, expected_account_id: str) -> dict:
+        """Read server-accounted retained bytes, not a customer bill or R2 proof."""
+        if (not isinstance(expected_account_id, str) or
+                not re.fullmatch(_UUID, expected_account_id)):
+            raise MigrationError("The hosted recovery account is invalid.")
+        reply = self._post({"action": "usage", "vaultId": self._vault_id})
+        if (set(reply) != {"accountId", "retainedBytes", "reservedBytes"} or
+                reply["accountId"] != expected_account_id or
+                type(reply["retainedBytes"]) is not int or
+                not 0 <= reply["retainedBytes"] <= 2**53 - 1 or
+                type(reply["reservedBytes"]) is not int or
+                not 0 <= reply["reservedBytes"] <= 2**53 - 1):
+            raise MigrationError("The hosted storage usage is invalid.")
+        return {"retainedBytes": reply["retainedBytes"],
+                "reservedBytes": reply["reservedBytes"]}
+
     @staticmethod
     def _summary(value: object) -> dict:
         if (not isinstance(value, dict)

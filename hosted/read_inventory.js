@@ -43,9 +43,34 @@ const SNAPSHOT_SQL = `SELECT s.verified_object_count, r.staged_bytes
   JOIN hosted.upload_reservations AS r ON r.reservation_id = s.reservation_id
   WHERE s.account_id = $1::uuid AND s.vault_id = $2::uuid
     AND s.snapshot_id = $3::uuid`;
+const USAGE_SQL = `SELECT retained_bytes, reserved_bytes
+  FROM hosted.accounts WHERE account_id = $1::uuid`;
 
 class HostedInventoryError extends Error {
   constructor() { super('hosted_inventory_denied'); }
+}
+
+function accountedBytes(value) {
+  if (!(typeof value === 'string' && /^[0-9]+$/.test(value)) &&
+      !(typeof value === 'number' && Number.isSafeInteger(value))) {
+    throw new HostedInventoryError();
+  }
+  const count = Number(value);
+  if (!Number.isSafeInteger(count) || count < 0) throw new HostedInventoryError();
+  return count;
+}
+
+async function getAccountStorageUsage({ scope, query }) {
+  if (!consumeAuthorizedReadScope(scope) || typeof query !== 'function') {
+    throw new HostedInventoryError();
+  }
+  try {
+    const result = await query(USAGE_SQL, [scope.accountId]);
+    if (result?.rows?.length !== 1) throw new HostedInventoryError();
+    const retainedBytes = accountedBytes(result.rows[0].retained_bytes);
+    const reservedBytes = accountedBytes(result.rows[0].reserved_bytes);
+    return Object.freeze({ retainedBytes, reservedBytes });
+  } catch { throw new HostedInventoryError(); }
 }
 
 function snapshotSummary(snapshotId, countValue, bytesValue) {
@@ -175,5 +200,5 @@ async function listPublishedObjects({ scope, snapshotId, afterKey = null, query 
   } catch { throw new HostedInventoryError(); }
 }
 
-module.exports = { HostedInventoryError, getLastGoodSnapshot,
+module.exports = { HostedInventoryError, getAccountStorageUsage, getLastGoodSnapshot,
   getPublishedSnapshot, listPublishedSnapshots, listPublishedObjects };

@@ -68,6 +68,10 @@ class _Handler(BaseHTTPRequestHandler):
                 "latest": None if snapshot_id is None else
                 {"snapshotId": snapshot_id,
                  "totalObjects": len(rows), "totalBytes": total}})
+        if claim["action"] == "usage":
+            return self._reply(200, {"accountId": ACCOUNT,
+                "retainedBytes": self.server.retained_bytes,
+                "reservedBytes": self.server.reserved_bytes})
         if claim["action"] == "history":
             entries = self.server.history
             if "beforeAt" in claim:
@@ -152,6 +156,8 @@ class HostedRecoveryClientTests(unittest.TestCase):
         self.server.mutate_manifest = None
         self.server.mutate_get = None
         self.server.latest_sequence = []
+        self.server.retained_bytes = 75_000_000_000
+        self.server.reserved_bytes = 0
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
 
@@ -173,6 +179,16 @@ class HostedRecoveryClientTests(unittest.TestCase):
             self.client().latest_snapshot(expected_account_id=VAULT)
         self.server.snapshot_id = None
         self.assertIsNone(self.client().latest_snapshot(expected_account_id=ACCOUNT))
+
+    def test_account_storage_usage_is_account_bound_and_strict(self):
+        self.assertEqual(self.client().account_storage_usage(
+            expected_account_id=ACCOUNT),
+            {"retainedBytes": 75_000_000_000, "reservedBytes": 0})
+        with self.assertRaises(MigrationError):
+            self.client().account_storage_usage(expected_account_id=VAULT)
+        self.server.retained_bytes = -1
+        with self.assertRaises(MigrationError):
+            self.client().account_storage_usage(expected_account_id=ACCOUNT)
 
     def test_prepares_validated_receipt_and_exact_get_grant(self):
         receipt, store = self.client().prepare(max_bytes=1_000_000)

@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { authorizeReadScope } = require('../hosted/access');
-const { getLastGoodSnapshot, getPublishedSnapshot,
+const { getAccountStorageUsage, getLastGoodSnapshot, getPublishedSnapshot,
   listPublishedSnapshots, listPublishedObjects } = require('../hosted/read_inventory');
 const { mintSessionSecret } = require('./hosted-device-fixture');
 
@@ -22,6 +22,24 @@ function row(index, count = 300) {
     object_key: `${prefix}objects/${digest.slice(0, 2)}/${digest.slice(2)}.cvchunk`,
     bytes: '10', sha256: digest };
 }
+
+test('account storage totals require the owned read scope and valid counters', async () => {
+  const usage = await getAccountStorageUsage({ scope: await scope(),
+    query: async (sql, values) => {
+      assert.match(sql, /FROM hosted\.accounts WHERE account_id = \$1::uuid/);
+      assert.deepEqual(values, [accountId]);
+      return { rows: [{ retained_bytes: '75000000000', reserved_bytes: '4096' }] };
+    } });
+  assert.deepEqual(usage, { retainedBytes: 75000000000, reservedBytes: 4096 });
+  await assert.rejects(getAccountStorageUsage({ scope: { accountId, vaultId },
+    query: async () => ({ rows: [] }) }), /hosted_inventory_denied/);
+  for (const rows of [[], [{ retained_bytes: '-1', reserved_bytes: '0' }],
+    [{ retained_bytes: '9007199254740992', reserved_bytes: '0' }],
+    [{ retained_bytes: '1', reserved_bytes: null }]]) {
+    await assert.rejects(getAccountStorageUsage({ scope: await scope(),
+      query: async () => ({ rows }) }), /hosted_inventory_denied/);
+  }
+});
 
 test('last-good discovery comes only from the owned Vault pointer', async () => {
   const latest = await getLastGoodSnapshot({ scope: await scope(),

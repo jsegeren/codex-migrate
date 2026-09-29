@@ -91,6 +91,15 @@ version; any uncertainty uses the normal backup path or fails closed. This is
 runtime or change rate has been measured, and a skipped run is not a new
 verified recovery point.
 
+The sandbox recovery API now has an account-scoped, device-authenticated
+read-only usage query for server-accounted retained and reserved encrypted
+bytes. It returns neither conversation content nor a billing amount. Retained
+bytes are the current database ledger, not a reconciled R2 inventory or a
+GB-month invoice; reserved bytes are pending capacity, not stored data.
+No customer UI or production route uses this query yet. Before billing,
+reconcile the ledger to actual provider storage and record daily retained
+usage across the billing period.
+
 The current hosted prototype is **not a business enrollment model**. Its
 account, device, subscription, and recovery paths all depend on one person's
 $49 app-purchase session and buyer-email challenge. That proves neither that
