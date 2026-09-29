@@ -996,14 +996,17 @@ egress allowance. Do not claim that B2 restores are always free. See its
    remote ciphertext, upload only new chunks, and leave both versions readable
    on a clean Mac. A fresh nonce under an existing object ID must fail rather
    than overwrite or silently count as protected.
-   A narrower independent-Mac CI proof passed on September 29 in
-   [run 36644315795](https://github.com/jsegeren/codex-migrate/actions/runs/36644315795):
-   separate macOS runners produced and consumed synthetic encrypted hosted
+   A narrower independent-Mac CI proof passed on September 29: the
+   [hosted import job](https://github.com/jsegeren/codex-migrate/actions/runs/36644315795/job/109664468451)
+   and [local Vault import job](https://github.com/jsegeren/codex-migrate/actions/runs/36644315795/job/109664609829)
+   both succeeded. Separate macOS runners produced and consumed synthetic encrypted hosted
    objects, imported the saved recovery key, verified the restored snapshot,
    and found its synthetic history. The local Vault portability pair passed
    in the same run. This did not exercise customer enrollment, authenticated
    service publication, real R2, a scheduled run, or a buyer-facing restore;
-   the full disaster gate remains open.
+   the full disaster gate remains open. The surrounding workflow was later
+   canceled because a newer commit superseded its slow full-suite jobs; its
+   successful portability job receipts remain the evidence for this narrow claim.
    A verified ciphertext publication is not necessarily a complete Codex
    capture: the current client can publish a snapshot with at-risk threads,
    while the service advances its `last_good_snapshot_id` pointer and the
