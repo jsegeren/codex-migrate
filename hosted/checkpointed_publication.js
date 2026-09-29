@@ -7,7 +7,7 @@ const { HostedPublicationStaleError, isStalePublication } =
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const PUBLISH_SQL = `SELECT hosted.publish_checkpointed_staged_current(
-  $1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::bigint
+  $1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::bigint, $6::text
 ) AS published`;
 const COUNT_SQL = `SELECT verified_object_count FROM hosted.snapshots
   WHERE account_id = $1::uuid AND vault_id = $2::uuid
@@ -17,14 +17,17 @@ class HostedCheckpointedPublicationError extends Error {
   constructor() { super('hosted_checkpointed_publication_failed'); }
 }
 
-async function publishCheckpointed({ scope, reservationId, snapshotId, query }) {
+async function publishCheckpointed({ scope, reservationId, snapshotId,
+  sourceCoverage, query }) {
   if (!consumeAuthorizedScope(scope) || !UUID.test(reservationId) ||
-      !UUID.test(snapshotId) || typeof query !== 'function') {
+      !UUID.test(snapshotId) ||
+      !['complete', 'needs_attention'].includes(sourceCoverage) ||
+      typeof query !== 'function') {
     throw new HostedCheckpointedPublicationError();
   }
   try {
     const published = await query(PUBLISH_SQL, [scope.accountId, scope.vaultId,
-      reservationId, snapshotId, scope.allowanceBytes]);
+      reservationId, snapshotId, scope.allowanceBytes, sourceCoverage]);
     if (published?.rows?.length !== 1 ||
         published.rows[0].published !== true) {
       throw new HostedCheckpointedPublicationError();

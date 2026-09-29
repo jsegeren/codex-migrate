@@ -396,6 +396,7 @@ class HostedUploadClient:
         return count, ready
 
     def publish_checkpointed(self, reservation_id: str, snapshot_id: str, *,
+                             source_coverage: str,
                              apply: bool = False) -> int:
         """Only the server's completed publication returns a protection count."""
         if apply is not True:
@@ -403,10 +404,13 @@ class HostedUploadClient:
         self._require_reservation(reservation_id)
         if not isinstance(snapshot_id, str) or not _UUID.fullmatch(snapshot_id):
             raise MigrationError("The hosted snapshot is invalid.")
+        if source_coverage not in ("complete", "needs_attention"):
+            raise MigrationError("The hosted source coverage is invalid.")
         result = self._post({"action": "publish_checkpointed",
                              "vaultId": self._vault_id,
                              "reservationId": reservation_id,
-                             "snapshotId": snapshot_id},
+                             "snapshotId": snapshot_id,
+                             "sourceCoverage": source_coverage},
                             checkpointed_publication=True)
         count = result.get("verifiedObjectCount")
         if (set(result) != {"snapshotId", "verifiedObjectCount"} or
@@ -416,6 +420,7 @@ class HostedUploadClient:
         return count
 
     def verify_and_publish(self, reservation_id: str, snapshot_id: str, *,
+                           source_coverage: str,
                            apply: bool = False) -> int:
         """Resume bounded proof steps; return only after publication succeeds.
 
@@ -439,6 +444,7 @@ class HostedUploadClient:
                 if time.monotonic() - last_renewal >= 25 * 60:
                     self.renew(reservation_id, apply=True)
                 return self.publish_checkpointed(reservation_id, snapshot_id,
+                                                  source_coverage=source_coverage,
                                                   apply=True)
         raise MigrationError("Hosted verification did not complete safely.")
 
@@ -456,7 +462,9 @@ class HostedUploadClient:
         if self.submit_pages(reservation_id, claim, apply=True) != len(claim.objects):
             raise MigrationError("The hosted snapshot receipt is incomplete.")
         verified = self.verify_and_publish(reservation_id, claim.snapshot_id,
-                                           apply=True)
+                                           source_coverage=("complete" if
+                                               staged.at_risk_threads == 0 else
+                                               "needs_attention"), apply=True)
         if verified != len(claim.objects):
             raise MigrationError("The hosted publication receipt is incomplete.")
         return {"snapshotId": claim.snapshot_id,
@@ -498,7 +506,10 @@ class HostedUploadClient:
         if self.submit_pages(reservation_id, staged, apply=True) != len(staged.objects):
             raise MigrationError("The hosted snapshot receipt is incomplete.")
         verified = self.verify_and_publish(
-            reservation_id, staged.snapshot_id, apply=True)
+            reservation_id, staged.snapshot_id,
+            # This older local-Vault mirror path does not attest source
+            # coverage; never turn it into a complete business-backup claim.
+            source_coverage="needs_attention", apply=True)
         if verified != len(staged.objects):
             raise MigrationError("The hosted publication receipt is incomplete.")
         return {"snapshotId": staged.snapshot_id,

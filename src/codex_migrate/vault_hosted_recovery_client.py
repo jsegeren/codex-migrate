@@ -112,13 +112,16 @@ class HostedRecoveryClient:
         if latest is None:
             return account_id, worker_origin, None
         if (not isinstance(latest, dict)
-                or set(latest) != {"snapshotId", "totalObjects", "totalBytes"}
+                or set(latest) != {"snapshotId", "totalObjects", "totalBytes",
+                                   "sourceCoverage"}
                 or not isinstance(latest["snapshotId"], str)
                 or not re.fullmatch(_UUID, latest["snapshotId"])
                 or type(latest["totalObjects"]) is not int
                 or not 3 <= latest["totalObjects"] <= MAX_CHUNKS + 3
                 or type(latest["totalBytes"]) is not int
-                or latest["totalBytes"] < latest["totalObjects"]):
+                or latest["totalBytes"] < latest["totalObjects"]
+                or latest["sourceCoverage"] not in
+                ("unknown", "complete", "needs_attention")):
             raise MigrationError("The hosted recovery pointer is invalid.")
         return account_id, worker_origin, latest
 
@@ -151,13 +154,16 @@ class HostedRecoveryClient:
     @staticmethod
     def _summary(value: object) -> dict:
         if (not isinstance(value, dict)
-                or set(value) != {"snapshotId", "totalObjects", "totalBytes"}
+                or set(value) != {"snapshotId", "totalObjects", "totalBytes",
+                                  "sourceCoverage"}
                 or not isinstance(value["snapshotId"], str)
                 or not re.fullmatch(_UUID, value["snapshotId"])
                 or type(value["totalObjects"]) is not int
                 or not 3 <= value["totalObjects"] <= MAX_CHUNKS + 3
                 or type(value["totalBytes"]) is not int
-                or value["totalBytes"] < value["totalObjects"]):
+                or value["totalBytes"] < value["totalObjects"]
+                or value["sourceCoverage"] not in
+                ("unknown", "complete", "needs_attention")):
             raise MigrationError("The hosted recovery version is invalid.")
         return value
 
@@ -194,10 +200,11 @@ class HostedRecoveryClient:
         entries = []
         for item in page["snapshots"]:
             if not isinstance(item, dict) or set(item) != {
-                    "snapshotId", "totalObjects", "totalBytes", "publishedAt"}:
+                    "snapshotId", "totalObjects", "totalBytes",
+                    "sourceCoverage", "publishedAt"}:
                 raise MigrationError("The hosted recovery history is invalid.")
             summary = self._summary({key: item[key] for key in (
-                "snapshotId", "totalObjects", "totalBytes")})
+                "snapshotId", "totalObjects", "totalBytes", "sourceCoverage")})
             position = (self._published_at(item["publishedAt"]), summary["snapshotId"])
             if prior is not None and position >= prior:
                 raise MigrationError("The hosted recovery history is invalid.")

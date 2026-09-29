@@ -18,10 +18,13 @@ function requestBody(req) {
       !req.body || typeof req.body !== 'object' || Array.isArray(req.body) ||
       Buffer.byteLength(JSON.stringify(req.body)) > 300 ||
       Object.keys(req.body).sort().join(',') !==
-        'action,reservationId,snapshotId,vaultId' ||
+        'action,reservationId,snapshotId,sourceCoverage,vaultId' ||
       req.body.action !== 'publish_checkpointed' ||
       !UUID.test(req.body.vaultId) || !UUID.test(req.body.reservationId) ||
-      !UUID.test(req.body.snapshotId)) throw Error('invalid_request');
+      !UUID.test(req.body.snapshotId) ||
+      !['complete', 'needs_attention'].includes(req.body.sourceCoverage)) {
+    throw Error('invalid_request');
+  }
   return req.body;
 }
 
@@ -50,7 +53,7 @@ function makeHandler(load = uploadRuntime, env = process.env,
         vaultId: data.vaultId, query, getEntitlement, verifyPurchase,
         live, priceCatalog });
       const result = await publish({ scope, reservationId: data.reservationId,
-        snapshotId: data.snapshotId, query });
+        snapshotId: data.snapshotId, sourceCoverage: data.sourceCoverage, query });
       return reply(res, 200, result);
     } catch (error) {
       if (error instanceof HostedPublicationStaleError) {

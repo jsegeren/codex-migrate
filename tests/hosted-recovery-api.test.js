@@ -79,7 +79,8 @@ test('owned last-good and inventory responses contain no secret', async () => {
     if (sql.includes('FROM hosted.vaults AS v')) {
       assert.deepEqual(values, [accountId, vaultId]);
       return { rows: [{ last_good_snapshot_id: snapshotId,
-        verified_object_count: 3, staged_bytes: '30' }] };
+        verified_object_count: 3, staged_bytes: '30',
+        source_coverage: 'complete' }] };
     }
     assert.match(sql, /hosted\.snapshot_objects/);
     assert.deepEqual(values, [accountId, vaultId, snapshotId, '']);
@@ -96,7 +97,8 @@ test('owned last-good and inventory responses contain no secret', async () => {
   assert.equal(latest.body.accountId, accountId);
   assert.equal(latest.body.workerOrigin, 'https://fixture.example');
   assert.deepEqual(latest.body.latest,
-    { snapshotId, totalObjects: 3, totalBytes: 30 });
+    { snapshotId, totalObjects: 3, totalBytes: 30,
+      sourceCoverage: 'complete' });
   f.req.body = { action: 'objects', vaultId, snapshotId };
   const page = await f.send();
   assert.equal(page.statusCode, 200);
@@ -129,13 +131,16 @@ test('an authenticated device discovers and selects only its published versions'
     if (sql.includes('ORDER BY s.published_at DESC')) {
       assert.deepEqual(values, [accountId, vaultId, null, null]);
       return { rows: [{ snapshot_id: snapshotId, published_at: at,
-        verified_object_count: 3, staged_bytes: '30' },
+        verified_object_count: 3, staged_bytes: '30',
+        source_coverage: 'complete' },
       { snapshot_id: older, published_at: '2026-09-27T20:00:00.123456Z',
-        verified_object_count: 4, staged_bytes: '40' }] };
+        verified_object_count: 4, staged_bytes: '40',
+        source_coverage: 'unknown' }] };
     }
     assert.match(sql, /s\.snapshot_id = \$3::uuid/);
     assert.deepEqual(values, [accountId, vaultId, older]);
-    return { rows: [{ verified_object_count: 4, staged_bytes: '40' }] };
+    return { rows: [{ verified_object_count: 4, staged_bytes: '40',
+      source_coverage: 'unknown' }] };
   });
   f.req.body = { action: 'history', vaultId };
   const history = await f.send();
@@ -148,7 +153,8 @@ test('an authenticated device discovers and selects only its published versions'
   const selected = await f.send();
   assert.equal(selected.statusCode, 200);
   assert.deepEqual(selected.body.snapshot,
-    { snapshotId: older, totalObjects: 4, totalBytes: 40 });
+    { snapshotId: older, totalObjects: 4, totalBytes: 40,
+      sourceCoverage: 'unknown' });
   f.req.body = { action: 'history', vaultId, beforeAt: at };
   assert.equal((await f.send()).statusCode, 400);
 });

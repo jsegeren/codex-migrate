@@ -41,19 +41,20 @@ function fixture(publishError = null) {
             recurring: { interval: 'month', interval_count: 1 } } }] } },
     }) };
   }, env, async ({ scope, reservationId: reservation,
-    snapshotId: snapshot }) => {
+    snapshotId: snapshot, sourceCoverage }) => {
     publishes++;
     if (publishError) throw publishError;
     assert.equal(scope.accountId, accountId);
     assert.equal(reservation, reservationId);
     assert.equal(snapshot, snapshotId);
+    assert.equal(sourceCoverage, 'complete');
     return { snapshotId, verifiedObjectCount: 4 };
   });
   const req = { method: 'POST', headers: {
     authorization: `Bearer ${session.token}`,
     'content-type': 'application/json',
   }, body: { action: 'publish_checkpointed', vaultId, reservationId,
-    snapshotId } };
+    snapshotId, sourceCoverage: 'complete' } };
   return { env, req, loads: () => loads, publishes: () => publishes,
     lapse: () => { status = 'past_due'; },
     send: async () => { const res = response(); await handler(req, res); return res; } };
@@ -67,6 +68,9 @@ test('checkpointed publication is dark and rejects malformed or unauthorized cal
   f.req.body.receipt = { trusted: true };
   assert.equal((await f.send()).statusCode, 400);
   delete f.req.body.receipt;
+  f.req.body.sourceCoverage = 'unknown';
+  assert.equal((await f.send()).statusCode, 400);
+  f.req.body.sourceCoverage = 'complete';
   f.req.headers.authorization = 'Bearer forged';
   assert.equal((await f.send()).statusCode, 403);
   assert.equal(f.loads(), 0);

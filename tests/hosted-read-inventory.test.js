@@ -47,9 +47,11 @@ test('last-good discovery comes only from the owned Vault pointer', async () => 
       assert.match(sql, /v\.last_good_snapshot_id/);
       assert.deepEqual(values, [accountId, vaultId]);
       return { rows: [{ last_good_snapshot_id: snapshotId,
-        verified_object_count: 300, staged_bytes: '3000' }] };
+        verified_object_count: 300, staged_bytes: '3000',
+        source_coverage: 'complete' }] };
     } });
-  assert.deepEqual(latest, { snapshotId, totalObjects: 300, totalBytes: 3000 });
+  assert.deepEqual(latest, { snapshotId, totalObjects: 300,
+    totalBytes: 3000, sourceCoverage: 'complete' });
   await assert.rejects(getLastGoodSnapshot({ scope: { accountId, vaultId },
     query: async () => ({ rows: [] }) }), /hosted_inventory_denied/);
   await assert.rejects(getLastGoodSnapshot({ scope: await scope(),
@@ -66,6 +68,7 @@ test('owned published versions page without losing microsecond order', async () 
   const rows = Array.from({ length: 51 }, (_, index) => ({
     snapshot_id: version(100 - index), published_at: at,
     verified_object_count: 3, staged_bytes: '30',
+    source_coverage: 'unknown',
   }));
   const first = await listPublishedSnapshots({ scope: await scope(),
     query: async (sql, values) => {
@@ -85,16 +88,18 @@ test('owned published versions page without losing microsecond order', async () 
       return { rows: [{ ...rows[50] }] };
     } });
   assert.deepEqual(second.snapshots, [{ snapshotId: version(50),
-    totalObjects: 3, totalBytes: 30, publishedAt: at }]);
+    totalObjects: 3, totalBytes: 30, sourceCoverage: 'unknown',
+    publishedAt: at }]);
   assert.equal(second.nextCursor, null);
   const selected = await getPublishedSnapshot({ scope: await scope(),
     snapshotId: version(50), query: async (sql, values) => {
       assert.match(sql, /FROM hosted\.snapshots/);
       assert.deepEqual(values, [accountId, vaultId, version(50)]);
-      return { rows: [{ verified_object_count: 3, staged_bytes: '30' }] };
+      return { rows: [{ verified_object_count: 3, staged_bytes: '30',
+        source_coverage: 'needs_attention' }] };
     } });
   assert.deepEqual(selected, { snapshotId: version(50),
-    totalObjects: 3, totalBytes: 30 });
+    totalObjects: 3, totalBytes: 30, sourceCoverage: 'needs_attention' });
 });
 
 test('history rejects unowned versions and malformed or unordered pages', async () => {
@@ -113,11 +118,13 @@ test('history rejects unowned versions and malformed or unordered pages', async 
   }
   const entry = { snapshot_id: snapshotId,
     published_at: '2026-09-28T20:00:00.123456Z',
-    verified_object_count: 3, staged_bytes: '30' };
+    verified_object_count: 3, staged_bytes: '30',
+    source_coverage: 'unknown' };
   for (const rows of [
     [entry, entry],
     [{ ...entry, published_at: 'invalid' }],
     [{ ...entry, staged_bytes: '1' }],
+    [{ ...entry, source_coverage: 'fabricated' }],
     Array.from({ length: 52 }, () => entry),
   ]) {
     await assert.rejects(listPublishedSnapshots({ scope: await scope(),

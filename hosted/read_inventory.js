@@ -9,7 +9,7 @@ const PAGE_SIZE = 256;
 const HISTORY_PAGE_SIZE = 50;
 const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/;
 const LATEST_SQL = `SELECT v.last_good_snapshot_id, s.verified_object_count,
-    r.staged_bytes
+    r.staged_bytes, s.source_coverage
   FROM hosted.vaults AS v
   LEFT JOIN hosted.snapshots AS s ON s.account_id = v.account_id
     AND s.vault_id = v.vault_id AND s.snapshot_id = v.last_good_snapshot_id
@@ -31,14 +31,15 @@ const PAGE_SQL = `SELECT s.verified_object_count, r.staged_bytes,
 const HISTORY_SQL = `SELECT s.snapshot_id,
     to_char(s.published_at AT TIME ZONE 'UTC',
       'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS published_at,
-    s.verified_object_count, r.staged_bytes
+    s.verified_object_count, r.staged_bytes, s.source_coverage
   FROM hosted.snapshots AS s
   JOIN hosted.upload_reservations AS r ON r.reservation_id = s.reservation_id
   WHERE s.account_id = $1::uuid AND s.vault_id = $2::uuid
     AND ($3::timestamptz IS NULL OR
       (s.published_at, s.snapshot_id) < ($3::timestamptz, $4::uuid))
   ORDER BY s.published_at DESC, s.snapshot_id DESC LIMIT 51`;
-const SNAPSHOT_SQL = `SELECT s.verified_object_count, r.staged_bytes
+const SNAPSHOT_SQL = `SELECT s.verified_object_count, r.staged_bytes,
+    s.source_coverage
   FROM hosted.snapshots AS s
   JOIN hosted.upload_reservations AS r ON r.reservation_id = s.reservation_id
   WHERE s.account_id = $1::uuid AND s.vault_id = $2::uuid
@@ -73,14 +74,16 @@ async function getAccountStorageUsage({ scope, query }) {
   } catch { throw new HostedInventoryError(); }
 }
 
-function snapshotSummary(snapshotId, countValue, bytesValue) {
+function snapshotSummary(snapshotId, countValue, bytesValue, sourceCoverage) {
   const count = Number(countValue);
   const bytes = Number(bytesValue);
   if (!UUID.test(snapshotId) || !Number.isSafeInteger(count) || count < 3 ||
-      count > 1_000_000 || !Number.isSafeInteger(bytes) || bytes < count) {
+      count > 1_000_000 || !Number.isSafeInteger(bytes) || bytes < count ||
+      !['unknown', 'complete', 'needs_attention'].includes(sourceCoverage)) {
     throw new HostedInventoryError();
   }
-  return Object.freeze({ snapshotId, totalObjects: count, totalBytes: bytes });
+  return Object.freeze({ snapshotId, totalObjects: count, totalBytes: bytes,
+    sourceCoverage });
 }
 
 function publishedTime(value) {
@@ -107,7 +110,7 @@ async function getLastGoodSnapshot({ scope, query }) {
     if (result?.rows?.length !== 1) throw new HostedInventoryError();
     if (row.last_good_snapshot_id === null) return null;
     return snapshotSummary(row.last_good_snapshot_id,
-      row.verified_object_count, row.staged_bytes);
+      row.verified_object_count, row.staged_bytes, row.source_coverage);
   } catch { throw new HostedInventoryError(); }
 }
 
@@ -120,7 +123,7 @@ async function getPublishedSnapshot({ scope, snapshotId, query }) {
     if (result?.rows?.length !== 1) throw new HostedInventoryError();
     const row = result.rows[0];
     return snapshotSummary(snapshotId, row.verified_object_count,
-      row.staged_bytes);
+      row.staged_bytes, row.source_coverage);
   } catch { throw new HostedInventoryError(); }
 }
 
@@ -142,7 +145,7 @@ async function listPublishedSnapshots({ scope, beforeAt = null,
     const entries = result.rows.map(row => {
       const publishedAt = publishedTime(row.published_at);
       const summary = snapshotSummary(row.snapshot_id,
-        row.verified_object_count, row.staged_bytes);
+        row.verified_object_count, row.staged_bytes, row.source_coverage);
       if (prior && (publishedAt > prior[0] ||
           (publishedAt === prior[0] && summary.snapshotId >= prior[1]))) {
         throw new HostedInventoryError();

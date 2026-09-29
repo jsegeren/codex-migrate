@@ -87,6 +87,8 @@ class _Handler(BaseHTTPRequestHandler):
             if (action != "publish_checkpointed" or
                     request["reservationId"] != RESERVATION or
                     request["snapshotId"] != SNAPSHOT or
+                    request.get("sourceCoverage") not in
+                    ("complete", "needs_attention") or
                     not self.server.verified_ready):
                 return self._json(503, {"error": "temporarily_unavailable"})
             if self.server.stale_next_checkpoint_publish:
@@ -548,29 +550,33 @@ class HostedUploadClientTests(unittest.TestCase):
         self.server.verified_ready = True
         self.server.stale_next_checkpoint_publish = True
         with self.assertRaises(HostedPublicationStale):
-            self.client.publish_checkpointed(RESERVATION, SNAPSHOT, apply=True)
+            self.client.publish_checkpointed(RESERVATION, SNAPSHOT,
+                                             source_coverage="complete", apply=True)
         self.server.stale_body = {"error": "other_conflict"}
         self.server.stale_next_checkpoint_publish = True
         with self.assertRaises(MigrationError) as failure:
-            self.client.publish_checkpointed(RESERVATION, SNAPSHOT, apply=True)
+            self.client.publish_checkpointed(RESERVATION, SNAPSHOT,
+                                             source_coverage="complete", apply=True)
         self.assertNotIsInstance(failure.exception, HostedPublicationStale)
 
     def test_verification_pages_resume_before_checkpointed_publication(self):
         with self.assertRaises(MigrationError):
             self.client.verify_next(RESERVATION, SNAPSHOT)
         with self.assertRaises(MigrationError):
-            self.client.publish_checkpointed(RESERVATION, SNAPSHOT)
+            self.client.publish_checkpointed(RESERVATION, SNAPSHOT,
+                                             source_coverage="complete")
         self.server.fail_next_verify = True
         with self.assertRaises(MigrationError):
             self.client.verify_next(RESERVATION, SNAPSHOT, apply=True)
         with self.assertRaises(MigrationError):
-            self.client.publish_checkpointed(RESERVATION, SNAPSHOT, apply=True)
+            self.client.publish_checkpointed(RESERVATION, SNAPSHOT,
+                                             source_coverage="complete", apply=True)
         self.assertEqual(self.client.verify_next(RESERVATION, SNAPSHOT,
                                                  apply=True), (3, False))
         self.assertEqual(self.client.verify_next(RESERVATION, SNAPSHOT,
                                                  apply=True), (0, True))
         self.assertEqual(self.client.publish_checkpointed(
-            RESERVATION, SNAPSHOT, apply=True), 3)
+            RESERVATION, SNAPSHOT, source_coverage="complete", apply=True), 3)
         self.assertEqual(self.server.actions.count("publish_checkpointed"), 2)
 
     def test_large_carried_proof_page_is_bounded_and_not_publication(self):
@@ -581,13 +587,15 @@ class HostedUploadClientTests(unittest.TestCase):
 
     def test_verification_loop_retries_ambiguous_final_response_safely(self):
         with self.assertRaises(MigrationError):
-            self.client.verify_and_publish(RESERVATION, SNAPSHOT)
+            self.client.verify_and_publish(RESERVATION, SNAPSHOT,
+                                           source_coverage="complete")
         self.server.fail_next_checkpoint_publish = True
         with self.assertRaises(MigrationError):
-            self.client.verify_and_publish(RESERVATION, SNAPSHOT, apply=True)
+            self.client.verify_and_publish(RESERVATION, SNAPSHOT,
+                                           source_coverage="complete", apply=True)
         self.assertTrue(self.server.verified_ready)
         self.assertEqual(self.client.verify_and_publish(
-            RESERVATION, SNAPSHOT, apply=True), 3)
+            RESERVATION, SNAPSHOT, source_coverage="complete", apply=True), 3)
         self.assertEqual(self.server.actions.count("publish_checkpointed"), 2)
 
     def test_full_snapshot_requires_publication_and_retries_without_reupload(self):

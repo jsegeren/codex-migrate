@@ -80,11 +80,14 @@ BEGIN
   PERFORM hosted.record_verified_receipt_page_current(v_account, v_vault,
     v_reservation, v_snapshot, v_last, 100);
   IF NOT hosted.publish_checkpointed_staged_current(v_account, v_vault,
-      v_reservation, v_snapshot, 100) THEN
+      v_reservation, v_snapshot, 100, 'complete') THEN
     RAISE EXCEPTION 'complete verified set failed to publish';
   END IF;
   IF (SELECT last_good_snapshot_id FROM hosted.vaults WHERE
       account_id = v_account AND vault_id = v_vault) <> v_snapshot OR
+     (SELECT source_coverage FROM hosted.snapshots WHERE
+      account_id = v_account AND vault_id = v_vault AND
+      snapshot_id = v_snapshot) <> 'complete' OR
      (SELECT count(*) FROM hosted.snapshot_objects WHERE
       account_id = v_account AND vault_id = v_vault AND
       snapshot_id = v_snapshot) <> 4 THEN
@@ -94,8 +97,19 @@ BEGIN
     verified_at = clock_timestamp() - interval '25 hours'
     WHERE reservation_id = v_reservation;
   IF NOT hosted.publish_checkpointed_staged_current(v_account, v_vault,
-      v_reservation, v_snapshot, 100) THEN
+      v_reservation, v_snapshot, 100, 'complete') THEN
     RAISE EXCEPTION 'same-snapshot retry after proof expiry failed';
+  END IF;
+  v_rejected := false;
+  BEGIN
+    PERFORM hosted.publish_checkpointed_staged_current(v_account, v_vault,
+      v_reservation, v_snapshot, 100, 'needs_attention');
+  EXCEPTION WHEN OTHERS THEN v_rejected := true;
+  END;
+  IF NOT v_rejected OR (SELECT source_coverage FROM hosted.snapshots WHERE
+      account_id = v_account AND vault_id = v_vault AND
+      snapshot_id = v_snapshot) <> 'complete' THEN
+    RAISE EXCEPTION 'conflicting source coverage changed publication';
   END IF;
 END;
 $$;

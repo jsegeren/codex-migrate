@@ -71,4 +71,27 @@ BEGIN
   END IF;
 END $$;
 
+DO $$
+DECLARE
+  rejected boolean := false;
+BEGIN
+  IF EXISTS (SELECT 1 FROM hosted.snapshots WHERE source_coverage <> 'unknown'
+      AND account_id = 'df000000-0000-4000-8000-000000000001') THEN
+    RAISE EXCEPTION 'historical snapshot was incorrectly marked complete';
+  END IF;
+  BEGIN
+    PERFORM hosted.publish_checkpointed_staged_current(
+      'df000000-0000-4000-8000-000000000001',
+      'df000000-0000-4000-8000-000000000002',
+      'df000000-0000-4000-8000-000000000003',
+      'df000000-0000-4000-8000-000000000005', 1000, 'complete');
+  EXCEPTION WHEN OTHERS THEN rejected := true;
+  END;
+  IF NOT rejected OR EXISTS (SELECT 1 FROM hosted.snapshots
+      WHERE account_id = 'df000000-0000-4000-8000-000000000001'
+        AND source_coverage <> 'unknown') THEN
+    RAISE EXCEPTION 'historical snapshot coverage was relabeled';
+  END IF;
+END $$;
+
 ROLLBACK;

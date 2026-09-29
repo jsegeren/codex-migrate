@@ -71,7 +71,8 @@ class _Handler(BaseHTTPRequestHandler):
                 "workerOrigin": self.server.origin,
                 "latest": None if snapshot_id is None else
                 {"snapshotId": snapshot_id,
-                 "totalObjects": len(rows), "totalBytes": total}})
+                 "totalObjects": len(rows), "totalBytes": total,
+                 "sourceCoverage": "complete"}})
         if claim["action"] == "usage":
             return self._reply(200, {"accountId": ACCOUNT,
                 "retainedBytes": self.server.retained_bytes,
@@ -95,7 +96,8 @@ class _Handler(BaseHTTPRequestHandler):
             return self._reply(200, {"accountId": ACCOUNT,
                 "workerOrigin": self.server.origin,
                 "snapshot": {"snapshotId": snapshot_id,
-                             "totalObjects": len(rows), "totalBytes": total}})
+                             "totalObjects": len(rows), "totalBytes": total,
+                             "sourceCoverage": "unknown"}})
         if claim["action"] == "objects":
             after = claim.get("afterKey", "")
             page = [item for item in rows if PREFIX + item["key"] > after][:257]
@@ -177,12 +179,20 @@ class HostedRecoveryClientTests(unittest.TestCase):
     def test_latest_snapshot_is_read_only_and_account_bound(self):
         self.assertEqual(self.client().latest_snapshot(expected_account_id=ACCOUNT), {
             "snapshotId": SNAPSHOT, "totalObjects": 3,
-            "totalBytes": sum(map(len, self.server.objects.values()))})
+            "totalBytes": sum(map(len, self.server.objects.values())),
+            "sourceCoverage": "complete"})
         self.assertEqual([item["action"] for item in self.server.requests], ["latest"])
         with self.assertRaises(MigrationError):
             self.client().latest_snapshot(expected_account_id=VAULT)
         self.server.snapshot_id = None
         self.assertIsNone(self.client().latest_snapshot(expected_account_id=ACCOUNT))
+
+    def test_recovery_rejects_unrecognized_source_coverage(self):
+        self.server.history = [{"snapshotId": SNAPSHOT, "totalObjects": 3,
+            "totalBytes": 25, "sourceCoverage": "verified",
+            "publishedAt": "2026-09-28T20:00:00.123456Z"}]
+        with self.assertRaises(MigrationError):
+            self.client().history_page()
 
     def test_account_storage_usage_is_account_bound_and_strict(self):
         self.assertEqual(self.client().account_storage_usage(
@@ -210,9 +220,11 @@ class HostedRecoveryClientTests(unittest.TestCase):
         self.server.versions = {SNAPSHOT: inventory(), OLDER: old}
         self.server.objects = {**self.server.versions[SNAPSHOT], **old}
         self.server.history = [{"snapshotId": SNAPSHOT, "totalObjects": 3,
-            "totalBytes": 25, "publishedAt": "2026-09-28T20:00:00.123456Z"},
+            "totalBytes": 25, "sourceCoverage": "complete",
+            "publishedAt": "2026-09-28T20:00:00.123456Z"},
             {"snapshotId": OLDER, "totalObjects": 3,
-             "totalBytes": 25, "publishedAt": "2026-09-27T20:00:00.123456Z"}]
+             "totalBytes": 25, "sourceCoverage": "unknown",
+             "publishedAt": "2026-09-27T20:00:00.123456Z"}]
         entries, cursor = self.client().history_page()
         self.assertEqual([item["snapshotId"] for item in entries], [SNAPSHOT, OLDER])
         self.assertIsNone(cursor)
@@ -232,14 +244,16 @@ class HostedRecoveryClientTests(unittest.TestCase):
         self.assertNotIn("get", [item["action"] for item in self.server.requests])
         self.server.requests.clear()
         self.server.history = [{"snapshotId": SNAPSHOT, "totalObjects": 3,
-            "totalBytes": 25, "publishedAt": "invalid"}]
+            "totalBytes": 25, "sourceCoverage": "complete",
+            "publishedAt": "invalid"}]
         with self.assertRaises(MigrationError):
             self.client().history_page()
 
     def test_history_pages_all_equal_timestamp_versions_without_skipping(self):
         at = "2026-09-28T20:00:00.123456Z"
         self.server.history = [{"snapshotId": f"11111111-1111-4111-8111-{index:012x}",
-            "totalObjects": 3, "totalBytes": 25, "publishedAt": at}
+            "totalObjects": 3, "totalBytes": 25,
+            "sourceCoverage": "complete", "publishedAt": at}
             for index in range(51, 0, -1)]
         first, cursor = self.client().history_page()
         self.assertEqual(len(first), 50)
@@ -453,10 +467,12 @@ class HostedRecoveryClientTests(unittest.TestCase):
                     {"snapshotId": newer.snapshot_id,
                      "totalObjects": len(newer.objects),
                      "totalBytes": newer.remote_bytes_checked,
+                     "sourceCoverage": "complete",
                      "publishedAt": "2026-09-28T20:00:00.123456Z"},
                     {"snapshotId": staged.snapshot_id,
                      "totalObjects": len(staged.objects),
                      "totalBytes": staged.remote_bytes_checked,
+                     "sourceCoverage": "unknown",
                      "publishedAt": "2026-09-27T20:00:00.123456Z"},
                 ]
                 entries, cursor = self.client().history_page()
