@@ -27,7 +27,8 @@ class HostedDisasterRecoveryTests(unittest.TestCase):
         self.output = str(Path(self.temporary.name) / "restored")
         self.upload = SimpleNamespace(_account_id=ACCOUNT, _worker_origin=WORKER)
         self.pointer = (ACCOUNT, WORKER, {"snapshotId": SNAPSHOT,
-                                         "totalObjects": 3, "totalBytes": 300})
+                                         "totalObjects": 3, "totalBytes": 300,
+                                         "sourceCoverage": "complete"})
         self.prepared = []
 
         def prepare(**kwargs):
@@ -65,6 +66,7 @@ class HostedDisasterRecoveryTests(unittest.TestCase):
         self.assertEqual(result["snapshot_id"], SNAPSHOT)
         self.assertEqual(result["transcript_files"], 1)
         self.assertFalse(result["needs_attention"])
+        self.assertEqual(result["source_coverage"], "complete")
         self.assertEqual(result["at_risk_sources"], 0)
         self.catalog.assert_called_once_with(self.output, snapshot=SNAPSHOT,
                                              crypto_helper="/synthetic/helper")
@@ -91,6 +93,16 @@ class HostedDisasterRecoveryTests(unittest.TestCase):
                 self.home, self.output, DEVICE, max_bytes=400, apply=True)
         self.assertTrue(result["needs_attention"])
         self.assertEqual(result["at_risk_sources"], 2)
+
+    def test_unknown_coverage_does_not_become_a_clean_recovery_claim(self):
+        self.pointer[2]["sourceCoverage"] = "unknown"
+        helper, enrollment, download = self._patches()
+        with helper, enrollment, download:
+            result = recover_hosted_snapshot(
+                self.home, self.output, DEVICE, max_bytes=400, apply=True)
+        self.assertTrue(result["needs_attention"])
+        self.assertEqual(result["at_risk_sources"], 0)
+        self.assertEqual(result["source_coverage"], "unknown")
 
     def test_plan_and_bad_limit_do_not_open_credentials(self):
         with patch("codex_migrate.vault_hosted_disaster_recovery.HostedEnrollmentClient") as client:
@@ -140,6 +152,19 @@ class HostedDisasterRecoveryTests(unittest.TestCase):
         self.assertIn("Encrypted hosted snapshot verified", printed.getvalue())
         self.assertIn("2 conversation source(s) have missing or changed content",
                       warning.getvalue())
+
+    def test_cli_warns_about_unknown_coverage_without_inventing_lost_sources(self):
+        warning = io.StringIO()
+        with patch("codex_migrate.vault_hosted_disaster_recovery.recover_hosted_snapshot",
+                   return_value={"vault": self.output, "needs_attention": True,
+                                 "at_risk_sources": 0,
+                                 "source_coverage": "unknown"}), \
+                redirect_stderr(warning):
+            self.assertEqual(main([
+                "vault", "--source-home", self.home, "hosted-recover",
+                "--device-id", DEVICE, "--output", self.output,
+                "--max-bytes", "400", "--apply"]), 0)
+        self.assertIn("source coverage is unknown", warning.getvalue())
 
 
 if __name__ == "__main__":

@@ -135,6 +135,26 @@ class HostedRecoveryClient:
             raise MigrationError("The hosted recovery account changed.")
         return latest
 
+    def published_snapshot(self, snapshot_id: str, *,
+                           expected_account_id: str,
+                           expected_worker_origin: str) -> dict:
+        """Read one immutable published version's source-reported coverage."""
+        if (not isinstance(snapshot_id, str) or not re.fullmatch(_UUID, snapshot_id)
+                or not isinstance(expected_account_id, str)
+                or not re.fullmatch(_UUID, expected_account_id)
+                or not isinstance(expected_worker_origin, str)):
+            raise MigrationError("The hosted recovery version is invalid.")
+        reply = self._post({"action": "snapshot", "vaultId": self._vault_id,
+                            "snapshotId": snapshot_id})
+        if (set(reply) != {"accountId", "workerOrigin", "snapshot"}
+                or reply["accountId"] != expected_account_id
+                or reply["workerOrigin"] != expected_worker_origin):
+            raise MigrationError("The hosted recovery version is invalid.")
+        selected = self._summary(reply["snapshot"])
+        if selected["snapshotId"] != snapshot_id:
+            raise MigrationError("The hosted recovery version is invalid.")
+        return selected
+
     def account_storage_usage(self, *, expected_account_id: str) -> dict:
         """Read server-accounted retained bytes, not a customer bill or R2 proof."""
         if (not isinstance(expected_account_id, str) or

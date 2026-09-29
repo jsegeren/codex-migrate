@@ -227,7 +227,13 @@ class HostedRecoveryClientTests(unittest.TestCase):
              "publishedAt": "2026-09-27T20:00:00.123456Z"}]
         entries, cursor = self.client().history_page()
         self.assertEqual([item["snapshotId"] for item in entries], [SNAPSHOT, OLDER])
+        self.assertEqual([item["sourceCoverage"] for item in entries],
+                         ["complete", "unknown"])
         self.assertIsNone(cursor)
+        self.assertEqual(self.client().published_snapshot(OLDER,
+            expected_account_id=ACCOUNT,
+            expected_worker_origin=self.server.origin)["sourceCoverage"],
+            "unknown")
         receipt, store = self.client().prepare(max_bytes=100,
             selected_snapshot_id=OLDER)
         self.assertEqual(receipt["snapshot_id"], OLDER)
@@ -236,7 +242,8 @@ class HostedRecoveryClientTests(unittest.TestCase):
         with store.open_read(f"metadata/{OLDER}.json") as stream:
             self.assertEqual(stream.read(), b"metadata")
         self.assertEqual([request["action"] for request in self.server.requests],
-                         ["latest", "history", "latest", "snapshot", "objects", "get"])
+                         ["latest", "history", "snapshot", "latest", "snapshot",
+                          "objects", "get"])
 
     def test_refuses_unpublished_selection_and_bad_history(self):
         with self.assertRaises(MigrationError):

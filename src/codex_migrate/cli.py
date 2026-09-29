@@ -306,10 +306,16 @@ def main(argv: Optional[List[str]] = None) -> int:
                 else:
                     print("Encrypted hosted snapshot verified in: %s" % result["vault"])
                     if result["needs_attention"]:
-                        print("Warning: %d conversation source(s) have missing or changed content. "
-                              "Review this version and earlier published versions before "
-                              "calling the history complete." % result["at_risk_sources"],
-                              file=sys.stderr)
+                        if result["at_risk_sources"]:
+                            print("Warning: %d conversation source(s) have missing or "
+                                  "changed content. Review this version and earlier "
+                                  "published versions before calling the history complete."
+                                  % result["at_risk_sources"], file=sys.stderr)
+                        else:
+                            print("Warning: this version's source coverage is %s. "
+                                  "Review earlier published versions before calling the "
+                                  "history complete." % result["source_coverage"],
+                                  file=sys.stderr)
                 return 0
             if args.vault_command in (
                     "schedule", "schedule-status", "schedule-remove", "scheduled-run"):

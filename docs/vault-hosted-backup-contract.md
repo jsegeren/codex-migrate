@@ -993,9 +993,10 @@ egress allowance. Do not claim that B2 restores are always free. See its
    independent server verification of encrypted conversation content.
    Draft migration 0031 now stores the authenticated source device's coverage
    claim atomically with publication, leaves historical versions `unknown`,
-   and exposes the claim in recovery history. The dark recovery command also
-   inspects the authenticated restored catalog and warns when a selected
-   version contains at-risk sources. This is not independent server proof of
+   and exposes the claim in recovery history. The dark recovery command uses
+   that claim and inspects the authenticated restored catalog; neither an
+   `unknown` claim nor observed at-risk sources can be reported as a clean
+   recovery. This is not independent server proof of
    encrypted content. Selecting an older complete version in the installed
    buyer UI and proving that recovery on a clean Mac remain open gates.
 4. **Prove commerce and operations:** separate Stripe *subscription* checkout

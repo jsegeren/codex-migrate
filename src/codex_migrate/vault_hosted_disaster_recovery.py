@@ -41,6 +41,11 @@ def recover_hosted_snapshot(
     if (account_id != upload._account_id or
             worker_origin != upload._worker_origin or latest is None):
         raise MigrationError("The hosted recovery authority changed.")
+    selected = (latest if snapshot_id is None or
+                snapshot_id == latest["snapshotId"] else
+                recovery.published_snapshot(snapshot_id,
+                    expected_account_id=account_id,
+                    expected_worker_origin=worker_origin))
     receipt, store = recovery.prepare(
         max_bytes=max_bytes, expected_pointer=(account_id, worker_origin, latest),
         selected_snapshot_id=snapshot_id)
@@ -59,5 +64,7 @@ def recover_hosted_snapshot(
             "reused_files": result.reused_files,
             "encrypted_bytes_checked": result.encrypted_bytes_checked,
             "transcript_files": result.transcript_files,
-            "needs_attention": bool(at_risk),
+            "source_coverage": selected["sourceCoverage"],
+            "needs_attention": bool(at_risk) or
+            selected["sourceCoverage"] != "complete",
             "at_risk_sources": len(at_risk)}
