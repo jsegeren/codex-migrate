@@ -150,6 +150,16 @@ payload volume, proved off-device recovery, or clears the public-release hold.
 
 ## September 28 hosted/Vault integration checkpoint — not released
 
+On September 28, the sandbox Worker ran locally under Wrangler 4.141.0 and
+Node 26.7.0 with an emulated R2 bucket. Both opt-in probe routes passed all
+their flags (9/9 object checks and 8/8 capability-transport checks), and the
+separate native Python client completed upload, immutable reuse, exact-byte
+download, and deletion through the same loopback Worker. The probes used
+random synthetic objects and removed them afterward. This is a local runtime
+transport receipt only: it did not connect to Cloudflare R2, publish an
+encrypted snapshot, exercise billing or enrollment, or prove clean-account
+recovery. The real-R2 sandbox and customer release gates remain open.
+
 An opt-in whole-run scale probe on the hosted branch passed in 53.454 s with
 2,048 additional synthetic transcript files and a roughly 72 MiB synthetic
 long thread. It exercised hosted-only staging, a second snapshot, remote-object
