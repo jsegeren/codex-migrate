@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from datetime import datetime
 from tempfile import TemporaryDirectory
 from typing import Dict, List, Optional, Tuple
 from urllib.error import HTTPError, URLError
@@ -29,6 +30,8 @@ _KEY = re.compile(rf"(?:metadata/{_UUID}\.json|manifests/{_UUID}\.cvmanifest|"
 _TOKEN = re.compile(r"hv1_[A-Za-z0-9_-]{43}\Z")
 _GRANT = re.compile(r"[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\Z")
 _PAGE_SIZE = 256
+_HISTORY_PAGE_SIZE = 50
+_PUBLISHED_AT = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z\Z")
 _MAX_RESPONSE = 128 * 1024
 _UNSPECIFIED = object()
 
@@ -119,8 +122,75 @@ class HostedRecoveryClient:
             raise MigrationError("The hosted recovery pointer is invalid.")
         return account_id, worker_origin, latest
 
+    @staticmethod
+    def _summary(value: object) -> dict:
+        if (not isinstance(value, dict)
+                or set(value) != {"snapshotId", "totalObjects", "totalBytes"}
+                or not isinstance(value["snapshotId"], str)
+                or not re.fullmatch(_UUID, value["snapshotId"])
+                or type(value["totalObjects"]) is not int
+                or not 3 <= value["totalObjects"] <= MAX_CHUNKS + 3
+                or type(value["totalBytes"]) is not int
+                or value["totalBytes"] < value["totalObjects"]):
+            raise MigrationError("The hosted recovery version is invalid.")
+        return value
+
+    @staticmethod
+    def _published_at(value: object) -> str:
+        if not isinstance(value, str) or not _PUBLISHED_AT.fullmatch(value):
+            raise MigrationError("The hosted recovery history is invalid.")
+        try:
+            datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            raise MigrationError("The hosted recovery history is invalid.") from None
+        return value
+
+    def history_page(self, before: Optional[Tuple[str, str]] = None
+                     ) -> Tuple[List[dict], Optional[Tuple[str, str]]]:
+        """Discover one bounded page of published versions; never download data."""
+        account_id, worker_origin, _latest = self._latest()
+        claim = {"action": "history", "vaultId": self._vault_id}
+        if before is not None:
+            if not isinstance(before, tuple) or len(before) != 2:
+                raise MigrationError("The hosted recovery history cursor is invalid.")
+            claim["beforeAt"] = self._published_at(before[0])
+            if not isinstance(before[1], str) or not re.fullmatch(_UUID, before[1]):
+                raise MigrationError("The hosted recovery history cursor is invalid.")
+            claim["beforeSnapshotId"] = before[1]
+        page = self._post(claim)
+        if (set(page) != {"accountId", "workerOrigin", "snapshots", "nextCursor"}
+                or page["accountId"] != account_id
+                or page["workerOrigin"] != worker_origin
+                or not isinstance(page["snapshots"], list)
+                or len(page["snapshots"]) > _HISTORY_PAGE_SIZE):
+            raise MigrationError("The hosted recovery history is invalid.")
+        prior = before
+        entries = []
+        for item in page["snapshots"]:
+            if not isinstance(item, dict) or set(item) != {
+                    "snapshotId", "totalObjects", "totalBytes", "publishedAt"}:
+                raise MigrationError("The hosted recovery history is invalid.")
+            summary = self._summary({key: item[key] for key in (
+                "snapshotId", "totalObjects", "totalBytes")})
+            position = (self._published_at(item["publishedAt"]), summary["snapshotId"])
+            if prior is not None and position >= prior:
+                raise MigrationError("The hosted recovery history is invalid.")
+            prior = position
+            entries.append(item)
+        next_cursor = page["nextCursor"]
+        if next_cursor is not None:
+            if (len(entries) != _HISTORY_PAGE_SIZE or
+                    not isinstance(next_cursor, dict)
+                    or set(next_cursor) != {"publishedAt", "snapshotId"}
+                    or (self._published_at(next_cursor["publishedAt"]),
+                        next_cursor["snapshotId"]) != prior):
+                raise MigrationError("The hosted recovery history is invalid.")
+            return entries, prior
+        return entries, None
+
     def prepare(self, *, max_bytes: int,
-                expected_pointer: Optional[Tuple[str, str, dict]] = None
+                expected_pointer: Optional[Tuple[str, str, dict]] = None,
+                selected_snapshot_id: Optional[str] = None
                 ) -> Tuple[dict, CapabilityHttpStore]:
         """Return a validated receipt and exact-object read store, without writes."""
         if type(max_bytes) is not int or max_bytes <= 0:
@@ -128,11 +198,26 @@ class HostedRecoveryClient:
         account_id, worker_origin, latest = self._latest()
         if latest is None:
             raise MigrationError("This Vault has no verified hosted backup yet.")
-        if (latest["totalBytes"] > max_bytes or
-                (expected_pointer is not None and
-                 (account_id, worker_origin, latest) != expected_pointer)):
+        if (expected_pointer is not None and
+                (account_id, worker_origin, latest) != expected_pointer):
             raise MigrationError("The hosted recovery pointer changed or exceeds its limit.")
-        snapshot_id = latest["snapshotId"]
+        selected = latest
+        if selected_snapshot_id is not None:
+            if not isinstance(selected_snapshot_id, str) or not re.fullmatch(
+                    _UUID, selected_snapshot_id):
+                raise MigrationError("The hosted recovery version is invalid.")
+            reply = self._post({"action": "snapshot", "vaultId": self._vault_id,
+                                "snapshotId": selected_snapshot_id})
+            if (set(reply) != {"accountId", "workerOrigin", "snapshot"}
+                    or reply["accountId"] != account_id
+                    or reply["workerOrigin"] != worker_origin):
+                raise MigrationError("The hosted recovery version is invalid.")
+            selected = self._summary(reply["snapshot"])
+            if selected["snapshotId"] != selected_snapshot_id:
+                raise MigrationError("The hosted recovery version is invalid.")
+        if selected["totalBytes"] > max_bytes:
+            raise MigrationError("The hosted recovery version exceeds its limit.")
+        snapshot_id = selected["snapshotId"]
         prefix = f"accounts/{account_id}/vaults/{self._vault_id}/"
         expected: Dict[str, Tuple[int, str]] = {}
         cursor = None
@@ -145,8 +230,8 @@ class HostedRecoveryClient:
             if (set(page) != {"snapshotId", "totalObjects", "totalBytes",
                              "objects", "nextCursor"}
                     or page["snapshotId"] != snapshot_id
-                    or page["totalObjects"] != latest["totalObjects"]
-                    or page["totalBytes"] != latest["totalBytes"]
+                    or page["totalObjects"] != selected["totalObjects"]
+                    or page["totalBytes"] != selected["totalBytes"]
                     or not isinstance(page["objects"], list)
                     or not 1 <= len(page["objects"]) <= _PAGE_SIZE):
                 raise MigrationError("The hosted recovery inventory is invalid.")
@@ -165,7 +250,7 @@ class HostedRecoveryClient:
                     raise MigrationError("The hosted recovery inventory is invalid.")
                 prior = scoped
                 expected[item["key"]] = (item["bytes"], item["sha256"])
-            if len(expected) > latest["totalObjects"]:
+            if len(expected) > selected["totalObjects"]:
                 raise MigrationError("The hosted recovery inventory is invalid.")
             next_cursor = page["nextCursor"]
             if next_cursor is None:
@@ -174,8 +259,8 @@ class HostedRecoveryClient:
                     next_cursor != prior or next_cursor == cursor):
                 raise MigrationError("The hosted recovery inventory is invalid.")
             cursor = next_cursor
-        if (len(expected) != latest["totalObjects"] or
-                sum(size for size, _ in expected.values()) != latest["totalBytes"]):
+        if (len(expected) != selected["totalObjects"] or
+                sum(size for size, _ in expected.values()) != selected["totalBytes"]):
             raise MigrationError("The hosted recovery inventory is incomplete.")
         metadata = f"metadata/{snapshot_id}.json"
         manifest = f"manifests/{snapshot_id}.cvmanifest"
@@ -185,7 +270,7 @@ class HostedRecoveryClient:
         if len(order) != len(expected) or any(key not in expected for key in order):
             raise MigrationError("The hosted recovery inventory is invalid.")
         receipt = {"version": 1, "snapshot_id": snapshot_id,
-                   "remote_bytes_checked": latest["totalBytes"],
+                   "remote_bytes_checked": selected["totalBytes"],
                    "objects": [{"key": key, "bytes": expected[key][0],
                                 "sha256": expected[key][1]} for key in order]}
         _objects(receipt, max_bytes)

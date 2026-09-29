@@ -185,7 +185,7 @@ checksum. Its capability expires after 30 seconds. A lapsed subscription does
 not by itself revoke access to already retained ciphertext, so the customer
 can recover/export it during the eventual published retention window; that
 window and cancellation policy still require Founder approval. There is no
-customer read endpoint, installed-client flow, or clean-Mac restore proof.
+live customer read endpoint, installed-client flow, or clean-Mac restore proof.
 The draft recovery discovery reads the owned Vault's last-good pointer, then
 enumerates that published snapshot in
 256-object pages under the same read authorization, with scoped key cursors,
@@ -196,16 +196,23 @@ A sandbox-only recovery HTTP route now exercises these read boundaries: it
 requires a device bearer, rejects cross-origin browser calls, verifies the
 current sandbox database identity, and is closed unless explicitly enabled.
 It can return the last-good pointer, an inventory page, or one published-object
-GET grant. It cannot open against the live database and is **not enabled or
+GET grant. It can also list owned, published versions in 50-entry pages and
+prepare an explicitly selected older version for read-only recovery. Its
+cursor preserves PostgreSQL's microsecond timestamp precision; shortening that
+timestamp would silently skip equal-time versions. The client verifies the
+selected version's account, service origin, object count, byte count, and
+complete inventory before downloading. This is not sync and never writes back
+into Codex. It cannot open against the live database and is **not enabled or
 customer-accessible**. Buyer enrollment and app-UI wiring are still absent,
 so this route is not a disaster-recovery proof.
 The native recovery adapter now validates every inventory page, total count,
 total bytes, key order, and snapshot identity before constructing the existing
 authenticated download receipt. It requests one exact GET grant at a time and
-never persists the device token. A disposable loopback test created an
-encrypted Vault, staged it, removed its test Keychain key, fetched ciphertext
-through the API-shaped service, imported the separately held recovery key, and
-restored a known synthetic thread. This proves local client wiring only; it
+never persists the device token. A disposable loopback test created two
+encrypted Vault versions, made the newer one current, selected the older
+published version, removed its test Keychain key, fetched ciphertext through
+the API-shaped service, imported the separately held recovery key, and restored
+the older synthetic thread. This proves local client wiring only; it
 does **not** prove a real R2-backed, clean-Mac customer restore.
 Do not send a whole staged receipt as one Vercel Function request. A synthetic
 JSON receipt matching the measured newer Mac's 21,907 chunks is about 4.03 MB,

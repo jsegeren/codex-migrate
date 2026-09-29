@@ -21,14 +21,15 @@ from tests.portable_vault_roundtrip import delete_test_key
 ACCOUNT = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 VAULT = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
 SNAPSHOT = "11111111-1111-4111-8111-111111111111"
+OLDER = "22222222-2222-4222-8222-222222222222"
 TOKEN = "hv1_" + "a" * 43
 PREFIX = f"accounts/{ACCOUNT}/vaults/{VAULT}/"
 
 
-def inventory(chunk_count=0):
-    values = {f"metadata/{SNAPSHOT}.json": b"metadata",
-              f"manifests/{SNAPSHOT}.cvmanifest": b"manifest",
-              f"refs/{SNAPSHOT}.json": b"reference"}
+def inventory(chunk_count=0, snapshot_id=SNAPSHOT):
+    values = {f"metadata/{snapshot_id}.json": b"metadata",
+              f"manifests/{snapshot_id}.cvmanifest": b"manifest",
+              f"refs/{snapshot_id}.json": b"reference"}
     for index in range(chunk_count):
         digest = format(index, "064x")
         values[f"objects/{digest[:2]}/{digest[2:]}.cvchunk"] = b"chunk" + str(index).encode()
@@ -53,9 +54,11 @@ class _Handler(BaseHTTPRequestHandler):
             return self._reply(403, {"error": "access_denied"})
         claim = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         self.server.requests.append(claim)
+        snapshot_id = claim.get("snapshotId", self.server.snapshot_id)
+        snapshot_objects = self.server.versions.get(snapshot_id, self.server.objects)
         rows = [{"key": key, "bytes": len(value),
                  "sha256": hashlib.sha256(value).hexdigest()}
-                for key, value in sorted(self.server.objects.items())]
+                for key, value in sorted(snapshot_objects.items())]
         total = sum(item["bytes"] for item in rows)
         if claim["action"] == "latest":
             snapshot_id = (self.server.latest_sequence.pop(0)
@@ -65,12 +68,32 @@ class _Handler(BaseHTTPRequestHandler):
                 "latest": None if snapshot_id is None else
                 {"snapshotId": snapshot_id,
                  "totalObjects": len(rows), "totalBytes": total}})
+        if claim["action"] == "history":
+            entries = self.server.history
+            if "beforeAt" in claim:
+                before = (claim["beforeAt"], claim["beforeSnapshotId"])
+                entries = [item for item in entries if
+                           (item["publishedAt"], item["snapshotId"]) < before]
+            page = entries[:50]
+            last = page[-1] if page else None
+            return self._reply(200, {"accountId": ACCOUNT,
+                "workerOrigin": self.server.origin, "snapshots": page,
+                "nextCursor": {"publishedAt": last["publishedAt"],
+                               "snapshotId": last["snapshotId"]}
+                if len(entries) > 50 else None})
+        if claim["action"] == "snapshot":
+            if snapshot_id not in self.server.versions:
+                return self._reply(403, {"error": "access_denied"})
+            return self._reply(200, {"accountId": ACCOUNT,
+                "workerOrigin": self.server.origin,
+                "snapshot": {"snapshotId": snapshot_id,
+                             "totalObjects": len(rows), "totalBytes": total}})
         if claim["action"] == "objects":
             after = claim.get("afterKey", "")
             page = [item for item in rows if PREFIX + item["key"] > after][:257]
             more = len(page) > 256
             page = page[:256]
-            result = {"snapshotId": self.server.snapshot_id, "totalObjects": len(rows),
+            result = {"snapshotId": snapshot_id, "totalObjects": len(rows),
                       "totalBytes": total, "objects": page,
                       "nextCursor": PREFIX + page[-1]["key"] if more else None}
             if self.server.mutate_page:
@@ -121,6 +144,8 @@ class HostedRecoveryClientTests(unittest.TestCase):
         self.server.origin = f"http://127.0.0.1:{self.server.server_port}"
         self.server.snapshot_id = SNAPSHOT
         self.server.objects = inventory()
+        self.server.versions = {}
+        self.server.history = []
         self.server.requests = []
         self.server.get_requests = []
         self.server.mutate_page = None
@@ -149,6 +174,50 @@ class HostedRecoveryClientTests(unittest.TestCase):
             self.assertEqual(stream.read(), b"metadata")
         self.assertEqual([item["action"] for item in self.server.requests],
                          ["latest", "objects", "get"])
+
+    def test_discovers_and_prepares_an_older_published_version(self):
+        old = inventory(snapshot_id=OLDER)
+        self.server.versions = {SNAPSHOT: inventory(), OLDER: old}
+        self.server.objects = {**self.server.versions[SNAPSHOT], **old}
+        self.server.history = [{"snapshotId": SNAPSHOT, "totalObjects": 3,
+            "totalBytes": 25, "publishedAt": "2026-09-28T20:00:00.123456Z"},
+            {"snapshotId": OLDER, "totalObjects": 3,
+             "totalBytes": 25, "publishedAt": "2026-09-27T20:00:00.123456Z"}]
+        entries, cursor = self.client().history_page()
+        self.assertEqual([item["snapshotId"] for item in entries], [SNAPSHOT, OLDER])
+        self.assertIsNone(cursor)
+        receipt, store = self.client().prepare(max_bytes=100,
+            selected_snapshot_id=OLDER)
+        self.assertEqual(receipt["snapshot_id"], OLDER)
+        self.assertEqual(receipt["remote_bytes_checked"],
+                         sum(map(len, old.values())))
+        with store.open_read(f"metadata/{OLDER}.json") as stream:
+            self.assertEqual(stream.read(), b"metadata")
+        self.assertEqual([request["action"] for request in self.server.requests],
+                         ["latest", "history", "latest", "snapshot", "objects", "get"])
+
+    def test_refuses_unpublished_selection_and_bad_history(self):
+        with self.assertRaises(MigrationError):
+            self.client().prepare(max_bytes=100, selected_snapshot_id=OLDER)
+        self.assertNotIn("get", [item["action"] for item in self.server.requests])
+        self.server.requests.clear()
+        self.server.history = [{"snapshotId": SNAPSHOT, "totalObjects": 3,
+            "totalBytes": 25, "publishedAt": "invalid"}]
+        with self.assertRaises(MigrationError):
+            self.client().history_page()
+
+    def test_history_pages_all_equal_timestamp_versions_without_skipping(self):
+        at = "2026-09-28T20:00:00.123456Z"
+        self.server.history = [{"snapshotId": f"11111111-1111-4111-8111-{index:012x}",
+            "totalObjects": 3, "totalBytes": 25, "publishedAt": at}
+            for index in range(51, 0, -1)]
+        first, cursor = self.client().history_page()
+        self.assertEqual(len(first), 50)
+        self.assertEqual(cursor, (at, first[-1]["snapshotId"]))
+        second, next_cursor = self.client().history_page(cursor)
+        self.assertEqual(len(second), 1)
+        self.assertEqual(second[0]["snapshotId"], self.server.history[-1]["snapshotId"])
+        self.assertIsNone(next_cursor)
 
     def test_large_inventory_pages_and_reorders_only_after_complete_validation(self):
         self.server.objects = inventory(254)
@@ -327,6 +396,38 @@ class HostedRecoveryClientTests(unittest.TestCase):
                     self.client().prior_catalog(key_id=key_id,
                         crypto_helper=str(helper), max_bytes=5_000_000)
                 self.server.mutate_get = None
+                older_objects = {item.key: staged_store.objects[item.key]
+                                 for item in staged.objects}
+                transcript.write_bytes(b'{"type":"response_item","payload":'
+                                       b'{"content":"newer fixture"}}\n')
+                backup(str(source), str(vault), crypto_helper=str(helper))
+                newer = stage_encrypted_snapshot(str(vault), staged_store,
+                                                  crypto_helper=str(helper))
+                self.assertNotEqual(newer.snapshot_id, staged.snapshot_id)
+                self.server.snapshot_id = newer.snapshot_id
+                self.server.versions = {
+                    staged.snapshot_id: older_objects,
+                    newer.snapshot_id: {item.key: staged_store.objects[item.key]
+                                        for item in newer.objects},
+                }
+                self.server.objects = staged_store.objects
+                self.server.history = [
+                    {"snapshotId": newer.snapshot_id,
+                     "totalObjects": len(newer.objects),
+                     "totalBytes": newer.remote_bytes_checked,
+                     "publishedAt": "2026-09-28T20:00:00.123456Z"},
+                    {"snapshotId": staged.snapshot_id,
+                     "totalObjects": len(staged.objects),
+                     "totalBytes": staged.remote_bytes_checked,
+                     "publishedAt": "2026-09-27T20:00:00.123456Z"},
+                ]
+                entries, cursor = self.client().history_page()
+                self.assertEqual([item["snapshotId"] for item in entries],
+                                 [newer.snapshot_id, staged.snapshot_id])
+                self.assertIsNone(cursor)
+                receipt, read_store = self.client().prepare(
+                    max_bytes=5_000_000,
+                    selected_snapshot_id=staged.snapshot_id)
                 empty_home = root / "empty-home"
                 empty_home.mkdir(mode=0o700)
                 recovered = root / "recovered-vault"

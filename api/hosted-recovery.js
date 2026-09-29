@@ -4,7 +4,8 @@
 const { reply } = require('../commerce/http');
 const { recoveryRuntime } = require('../hosted/recovery_runtime');
 const { authorizeReadScope, HostedAccessError } = require('../hosted/access');
-const { getLastGoodSnapshot, listPublishedObjects } = require('../hosted/read_inventory');
+const { getLastGoodSnapshot, getPublishedSnapshot,
+  listPublishedSnapshots, listPublishedObjects } = require('../hosted/read_inventory');
 const { issuePublishedGet, issueLastGoodManifest } = require('../hosted/read_grant');
 
 const BEARER = /^Bearer (hv1_[A-Za-z0-9_-]{43})$/;
@@ -23,12 +24,23 @@ function requestBody(req) {
   if (Buffer.byteLength(raw) > MAX_BODY) throw Error('invalid_request');
   const { action } = req.body;
   const allowed = action === 'latest' ? ['action', 'vaultId'] :
+    action === 'history' ? ['action', 'vaultId', 'beforeAt', 'beforeSnapshotId'] :
+    action === 'snapshot' ? ['action', 'vaultId', 'snapshotId'] :
     action === 'objects' ? ['action', 'vaultId', 'snapshotId', 'afterKey'] :
     action === 'manifest' ? ['action', 'vaultId', 'snapshotId'] :
     action === 'get' ? ['action', 'vaultId', 'snapshotId', 'relativeKey'] : [];
   if (!allowed.length || Object.keys(req.body).some(key => !allowed.includes(key)) ||
       typeof req.body.vaultId !== 'string') throw Error('invalid_request');
-  if (action !== 'latest' && typeof req.body.snapshotId !== 'string') {
+  if (!['latest', 'history'].includes(action) &&
+      typeof req.body.snapshotId !== 'string') {
+    throw Error('invalid_request');
+  }
+  if (action === 'history' &&
+      ((req.body.beforeAt === undefined) !==
+        (req.body.beforeSnapshotId === undefined) ||
+       (req.body.beforeAt !== undefined &&
+        (typeof req.body.beforeAt !== 'string' ||
+         typeof req.body.beforeSnapshotId !== 'string')))) {
     throw Error('invalid_request');
   }
   if (action === 'objects' && req.body.afterKey !== undefined &&
@@ -63,6 +75,18 @@ function makeHandler(load = recoveryRuntime, env = process.env) {
       if (data.action === 'latest') {
         return reply(res, 200, { accountId: scope.accountId, workerOrigin,
           latest: await getLastGoodSnapshot({ scope, query }) });
+      }
+      if (data.action === 'history') {
+        const page = await listPublishedSnapshots({ scope,
+          beforeAt: data.beforeAt ?? null,
+          beforeSnapshotId: data.beforeSnapshotId ?? null, query });
+        return reply(res, 200, { accountId: scope.accountId, workerOrigin,
+          ...page });
+      }
+      if (data.action === 'snapshot') {
+        return reply(res, 200, { accountId: scope.accountId, workerOrigin,
+          snapshot: await getPublishedSnapshot({ scope,
+            snapshotId: data.snapshotId, query }) });
       }
       if (data.action === 'objects') {
         const page = await listPublishedObjects({ scope,

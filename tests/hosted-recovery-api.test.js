@@ -106,6 +106,37 @@ test('owned last-good and inventory responses contain no secret', async () => {
   assert.equal(page.headers['Cache-Control'], 'no-store');
 });
 
+test('an authenticated device discovers and selects only its published versions', async () => {
+  const older = '22222222-2222-4222-8222-222222222222';
+  const at = '2026-09-28T20:00:00.123456Z';
+  const f = fixture(async (sql, values) => {
+    if (sql.includes('ORDER BY s.published_at DESC')) {
+      assert.deepEqual(values, [accountId, vaultId, null, null]);
+      return { rows: [{ snapshot_id: snapshotId, published_at: at,
+        verified_object_count: 3, staged_bytes: '30' },
+      { snapshot_id: older, published_at: '2026-09-27T20:00:00.123456Z',
+        verified_object_count: 4, staged_bytes: '40' }] };
+    }
+    assert.match(sql, /s\.snapshot_id = \$3::uuid/);
+    assert.deepEqual(values, [accountId, vaultId, older]);
+    return { rows: [{ verified_object_count: 4, staged_bytes: '40' }] };
+  });
+  f.req.body = { action: 'history', vaultId };
+  const history = await f.send();
+  assert.equal(history.statusCode, 200);
+  assert.deepEqual(history.body.snapshots.map(item => item.snapshotId),
+    [snapshotId, older]);
+  assert.equal(history.body.nextCursor, null);
+  assert.equal(JSON.stringify(history.body).includes('hv1_'), false);
+  f.req.body = { action: 'snapshot', vaultId, snapshotId: older };
+  const selected = await f.send();
+  assert.equal(selected.statusCode, 200);
+  assert.deepEqual(selected.body.snapshot,
+    { snapshotId: older, totalObjects: 4, totalBytes: 40 });
+  f.req.body = { action: 'history', vaultId, beforeAt: at };
+  assert.equal((await f.send()).statusCode, 400);
+});
+
 test('GET grant is for only the published object, not a staged or foreign key', async () => {
   const f = fixture(async (sql, values) => {
     assert.match(sql, /hosted\.snapshot_objects/);
