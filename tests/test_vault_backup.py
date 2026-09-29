@@ -817,12 +817,29 @@ class VaultBackupTests(unittest.TestCase):
                     super().__init__(origin, token, vault_id, allow_loopback_http=True)
                     self.base_id = None
 
+                def latest_snapshot(self, *, expected_account_id):
+                    assert expected_account_id == account_id
+                    return (None if self.base_id is None else
+                            {"snapshotId": self.base_id, "totalObjects": 6,
+                             "totalBytes": 100})
+
                 def prior_catalog(self, *, key_id, crypto_helper, max_bytes,
                                   expected_snapshot_id, expected_account_id,
                                   include_chunks=False):
                     assert expected_snapshot_id == self.base_id
                     assert expected_account_id == account_id
-                    assert include_chunks is True
+                    if not include_chunks and self.base_id is not None:
+                        with tempfile.TemporaryDirectory() as temporary_manifest:
+                            manifest = Path(temporary_manifest) / "prior.cvmanifest"
+                            manifest.write_bytes(upload.store.objects[
+                                f"manifests/{self.base_id}.cvmanifest"])
+                            result = subprocess.run([
+                                crypto_helper, "catalog", "--key-id", key_id,
+                                "--snapshot-id", self.base_id,
+                                "--manifest", str(manifest),
+                            ], check=True, stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE)
+                            return self.base_id, json.loads(result.stdout)["files"]
                     return self.base_id, []
 
             upload = Upload()
@@ -849,6 +866,16 @@ class VaultBackupTests(unittest.TestCase):
                 # A later snapshot pins the prior published base, reuses the
                 # unchanged archived chunk, and never overwrites ciphertext.
                 recovery.base_id = published["snapshotId"]
+                prior_writes = upload.store.writes
+                checked = runner.back_up_live_history(
+                    metadata, crypto_helper=str(self.helper),
+                    max_prior_bytes=5_000_000, apply=True)
+                self.assertEqual(checked, {
+                    "unchanged": True, "lastGoodSnapshotId": published["snapshotId"],
+                    "lastGoodObjectCount": 6})
+                self.assertEqual(upload.store.writes, prior_writes)
+                self.assertEqual(upload.published_id, published["snapshotId"])
+                self.assertIsNone(runner.pending())
                 active_path = source / ".codex/sessions/2026/09/17/active.jsonl"
                 with active_path.open("ab") as handle:
                     handle.write(b'{"type":"response_item","payload":{"role":"user",'

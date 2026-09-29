@@ -82,9 +82,14 @@ journal file identities after a published backup. An unchanged source can reuse
 its authenticated prior paginated-thread entries and published ciphertext
 without rereading every thread body; a changed or unsafe SQLite source takes
 the full read path or fails closed. Volatile SQLite shared-memory reader locks
-do not count as content changes. This is **not** a scheduled or production
-backup: unchanged history still creates a redundant version, and neither
-physical Mac's 30-minute runtime or change rate has been measured.
+do not count as content changes. A read-only preflight now compares the current
+source against the authenticated last-published index, sealed manifest, and
+live service pointer. An exact match reports a check against the existing
+last-good snapshot without reserving storage or publishing a redundant
+version; any uncertainty uses the normal backup path or fails closed. This is
+**not** a scheduled or production backup: neither physical Mac's 30-minute
+runtime or change rate has been measured, and a skipped run is not a new
+verified recovery point.
 
 The current hosted prototype is **not a business enrollment model**. Its
 account, device, subscription, and recovery paths all depend on one person's

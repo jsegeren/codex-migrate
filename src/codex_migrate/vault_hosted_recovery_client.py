@@ -122,6 +122,16 @@ class HostedRecoveryClient:
             raise MigrationError("The hosted recovery pointer is invalid.")
         return account_id, worker_origin, latest
 
+    def latest_snapshot(self, *, expected_account_id: str) -> Optional[dict]:
+        """Read a validated current pointer; this does not reserve or protect."""
+        if (not isinstance(expected_account_id, str) or
+                not re.fullmatch(_UUID, expected_account_id)):
+            raise MigrationError("The hosted recovery account is invalid.")
+        account_id, _, latest = self._latest()
+        if account_id != expected_account_id:
+            raise MigrationError("The hosted recovery account changed.")
+        return latest
+
     @staticmethod
     def _summary(value: object) -> dict:
         if (not isinstance(value, dict)

@@ -164,6 +164,16 @@ class HostedRecoveryClientTests(unittest.TestCase):
         return HostedRecoveryClient(self.server.origin, TOKEN, VAULT,
                                     allow_loopback_http=True)
 
+    def test_latest_snapshot_is_read_only_and_account_bound(self):
+        self.assertEqual(self.client().latest_snapshot(expected_account_id=ACCOUNT), {
+            "snapshotId": SNAPSHOT, "totalObjects": 3,
+            "totalBytes": sum(map(len, self.server.objects.values()))})
+        self.assertEqual([item["action"] for item in self.server.requests], ["latest"])
+        with self.assertRaises(MigrationError):
+            self.client().latest_snapshot(expected_account_id=VAULT)
+        self.server.snapshot_id = None
+        self.assertIsNone(self.client().latest_snapshot(expected_account_id=ACCOUNT))
+
     def test_prepares_validated_receipt_and_exact_get_grant(self):
         receipt, store = self.client().prepare(max_bytes=1_000_000)
         self.assertEqual(receipt["snapshot_id"], SNAPSHOT)

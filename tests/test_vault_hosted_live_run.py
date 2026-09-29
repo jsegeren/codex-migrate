@@ -37,6 +37,10 @@ class HostedLiveRunTests(unittest.TestCase):
         self.recovery = HostedRecoveryClient(
             ORIGIN, TOKEN, VAULT, allow_loopback_http=True)
         self.run = HostedLiveBackupRun(self.upload, self.recovery, str(self.home))
+        preflight = patch("codex_migrate.vault_hosted_live_run.unchanged_published_history",
+                          return_value=None)
+        self.preflight = preflight.start()
+        self.addCleanup(preflight.stop)
         self.metadata = {"format": "codex-vault", "version": 1,
                          "key_id": KEY, "created_at": "2026-09-27T00:00:00+00:00"}
 
@@ -76,6 +80,15 @@ class HostedLiveRunTests(unittest.TestCase):
                 self.run.back_up_live_history(
                     self.metadata, crypto_helper=str(self.helper),
                     max_prior_bytes=0, apply=True)
+            reserve.assert_not_called()
+        self.assertIsNone(self.run.pending())
+
+    def test_unchanged_check_creates_no_reservation_or_new_version(self):
+        self.preflight.return_value = {"unchanged": True,
+                                       "lastGoodSnapshotId": BASE,
+                                       "lastGoodObjectCount": 4}
+        with patch.object(self.upload, "reserve_with_base") as reserve:
+            self.assertEqual(self.back_up(), self.preflight.return_value)
             reserve.assert_not_called()
         self.assertIsNone(self.run.pending())
 

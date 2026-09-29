@@ -131,23 +131,44 @@ def published_source_facts(journal: HostedChunkJournal, *,
         return empty  # Legacy direct staging has no safe published base to reuse.
     if base is None:
         return empty
+    found = published_source_index(
+        journal.directory.parent, account_id=journal.account_id,
+        vault_id=journal.vault_id, key_id=journal.key_id,
+        snapshot_id=base, crypto_helper=crypto_helper)
+    if found is None:
+        return empty
+    return found if include_paginated else found[0]
+
+
+def published_source_index(directory: Path, *, account_id: str, vault_id: str,
+                           key_id: str, snapshot_id: str,
+                           crypto_helper: str):
+    """Read the exact last-good hint without creating an upload reservation.
+
+    None is a cache miss; unsafe filesystem paths still fail closed. The server
+    pointer and sealed prior manifest remain authoritative for a no-change
+    check, not this local hint alone.
+    """
     try:
-        value = _read_private(journal.directory.parent / "source-index.json")
+        value = _read_private(directory / "source-index.json")
     except SourceIndexInvalid:
-        return empty
+        return None
     if value is None:
-        return empty
+        return None
+    expected = {"format": _FORMAT, "accountId": account_id,
+                "vaultId": vault_id, "keyId": key_id,
+                "snapshotId": snapshot_id}
     if (value.get("version") not in (1, 2) or
-            any(value.get(key) != expected for key, expected in
-                _header(journal, base).items() if key != "version")):
-        return empty  # Lost promotion or key rotation: scan the source instead.
+            any(value.get(key) != wanted for key, wanted in
+                expected.items())):
+        return None  # Lost promotion or key rotation: scan the source instead.
     try:
         facts = _facts(value)
     except SourceIndexInvalid:
-        return empty
-    if value["mac"] != _authenticate(value, journal.key_id, crypto_helper):
-        return empty  # Tampering or corruption cannot suppress a source read.
-    return (facts, _paginated(value)) if include_paginated else facts
+        return None
+    if value["mac"] != _authenticate(value, key_id, crypto_helper):
+        return None  # Tampering or corruption cannot suppress a source read.
+    return facts, _paginated(value)
 
 
 def record_source_facts(journal: HostedChunkJournal, facts: SourceFacts, *,

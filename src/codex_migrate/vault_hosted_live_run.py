@@ -25,6 +25,7 @@ from codex_migrate.vault_backup import (
 )
 from codex_migrate.vault_hosted_chunk_journal import HostedChunkJournal
 from codex_migrate.vault_hosted_live_stage import stage_reserved_hosted_snapshot
+from codex_migrate.vault_hosted_no_change import unchanged_published_history
 from codex_migrate.vault_hosted_recovery_client import HostedRecoveryClient
 from codex_migrate.vault_hosted_source_index import promote_source_facts
 from codex_migrate.vault_hosted_upload_client import HostedUploadClient, _UUID
@@ -143,6 +144,13 @@ class HostedLiveBackupRun:
                 raise MigrationError(
                     "The abandoned hosted upload needs verified cleanup before another backup.")
             if state is None:
+                unchanged = unchanged_published_history(
+                    str(self._home), self._directory, self._recovery,
+                    account_id=self._upload._account_id,
+                    vault_id=self._upload._vault_id, key_id=key_id,
+                    crypto_helper=crypto_helper, max_prior_bytes=max_prior_bytes)
+                if unchanged is not None:
+                    return unchanged
                 state = {"format": _FORMAT, "version": 1,
                          "accountId": self._upload._account_id,
                          "vaultId": self._upload._vault_id,

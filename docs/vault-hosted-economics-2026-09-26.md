@@ -79,11 +79,13 @@ owner's measured baseline, not observed invoices or customer averages.
 They make the original whole-history staging loop unsuitable as a 30-minute
 default. The dark client now has a Keychain-authenticated, published-snapshot-
 bound source index that skips reading unchanged transcript bodies and obtains
-prior chunk facts from the service. This is a code-and-synthetic-test result,
-not a physical-Mac cadence measurement; database-backed history still takes
-the full path. The server still HEADs every retained object for each newly
-published snapshot, so the **52.35 million read-operation extrapolation is
-not yet eliminated**. The release path needs a trustworthy changed-source inventory,
+prior chunk facts from the service. Database-backed history can also reuse
+authenticated prior entries when the SQLite database, WAL, and journal have
+not changed. A read-only preflight now skips reservation and publication for
+an exact unchanged match against the sealed prior manifest and current
+service pointer. This eliminates the modeled per-snapshot HEAD cost on quiet
+checks; changed runs still need the incremental path, and neither path has a
+physical-Mac cadence measurement. The release path still needs a trustworthy changed-source inventory,
 reuse of published ciphertext, upload of only new encrypted chunks and the
 new manifest/reference, and periodic—not per-checkpoint—full remote scrubs.
 Record actual per-run bytes read, novel bytes uploaded, object operations,
@@ -153,8 +155,13 @@ requests** and 36,356 R2 HEAD subrequests. Thirty daily checks would be about
 2,160 Worker requests and 1.09 million R2 Class B HEADs (about $0.39 at the
 unrounded metered rate, before the account-wide allowance). This is a model,
 not a measured customer bill: the database/API page cost and unchanged-run
-skip remain to be proven. New or changed chunks still
-need individual upload requests. A few initial uploads on one day can exceed
+skip remain to be measured on physical Macs. On the older Mac, one warm
+read-only source pass over 2,053 transcript paths took 0.125 seconds,
+database/WAL fingerprinting took under 0.001 seconds, title lookup over
+2,000 thread IDs took 0.06 seconds, and a paginated thread-ID query over
+1,615 IDs took 0.064 seconds. These are isolated local passes, not an
+end-to-end hosted check or a recovery-point guarantee. New or changed chunks
+still need individual upload requests. A few initial uploads on one day can exceed
 the Free daily request ceiling; do not build the offer around it. The batch
 network endpoint and actual provider behavior remain unproved. Workers Paid has a **$5/month account
 minimum**, including 10 million monthly requests and 30 million CPU-ms, then
