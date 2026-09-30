@@ -4,6 +4,7 @@
 const { authorizeUploadScope, authorizeLeasedUploadScope,
   authorizeReadScope, authorizeBusinessUploadScope,
   authorizeBusinessLeasedUploadScope, authorizeBusinessReadScope,
+  authorizeBusinessAbandonScope,
   tokenHash, businessTokenHash, HostedAccessError } = require('./access');
 
 const INDIVIDUAL = /^Bearer (hv1_[A-Za-z0-9_-]{43})$/;
@@ -60,6 +61,14 @@ function authorizeRead({ credential, vaultId, query }) {
     authorizeReadScope({ sessionToken: credential.token, vaultId, query });
 }
 
+function authorizeAbandon({ credential, vaultId, query }) {
+  requireCredential(credential);
+  return credential.kind === 'business' ?
+    authorizeBusinessAbandonScope({ sessionToken: credential.token,
+      vaultId, query }) :
+    authorizeReadScope({ sessionToken: credential.token, vaultId, query });
+}
+
 function authorizeLeasedWrite({ credential, vaultId, reservationId,
   lease, secret, query }) {
   requireCredential(credential);
@@ -71,4 +80,4 @@ function authorizeLeasedWrite({ credential, vaultId, reservationId,
 }
 
 module.exports = { deviceCredential, deviceHash, authorizeWrite,
-  authorizeRead, authorizeLeasedWrite };
+  authorizeRead, authorizeAbandon, authorizeLeasedWrite };

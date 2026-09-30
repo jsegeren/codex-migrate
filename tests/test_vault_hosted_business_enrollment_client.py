@@ -22,6 +22,9 @@ TOKEN = "hvb1_" + "a" * 43
 HASH = hashlib.sha256(b"codex-backup-business-device-v1\0" +
                       TOKEN.encode("ascii")).hexdigest()
 CODE = "hvwe1_" + "b" * 43
+ADMIN_TOKEN = "hva1_" + "c" * 43
+RECOVERY_CODE = "hvcr1_" + "d" * 43
+REQUEST = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -29,7 +32,9 @@ class _Handler(BaseHTTPRequestHandler):
         pass
 
     def do_POST(self):
-        if self.path not in ("/api/hosted-business-device", "/api/hosted-recovery"):
+        if self.path not in ("/api/hosted-business-device",
+                             "/api/hosted-business-recovery-device",
+                             "/api/hosted-recovery"):
             self.send_error(404)
             return
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
@@ -38,6 +43,9 @@ class _Handler(BaseHTTPRequestHandler):
         if self.path == "/api/hosted-recovery":
             response = {"accountId": self.server.recovery_account,
                         "workerOrigin": self.server.worker_origin, "latest": None}
+        elif (self.path == "/api/hosted-business-recovery-device" and
+              body["action"] == "begin"):
+            response = {"requestId": REQUEST, "status": "sent"}
         elif body["action"] == "claim":
             if self.server.lose_claim_reply:
                 self.close_connection = True
@@ -129,6 +137,33 @@ class BusinessHostedEnrollmentClientTests(unittest.TestCase):
         self.assertEqual(self.helper_calls.count(["hosted-business-device-create"]), 1)
         self.assertFalse(any("delete" in part for call in self.helper_calls
                              for part in call))
+
+    def test_clean_mac_recovery_uses_admin_approval_and_read_only_client(self):
+        path_patch, helper_patch = self.helper_patches()
+        with path_patch, helper_patch:
+            client = self.client()
+            with self.assertRaisesRegex(MigrationError, "invalid"):
+                client.begin_recovery(ACCOUNT, SEAT, VAULT,
+                                      "Original employee Mac is lost",
+                                      ADMIN_TOKEN)
+            request_id = client.begin_recovery(ACCOUNT, SEAT, VAULT,
+                "Original employee Mac is lost", ADMIN_TOKEN, apply=True)
+            self.assertEqual(request_id, REQUEST)
+            client.create_device(apply=True)
+            identity = client.claim_recovery(ACCOUNT, SEAT, VAULT, REQUEST,
+                RECOVERY_CODE, DEVICE, apply=True)
+            self.assertEqual(identity["vaultId"], VAULT)
+            recovery = client.recovery_client(DEVICE)
+        self.assertIsInstance(recovery, HostedRecoveryClient)
+        self.assertEqual([body["action"] for body, _ in self.server.calls],
+                         ["begin", "claim", "resolve", "latest"])
+        self.assertEqual(self.server.calls[0][1], "Bearer " + ADMIN_TOKEN)
+        self.assertIsNone(self.server.calls[1][1])
+        self.assertEqual(self.server.calls[1][0]["deviceTokenHash"], HASH)
+        self.assertNotIn(TOKEN, json.dumps(self.server.calls[1][0]))
+        self.assertTrue(all(auth == "Bearer " + TOKEN
+                            for _, auth in self.server.calls[2:]))
+        self.assertNotIn(TOKEN, repr(recovery))
 
     def test_refuses_personal_token_and_account_substitution(self):
         def personal_helper(path, arguments):

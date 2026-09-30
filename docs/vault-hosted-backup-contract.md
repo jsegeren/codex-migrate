@@ -233,6 +233,19 @@ customer billing entitlement, company key-custody receipt, live pairing UI,
 or company recovery authority. No business backup is customer-accessible or
 certified yet.
 
+Migration 0038 and a separate default-off sandbox route add a **recovery-only**
+replacement-device path for an already assigned business Vault. A current
+administrator session must request recovery for one exact seat and Vault with
+a recorded purpose. A fresh 10-minute code goes only to the operator-approved
+administrator contact; claiming it creates an audited, two-hour device session
+that may read that Vault's encrypted backup but cannot upload, publish, or
+change it. Requests are limited per seat, and seat revocation invalidates the
+replacement session. The company-held `CVB1-` kit is still needed to decrypt
+the backup; the service does not receive it. This is a sandbox security and
+authorization mechanism, **not** proof that a customer can recover after Mac
+loss. A clean GUI-backed Mac restore, tested company custody, live business
+entitlement, notification handling, and operator acceptance remain required.
+
 Before a business pilot, establish one organization-owned account with an
 identified purchaser and designated administrator, explicit seat/device
 enrollment and revocation, a company-held recovery route, and a subscription
@@ -313,7 +326,8 @@ The personal `CV1-` export command refuses a business key. This does **not**
 convert an existing personal Vault, store envelopes in the hosted service,
 prove that a company retained its pair, attribute offline use, or revoke
 previously copied ciphertext. Until enrollment, custody confirmation, company
-recovery testing, and an audited access path are integrated, keep the helper
+recovery testing, and the audited access path are integrated into a verified
+customer journey, keep the helper
 commands dark and keep business protection claims off the buyer UI.
 The [synthetic producer](https://github.com/jsegeren/codex-migrate/actions/runs/36683267263/job/109783265819)
 and [independent-macOS-runner consumer](https://github.com/jsegeren/codex-migrate/actions/runs/36683267263/job/109783378441)

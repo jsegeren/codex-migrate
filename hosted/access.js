@@ -33,6 +33,8 @@ const BUSINESS_DEVICE_SQL = `SELECT d.account_id, d.vault_id
   WHERE d.token_hash = $1 AND d.vault_id = $2
     AND d.revoked_at IS NULL AND d.expires_at > clock_timestamp()
     AND s.revoked_at IS NULL`;
+const BUSINESS_ABANDON_SQL = BUSINESS_DEVICE_SQL +
+  " AND d.access_purpose = 'worker'";
 const BUSINESS_UPLOAD_SQL = `SELECT d.account_id, d.vault_id,
     e.allowance_bytes
   FROM hosted.business_device_sessions AS d
@@ -45,6 +47,7 @@ const BUSINESS_UPLOAD_SQL = `SELECT d.account_id, d.vault_id,
     ON e.account_id = d.account_id
   WHERE d.token_hash = $1 AND d.vault_id = $2
     AND d.revoked_at IS NULL AND d.expires_at > clock_timestamp()
+    AND d.access_purpose = 'worker'
     AND s.revoked_at IS NULL AND e.revoked_at IS NULL
     AND e.starts_at <= clock_timestamp()
     AND e.expires_at > clock_timestamp()`;
@@ -66,12 +69,14 @@ function businessTokenHash(token) {
   catch { throw new HostedAccessError(); }
 }
 
-async function businessDeviceRow({ sessionToken, vaultId, query, upload }) {
+async function businessDeviceRow({ sessionToken, vaultId, query, upload,
+  abandon }) {
   if (!UUID.test(vaultId) || typeof query !== 'function') {
     throw new HostedAccessError();
   }
   try {
-    const result = await query(upload ? BUSINESS_UPLOAD_SQL : BUSINESS_DEVICE_SQL,
+    const result = await query(upload ? BUSINESS_UPLOAD_SQL :
+      abandon ? BUSINESS_ABANDON_SQL : BUSINESS_DEVICE_SQL,
       [businessTokenHash(sessionToken), vaultId]);
     const row = result?.rows?.[0];
     if (result?.rows?.length !== 1 || row?.vault_id !== vaultId ||
@@ -100,6 +105,14 @@ async function authorizeBusinessUploadScope({ sessionToken, vaultId, query }) {
 async function authorizeBusinessReadScope({ sessionToken, vaultId, query }) {
   const values = await businessDeviceRow({ sessionToken, vaultId, query,
     upload: false });
+  const scope = Object.freeze(values);
+  authorizedReadScopes.set(scope, Date.now());
+  return scope;
+}
+
+async function authorizeBusinessAbandonScope({ sessionToken, vaultId, query }) {
+  const values = await businessDeviceRow({ sessionToken, vaultId, query,
+    abandon: true });
   const scope = Object.freeze(values);
   authorizedReadScopes.set(scope, Date.now());
   return scope;
@@ -237,4 +250,5 @@ module.exports = { HostedAccessError, authorizeUploadScope,
   authorizeReadScope,
   isAuthorizedReadScope, consumeAuthorizedReadScope, tokenHash,
   authorizeBusinessUploadScope, authorizeBusinessReadScope,
+  authorizeBusinessAbandonScope,
   authorizeBusinessLeasedUploadScope, businessTokenHash };

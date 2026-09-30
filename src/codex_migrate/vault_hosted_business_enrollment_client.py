@@ -24,6 +24,8 @@ from codex_migrate.vault_http_store import _NoRedirect
 _UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z")
 _CODE = re.compile(r"hvwe1_[A-Za-z0-9_-]{43}\Z")
 _TOKEN = re.compile(r"hvb1_[A-Za-z0-9_-]{43}\Z")
+_ADMIN_TOKEN = re.compile(r"hva1_[A-Za-z0-9_-]{43}\Z")
+_RECOVERY_CODE = re.compile(r"hvcr1_[A-Za-z0-9_-]{43}\Z")
 _HASH = re.compile(r"[0-9a-f]{64}\Z")
 _DOMAIN = b"codex-backup-business-device-v1\0"
 
@@ -51,15 +53,20 @@ class BusinessHostedEnrollmentClient:
         self._allow_loopback_http = allow_loopback_http
         self._opener = build_opener(_NoRedirect())
 
-    def _post(self, claim: dict, token: str = "") -> dict:
+    def _post(self, claim: dict, token: str = "", *,
+              recovery: bool = False, admin: bool = False) -> dict:
         body = json.dumps(claim, separators=(",", ":")).encode("utf-8")
-        if len(body) > 512 or (token and not _TOKEN.fullmatch(token)):
+        if (len(body) > (768 if recovery else 512) or
+                (admin and (not recovery or claim.get("action") != "begin")) or
+                (token and not (_ADMIN_TOKEN if admin else _TOKEN).fullmatch(token))):
             raise MigrationError("The business enrollment request is invalid.")
         headers = {"Content-Type": "application/json",
                    "Content-Length": str(len(body))}
         if token:
             headers["Authorization"] = "Bearer " + token
-        request = Request(self._origin + "/api/hosted-business-device",
+        endpoint = ("/api/hosted-business-recovery-device" if recovery else
+                    "/api/hosted-business-device")
+        request = Request(self._origin + endpoint,
                           data=body, headers=headers, method="POST")
         try:
             with self._opener.open(request, timeout=self._timeout) as response:
@@ -129,6 +136,47 @@ class BusinessHostedEnrollmentClient:
                             "deviceTokenHash": digest})
         return _identity(value, account_id, seat_id, vault_id, device_id)
 
+    def begin_recovery(self, account_id: str, seat_id: str, vault_id: str,
+                       purpose: str, admin_session_token: str, *,
+                       apply: bool = False) -> str:
+        if (apply is not True or any(not isinstance(value, str) or
+                not _UUID.fullmatch(value) for value in
+                (account_id, seat_id, vault_id)) or
+                not isinstance(purpose, str) or
+                not 12 <= len(purpose) <= 250 or purpose != purpose.strip() or
+                any(ord(char) < 32 or ord(char) == 127 for char in purpose) or
+                not isinstance(admin_session_token, str) or
+                not _ADMIN_TOKEN.fullmatch(admin_session_token)):
+            raise MigrationError("The company recovery request is invalid.")
+        value = self._post({"action": "begin", "accountId": account_id,
+                            "seatId": seat_id, "vaultId": vault_id,
+                            "purpose": purpose}, admin_session_token,
+                           recovery=True, admin=True)
+        request_id = value.get("requestId")
+        if (set(value) != {"requestId", "status"} or
+                value.get("status") != "sent" or
+                not isinstance(request_id, str) or
+                not _UUID.fullmatch(request_id)):
+            raise MigrationError("The company recovery request is invalid.")
+        return request_id
+
+    def claim_recovery(self, account_id: str, seat_id: str, vault_id: str,
+                       request_id: str, code: str, device_id: str, *,
+                       crypto_helper: Optional[str] = None,
+                       apply: bool = False) -> dict:
+        if (apply is not True or any(not isinstance(value, str) or
+                not _UUID.fullmatch(value) for value in
+                (account_id, seat_id, vault_id, request_id, device_id)) or
+                not isinstance(code, str) or not _RECOVERY_CODE.fullmatch(code)):
+            raise MigrationError("The company recovery claim is invalid.")
+        _, digest = self._credential(device_id, crypto_helper)
+        value = self._post({"action": "claim", "accountId": account_id,
+                            "seatId": seat_id, "vaultId": vault_id,
+                            "requestId": request_id, "code": code,
+                            "deviceId": device_id, "deviceTokenHash": digest},
+                           recovery=True)
+        return _identity(value, account_id, seat_id, vault_id, device_id)
+
     def resolve(self, device_id: str, *, crypto_helper: Optional[str] = None) -> dict:
         token, _ = self._credential(device_id, crypto_helper)
         return self._resolve_with_token(device_id, token)
@@ -159,3 +207,15 @@ class BusinessHostedEnrollmentClient:
             identity["vaultId"], timeout=self._timeout,
             allow_loopback_http=self._allow_loopback_http)
         return upload, recovery
+
+    def recovery_client(self, device_id: str, *,
+                        crypto_helper: Optional[str] = None) -> HostedRecoveryClient:
+        token, _ = self._credential(device_id, crypto_helper)
+        identity = self._resolve_with_token(device_id, token)
+        recovery = HostedRecoveryClient(
+            self._origin, token, identity["vaultId"], timeout=self._timeout,
+            allow_loopback_http=self._allow_loopback_http)
+        account_id, _, _ = recovery._latest()
+        if account_id != identity["accountId"]:
+            raise MigrationError("The business recovery account changed.")
+        return recovery

@@ -6,7 +6,7 @@ const { allowedBrowserOrigin } = require('../hosted/http_origin');
 const { uploadRuntime } = require('../hosted/upload_runtime');
 const { consumeAuthorizedScope, HostedAccessError } = require('../hosted/access');
 const { deviceCredential, deviceHash, authorizeWrite, authorizeRead,
-  authorizeLeasedWrite } = require('../hosted/request_access');
+  authorizeAbandon, authorizeLeasedWrite } = require('../hosted/request_access');
 const { HostedUploadLeaseError, mintUploadLease,
   requireActiveReservation } = require('../hosted/upload_lease');
 const { createUploadReservation, renewUploadReservation,
@@ -102,8 +102,9 @@ function makeHandler(load = uploadRuntime, env = process.env) {
         workerOrigin, secret } = await load(env, credential);
       if (live !== false) throw Error('hosted_upload_unavailable');
       if (data.action === 'abandon' || data.action === 'status') {
-        const scope = await authorizeRead({ credential,
-          vaultId: data.vaultId, query });
+        const scope = await (data.action === 'abandon' ?
+          authorizeAbandon : authorizeRead)({ credential,
+            vaultId: data.vaultId, query });
         return reply(res, 200, await (data.action === 'abandon' ?
           abandonUploadReservation : readUploadReservationStatus)({ scope,
             reservationId: data.reservationId, query }));
