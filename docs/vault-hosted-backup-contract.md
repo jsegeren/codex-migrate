@@ -232,6 +232,13 @@ new business Vault key in a distinct device-only Keychain service and returns
 two independently generated `CVB1-` recovery credentials, each paired with
 an authenticated, key-ID- and role-bound encrypted envelope. Either pair can
 import the same key on a clean Mac; neither credential is the raw master key.
+The internal backup and recovery modules now initialize an empty business
+Vault using that primitive and import either role's credential without
+placing recovery material in the Vault or in command arguments. The
+independent-Mac synthetic proof exercises those modules rather than writing
+Vault metadata by hand. This is an implementation path, not a customer setup
+flow: the caller must still securely deliver each one-time credential to its
+respective custodian and record both custody and recovery-drill confirmation.
 The personal `CV1-` export command refuses a business key. This does **not**
 convert an existing personal Vault, store envelopes in the hosted service,
 prove that a company retained its pair, attribute offline use, or revoke

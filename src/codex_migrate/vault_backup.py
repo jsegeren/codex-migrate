@@ -85,6 +85,15 @@ class BackupResult:
         return asdict(self)
 
 
+@dataclass(frozen=True)
+class BusinessRecoverySetup:
+    """One-time credentials; the caller must deliver each kit to its custodian."""
+
+    key_id: str
+    worker_credential: Dict[str, object]
+    company_credential: Dict[str, object]
+
+
 def _canonical_macos_path(path: Path) -> Path:
     """Normalize only Apple's fixed root aliases, never user-controlled links."""
     absolute = path.absolute()
@@ -295,12 +304,16 @@ def _read_json(path: Path) -> Dict[str, object]:
 
 def _metadata(value: Dict[str, object]) -> str:
     required = {"format", "version", "key_id", "created_at"}
-    if set(value) not in (required, required | {"storage_codec"}):
+    if set(value) not in (
+            required, required | {"storage_codec"},
+            required | {"storage_codec", "recovery_mode"}):
         raise MigrationError("Vault metadata has an unsupported shape.")
     if value.get("format") != "codex-vault" or value.get("version") != FORMAT_VERSION:
         raise MigrationError("Vault metadata has an unsupported format version.")
     if "storage_codec" in value and value["storage_codec"] != STORAGE_CODEC:
         raise MigrationError("Vault metadata has an unsupported storage codec.")
+    if "recovery_mode" in value and value["recovery_mode"] != "business-v1":
+        raise MigrationError("Vault metadata has an unsupported recovery mode.")
     key_id = value.get("key_id")
     try:
         canonical = str(uuid.UUID(str(key_id))).lower()
@@ -355,6 +368,62 @@ def _prepare_repository(root: Path, helper: Path) -> Tuple[str, Optional[str]]:
     }
     _atomic_json(metadata_path, metadata)
     return canonical, recovery_key
+
+
+def initialize_business_vault(
+    source_home: str,
+    destination: str,
+    *,
+    crypto_helper: Optional[str] = None,
+) -> BusinessRecoverySetup:
+    """Create an empty business Vault; never persist recovery kits in it.
+
+    This is an internal primitive, not organization enrollment or proof that
+    the worker and company have independently retained their credentials.
+    """
+    root = _validate_destination(source_home, destination)
+    if not root.exists():
+        root.mkdir(mode=0o700)
+        _fsync_directory(root.parent)
+    _require_unlinked_path(root)
+    info = root.lstat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
+        raise MigrationError("The business Vault folder must be private and owned by this user.")
+    helper = _helper_path(crypto_helper)
+    with _repository_lock(root):
+        if any(item.name != "backup.lock" for item in root.iterdir()):
+            raise MigrationError("Business Vault setup requires an empty destination.")
+        created = _run_helper(helper, ["business-key-create"])
+        key_id = created.get("key_id")
+        try:
+            canonical = str(uuid.UUID(str(key_id))).lower()
+        except (ValueError, TypeError, AttributeError):
+            raise MigrationError("The business key helper returned an invalid identifier.") from None
+        if canonical != key_id:
+            raise MigrationError("The business key helper returned an invalid identifier.")
+        credentials = []
+        for role in ("worker", "company"):
+            secret = created.get(role + "_recovery_key")
+            envelope = created.get(role + "_envelope")
+            if (not isinstance(secret, str) or not secret.startswith("CVB1-")
+                    or not isinstance(envelope, dict)
+                    or envelope.get("version") != 1
+                    or envelope.get("key_id") != canonical
+                    or envelope.get("role") != role
+                    or not isinstance(envelope.get("wrapped_key"), str)):
+                raise MigrationError("The business key helper returned invalid recovery material.")
+            credentials.append({"recovery_key": secret, "envelope": envelope})
+        if credentials[0]["recovery_key"] == credentials[1]["recovery_key"]:
+            raise MigrationError("The business recovery custodians were not independent.")
+        _atomic_json(root / METADATA_NAME, {
+            "format": "codex-vault",
+            "version": FORMAT_VERSION,
+            "storage_codec": STORAGE_CODEC,
+            "recovery_mode": "business-v1",
+            "key_id": canonical,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        return BusinessRecoverySetup(canonical, credentials[0], credentials[1])
 
 
 def _source_files(source_home: str) -> List[Tuple[str, Path, str]]:

@@ -12,8 +12,10 @@ import sys
 import uuid
 
 from codex_migrate.errors import MigrationError
-from codex_migrate.vault_backup import backup
-from codex_migrate.vault_recovery import restore_snapshot, verify_snapshot
+from codex_migrate.vault_backup import backup, initialize_business_vault
+from codex_migrate.vault_recovery import (
+    import_business_recovery_credential, restore_snapshot, verify_snapshot,
+)
 
 
 THREAD_ID = "77777777-7777-4777-8777-777777777777"
@@ -53,15 +55,10 @@ def produce(bundle: Path, helper: Path) -> None:
     transcript.write_bytes(TRANSCRIPT)
     bundle.mkdir(mode=0o700)
     vault = bundle / "vault"
-    vault.mkdir(mode=0o700)
     key_id = None
     try:
-        created = helper_call(helper, "business-key-create")
-        key_id = created["key_id"]
-        private_json(vault / "vault.json", {
-            "format": "codex-vault", "version": 1, "storage_codec": "lzfse-v1",
-            "key_id": key_id, "created_at": "2026-09-30T00:00:00+00:00",
-        })
+        created = initialize_business_vault(str(source), str(vault), crypto_helper=str(helper))
+        key_id = created.key_id
         result = backup(str(source), str(vault), crypto_helper=str(helper),
                         require_existing_key_id=key_id)
         if result.recovery_key is not None or result.transcript_files != 1:
@@ -69,11 +66,8 @@ def produce(bundle: Path, helper: Path) -> None:
         verified = verify_snapshot(str(vault), crypto_helper=str(helper))
         if verified.snapshot_id != result.snapshot_id:
             raise AssertionError("Business snapshot did not verify on producer Mac")
-        for role in ("worker", "company"):
-            private_json(bundle / (role + "-credential.json"), {
-                "recovery_key": created[role + "_recovery_key"],
-                "envelope": created[role + "_envelope"],
-            })
+        private_json(bundle / "worker-credential.json", created.worker_credential)
+        private_json(bundle / "company-credential.json", created.company_credential)
         print("Synthetic business Vault verified on producer Mac")
     finally:
         if key_id is not None:
@@ -99,10 +93,10 @@ def consume(bundle: Path, helper: Path) -> None:
             raise AssertionError("Business recovery custodian was switched")
         imported = False
         try:
-            result = helper_call(helper, "business-key-import", "--key-id", key_id,
-                                 input_bytes=json.dumps(credential).encode())
+            result = import_business_recovery_credential(
+                str(vault), credential, crypto_helper=str(helper))
             imported = True
-            if result != {"key_id": key_id, "imported": True}:
+            if result != key_id:
                 raise AssertionError("Business recovery import changed key identity")
             verified = verify_snapshot(str(vault), crypto_helper=str(helper))
             empty_home = bundle.parent / ("business-empty-home-" + role)

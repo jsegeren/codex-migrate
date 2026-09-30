@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from datetime import datetime
+import json
 import os
 from pathlib import Path
 import stat
@@ -388,6 +389,41 @@ def import_recovery_key(
     )
     if result.get("key_id") != key_id or result.get("imported") is not True:
         raise MigrationError("The recovery key import result is invalid.")
+    return key_id
+
+
+def import_business_recovery_credential(
+    vault: str,
+    credential: Dict[str, object],
+    *,
+    crypto_helper: Optional[str] = None,
+) -> str:
+    """Import one role-bound business recovery kit without exposing it in argv."""
+    root = _vault_root(vault)
+    metadata = _read_json(root / "vault.json")
+    key_id = _metadata(metadata)
+    if metadata.get("recovery_mode") != "business-v1":
+        raise ValueError("the selected Vault is not a business Vault")
+    if not isinstance(credential, dict):
+        raise ValueError("business recovery credential has an invalid format")
+    secret = credential.get("recovery_key")
+    envelope = credential.get("envelope")
+    if (set(credential) != {"recovery_key", "envelope"}
+            or not isinstance(secret, str) or not secret.startswith("CVB1-")
+            or len(secret) > 256 or not isinstance(envelope, dict)
+            or set(envelope) != {"version", "key_id", "role", "wrapped_key"}
+            or envelope.get("version") != 1
+            or envelope.get("key_id") != key_id
+            or envelope.get("role") not in ("worker", "company")
+            or not isinstance(envelope.get("wrapped_key"), str)):
+        raise ValueError("business recovery credential has an invalid format")
+    helper = _helper_path(crypto_helper)
+    result = _run_helper(
+        helper, ["business-key-import", "--key-id", key_id],
+        input_data=json.dumps(credential, separators=(",", ":")).encode("utf-8"),
+    )
+    if result != {"key_id": key_id, "imported": True}:
+        raise MigrationError("The business recovery import result is invalid.")
     return key_id
 
 

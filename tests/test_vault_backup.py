@@ -30,7 +30,8 @@ from codex_migrate.vault_identity import TranscriptChanged
 from codex_migrate.vault_install import plan_install
 from codex_migrate.vault_paginated import restored_items
 from codex_migrate.vault_recovery import (
-    export_recovery_key, import_recovery_key, list_snapshots, restore_snapshot,
+    export_recovery_key, import_business_recovery_credential,
+    import_recovery_key, list_snapshots, restore_snapshot,
     snapshot_catalog, vault_storage_usage, verify_snapshot,
 )
 from codex_migrate import vault_remote_inventory
@@ -91,6 +92,85 @@ class BackupHelperDiagnosticTests(unittest.TestCase):
                 vault_backup._run_helper(Path("/synthetic/helper"), ["create-key"])
         self.assertEqual(str(caught.exception),
                          "Authenticated backup failed; no new snapshot was published.")
+
+
+class BusinessVaultWiringTests(unittest.TestCase):
+    key_id = "77777777-7777-4777-8777-777777777777"
+
+    def helper_result(self):
+        result = {"key_id": self.key_id}
+        for role in ("worker", "company"):
+            result[role + "_recovery_key"] = "CVB1-" + role
+            result[role + "_envelope"] = {
+                "version": 1, "key_id": self.key_id, "role": role,
+                "wrapped_key": "synthetic-encrypted-envelope",
+            }
+        return result
+
+    def test_business_setup_writes_only_public_metadata_to_vault(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            destination = root / "vault"
+            with patch.object(vault_backup, "_helper_path", return_value=Path("/synthetic/helper")), \
+                    patch.object(vault_backup, "_run_helper", return_value=self.helper_result()):
+                result = vault_backup.initialize_business_vault(
+                    str(root / "source"), str(destination))
+            self.assertEqual(result.key_id, self.key_id)
+            self.assertNotEqual(result.worker_credential["recovery_key"],
+                                result.company_credential["recovery_key"])
+            self.assertEqual({item.name for item in destination.iterdir()},
+                             {"backup.lock", "vault.json"})
+            metadata = json.loads((destination / "vault.json").read_text())
+            self.assertEqual(metadata["key_id"], self.key_id)
+            self.assertEqual(metadata["recovery_mode"], "business-v1")
+            self.assertNotIn(b"CVB1-", (destination / "vault.json").read_bytes())
+
+    def test_business_setup_refuses_existing_vault_without_creating_key(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            destination = root / "vault"
+            destination.mkdir(mode=0o700)
+            (destination / "vault.json").write_text("existing", encoding="utf-8")
+            with patch.object(vault_backup, "_helper_path", return_value=Path("/synthetic/helper")), \
+                    patch.object(vault_backup, "_run_helper") as create:
+                with self.assertRaisesRegex(MigrationError, "empty destination"):
+                    vault_backup.initialize_business_vault(str(root / "source"), str(destination))
+                create.assert_not_called()
+            self.assertEqual((destination / "vault.json").read_text(), "existing")
+
+    def test_business_import_rejects_wrong_vault_without_helper_call(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            vault = Path(temporary) / "vault"
+            vault.mkdir()
+            (vault / "vault.json").write_text(json.dumps({
+                "format": "codex-vault", "version": 1,
+                "storage_codec": "lzfse-v1",
+                "key_id": self.key_id, "recovery_mode": "business-v1",
+                "created_at": "2026-09-30T00:00:00+00:00",
+            }), encoding="utf-8")
+            wrong = self.helper_result()
+            credential = {"recovery_key": wrong["worker_recovery_key"],
+                          "envelope": {**wrong["worker_envelope"], "key_id": str(uuid.uuid4())}}
+            with patch("codex_migrate.vault_recovery._run_helper") as imported:
+                with self.assertRaisesRegex(ValueError, "invalid format"):
+                    import_business_recovery_credential(str(vault), credential)
+                imported.assert_not_called()
+
+    def test_business_import_refuses_personal_vault(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            vault = Path(temporary) / "vault"
+            vault.mkdir()
+            (vault / "vault.json").write_text(json.dumps({
+                "format": "codex-vault", "version": 1,
+                "key_id": self.key_id, "created_at": "2026-09-30T00:00:00+00:00",
+            }), encoding="utf-8")
+            with patch("codex_migrate.vault_recovery._run_helper") as imported:
+                with self.assertRaisesRegex(ValueError, "not a business Vault"):
+                    import_business_recovery_credential(str(vault), {
+                        "recovery_key": "CVB1-synthetic",
+                        "envelope": self.helper_result()["worker_envelope"],
+                    })
+                imported.assert_not_called()
 
 
 @unittest.skipUnless(platform.system() == "Darwin", "CryptoKit backup helper requires macOS")
