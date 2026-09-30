@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import patch
 
 from codex_migrate.errors import MigrationError
+from codex_migrate.vault_identity import title_index
 from codex_migrate.vault_hosted_chunk_journal import HostedChunkJournal
 from codex_migrate.vault_hosted_live_stage import stage_reserved_hosted_snapshot
 from codex_migrate.vault_hosted_recovery_client import HostedRecoveryClient
@@ -172,6 +173,41 @@ class HostedLiveStageTests(unittest.TestCase):
                         journal, object(), crypto_helper="/unused-helper",
                         apply=True)
                 publish.assert_not_called()
+
+    def test_damaged_optional_title_index_does_not_block_intact_history(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "source"
+            codex = source / ".codex"
+            active = codex / "sessions/current.jsonl"
+            active.parent.mkdir(parents=True, mode=0o700)
+            original = ('{"type":"session_meta","payload":{"id":"' + OTHER + '"}}\n')
+            active.write_text(original, encoding="utf-8")
+            index = codex / "session_index.jsonl"
+            index.write_text("{broken\n", encoding="utf-8")
+            with self.assertRaises(MigrationError):
+                title_index(str(source))
+            journal_dir = Path(temporary) / "journal"
+            journal_dir.mkdir(mode=0o700)
+            staged = SimpleNamespace(size=active.stat().st_size,
+                                     sha256="a" * 64, chunks=[], objects=())
+            with HostedChunkJournal(
+                    journal_dir, account_id=ACCOUNT, vault_id=VAULT,
+                    reservation_id=RESERVATION, snapshot_id=SNAPSHOT,
+                    key_id=KEY, base_snapshot_id=None) as journal, patch(
+                    "codex_migrate.vault_hosted_snapshot_stage.published_source_facts",
+                    return_value=({}, None)), patch(
+                    "codex_migrate.vault_hosted_snapshot_stage.stage_remote_aware_file_windowed",
+                    return_value=staged), patch(
+                    "codex_migrate.vault_hosted_snapshot_stage.stage_hosted_snapshot_tail",
+                    return_value=()) as tail, patch(
+                    "codex_migrate.vault_hosted_snapshot_stage.record_source_facts"):
+                result = stage_hosted_snapshot(
+                    str(source), self.metadata, [], journal, object(),
+                    crypto_helper="/unused-helper", apply=True)
+                self.assertEqual(result.transcript_files, 1)
+                self.assertEqual(tail.call_args.args[1]["files"][0]["titles"], [])
+            self.assertEqual(active.read_text(encoding="utf-8"), original)
+            self.assertEqual(index.read_text(encoding="utf-8"), "{broken\n")
 
     def test_prior_catalog_precedes_transcript_stage_and_binds_base(self):
         catalog = [{"thread_id": "example"}]

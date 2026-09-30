@@ -267,7 +267,12 @@ def stage_hosted_snapshot(
                                      if item.get("collection") == "attachments"}
         missing_attachments = set()
         missing_paginated_attachments = set()
-        titles = title_index(source_home)
+        try:
+            titles = title_index(source_home)
+        except MigrationError:
+            # Titles are optional metadata, not an authority for conversation
+            # content. Keep protecting intact history when their index is bad.
+            titles = {}
         fingerprints, previous_paginated = published_source_facts(
             journal, crypto_helper=crypto_helper, include_paginated=True)
         reuse = _reuse_candidates(files, previous_catalog, fingerprints)
