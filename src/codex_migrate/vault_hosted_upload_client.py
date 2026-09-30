@@ -474,7 +474,9 @@ class HostedUploadClient:
                 "transcriptBytes": staged.transcript_bytes,
                 "restagedPlaintextBytes": staged.restaged_plaintext_bytes,
                 "reusedPlaintextBytes": staged.reused_plaintext_bytes,
-                "atRiskThreads": staged.at_risk_threads}
+                "atRiskThreads": staged.at_risk_threads,
+                **({"titleIndexUnavailable": True}
+                   if staged.title_index_unavailable else {})}
 
     def back_up_snapshot(self, vault: str, *, reservation_id: str,
                          snapshot: str = "latest",

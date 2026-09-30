@@ -98,7 +98,12 @@ def unchanged_published_history(
             with open_paginated_source(source_home) as paginated:
                 if set(paginated.thread_ids()) != paginated_ids:
                     return None
-        titles = title_index(source_home)
+        try:
+            titles = title_index(source_home)
+        except MigrationError:
+            # An optional title index cannot certify an unchanged snapshot.
+            # Let the normal staging path protect intact conversation bodies.
+            return None
         for identity, item in transcript_rows.items():
             if (item.get("size") != before[identity][2] or
                     (identity[0] != "attachments" and
@@ -108,9 +113,13 @@ def unchanged_published_history(
             if item.get("collection") == "paginated" and item.get("titles") != list(
                     titles.get(item["thread_id"], [])):
                 return None
+        try:
+            titles_after = title_index(source_home)
+        except MigrationError:
+            return None
         if (_transcript_state(source_home) != before or
                 source_fingerprint(source_home) != before_db or
-                title_index(source_home) != titles):
+                titles_after != titles):
             return None
         if recovery.latest_snapshot(expected_account_id=account_id) != latest:
             return None

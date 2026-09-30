@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from codex_migrate.errors import MigrationError
 from codex_migrate.vault_hosted_no_change import (
     _transcript_state, unchanged_published_history,
 )
@@ -89,6 +90,19 @@ class HostedNoChangeTests(unittest.TestCase):
         self.recovery.pointer_reads = 0
         self.recovery.change_pointer_after_first = True
         self.assertIsNone(self.check())
+
+    def test_unreadable_optional_title_index_falls_back_to_staging(self):
+        for observations in ((MigrationError("damaged index"),),
+                             ({}, MigrationError("index changed"))):
+            with self.subTest(observations=len(observations)), patch(
+                    "codex_migrate.vault_hosted_no_change.published_source_index",
+                    return_value=(self.hint, None)), patch(
+                    "codex_migrate.vault_hosted_no_change.title_index",
+                    side_effect=observations):
+                self.assertIsNone(unchanged_published_history(
+                    str(self.home), self.home / "runs", self.recovery,
+                    account_id=ACCOUNT, vault_id=VAULT, key_id=KEY,
+                    crypto_helper="/unused", max_prior_bytes=1000))
 
     def test_attachment_change_cannot_be_called_unchanged(self):
         attachment = (self.home / ".codex/attachments" / OTHER /

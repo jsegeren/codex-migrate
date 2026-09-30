@@ -507,7 +507,8 @@ class HostedUploadClientTests(unittest.TestCase):
             StagedObject(manifest_key, 5, hashlib.sha256(b"third").hexdigest()),
             StagedObject(SECOND_KEY, len(SECOND), self.server.expected[SECOND_KEY][1]),
         )
-        staged = HostedSnapshotStage(SNAPSHOT, RESERVATION, objects, 2, 123, 0)
+        staged = HostedSnapshotStage(SNAPSHOT, RESERVATION, objects, 2, 123, 0,
+                                     title_index_unavailable=True)
         self.assertIsNone(staged.upload_claim().uploaded_files)
         with self.assertRaisesRegex(MigrationError, "explicit confirmation"):
             self.client.publish_hosted_stage(RESERVATION, staged)
@@ -529,7 +530,7 @@ class HostedUploadClientTests(unittest.TestCase):
             "encryptedBytes": len(FIRST) + len(SECOND) + 5,
             "transcriptFiles": 2, "transcriptBytes": 123,
             "restagedPlaintextBytes": 0, "reusedPlaintextBytes": 0,
-            "atRiskThreads": 0,
+            "atRiskThreads": 0, "titleIndexUnavailable": True,
         })
 
     def test_publication_requires_apply_and_exact_server_receipt(self):

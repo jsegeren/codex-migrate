@@ -50,6 +50,7 @@ class HostedSnapshotStage:
     at_risk_threads: int
     restaged_plaintext_bytes: int = 0
     reused_plaintext_bytes: int = 0
+    title_index_unavailable: bool = False
 
     def upload_claim(self) -> StageResult:
         """Counts are unknown for the mixed incremental path, never zeroed."""
@@ -269,10 +270,12 @@ def stage_hosted_snapshot(
         missing_paginated_attachments = set()
         try:
             titles = title_index(source_home)
+            title_index_unavailable = False
         except MigrationError:
             # Titles are optional metadata, not an authority for conversation
             # content. Keep protecting intact history when their index is bad.
             titles = {}
+            title_index_unavailable = True
         fingerprints, previous_paginated = published_source_facts(
             journal, crypto_helper=crypto_helper, include_paginated=True)
         reuse = _reuse_candidates(files, previous_catalog, fingerprints)
@@ -505,4 +508,5 @@ def stage_hosted_snapshot(
         }, crypto_helper=crypto_helper, paginated=paginated_hint)
         return HostedSnapshotStage(journal.snapshot_id, journal.reservation_id, objects,
                                    len(manifest_files), total_bytes, len(at_risk),
-                                   restaged_plaintext_bytes, reused_plaintext_bytes)
+                                   restaged_plaintext_bytes, reused_plaintext_bytes,
+                                   title_index_unavailable)

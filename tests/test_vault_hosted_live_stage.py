@@ -205,6 +205,7 @@ class HostedLiveStageTests(unittest.TestCase):
                     str(source), self.metadata, [], journal, object(),
                     crypto_helper="/unused-helper", apply=True)
                 self.assertEqual(result.transcript_files, 1)
+                self.assertTrue(result.title_index_unavailable)
                 self.assertEqual(tail.call_args.args[1]["files"][0]["titles"], [])
             self.assertEqual(active.read_text(encoding="utf-8"), original)
             self.assertEqual(index.read_text(encoding="utf-8"), "{broken\n")

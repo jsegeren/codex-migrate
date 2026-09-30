@@ -353,6 +353,8 @@ def run_hosted_scheduled_backup(config_path: str) -> int:
             _write_run_status(status_path, {
                 "status": state, "checked_at": _now(),
                 "snapshot_id": snapshot_id,
+                **({"title_index_unavailable": True}
+                   if result.get("titleIndexUnavailable") is True else {}),
                 "cost_metrics": _cost_metrics(started, upload, result),
             })
             return 0
@@ -397,11 +399,14 @@ def hosted_schedule_status(source_home: str) -> dict:
         if (not isinstance(status.get("status"), str) or
                 status["status"] not in {"awaiting_check", "running", "failed", "unchanged",
                                           "verified", "needs_attention"} or
-                not isinstance(status.get("checked_at"), str)):
+                not isinstance(status.get("checked_at"), str) or
+                not isinstance(status.get("title_index_unavailable", False), bool)):
             raise MigrationError("The hosted backup status is invalid.")
         checked = _timestamp(status["checked_at"])
         result["last_checked_at"] = status["checked_at"]
         result["status"] = status["status"]
+        if status.get("title_index_unavailable") is True:
+            result["title_index_unavailable"] = True
         age = (datetime.now(timezone.utc) - checked).total_seconds()
         result["healthy"] = (result["loaded"] and result["last_good_snapshot_id"]
                              is not None and status["status"] in ("unchanged", "verified")

@@ -172,6 +172,22 @@ class HostedScheduleTests(unittest.TestCase):
             self.assertEqual(run_hosted_scheduled_backup(str(config_path)), 0)
         self.assertEqual(len(self.rotation_calls), 1)
 
+    def test_verified_backup_reports_incomplete_saved_title_search(self):
+        self._install()
+        config_path, status_path, _, _ = _paths(self.home)
+        fake_run = SimpleNamespace(back_up_live_history=lambda *_args, **_kw: {
+            "snapshotId": NEXT, "atRiskThreads": 0,
+            "titleIndexUnavailable": True})
+        a, b, _, _ = self._patches()
+        with a, b, patch("codex_migrate.vault_hosted_schedule.HostedLiveBackupRun",
+                         return_value=fake_run):
+            self.assertEqual(run_hosted_scheduled_backup(str(config_path)), 0)
+        self.assertEqual(json.loads(status_path.read_text())["status"], "verified")
+        with patch("codex_migrate.vault_hosted_schedule._loaded", return_value=True):
+            status = hosted_schedule_status(self.home)
+        self.assertTrue(status["title_index_unavailable"])
+        self.assertEqual(status["last_good_snapshot_id"], NEXT)
+
     def test_private_run_receipt_records_content_free_cost_counts(self):
         self._install()
         self.upload = HostedUploadClient(
