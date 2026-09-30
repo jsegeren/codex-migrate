@@ -6,6 +6,7 @@ import LocalAuthentication
 import Security
 
 private let keychainService = "com.segeren.codex-vault"
+private let businessKeychainService = "com.segeren.codex-vault-business"
 private let hostedDeviceService = "com.segeren.codex-vault-hosted-device"
 private let keychainInteractionError = "Vault could not access its key without interactive Keychain approval. No backup was published. Contact support if this persists"
 private let formatVersion = 1
@@ -121,6 +122,26 @@ private struct KeyResult: Codable {
     let deleted: Bool?
 }
 
+private struct BusinessRecoveryEnvelope: Codable {
+    let version: Int
+    let key_id: String
+    let role: String
+    let wrapped_key: String
+}
+
+private struct BusinessRecoveryResult: Codable {
+    let key_id: String
+    let worker_recovery_key: String
+    let company_recovery_key: String
+    let worker_envelope: BusinessRecoveryEnvelope
+    let company_envelope: BusinessRecoveryEnvelope
+}
+
+private struct BusinessRecoveryImport: Decodable {
+    let recovery_key: String
+    let envelope: BusinessRecoveryEnvelope
+}
+
 private struct HostedDeviceResult: Codable {
     let device_id: String
     let token_hash: String
@@ -217,6 +238,12 @@ private func keyQuery(_ keyID: String) -> [CFString: Any] {
     query[kSecUseDataProtectionKeychain] = true
     query[kSecAttrAccessGroup] = "P9J3JK79KQ.com.segeren.codex-migrate.vault-crypto"
 #endif
+    return query
+}
+
+private func businessKeyQuery(_ keyID: String) -> [CFString: Any] {
+    var query = keyQuery(keyID)
+    query[kSecAttrService] = businessKeychainService
     return query
 }
 
@@ -318,11 +345,28 @@ private func deleteHostedDeviceCommand(_ arguments: [String]) throws {
     try printJSON(HostedDeviceDeleteResult(device_id: deviceID, deleted: true))
 }
 
-private func storeKey(_ data: Data, keyID: String) throws {
+private func storeKey(_ data: Data, keyID: String, business: Bool = false) throws {
     guard data.count == 32 else {
         throw VaultError.message("the encryption key has an invalid size")
     }
-    var query = keyQuery(keyID)
+    var other = business ? keyQuery(keyID) : businessKeyQuery(keyID)
+    other[kSecReturnAttributes] = true
+    var otherItem: CFTypeRef?
+    let otherStatus = SecItemCopyMatching(other as CFDictionary, &otherItem)
+    guard otherStatus == errSecItemNotFound else {
+        if otherStatus == errSecSuccess {
+            throw VaultError.message("that key identifier belongs to another Vault key type")
+        }
+        throw VaultError.message("the other Vault key type could not be checked")
+    }
+#if !CODEX_VAULT_TEST_LEGACY_KEYCHAIN
+    if business {
+        if try inspectLegacyKey(keyID) != nil {
+            throw VaultError.message("that key identifier belongs to an older Vault key")
+        }
+    }
+#endif
+    var query = business ? businessKeyQuery(keyID) : keyQuery(keyID)
     query[kSecValueData] = data
     // Daily LaunchAgent backups may run while the screen is locked, but never
     // before the user has unlocked the Mac once after a restart.
@@ -347,6 +391,19 @@ private func loadKey(_ keyID: String) throws -> SymmetricKey {
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
         return (status, item as? Data)
+    }
+    let (businessStatus, businessData) = read(businessKeyQuery(keyID))
+    if businessStatus == errSecInteractionNotAllowed {
+        throw VaultError.message(keychainInteractionError)
+    }
+    if businessStatus == errSecSuccess {
+        guard let data = businessData, data.count == 32 else {
+            throw VaultError.message("the business encryption key is invalid")
+        }
+        return SymmetricKey(data: data)
+    }
+    guard businessStatus == errSecItemNotFound else {
+        throw VaultError.message("the business encryption key could not be read")
     }
     let (status, data) = read(keyQuery(keyID))
     if status == errSecInteractionNotAllowed {
@@ -469,6 +526,13 @@ private func deleteKey(_ keyID: String) throws {
     }
     guard status == errSecSuccess || status == errSecItemNotFound else {
         throw VaultError.message("the encryption key could not be removed from Keychain")
+    }
+    let businessStatus = SecItemDelete(businessKeyQuery(keyID) as CFDictionary)
+    if businessStatus == errSecInteractionNotAllowed {
+        throw VaultError.message(keychainInteractionError)
+    }
+    guard businessStatus == errSecSuccess || businessStatus == errSecItemNotFound else {
+        throw VaultError.message("the business encryption key could not be removed from Keychain")
     }
 }
 
@@ -711,6 +775,85 @@ private func createKeyCommand() throws {
                             imported: nil, deleted: nil))
 }
 
+private func businessRecoveryAAD(_ keyID: String, role: String) -> Data {
+    Data("codex-vault:business-recovery:v1:\(keyID):\(role)".utf8)
+}
+
+private func businessRecoveryEnvelope(_ master: Data, keyID: String,
+                                      role: String, secret: Data) throws -> BusinessRecoveryEnvelope {
+    let wrapping = HKDF<SHA256>.deriveKey(
+        inputKeyMaterial: SymmetricKey(data: secret),
+        salt: Data("codex-vault-business-recovery-v1".utf8),
+        info: businessRecoveryAAD(keyID, role: role), outputByteCount: 32)
+    let ciphertext = try sealed(master, key: wrapping,
+                                aad: businessRecoveryAAD(keyID, role: role))
+    return BusinessRecoveryEnvelope(version: 1, key_id: keyID,
+                                    role: role, wrapped_key: base64URL(ciphertext))
+}
+
+private func createBusinessKeyCommand() throws {
+    let keyID = UUID().uuidString.lowercased()
+    let master = rawKey(SymmetricKey(size: .bits256))
+    let worker = rawKey(SymmetricKey(size: .bits256))
+    let company = rawKey(SymmetricKey(size: .bits256))
+    let workerEnvelope = try businessRecoveryEnvelope(master, keyID: keyID,
+                                                       role: "worker", secret: worker)
+    let companyEnvelope = try businessRecoveryEnvelope(master, keyID: keyID,
+                                                        role: "company", secret: company)
+    try storeKey(master, keyID: keyID, business: true)
+    guard rawKey(try loadKey(keyID)) == master else {
+        throw VaultError.message("the business Vault key could not be verified")
+    }
+    try printJSON(BusinessRecoveryResult(
+        key_id: keyID,
+        worker_recovery_key: "CVB1-" + base64URL(worker),
+        company_recovery_key: "CVB1-" + base64URL(company),
+        worker_envelope: workerEnvelope, company_envelope: companyEnvelope))
+}
+
+private func importBusinessKeyCommand(_ arguments: [String]) throws {
+    let keyID = try canonicalKeyID(argument("--key-id", in: arguments))
+    let input = FileHandle.standardInput.readDataToEndOfFile()
+    guard input.count <= 4096,
+          let recovery = try? JSONDecoder().decode(BusinessRecoveryImport.self, from: input),
+          recovery.envelope.version == 1,
+          recovery.envelope.key_id == keyID,
+          recovery.envelope.role == "worker" || recovery.envelope.role == "company",
+          recovery.recovery_key.hasPrefix("CVB1-") else {
+        throw VaultError.message("the business recovery credential is invalid")
+    }
+    let secret = try decodeBase64URL(String(recovery.recovery_key.dropFirst(5)))
+    guard secret.count == 32,
+          recovery.recovery_key == "CVB1-" + base64URL(secret) else {
+        throw VaultError.message("the business recovery credential is invalid")
+    }
+    let ciphertext = try decodeBase64URL(recovery.envelope.wrapped_key)
+    guard ciphertext.count == 60,
+          recovery.envelope.wrapped_key == base64URL(ciphertext) else {
+        throw VaultError.message("the business recovery envelope is invalid")
+    }
+    let aad = businessRecoveryAAD(keyID, role: recovery.envelope.role)
+    let wrapping = HKDF<SHA256>.deriveKey(
+        inputKeyMaterial: SymmetricKey(data: secret),
+        salt: Data("codex-vault-business-recovery-v1".utf8),
+        info: aad, outputByteCount: 32)
+    let master: Data
+    do {
+        master = try opened(ciphertext, key: wrapping, aad: aad)
+    } catch {
+        throw VaultError.message("the business recovery credential does not open its envelope")
+    }
+    guard master.count == 32 else {
+        throw VaultError.message("the business recovery envelope has an invalid key")
+    }
+    try storeKey(master, keyID: keyID, business: true)
+    guard rawKey(try loadKey(keyID)) == master else {
+        throw VaultError.message("the imported business key could not be verified")
+    }
+    try printJSON(KeyResult(key_id: keyID, recovery_key: nil,
+                            imported: true, deleted: nil))
+}
+
 private func importKeyCommand(_ arguments: [String]) throws {
     let keyID = try canonicalKeyID(argument("--key-id", in: arguments))
     guard let input = String(data: FileHandle.standardInput.readDataToEndOfFile(), encoding: .utf8) else {
@@ -731,6 +874,16 @@ private func importKeyCommand(_ arguments: [String]) throws {
 
 private func exportKeyCommand(_ arguments: [String]) throws {
     let keyID = try canonicalKeyID(argument("--key-id", in: arguments))
+    var business = businessKeyQuery(keyID)
+    business[kSecReturnAttributes] = true
+    var businessItem: CFTypeRef?
+    let businessStatus = SecItemCopyMatching(business as CFDictionary, &businessItem)
+    if businessStatus == errSecSuccess {
+        throw VaultError.message("business Vaults have no raw-key export")
+    }
+    guard businessStatus == errSecItemNotFound else {
+        throw VaultError.message("business Vault key status could not be verified")
+    }
     let key = try loadKey(keyID)
     try printJSON(KeyResult(key_id: keyID,
                             recovery_key: "CV1-" + base64URL(rawKey(key)),
@@ -1238,6 +1391,8 @@ private func run() throws {
     }
     switch command {
     case "create-key": try createKeyCommand()
+    case "business-key-create": try createBusinessKeyCommand()
+    case "business-key-import": try importBusinessKeyCommand(arguments)
     case "import-key": try importKeyCommand(arguments)
     case "export-key": try exportKeyCommand(arguments)
 #if CODEX_VAULT_TEST_LEGACY_KEYCHAIN

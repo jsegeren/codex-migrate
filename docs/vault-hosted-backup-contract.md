@@ -227,6 +227,18 @@ hosted ciphertext, and an explicit warning that previously exported copies
 cannot be recalled. Do not promise retrospective revocation or a complete
 audit trail for offline decryption.
 
+The dark native helper now has a first business-key primitive: it creates a
+new business Vault key in a distinct device-only Keychain service and returns
+two independently generated `CVB1-` recovery credentials, each paired with
+an authenticated, key-ID- and role-bound encrypted envelope. Either pair can
+import the same key on a clean Mac; neither credential is the raw master key.
+The personal `CV1-` export command refuses a business key. This does **not**
+convert an existing personal Vault, store envelopes in the hosted service,
+prove that a company retained its pair, attribute offline use, or revoke
+previously copied ciphertext. Until enrollment, custody confirmation, company
+recovery testing, and an audited access path are integrated, keep the helper
+commands dark and keep business protection claims off the buyer UI.
+
 ### Business privacy and recovery boundary
 
 The business outcome is organizational continuity of Codex work, not employee
