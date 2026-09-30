@@ -1203,6 +1203,8 @@ class VaultBackupTests(unittest.TestCase):
                     }
                     return {"snapshotId": staged.snapshot_id,
                             "verifiedObjectCount": len(staged.objects),
+                            "sourceCoverage": ("complete" if staged.at_risk_threads == 0
+                                               else "needs_attention"),
                             "encryptedBytes": staged.upload_claim().remote_bytes_checked,
                             "transcriptFiles": staged.transcript_files,
                             "transcriptBytes": staged.transcript_bytes,
@@ -1220,6 +1222,18 @@ class VaultBackupTests(unittest.TestCase):
                     return (None if self.base_id is None else
                             {"snapshotId": self.base_id, "totalObjects": 6,
                              "totalBytes": 100, "sourceCoverage": "complete"})
+
+                def published_snapshot(self, snapshot_id, *, expected_account_id,
+                                       expected_worker_origin):
+                    assert expected_account_id == account_id
+                    assert expected_worker_origin == upload._worker_origin
+                    assert snapshot_id == upload.published_id
+                    return {"snapshotId": snapshot_id,
+                            "totalObjects": len(upload.published_objects),
+                            "totalBytes": sum(map(len, upload.published_objects.values())),
+                            "sourceCoverage": ("complete" if
+                                               upload.staged.at_risk_threads == 0 else
+                                               "needs_attention")}
 
                 def prior_catalog(self, *, key_id, crypto_helper, max_bytes,
                                   expected_snapshot_id, expected_account_id,

@@ -130,6 +130,17 @@ class HostedLiveBackupRun:
             "reservationId": state["reservationId"],
             "snapshotId": state["snapshotId"], "phase": state["phase"]}
 
+    def _confirmed_publication(self, snapshot_id: str, object_count: int,
+                               source_coverage: Optional[str] = None) -> dict:
+        published = self._recovery.published_snapshot(
+            snapshot_id, expected_account_id=self._upload._account_id,
+            expected_worker_origin=self._upload._worker_origin)
+        if (published["totalObjects"] != object_count or
+                source_coverage is not None and
+                published["sourceCoverage"] != source_coverage):
+            raise MigrationError("The hosted publication receipt does not match its version.")
+        return published
+
     def back_up_live_history(self, metadata: dict, *, crypto_helper: str,
                              max_prior_bytes: int, apply: bool = False) -> dict:
         if apply is not True:
@@ -177,12 +188,8 @@ class HostedLiveBackupRun:
                     if status["snapshotId"] != snapshot_id:
                         raise MigrationError(
                             "The hosted publication does not match the pending snapshot.")
-                    published = self._recovery.published_snapshot(
-                        snapshot_id, expected_account_id=self._upload._account_id,
-                        expected_worker_origin=self._upload._worker_origin)
-                    if published["totalObjects"] != status["verifiedObjectCount"]:
-                        raise MigrationError(
-                            "The hosted publication receipt does not match its version.")
+                    published = self._confirmed_publication(
+                        snapshot_id, status["verifiedObjectCount"])
                     self._finish(snapshot_id)
                     return {"snapshotId": snapshot_id,
                             "verifiedObjectCount": status["verifiedObjectCount"],
@@ -209,6 +216,11 @@ class HostedLiveBackupRun:
                     reservation_id, staged, apply=True)
             if result.get("snapshotId") != snapshot_id:
                 raise MigrationError("The hosted publication did not match the pending snapshot.")
+            if result.get("sourceCoverage") not in ("complete", "needs_attention"):
+                raise MigrationError("The hosted publication coverage is invalid.")
+            self._confirmed_publication(
+                snapshot_id, result.get("verifiedObjectCount"),
+                result.get("sourceCoverage"))
             self._finish(snapshot_id)
             return result
 
@@ -237,6 +249,8 @@ class HostedLiveBackupRun:
                 if (state["phase"] == "cleanup_pending" or
                         receipt["snapshotId"] != state["snapshotId"]):
                     raise MigrationError("The hosted publication conflicts with abandonment.")
+                self._confirmed_publication(
+                    state["snapshotId"], receipt["verifiedObjectCount"])
                 self._finish(state["snapshotId"])
                 return "published"
             if receipt["state"] == "active":

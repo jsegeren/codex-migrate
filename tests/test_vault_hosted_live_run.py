@@ -124,7 +124,8 @@ class HostedLiveRunTests(unittest.TestCase):
             stage.assert_not_called()
             publish.assert_not_called()
             publish.return_value = {"snapshotId": pending["snapshotId"],
-                                    "verifiedObjectCount": 3}
+                                    "verifiedObjectCount": 3,
+                                    "sourceCoverage": "complete"}
             self.assertEqual(self.back_up()["snapshotId"], pending["snapshotId"])
             self.assertEqual(ids, [pending["reservationId"]] * 2)
             self.assertIsNone(self.run.pending())
@@ -151,7 +152,8 @@ class HostedLiveRunTests(unittest.TestCase):
             self.assertEqual(json.loads(self.run._state.read_text())["baseSnapshotId"],
                              BASE)
             publish.return_value = {"snapshotId": pending["snapshotId"],
-                                    "verifiedObjectCount": 3}
+                                    "verifiedObjectCount": 3,
+                                    "sourceCoverage": "complete"}
             resumed = HostedLiveBackupRun(self.upload, self.recovery, str(self.home))
             self.assertEqual(self.back_up(resumed)["snapshotId"],
                              pending["snapshotId"])
@@ -194,6 +196,53 @@ class HostedLiveRunTests(unittest.TestCase):
             with self.assertRaisesRegex(MigrationError, "receipt does not match"):
                 self.back_up()
         self.assertEqual(self.run.pending(), pending)
+
+    def test_publish_ack_needs_independent_matching_version_before_cleanup(self):
+        with patch.object(self.upload, "reserve_with_base",
+                          side_effect=lambda *, reservation_id, apply:
+                          (reservation_id, None)), patch(
+                "codex_migrate.vault_hosted_live_run.stage_reserved_hosted_snapshot",
+                return_value="staged") as stage, patch.object(
+                self.upload, "publish_hosted_stage") as publish:
+            publish.side_effect = lambda reservation_id, value, *, apply: {
+                "snapshotId": self.run.pending()["snapshotId"],
+                "verifiedObjectCount": 3, "sourceCoverage": "complete"}
+            self.published.side_effect = lambda snapshot_id, **_kwargs: {
+                "snapshotId": snapshot_id, "totalObjects": 3,
+                "totalBytes": 300, "sourceCoverage": "needs_attention"}
+            with self.assertRaisesRegex(MigrationError, "receipt does not match"):
+                self.back_up()
+            pending = self.run.pending()
+            self.assertEqual(pending["phase"], "active")
+            self.assertTrue((self.run._directory /
+                             ("snapshot-" + pending["snapshotId"])).exists())
+            stage.assert_called_once()
+            publish.assert_called_once()
+
+    def test_publish_ack_recovery_outage_keeps_pending_for_reconciliation(self):
+        with patch.object(self.upload, "reserve_with_base",
+                          side_effect=lambda *, reservation_id, apply:
+                          (reservation_id, None)), patch(
+                "codex_migrate.vault_hosted_live_run.stage_reserved_hosted_snapshot",
+                return_value="staged"), patch.object(
+                self.upload, "publish_hosted_stage") as publish:
+            publish.side_effect = lambda reservation_id, value, *, apply: {
+                "snapshotId": self.run.pending()["snapshotId"],
+                "verifiedObjectCount": 3, "sourceCoverage": "complete"}
+            self.published.side_effect = MigrationError("recovery unavailable")
+            with self.assertRaisesRegex(MigrationError, "recovery unavailable"):
+                self.back_up()
+            pending = self.run.pending()
+            self.assertEqual(pending["phase"], "active")
+            self.published.side_effect = lambda snapshot_id, **_kwargs: {
+                "snapshotId": snapshot_id, "totalObjects": 3,
+                "totalBytes": 300, "sourceCoverage": "complete"}
+            with patch.object(self.upload, "reservation_receipt", return_value={
+                    "state": "published", "snapshotId": pending["snapshotId"],
+                    "verifiedObjectCount": 3}):
+                self.assertEqual(self.back_up()["snapshotId"], pending["snapshotId"])
+            publish.assert_called_once()
+            self.assertIsNone(self.run.pending())
 
     def test_lost_publication_ack_preserves_partial_coverage(self):
         pending = self.interrupted_run()
@@ -297,7 +346,7 @@ class HostedLiveRunTests(unittest.TestCase):
                 self.upload, "publish_hosted_stage") as publish:
             publish.side_effect = lambda reservation_id, value, *, apply: {
                 "snapshotId": self.run.pending()["snapshotId"],
-                "verifiedObjectCount": 3}
+                "verifiedObjectCount": 3, "sourceCoverage": "complete"}
             with self.assertRaisesRegex(MigrationError, "scratch is not empty"):
                 self.back_up()
             pending = self.run.pending()
@@ -346,7 +395,7 @@ class HostedLiveRunTests(unittest.TestCase):
                 self.upload, "publish_hosted_stage") as publish:
             publish.side_effect = lambda reservation_id, value, *, apply: {
                 "snapshotId": self.run.pending()["snapshotId"],
-                "verifiedObjectCount": 3}
+                "verifiedObjectCount": 3, "sourceCoverage": "complete"}
             with patch("codex_migrate.vault_hosted_live_run._fsync_directory",
                        side_effect=OSError("interrupted cleanup")):
                 with self.assertRaisesRegex(MigrationError, "needs local cleanup"):
@@ -371,7 +420,7 @@ class HostedLiveRunTests(unittest.TestCase):
                 self.upload, "publish_hosted_stage") as publish:
             publish.side_effect = lambda reservation_id, value, *, apply: {
                 "snapshotId": self.run.pending()["snapshotId"],
-                "verifiedObjectCount": 3}
+                "verifiedObjectCount": 3, "sourceCoverage": "complete"}
             with patch.object(self.run, "_private_file",
                               side_effect=PermissionError("synthetic preflight failure")):
                 with self.assertRaisesRegex(MigrationError, "needs local cleanup"):
@@ -446,11 +495,22 @@ class HostedLiveRunTests(unittest.TestCase):
         pending = self.interrupted_run()
         with patch.object(self.upload, "reservation_receipt", return_value={
                 "state": "published", "snapshotId": pending["snapshotId"],
-                "verifiedObjectCount": 1}), patch.object(
+                "verifiedObjectCount": 3}), patch.object(
                 self.upload, "abandon") as abandon:
             self.assertEqual(self.run.abandon_pending(apply=True), "published")
             abandon.assert_not_called()
             self.assertIsNone(self.run.pending())
+
+    def test_abandon_keeps_published_run_when_recovery_disagrees(self):
+        pending = self.interrupted_run()
+        with patch.object(self.upload, "reservation_receipt", return_value={
+                "state": "published", "snapshotId": pending["snapshotId"],
+                "verifiedObjectCount": 4}), patch.object(
+                self.upload, "abandon") as abandon:
+            with self.assertRaisesRegex(MigrationError, "receipt does not match"):
+                self.run.abandon_pending(apply=True)
+            abandon.assert_not_called()
+        self.assertEqual(self.run.pending(), pending)
 
 
 if __name__ == "__main__":
