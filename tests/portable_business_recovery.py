@@ -13,6 +13,7 @@ import uuid
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_backup import backup, initialize_business_vault
+from codex_migrate.vault_business_kits import save_business_recovery_kits
 from codex_migrate.vault_recovery import (
     import_business_recovery_credential, restore_snapshot, verify_snapshot,
 )
@@ -40,12 +41,6 @@ def helper_call(helper: Path, command: str, *arguments: str, input_bytes: bytes 
         raise AssertionError("Business recovery helper result was invalid") from error
 
 
-def private_json(path: Path, value: dict) -> None:
-    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(descriptor, "w", encoding="utf-8") as output:
-        json.dump(value, output, sort_keys=True)
-
-
 def produce(bundle: Path, helper: Path) -> None:
     if bundle.exists():
         raise AssertionError("Business recovery artifact must start absent")
@@ -66,8 +61,11 @@ def produce(bundle: Path, helper: Path) -> None:
         verified = verify_snapshot(str(vault), crypto_helper=str(helper))
         if verified.snapshot_id != result.snapshot_id:
             raise AssertionError("Business snapshot did not verify on producer Mac")
-        private_json(bundle / "worker-credential.json", created.worker_credential)
-        private_json(bundle / "company-credential.json", created.company_credential)
+        save_business_recovery_kits(
+            str(source), str(vault), created,
+            str(bundle / "worker-credential.json"),
+            str(bundle / "company-credential.json"),
+        )
         print("Synthetic business Vault verified on producer Mac")
     finally:
         if key_id is not None:

@@ -285,6 +285,13 @@ independent-Mac synthetic proof exercises those modules rather than writing
 Vault metadata by hand. This is an implementation path, not a customer setup
 flow: the caller must still securely deliver each one-time credential to its
 respective custodian and record both custody and recovery-drill confirmation.
+The internal kit exporter now writes the worker and company credentials to
+separate, owner-only files outside the Codex source and Vault, reserves both
+names before writing either secret, and refuses overwrite. It returns paths,
+never key material. Files left on the originating Mac are **not** company
+custody: an assisted pilot must transfer the company kit to the designated
+off-device custodian and prove import plus restore on a clean Mac. A failed
+export or a file's mere existence never establishes protection.
 The personal `CV1-` export command refuses a business key. This does **not**
 convert an existing personal Vault, store envelopes in the hosted service,
 prove that a company retained its pair, attribute offline use, or revoke
