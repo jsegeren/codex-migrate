@@ -179,6 +179,13 @@ but do not expose it as team protection or make an employee's individual
 purchase token the company's durable recovery authority. Whether a business
 contract includes a Mac-app charge is a commercial decision separate from
 technical ownership of company data.
+Migration 0032 now gives new accounts an explicit `individual` or `business`
+owner kind and records an organization and operator approval reference in a
+separate inert business-account table. Composite foreign keys prevent a
+business account from inheriting the individual purchase enrollment or its
+device-session path. Contact addresses in that table are **not** administrator
+authentication, contractual entitlement, or proof of company key custody.
+No business device can upload or restore through this migration alone.
 
 Before a business pilot, establish one organization-owned account with an
 identified purchaser and designated administrator, explicit seat/device
