@@ -77,6 +77,8 @@ h1 .accent { color: var(--purple); }
 #checkout-status:not(:empty) { margin-top: 16px; }
 .checkout-assurance { margin: 16px 0 10px; color: var(--purple); font-size: 15px; line-height: 1.55; }
 .button.disabled { opacity: .55; pointer-events: none; box-shadow: none; }
+.team-hero-link { margin: 18px 0 0; font-size: 16px; font-weight: 700; }
+.team-hero-link a { color: var(--purple); text-underline-offset: 3px; }
 .fine-print { margin: 19px 0 0; color: var(--muted); font-size: 16px; }
 
 .jobs { padding: 92px 0 70px; border-top: 1px solid var(--line); }

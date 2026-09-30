@@ -1,6 +1,6 @@
 // Email-only intake: fixed maintainer recipient, no visitor autoresponder,
 // no arbitrary content, no secrets or addresses in application logs.
-const ORIGINS = new Set(['https://migrate.segeren.com', 'https://codex-migrate.vercel.app']);
+const ORIGINS = new Set(['https://codexbackup.segeren.com', 'https://migrate.segeren.com', 'https://codex-migrate.vercel.app']);
 const EMAIL = /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
 const TEAM_SIZES = new Map([
   ['2-5', '2–5 people'], ['6-25', '6–25 people'],

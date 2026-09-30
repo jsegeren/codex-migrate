@@ -5,7 +5,7 @@
   const STORAGE_KEY = "codex-migrate.analytics-consent.v1";
   const GRANTED = "granted";
   const DENIED = "denied";
-  const PUBLIC_HOSTS = new Set(["migrate.segeren.com", "codex-migrate.vercel.app"]);
+  const PUBLIC_HOSTS = new Set(["codexbackup.segeren.com", "migrate.segeren.com", "codex-migrate.vercel.app"]);
   let consentNotice = null;
   let analyticsMode = "consent";
   let currentChoice = null;
