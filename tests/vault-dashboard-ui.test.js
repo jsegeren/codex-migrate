@@ -9,7 +9,7 @@ const completeVisibleConversation = vm.runInNewContext(
   '(' + source.match(/function completeVisibleConversation\([\s\S]*?\n\}/)[0] + ')');
 const markdownFile = source.match(/async function markdownFile\(\)\{[\s\S]*?\n\}/)[0];
 const backupView = source.match(/function backupView\(data\)\{[\s\S]*?\n\}/)[0];
-const scheduleView = source.match(/function scheduleView\(data\)\{[^\n]*\}/)[0];
+const scheduleView = source.match(/function scheduleView\(data\)\{[\s\S]*?\n\}/)[0];
 
 test('schedule view explicitly disclaims incomplete paginated coverage', () => {
   const elements = new Map();
