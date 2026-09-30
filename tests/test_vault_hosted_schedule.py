@@ -10,7 +10,7 @@ from unittest.mock import patch
 from codex_migrate.cli import parser
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_hosted_schedule import (
-    LABEL, _paths, _rotation_path, _write_run_status,
+    LABEL, _cost_metrics, _paths, _rotation_path, _write_run_status,
     hosted_schedule_status, install_hosted_schedule, remove_hosted_schedule,
     run_hosted_scheduled_backup,
 )
@@ -30,6 +30,18 @@ METADATA = {"format": "codex-vault", "version": 1, "key_id": KEY,
 
 
 class HostedScheduleTests(unittest.TestCase):
+    def test_cost_metrics_distinguish_restaged_and_reused_content(self):
+        metrics = _cost_metrics(0, published={
+            "restagedPlaintextBytes": 42,
+            "reusedPlaintextBytes": 123,
+            "encryptedBytes": 321,
+            "snapshotId": SNAPSHOT,
+        })
+        self.assertEqual(metrics["restaged_plaintext_bytes"], 42)
+        self.assertEqual(metrics["reused_plaintext_bytes"], 123)
+        self.assertEqual(metrics["remote_claimed_ciphertext_bytes"], 321)
+        self.assertNotIn("snapshotId", metrics)
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="hosted-schedule-test-")
         self.addCleanup(self.temporary.cleanup)

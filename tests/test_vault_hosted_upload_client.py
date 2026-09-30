@@ -528,6 +528,7 @@ class HostedUploadClientTests(unittest.TestCase):
             "snapshotId": SNAPSHOT, "verifiedObjectCount": 3,
             "encryptedBytes": len(FIRST) + len(SECOND) + 5,
             "transcriptFiles": 2, "transcriptBytes": 123,
+            "restagedPlaintextBytes": 0, "reusedPlaintextBytes": 0,
             "atRiskThreads": 0,
         })
 

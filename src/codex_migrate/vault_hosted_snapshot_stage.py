@@ -48,6 +48,8 @@ class HostedSnapshotStage:
     transcript_files: int
     transcript_bytes: int
     at_risk_threads: int
+    restaged_plaintext_bytes: int = 0
+    reused_plaintext_bytes: int = 0
 
     def upload_claim(self) -> StageResult:
         """Counts are unknown for the mixed incremental path, never zeroed."""
@@ -293,6 +295,8 @@ def stage_hosted_snapshot(
         stages: Dict[Tuple[str, str], StagedRemoteFile] = {}
         source_facts: Dict[Tuple[str, str], tuple[int, int, int, int, int]] = {}
         total_bytes = 0
+        restaged_plaintext_bytes = 0
+        reused_plaintext_bytes = 0
         for folder, path, relative in files:
             before = check_info(path.lstat())
             identity = (folder, relative)
@@ -349,6 +353,10 @@ def stage_hosted_snapshot(
                 "chunks": list(staged.chunks), **signals_fields,
             })
             total_bytes += staged.size
+            if previous is None:
+                restaged_plaintext_bytes += staged.size
+            else:
+                reused_plaintext_bytes += staged.size
         current = _source_files(source_home)
         if {(folder, relative) for folder, _, relative in current} != set(source_facts):
             raise MigrationError("Codex conversations changed during hosted backup.")
@@ -398,6 +406,7 @@ def stage_hosted_snapshot(
                         "at_risk": False,
                     })
                     total_bytes += staged.size
+                    reused_plaintext_bytes += staged.size
             else:
                 with open_paginated_source(source_home) as paginated:
                     thread_ids = paginated.thread_ids()
@@ -435,6 +444,7 @@ def stage_hosted_snapshot(
                             "assistant_messages": counts[2], "at_risk": False,
                         })
                         total_bytes += staged.size
+                        restaged_plaintext_bytes += staged.size
             paginated_after = source_fingerprint(source_home)
             if reusable_paginated is not None and paginated_after != paginated_before:
                 raise MigrationError("Codex paginated history changed during hosted backup.")
@@ -489,4 +499,5 @@ def stage_hosted_snapshot(
             for (folder, relative), facts in source_facts.items()
         }, crypto_helper=crypto_helper, paginated=paginated_hint)
         return HostedSnapshotStage(journal.snapshot_id, journal.reservation_id, objects,
-                                   len(manifest_files), total_bytes, len(at_risk))
+                                   len(manifest_files), total_bytes, len(at_risk),
+                                   restaged_plaintext_bytes, reused_plaintext_bytes)

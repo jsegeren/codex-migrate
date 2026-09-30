@@ -472,6 +472,8 @@ class HostedUploadClient:
                 "encryptedBytes": claim.remote_bytes_checked,
                 "transcriptFiles": staged.transcript_files,
                 "transcriptBytes": staged.transcript_bytes,
+                "restagedPlaintextBytes": staged.restaged_plaintext_bytes,
+                "reusedPlaintextBytes": staged.reused_plaintext_bytes,
                 "atRiskThreads": staged.at_risk_threads}
 
     def back_up_snapshot(self, vault: str, *, reservation_id: str,

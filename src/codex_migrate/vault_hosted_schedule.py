@@ -50,12 +50,20 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _cost_metrics(started: float, upload: object = None) -> dict:
+def _cost_metrics(started: float, upload: object = None,
+                  published: object = None) -> dict:
     """Private counts only; never persist an object key, token, or transcript."""
     result = {"elapsed_ms": max(0, int((time.monotonic() - started) * 1000))}
     if isinstance(upload, HostedUploadClient):
         result["upload_service_attempts"] = upload.service_request_counts()
         result["worker_attempts"] = upload.worker_attempt_counts()
+    if isinstance(published, dict):
+        for field, target in (("restagedPlaintextBytes", "restaged_plaintext_bytes"),
+                              ("reusedPlaintextBytes", "reused_plaintext_bytes"),
+                              ("encryptedBytes", "remote_claimed_ciphertext_bytes")):
+            value = published.get(field)
+            if type(value) is int and value >= 0:
+                result[target] = value
     return result
 
 
@@ -345,7 +353,7 @@ def run_hosted_scheduled_backup(config_path: str) -> int:
             _write_run_status(status_path, {
                 "status": state, "checked_at": _now(),
                 "snapshot_id": snapshot_id,
-                "cost_metrics": _cost_metrics(started, upload),
+                "cost_metrics": _cost_metrics(started, upload, result),
             })
             return 0
     except Exception:

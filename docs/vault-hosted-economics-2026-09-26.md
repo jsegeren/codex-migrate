@@ -150,11 +150,21 @@ request counts, and attempted/confirmed Worker HEAD and PUT counts and bytes to
 its owner-only last-run receipt. A separate owner-only, content-free rolling
 history retains at most 1,024 terminal-run samples; an unsafe or corrupt
 history never blocks the backup, so a measurement review must check for gaps.
+For a successfully published changed snapshot, it now also records aggregate
+plaintext bytes **re-staged** for encryption versus bytes reused from the
+authenticated prior snapshot, plus the total ciphertext bytes claimed in the
+published object graph. Re-staged bytes are not a disk-I/O counter: identity
+inspection and encoding can read a source more than once. Claimed ciphertext
+includes reused objects and is not billable unique growth; confirmed Worker
+PUT bytes remain the closer network-cost observation. An unchanged check has
+no staged-source counters, and a failed pre-publication attempt may have read
+source data without producing those counters. Do not calculate gross margin
+from these fields alone.
 These are diagnostics, not a provider bill: a lost PUT acknowledgement can be
 billed even when the client cannot confirm it, and a confirmed immutable retry
 does not necessarily add retained bytes. The seven-day measurement still needs
 real scheduled runs and reconciliation with other service reads, database and
-R2 usage. Source-read bytes, verified unique growth, retention cost, and
+R2 usage. Full source-read bytes, verified unique growth, retention cost, and
 restore/support cost remain unmeasured.
 
 The measured two-Mac baseline has 36,356 unique encrypted chunks and about

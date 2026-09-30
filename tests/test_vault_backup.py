@@ -711,6 +711,9 @@ class VaultBackupTests(unittest.TestCase):
                         window_bytes=64 * 1024, apply=True)
                     self.assertEqual(first.snapshot_id, snapshot_id)
                     self.assertEqual(first.transcript_files, 2)
+                    self.assertEqual(first.restaged_plaintext_bytes,
+                                     first.transcript_bytes)
+                    self.assertEqual(first.reused_plaintext_bytes, 0)
                     self.assertEqual(len(first.objects), 5)
                     self.assertEqual(client.store.writes, 5)
                     self.assertFalse(list((directory / "scratch").rglob("*.cvchunk")))
@@ -1243,6 +1246,9 @@ class VaultBackupTests(unittest.TestCase):
                     max_prior_bytes=5_000_000, apply=True)
                 self.assertIsNone(runner.pending())
                 self.assertEqual(published["verifiedObjectCount"], 6)
+                self.assertEqual(published["restagedPlaintextBytes"],
+                                 published["transcriptBytes"])
+                self.assertEqual(published["reusedPlaintextBytes"], 0)
                 self.assertEqual(upload.staged.snapshot_id,
                                  published["snapshotId"])
                 self.assertFalse((root / "vault").exists())
@@ -1275,6 +1281,11 @@ class VaultBackupTests(unittest.TestCase):
                     metadata, crypto_helper=str(self.helper),
                     max_prior_bytes=5_000_000, apply=True)
                 self.assertNotEqual(second["snapshotId"], published["snapshotId"])
+                self.assertGreater(second["restagedPlaintextBytes"], 0)
+                self.assertGreater(second["reusedPlaintextBytes"], 0)
+                self.assertEqual(second["restagedPlaintextBytes"] +
+                                 second["reusedPlaintextBytes"],
+                                 second["transcriptBytes"])
                 self.assertEqual(upload.store.writes, 10)
                 self.assertIsNone(runner.pending())
 
