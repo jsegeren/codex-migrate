@@ -3,6 +3,25 @@
 Internal working evidence, not a published price or storage entitlement. The
 existing $49 app and its checkout are unchanged; hosted backup is not live.
 
+## Current pricing authority — September 30 amendment
+
+The Founder now targets **2× fully loaded COGS** for the individual hosted
+offer, as recorded in `vault-hosted-backup-contract.md`. Earlier 3×/80% targets
+and pricing tables below are historical sensitivities, not the current price
+policy or a customer offer. Company administration is deferred until the
+individual backup/recovery journey works.
+
+The multiplier includes retained-version storage and requests, service/API,
+database, email/monitoring, allocated support/recovery and fixed costs, and
+payment fees. If those non-percentage costs total `B` per billing period and
+the processor takes a fraction `f` of the customer charge `P`, then the target
+is `P = 2 × (B + f × P)`, or `P = 2B / (1 − 2f)`, for `0 ≤ f < 0.5`.
+Any fixed processor fee belongs in `B`. This is internal accounting algebra,
+not evidence for any fee rate, tax treatment, customer price, or forecast.
+Simply doubling the storage bill does not achieve the target. The internal
+markup is not public copy; customer-visible rates, usage units and renewal
+terms still require a measured offer before billing is enabled.
+
 ## What is measured
 
 `ops/vault-size-estimate.py` reads only the active and archived transcript trees,

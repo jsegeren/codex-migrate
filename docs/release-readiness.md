@@ -20,8 +20,20 @@ also covered by health-state tests that preserve the prior receipt.
 The focused scheduler/live-run/no-change/drill suite passed 63 tests. These
 use synthetic clients and disposable paths; they do not prove production
 credential renewal, real hosted background execution, or clean-Mac recovery.
-The signed candidate identified below predates this source fix and must be
-rebuilt and retested before release acceptance.
+Clean pushed source `82cc77c6bbb00b30911dbfd957e0d72b80cdf233` has now
+been rebuilt as Developer ID signed, provisioned local-test build 20. Strict
+signature validation passed. The archive SHA-256 is
+`41033d50e99c27b85336ff8db734d31e8eca86c055de6395013260392dc3f273`.
+All 11 exact-package Vault/interruption/updater-contention tests passed,
+including the real disposable local LaunchAgent check. Those packaged tests
+exercise local protection; the hosted credential/publication cases above
+remain source tests, not real hosted scheduled acceptance. This new candidate
+supersedes the earlier test package below. It is not notarized or released;
+clean-Mac and real-service hosted recovery remain unproven.
+The stdlib-only packaged producer/receiver drill also passed on this same Mac
+with this exact candidate, and a signature-checked copy plus only synthetic
+data and its disposable recovery key are staged for the guest. This is harness
+validation, not independent-Mac acceptance.
 
 ## September 30 packaged recovery drill — harness validated, VM pending
 
