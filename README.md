@@ -99,9 +99,10 @@ codex-migrate vault search-index-remove --apply
 
 The cache is not a Vault backup and is never required for search or recovery.
 It is an owner-only, rebuildable SQLite file under
-`~/Library/Caches/Codex Migrate`. It stores searchable three-character terms,
-not full conversation bodies, but those terms can reveal short fragments to
-someone who can read the Mac account; **the cache itself is not encrypted**.
+`~/Library/Caches/Codex Migrate`. It stores searchable text terms and their
+positions, not full conversation bodies. Those terms can reveal conversation
+content to someone who can read the Mac account; **the cache itself is not
+encrypted**.
 It is not included in encrypted Vault snapshots. Building it can take minutes
 and several gigabytes of local disk on a very large history. Once built, Vault
 still verifies candidate matches against the original conversations. It covers

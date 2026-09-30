@@ -602,7 +602,7 @@ function indexView(data){
 }
 async function refreshIndex(){try{indexView(await api("/api/vault/search-index-status"))}catch(error){$("index-error").textContent=error.message}}
 $("index-build").onclick=async()=>{
-  if(!confirm("Build a local search cache for transcripts and database-backed history? It stores unencrypted three-character text fragments, may use substantial disk space, and is not a backup. You can delete it later."))return;
+  if(!confirm("Build a local search cache for transcripts and database-backed history? It stores unencrypted text terms and positions that may reveal conversation content, may use substantial disk space, and is not a backup. You can delete it later."))return;
   try{$("index-error").textContent="";indexView(await api("/api/vault/search-index",{apply:true}))}
   catch(error){$("index-error").textContent=error.message;await refreshIndex()}
 };
