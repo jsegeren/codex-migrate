@@ -195,6 +195,47 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+  business-portability-export:
+    if: >-
+      (github.event_name == 'push' && contains(github.event.head_commit.message, '[business-portability]')) ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'business-portability-proof'))
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Create synthetic business Vault on producer Mac
+        run: |
+          xcrun swiftc -parse-as-library -D CODEX_VAULT_TEST_LEGACY_KEYCHAIN desktop/CodexVaultCrypto.swift -o "$RUNNER_TEMP/CodexVaultCrypto"
+          PYTHONPATH=src python tests/portable_business_recovery.py produce "$RUNNER_TEMP/business-portability" "$RUNNER_TEMP/CodexVaultCrypto"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: business-portability-synthetic
+          path: |
+            ${{ runner.temp }}/business-portability/vault/
+            ${{ runner.temp }}/business-portability/worker-credential.json
+            ${{ runner.temp }}/business-portability/company-credential.json
+          retention-days: 1
+          if-no-files-found: error
+
+  business-portability-import:
+    needs: business-portability-export
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          name: business-portability-synthetic
+          path: ${{ runner.temp }}/business-portability
+      - name: Restore both roles on independent Mac
+        run: |
+          xcrun swiftc -parse-as-library -D CODEX_VAULT_TEST_LEGACY_KEYCHAIN desktop/CodexVaultCrypto.swift -o "$RUNNER_TEMP/CodexVaultCrypto"
+          PYTHONPATH=src python tests/portable_business_recovery.py consume "$RUNNER_TEMP/business-portability" "$RUNNER_TEMP/CodexVaultCrypto"
+
   vault-portability-import:
     needs: vault-portability-export
     runs-on: macos-latest
