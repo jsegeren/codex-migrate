@@ -257,6 +257,15 @@ artifact transfer. This proves portable cryptography for disposable test data;
 it does not prove organization enrollment, custody, audit, hosted R2 transport,
 or a customer disaster recovery drill.
 
+On September 30, a physical two-Mac repeat produced and verified a synthetic
+business Vault on the first Mac and transferred only that disposable artifact
+to the second. The second Mac's SSH session could read the artifact, but the
+business-key import refused to save its key in the login Keychain; no restore
+receipt was produced. A GUI-backed clean-account/clean-Mac run is still needed.
+Do not treat SSH reachability, artifact transfer, or the CI portability pair
+as physical recovery acceptance. Both temporary artifact directories were
+removed after this attempt.
+
 ### Business privacy and recovery boundary
 
 The business outcome is organizational continuity of Codex work, not employee
