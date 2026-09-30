@@ -36,7 +36,7 @@ class SiteTests(unittest.TestCase):
         self.assertEqual(product["@type"], "Product")
         self.assertEqual(product["name"], "Codex Migrate Mac beta")
         self.assertEqual(product["brand"]["name"], "Codex Migrate")
-        self.assertEqual(product["offers"]["url"], "https://migrate.segeren.com/#founding-edition")
+        self.assertEqual(product["offers"]["url"], "https://codexbackup.segeren.com/#founding-edition")
         self.assertEqual(product["offers"]["price"], 49)
         self.assertEqual(product["offers"]["priceCurrency"], "USD")
         self.assertEqual(product["offers"]["availability"], "https://schema.org/InStock")
@@ -85,10 +85,10 @@ class SiteTests(unittest.TestCase):
         self.assertIn("does not transfer ordinary ChatGPT cloud chats", readme)
 
     def test_indexed_pages_have_canonical_urls(self):
-        for name in ("privacy", "terms", "refunds", "codex-vault", "backup-codex-conversations-mac", "search-codex-conversation-history", "recover-missing-codex-chats", "moving-to-a-new-mac", "codex-history-missing-new-mac", "backup-and-recovery", "compare-codex-migration-tools", "access-codex-from-another-machine"):
-            self.assertIn('<link rel="canonical" href="https://migrate.segeren.com/' + name + '">',
+        for name in ("privacy", "terms", "refunds", "codex-vault", "codex-backup-for-teams", "backup-codex-conversations-mac", "search-codex-conversation-history", "recover-missing-codex-chats", "moving-to-a-new-mac", "codex-history-missing-new-mac", "backup-and-recovery", "compare-codex-migration-tools", "access-codex-from-another-machine"):
+            self.assertIn('<link rel="canonical" href="https://codexbackup.segeren.com/' + name + '">',
                           (SITE / (name + ".html")).read_text())
-        self.assertIn('<link rel="canonical" href="https://migrate.segeren.com/ja/codex-new-mac">',
+        self.assertIn('<link rel="canonical" href="https://codexbackup.segeren.com/ja/codex-new-mac">',
                       (SITE / "ja/codex-new-mac.html").read_text())
 
     def test_vault_search_pages_are_focused_truthful_and_discoverable(self):
@@ -97,7 +97,7 @@ class SiteTests(unittest.TestCase):
         search = " ".join(self.parse("search-codex-conversation-history.html").text)
         recovery = " ".join(self.parse("recover-missing-codex-chats.html").text)
         for slug in ("backup-codex-conversations-mac", "search-codex-conversation-history", "recover-missing-codex-chats"):
-            self.assertIn(f"https://migrate.segeren.com/{slug}", sitemap)
+            self.assertIn(f"https://codexbackup.segeren.com/{slug}", sitemap)
         self.assertIn("Daily protection by default", backup)
         self.assertIn("Segeren Studio does not host or receive your conversations", backup)
         self.assertIn("guidance—not a guarantee", backup)
@@ -108,6 +108,39 @@ class SiteTests(unittest.TestCase):
         self.assertIn("paginated-history database", recovery)
         self.assertIn("Vault cannot reconstruct them", recovery)
         self.assertIn("preserving the new Mac’s authentication and installation identity", recovery)
+
+    def test_business_design_partner_page_is_discoverable_without_pretending_to_sell_hosting(self):
+        source = (SITE / "codex-backup-for-teams.html").read_text()
+        home = (SITE / "index.html").read_text()
+        text = " ".join(self.parse("codex-backup-for-teams.html").text)
+        self.assertEqual(home.count('href="/codex-backup-for-teams"'), 1)
+        self.assertLess(home.index('data-analytics-event="team_pilot_hero_click"'),
+                        home.index('class="fine-print"'))
+        self.assertIn("Responsible for a team? Help shape hosted backup", home)
+        self.assertIn("https://codexbackup.segeren.com/codex-backup-for-teams",
+                      (SITE / "sitemap.xml").read_text())
+        self.assertIn("This hosted team service is not available yet", text)
+        self.assertIn("Protect the Codex work your team can’t afford to lose", text)
+        self.assertIn("Loss, theft, hardware failure, or an accidental delete can erase them", text)
+        self.assertIn("Account-saved ChatGPT-app chats are another case", text)
+        self.assertIn("current backup can miss history held only", text)
+        self.assertIn("there is no pre-order or charge here", text)
+        self.assertIn("Talk to Joshua about a pilot", text)
+        self.assertIn('<form class="signup-form pilot-form" action="/api/signup" method="post"', source)
+        self.assertIn('name="intent" value="team-pilot"', source)
+        self.assertIn('name="team_size" required', source)
+        self.assertIn('name="codex_surface" required', source)
+        self.assertIn('name="consent" type="checkbox" value="yes" required', source)
+        self.assertIn("The form does not ask for conversation content or repositories",
+                      (SITE / "privacy.html").read_text())
+        self.assertIn("mailto:joshua@segeren.com?subject=Codex%20Backup", source)
+        self.assertIn('data-analytics-event="team_pilot_email_click"', source)
+        self.assertIn('href="/privacy#website-analytics" data-analytics-preferences', source)
+        self.assertIn("An email-link click does not tell us whether you sent a message",
+                      (SITE / "privacy.html").read_text())
+        self.assertNotIn("/api/checkout", source)
+        self.assertIn("[business backup design partners](https://codexbackup.segeren.com/codex-backup-for-teams)",
+                      (ROOT / "README.md").read_text())
 
     def test_comparison_distinguishes_search_backup_and_migration(self):
         source = (SITE / "compare-codex-migration-tools.html").read_text()
@@ -123,11 +156,11 @@ class SiteTests(unittest.TestCase):
         english = (SITE / "moving-to-a-new-mac.html").read_text()
         japanese = (SITE / "ja/codex-new-mac.html").read_text()
         sitemap = (SITE / "sitemap.xml").read_text()
-        self.assertIn('hreflang="ja" href="https://migrate.segeren.com/ja/codex-new-mac"', english)
-        self.assertIn('hreflang="en" href="https://migrate.segeren.com/moving-to-a-new-mac"', japanese)
+        self.assertIn('hreflang="ja" href="https://codexbackup.segeren.com/ja/codex-new-mac"', english)
+        self.assertIn('hreflang="en" href="https://codexbackup.segeren.com/moving-to-a-new-mac"', japanese)
         self.assertIn('href="/ja/codex-new-mac"', english)
         self.assertIn('href="/moving-to-a-new-mac" lang="en">English</a>', japanese)
-        self.assertIn("https://migrate.segeren.com/ja/codex-new-mac", sitemap)
+        self.assertIn("https://codexbackup.segeren.com/ja/codex-new-mac", sitemap)
         self.assertIn("Codexを新しいMacへ安全に移行・転送する方法", japanese)
         self.assertIn("~/.codex/auth.json", japanese)
         self.assertIn("~/.codex/installation_id", japanese)
@@ -324,7 +357,7 @@ class SiteTests(unittest.TestCase):
                     continue
                 self.assertIn('src="/analytics.js?v=20260911-ecommerce"', page.read_text())
         self.assertIn('const GRANTED = "granted"', analytics)
-        self.assertIn('const PUBLIC_HOSTS = new Set(["migrate.segeren.com", "codex-migrate.vercel.app"]);', analytics)
+        self.assertIn('const PUBLIC_HOSTS = new Set(["codexbackup.segeren.com", "migrate.segeren.com", "codex-migrate.vercel.app"]);', analytics)
         self.assertIn('!PUBLIC_HOSTS.has(window.location.hostname)', analytics)
         self.assertIn('fetch("/api/analytics-region"', analytics)
         self.assertIn('analyticsMode === "default"', analytics)
@@ -344,7 +377,7 @@ class SiteTests(unittest.TestCase):
         self.assertIn("The app itself has no telemetry", home)
         self.assertIn("In markets where prior consent is not required, analytics cookies are enabled by default.", privacy)
         self.assertIn("European Economic Area, United Kingdom, and Switzerland", privacy)
-        self.assertIn("It does not receive your name, email address, Codex conversations", privacy)
+        self.assertIn("Analytics does not receive your name, email address, team size, Codex usage choice", privacy)
         self.assertIn("Google Signals may add aggregate", privacy)
         self.assertIn("https://www.googletagmanager.com", vercel)
         self.assertIn("https://analytics.google.com", vercel)
@@ -428,7 +461,7 @@ class SiteTests(unittest.TestCase):
         for path in ("codex-vault", "moving-to-a-new-mac", "backup-and-recovery", "compare-codex-migration-tools"):
             self.assertIn('href="/' + path + '"', home)
         for path in ("codex-vault", "moving-to-a-new-mac", "codex-history-missing-new-mac", "backup-and-recovery", "compare-codex-migration-tools", "access-codex-from-another-machine"):
-            self.assertIn("https://migrate.segeren.com/" + path, sitemap)
+            self.assertIn("https://codexbackup.segeren.com/" + path, sitemap)
         self.assertIn("no skip-backup switch", (SITE / "backup-and-recovery.html").read_text())
 
     def test_vault_page_matches_the_shipped_local_product_boundary(self):

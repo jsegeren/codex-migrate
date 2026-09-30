@@ -1,17 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://migrate.segeren.com/</loc></url>
-  <url><loc>https://migrate.segeren.com/codex-vault</loc></url>
-  <url><loc>https://migrate.segeren.com/backup-codex-conversations-mac</loc></url>
-  <url><loc>https://migrate.segeren.com/search-codex-conversation-history</loc></url>
-  <url><loc>https://migrate.segeren.com/recover-missing-codex-chats</loc></url>
-  <url><loc>https://migrate.segeren.com/moving-to-a-new-mac</loc></url>
-  <url><loc>https://migrate.segeren.com/ja/codex-new-mac</loc></url>
-  <url><loc>https://migrate.segeren.com/codex-history-missing-new-mac</loc></url>
-  <url><loc>https://migrate.segeren.com/backup-and-recovery</loc></url>
-  <url><loc>https://migrate.segeren.com/compare-codex-migration-tools</loc></url>
-  <url><loc>https://migrate.segeren.com/access-codex-from-another-machine</loc></url>
-  <url><loc>https://migrate.segeren.com/privacy</loc></url>
-  <url><loc>https://migrate.segeren.com/terms</loc></url>
-  <url><loc>https://migrate.segeren.com/refunds</loc></url>
+  <url><loc>https://codexbackup.segeren.com/</loc></url>
+  <url><loc>https://codexbackup.segeren.com/codex-vault</loc></url>
+  <url><loc>https://codexbackup.segeren.com/codex-backup-for-teams</loc></url>
+  <url><loc>https://codexbackup.segeren.com/backup-codex-conversations-mac</loc></url>
+  <url><loc>https://codexbackup.segeren.com/search-codex-conversation-history</loc></url>
+  <url><loc>https://codexbackup.segeren.com/recover-missing-codex-chats</loc></url>
+  <url><loc>https://codexbackup.segeren.com/moving-to-a-new-mac</loc></url>
+  <url><loc>https://codexbackup.segeren.com/ja/codex-new-mac</loc></url>
+  <url><loc>https://codexbackup.segeren.com/codex-history-missing-new-mac</loc></url>
+  <url><loc>https://codexbackup.segeren.com/backup-and-recovery</loc></url>
+  <url><loc>https://codexbackup.segeren.com/compare-codex-migration-tools</loc></url>
+  <url><loc>https://codexbackup.segeren.com/access-codex-from-another-machine</loc></url>
+  <url><loc>https://codexbackup.segeren.com/privacy</loc></url>
+  <url><loc>https://codexbackup.segeren.com/terms</loc></url>
+  <url><loc>https://codexbackup.segeren.com/refunds</loc></url>
 </urlset>

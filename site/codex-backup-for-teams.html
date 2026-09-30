@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Codex backup for teams — Segeren Studio</title>
+    <meta name="description" content="Help shape a verified, encrypted off-device backup and recovery service for local OpenAI Codex work on Mac. Business design partners wanted; the hosted service is not available yet.">
+    <link rel="canonical" href="https://codexbackup.segeren.com/codex-backup-for-teams">
+    <meta property="og:title" content="Codex backup for teams — design partners wanted">
+    <meta property="og:description" content="Local Codex work can outlive a lost Mac. Help shape verified, encrypted off-device backup and recovery for teams. Not available yet.">
+    <meta property="og:type" content="website">
+    <link rel="icon" href="/assets/mark.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css?v=20260929-pilot-form"><script src="/analytics.js?v=20260911-ecommerce" defer></script>
+  </head>
+  <body>
+    <header class="site-header"><a class="brand" href="/"><span class="brand-mark" aria-hidden="true">CM</span><span>Codex Migrate</span></a><nav aria-label="Primary navigation"><a href="/">Mac app</a><a href="https://github.com/jsegeren/codex-migrate">Source</a></nav></header>
+    <main class="legal shell team-page">
+      <p class="eyebrow">For teams using local OpenAI Codex on Mac</p>
+      <h1>Protect the Codex work your team can’t afford to lose.</h1>
+      <p class="lede">Local Codex conversations hold plans and decisions Git never captures. Loss, theft, hardware failure, or an accidental delete can erase them. We’re building verified off-device recovery for teams.</p>
+      <form class="signup-form pilot-form" action="/api/signup" method="post" aria-describedby="pilot-privacy">
+        <h2>Talk to Joshua about a pilot</h2>
+        <input type="hidden" name="intent" value="team-pilot">
+        <label for="pilot-email">Work email</label>
+        <input id="pilot-email" name="email" type="email" autocomplete="email" inputmode="email" maxlength="254" placeholder="you@company.com" required>
+        <label for="pilot-size">Team size</label>
+        <select id="pilot-size" name="team_size" required><option value="">Select a range</option><option value="2-5">2–5 people</option><option value="6-25">6–25 people</option><option value="26-100">26–100 people</option><option value="101-plus">101+ people</option><option value="not-sure">Not sure</option></select>
+        <label for="pilot-surface">How your team uses Codex</label>
+        <select id="pilot-surface" name="codex_surface" required><option value="">Select a surface</option><option value="mac-app">Mac app</option><option value="cli-ide">CLI or IDE</option><option value="both">Mac app and CLI/IDE</option><option value="cloud-only">Codex Cloud only</option><option value="not-sure">Not sure</option></select>
+        <div class="form-trap" aria-hidden="true"><label for="pilot-website">Leave this empty</label><input id="pilot-website" name="website" type="text" tabindex="-1" autocomplete="off"></div>
+        <label class="consent"><input name="consent" type="checkbox" value="yes" required><span>Joshua may contact me about a team pilot. I understand the hosted service is not available yet.</span></label>
+        <button class="button button-primary" type="submit">Request a conversation</button>
+      </form>
+      <p class="pilot-note" id="pilot-privacy">No purchase or newsletter. Your request goes to Joshua’s inbox via SendGrid. Do not send credentials or customer data. Prefer email? <a data-analytics-event="team_pilot_email_click" href="mailto:joshua@segeren.com?subject=Codex%20Backup%20team%20design%20partner">Write to Joshua directly</a>. <a href="/privacy">Privacy</a>.</p>
+      <h2>What we are building</h2>
+      <ul>
+        <li>Scheduled, client-encrypted backup of supported local Codex history to off-device storage.</li>
+        <li>A last-verified-backup receipt and visible failures, so a silent missed run is not called protection.</li>
+        <li>A clean-Mac recovery drill: find a version, read or export it, and recover what the format safely permits.</li>
+        <li>Organization-controlled recovery and device-health visibility, with governed access to employee content.</li>
+      </ul>
+      <p><strong>This hosted team service is not available yet.</strong> We have not certified organization key custody, clean-Mac hosted restore, retention controls, or a business service level. It is scheduled backup, not live multi-Mac sync, a whole-device backup, or a promise of zero data loss. Pricing and pilot terms are not set; there is no pre-order or charge here.</p>
+      <h2>The exact gap matters</h2>
+      <p>OpenAI <a href="https://developers.openai.com/codex/config-advanced">documents local Codex history under <code>CODEX_HOME</code></a>. Its <a href="https://d2xo500swnpgl1.cloudfront.net/slide-upload/oaiacademy/Codex-Security-Whitepaper-a9d6a446-3e82-4783-8c2f-3a15287f70d1-1778256939604.pdf">Codex security whitepaper</a> distinguishes local CLI, IDE, and app history from persistent Codex Cloud conversations. Account-saved ChatGPT-app chats are another case. We will confirm which records your team needs to recover before recommending a pilot.</p>
+      <p class="notice"><strong>Available today:</strong> the <a href="/#founding-edition">$49 one-time Mac beta</a> can search and back up supported local conversations into an encrypted folder you choose, and migrate selected work between Macs. It is not our hosted team service. Its current backup can miss history held only in Codex's separate database; maintain an independent backup and verify recovery before relying on it.</p>
+    </main>
+    <footer><div class="shell"><p>Independent software by <a href="https://x.com/JoshuaSegeren">Joshua Segeren</a>. Not affiliated with or endorsed by OpenAI.</p><div class="footer-bottom"><a href="/">Codex Migrate</a><a href="/privacy">Privacy</a><a href="/privacy#website-analytics" data-analytics-preferences>Analytics choices</a><a href="/terms">Terms</a></div></div></footer>
+  </body>
+</html>

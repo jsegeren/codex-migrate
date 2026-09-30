@@ -10,6 +10,11 @@ state that does not magically appear when you sign into Codex on a new Mac:
 conversations, project organization, configuration, skills, automations,
 repositories, branches, worktrees, stashes, and unfinished files.
 
+Responsible for local Codex history across a team? We are looking for
+[business backup design partners](https://codexbackup.segeren.com/codex-backup-for-teams)
+to help define verified off-device recovery. The hosted team service is not
+available or for sale yet; the $49 Mac beta below is a separate local product.
+
 ### Using Codex in the ChatGPT app?
 
 This project is for the local Codex work you want to keep when changing Macs,
@@ -28,7 +33,7 @@ transfer progress, pause/resume, and verification. Vault backups are encrypted
 before they are written to the local or cloud-sync folder you choose. Migration
 data moves directly between your Macs. Neither goes through our servers.
 
-**[Get the signed Mac beta — $49 →](https://migrate.segeren.com/#founding-edition)**
+**[Get the signed Mac beta — $49 →](https://codexbackup.segeren.com/#founding-edition)**
 
 For Apple silicon Macs. Developer ID signed and Apple notarized, with
 best-effort support and a 30-day refund guarantee: if the supported Vault or
@@ -63,7 +68,7 @@ guaranteed response time or guarantee that every migration issue can be solved.
 
 ## See the app in one minute
 
-[![Codex Migrate build 14 migration setup with staged sample data](site/assets/codex-migrate-demo-build14-poster.jpg)](https://migrate.segeren.com/assets/codex-migrate-demo-build14.webm)
+[![Codex Migrate build 14 migration setup with staged sample data](site/assets/codex-migrate-demo-build14-poster.jpg)](https://codexbackup.segeren.com/assets/codex-migrate-demo-build14.webm)
 
 This is the real local dashboard with staged sample data. Actual transfer time
 depends on data size and the connection between the Macs.
@@ -213,7 +218,7 @@ Codex Migrate is an independent project by Joshua Segeren. It is not made by,
 affiliated with, supported by, or endorsed by OpenAI. OpenAI and Codex are
 trademarks of their respective owner.
 
-**Website:** [migrate.segeren.com](https://migrate.segeren.com)
+**Website:** [codexbackup.segeren.com](https://codexbackup.segeren.com)
 
 ![Codex Migrate showing a resumable workspace transfer](docs/images/dashboard.png)
 

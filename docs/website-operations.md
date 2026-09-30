@@ -8,8 +8,16 @@
 > [release readiness](release-readiness.md) for current authority.
 
 The public site is deployed to the existing `codex-migrate` Vercel project.
-Its canonical hostname is `migrate.segeren.com`; Squarespace manages DNS.
-The `migrate` CNAME serves the site. Three additional CNAMEs authenticate
+Its canonical hostname is `codexbackup.segeren.com`; Squarespace manages DNS.
+The `codexbackup` CNAME points to the existing Vercel project. Keep the
+`migrate.segeren.com` CNAME and Vercel alias: released Mac builds use it for
+their update feed, purchase entitlement, private purchase links, and download
+APIs, and old public links must continue to work. Checkout returns and buyer
+emails remain on that hostname until a signed app update accepts the new one.
+Both exact origins are accepted for production purchase and signup requests;
+only the new hostname appears in canonical, social, and sitemap URLs. Never
+redirect the existing API hostname wholesale.
+Three additional CNAMEs authenticate
 `segeren.com` for SendGrid (return path plus two DKIM selectors); preserve them
 with the existing strict DMARC record. Do not change the apex site, MX records,
 or nameservers. Static output is `site/`; `api/signup.js` is a Node function.
@@ -23,10 +31,16 @@ Production-only sensitive environment variables:
 - `LAUNCH_NOTIFY_EMAIL`: fixed maintainer inbox.
 
 Never put these values in Git, browser code, screenshots, or command logs.
-The endpoint accepts same-origin URL-encoded POSTs, one validated address,
-explicit launch-only consent, and an empty honeypot. It sends a fixed plain-text
-message to the maintainer only. No visitor autoresponder, payment, or bulk
-newsletter is created. Open/click tracking is disabled for the notification.
+In launch mode, the endpoint accepts same-origin URL-encoded POSTs, one
+validated address, explicit launch-only consent, and an empty honeypot. It
+sends a fixed plain-text message to the maintainer only. No visitor
+autoresponder, payment, or bulk newsletter is created. Open/click tracking is
+disabled for the notification.
+The business design-partner page uses that same rate-limited endpoint with an
+explicit `team-pilot` intent, a team-size range and Codex-surface choice from
+fixed lists, and separate contact consent. It sends those bounded selections
+to the same maintainer inbox; it does not enroll the visitor in launch mail,
+accept free-text customer data, or grant access to the hosted service.
 
 Success means SendGrid returned 202, not proof of inbox delivery. Error and
 timeout responses never claim success, and ambiguous sends are not retried

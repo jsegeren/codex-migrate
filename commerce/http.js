@@ -1,4 +1,4 @@
-const { CommerceError, SITE } = require('./config');
+const { CommerceError, SITE, PUBLIC_SITE } = require('./config');
 function reply(res, status, value) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -13,7 +13,11 @@ function failure(res, error) {
     { error: error instanceof CommerceError ? error.code : 'temporarily_unavailable' });
 }
 function body(req, origin = SITE) {
-  if (req.headers.origin !== origin) throw new CommerceError('invalid_origin', 403);
+  // The public site can call the same production API without changing the
+  // updater/purchase hostname pinned in already-released Mac builds.
+  if (req.headers.origin !== origin && !(origin === SITE && req.headers.origin === PUBLIC_SITE)) {
+    throw new CommerceError('invalid_origin', 403);
+  }
   if ((req.headers['content-type'] || '').split(';')[0] !== 'application/json') throw new CommerceError('invalid_request', 415);
   if (Number(req.headers['content-length']) > 2048) throw new CommerceError('invalid_request', 413);
   const data = req.body;
