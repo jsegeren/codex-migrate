@@ -73,7 +73,7 @@ SETUP_HTML = r'''<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" href="data:,">
-<title>Codex Migrate — Vault + Migration</title>
+<title>Codex Backup — Overview</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#080b10;color:#f7f8fa;font:500 17px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow-wrap:anywhere}
 main{width:min(800px,calc(100% - 32px));margin:40px auto}h1{font-size:clamp(32px,6vw,48px);line-height:1.1}h2{font-size:24px}p{color:#cbd2df}section,fieldset{background:#111722;border:1px solid #465268;border-radius:16px;padding:24px;margin:24px 0;min-width:0}
@@ -87,7 +87,7 @@ label{display:block;margin:16px 0 6px}input,textarea,button,select{font:inherit}
 <body>
 <div class="app">
 <aside class="sidebar">
-<div class="brand"><div class="brand-mark">CM</div><div><strong>Codex Migrate</strong><small>Vault + Migration</small></div></div>
+<div class="brand"><div class="brand-mark">CB</div><div><strong>Codex Backup</strong><small>Find · Recover · Move</small></div></div>
 <nav class="nav" aria-label="Product">
 <a data-route="overview" href="/?view=overview"><span class="nav-icon">⌂</span>Overview</a>
 <a data-route="backup" href="/vault?view=backup"><span class="nav-icon">⟳</span>Backups</a>
@@ -95,13 +95,13 @@ label{display:block;margin:16px 0 6px}input,textarea,button,select{font:inherit}
 <a data-route="recovery" href="/vault?view=recovery"><span class="nav-icon">↺</span>Recovery</a>
 <a data-route="move" href="/?view=move"><span class="nav-icon">⇢</span>Move Macs</a>
 </nav>
-<div class="protection"><strong>This Mac stays local</strong><br>Conversation content is not sent to Codex Migrate servers.</div>
+<div class="protection"><strong>Local backup</strong><br>Conversation content is not sent to our servers by this version.</div>
 </aside>
 <div class="content">
 <main>
 <section id="overview-view">
-<header class="overview-head"><div class="move-kicker">Overview</div><h1>Your Codex work,<br>safe and searchable.</h1><p>One place to protect your history, find old conversations, and move to another Mac without breaking your setup.</p></header>
-<div class="health" id="overview-health-card"><div class="health-copy"><div class="health-icon" id="overview-health-icon">·</div><div><span>Backup health</span><strong id="overview-health">Checking protection…</strong><p id="overview-health-detail">Reading this Mac’s local Vault status.</p></div></div><a class="button secondary" data-overview-route="backup" href="/vault?view=backup">Back up now</a></div>
+<header class="overview-head"><div class="move-kicker">Overview</div><h1>Protect and find your<br>Codex work.</h1><p>Back up local conversations, search your history, and move your work to another Mac.</p></header>
+<div class="health" id="overview-health-card"><div class="health-copy"><div class="health-icon" id="overview-health-icon">·</div><div><span>Backup health</span><strong id="overview-health">Checking protection…</strong><p id="overview-health-detail">Reading this Mac’s local backup status.</p></div></div><a class="button secondary" data-overview-route="backup" href="/vault?view=backup">Back up now</a></div>
 <div class="job-grid">
 <a class="job-card" data-overview-route="backup" href="/vault?view=backup"><small>01</small><h2>Back up this Mac</h2><p>Encrypted, versioned backups in a folder you control.</p><strong>Manage backups →</strong></a>
 <a class="job-card" data-overview-route="conversations" href="/vault?view=conversations"><small>02</small><h2>Find a conversation</h2><p>Search active and archived Codex threads from one clean library.</p><strong>Search history →</strong></a>
@@ -128,7 +128,7 @@ label{display:block;margin:16px 0 6px}input,textarea,button,select{font:inherit}
 <button type="button" id="approve-card">Approve this connection for seven days</button>
 </div>
 <div id="reply-area" hidden>
-<p>Approved. Copy the reply and paste it into Codex Migrate on your old Mac.</p>
+<p>Approved. Copy the reply and paste it into this app on your old Mac.</p>
 <button type="button" id="copy-reply">Copy reply</button>
 <details>
 <summary>View reply card</summary>
@@ -156,7 +156,7 @@ label{display:block;margin:16px 0 6px}input,textarea,button,select{font:inherit}
 <h2 tabindex="-1">Your new Mac</h2>
 <p>Connect both Macs to Wi-Fi, or use a compatible USB-C/Thunderbolt connection.</p>
 <div id="pair-source">
-<p>Open Codex Migrate on both Macs. Create a card here, then approve it in the new Mac’s browser. No Terminal commands or passwords.</p>
+<p>Open this app on both Macs. Create a card here, then approve it in the new Mac’s browser. No Terminal commands or passwords.</p>
 <button type="button" id="create-card">Create connection card</button>
 <div id="request-area" hidden>
 <p>On the new Mac, choose “I’m on the new Mac” and paste this card.</p>
@@ -274,7 +274,7 @@ label{display:block;margin:16px 0 6px}input,textarea,button,select{font:inherit}
 <p>Choose Custom skills only above for a smaller repair. It has its own saved staging, pause/resume controls and verified destination backups; a full migration’s staging is left alone.</p>
 </details>
 </div>
-<footer>Codex Migrate is independent software. Not affiliated with or endorsed by OpenAI. Mac-to-Mac only.</footer>
+<footer>Codex Backup is independent software. Not affiliated with or endorsed by OpenAI. Migration is Mac-to-Mac only.</footer>
 </main>
 </div>
 </div>
@@ -287,6 +287,7 @@ const token=incoming||sessionStorage.getItem(storageKey)||"";
 history.replaceState(null,"",location.pathname+location.search);
 const requestedView=new URLSearchParams(location.search).get("view");
 const view=requestedView==="move"?"move":"overview";
+document.title="Codex Backup — "+(view==="move"?"Move Macs":"Overview");
 document.body.classList.add("view-"+view);
 for(const link of document.querySelectorAll("[data-route]")){link.classList.toggle("active",link.dataset.route===view);link.href=link.getAttribute("href")+"#token="+encodeURIComponent(token)}
 for(const link of document.querySelectorAll("[data-overview-route]")){link.href=link.getAttribute("href")+"#token="+encodeURIComponent(token)}
@@ -379,7 +380,7 @@ $("approve-card").onclick=()=>connectionAction($("approve-card"),"approve",{card
 $("accept-card").onclick=()=>connectionAction($("accept-card"),"accept",{card:$("accepted-card").value,apply:true},r=>{selectPaired(r);return $("next-1")});
 $("revoke-pair").onclick=()=>{if(confirm("Remove this old Mac’s SSH access? Wait until migration and recovery have finished."))connectionAction($("revoke-pair"),"revoke",{apply:true},r=>{$("message").textContent=r.message;$("reply-area").hidden=true;$("reply-card").value="";$("receiver-request-area").hidden=false})};
 $("restart-pair").onclick=()=>{if(confirm("Start a new connection? Previous local files will be kept. Remove the old access on the new Mac before approving another card."))connectionAction($("restart-pair"),"restart",{apply:true},r=>{paired=false;connectionBlocked=false;pairingView();$("request-area").hidden=true;$("create-card").hidden=false;$("target").value="";$("username").value="";$("computer").value="";$("target-home").value="";$("source-card").value="";$("accepted-card").value="";$("message").textContent=r.message})};
-async function copyCard(id){try{await navigator.clipboard.writeText($(id).value);$("message").textContent="Copied. Paste it into Codex Migrate on your other Mac."}catch(e){$(id).closest("details").open=true;$(id).focus();$(id).select();$("message").textContent="Card selected. Press Command-C to copy."}}
+async function copyCard(id){try{await navigator.clipboard.writeText($(id).value);$("message").textContent="Copied. Paste it into this app on your other Mac."}catch(e){$(id).closest("details").open=true;$(id).focus();$(id).select();$("message").textContent="Card selected. Press Command-C to copy."}}
 $("copy-request").onclick=()=>copyCard("source-card");$("copy-reply").onclick=()=>copyCard("reply-card");
 function attached(){ $("receiver-toggle").hidden=true;$("receiver").hidden=true; $("attached").hidden=false;$("setup").hidden=true;$("step-progress").hidden=true;$("continue").href="/migration#token="+encodeURIComponent(token);$("message").textContent="The helper is ready. No transfer was started automatically."; }
 function restoreConnection(s,c){
@@ -605,7 +606,7 @@ class SetupDashboard(Dashboard):
             result = subprocess.run(["/usr/bin/osascript", "-l", "JavaScript", "-e", '''
 const app = Application.currentApplication();
 app.includeStandardAdditions = true;
-JSON.stringify(app.chooseFolder({withPrompt: "Choose workspace folders for Codex Migrate",
+JSON.stringify(app.chooseFolder({withPrompt: "Choose workspace folders for Codex Backup",
                                 multipleSelectionsAllowed: true}).map(String));
 '''], capture_output=True, text=True, timeout=120)
             if result.returncode != 0:
@@ -628,7 +629,7 @@ JSON.stringify(app.chooseFolder({withPrompt: "Choose workspace folders for Codex
             result = subprocess.run(["/usr/bin/osascript", "-l", "JavaScript", "-e", '''
 const app = Application.currentApplication();
 app.includeStandardAdditions = true;
-String(app.chooseFolder({withPrompt: "Choose an empty folder or an existing Codex Vault"}));
+String(app.chooseFolder({withPrompt: "Choose an empty folder or an existing Codex backup"}));
 '''], capture_output=True, text=True, timeout=120)
             if result.returncode != 0:
                 if "(-128)" in result.stderr:

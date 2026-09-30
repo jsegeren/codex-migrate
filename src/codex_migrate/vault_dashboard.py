@@ -6,7 +6,7 @@ VAULT_HTML = r'''<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" href="data:,">
-<title>Codex Migrate — Vault + Migration</title>
+<title>Codex Backup — Conversations</title>
 <style>
 :root{color-scheme:dark;--bg:#080b10;--panel:#111722;--line:#344057;--text:#f7f8fa;--muted:#bdc7d8;--purple:#6042a6;--light:#d9cdff}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 20% 0,#172038 0,transparent 36%),var(--bg);color:var(--text);font:500 16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
@@ -25,10 +25,10 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 <div class="app">
 <aside class="sidebar">
 <div class="brand">
-<div class="brand-mark">CM</div>
+<div class="brand-mark">CB</div>
 <div>
-<strong>Codex Migrate</strong>
-<small>Vault + Migration</small>
+<strong>Codex Backup</strong>
+<small>Find · Recover · Move</small>
 </div>
 </div>
 <nav class="nav" aria-label="Product">
@@ -73,10 +73,10 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 </section>
 <section class="panel" id="backup-panel">
 <h2>Backup settings</h2>
-<p class="muted">Choose an empty local or cloud-sync folder, or your existing Vault. Conversation content is encrypted before it is written there.</p>
+<p class="muted">Choose an empty local or cloud-sync folder, or an existing backup folder. Conversation content is encrypted before it is written there.</p>
 <p class="muted" id="backup-footprint" role="status">Checking the size of your conversation history…</p>
 <div class="actions">
-<input id="vault-folder" readonly placeholder="Choose a Vault folder">
+<input id="vault-folder" readonly placeholder="Choose a backup folder">
 <button id="choose-vault" class="secondary">Choose folder…</button>
 </div>
 <div id="storage-assessment" class="storage-assessment" hidden role="status" aria-live="polite">
@@ -89,7 +89,7 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 <input id="backup-frequency-daily" type="radio" name="backup-frequency" value="daily" checked>
 <span>
 <strong>Back up automatically every day</strong>
-<small>Recommended. Runs through macOS even when the app is closed. The Mac and Vault folder must be available.</small>
+<small>Recommended. Runs through macOS even when the app is closed. The Mac and backup folder must be available.</small>
 </span>
 </label>
 <label>
@@ -136,12 +136,12 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 <h2>Recover a backup</h2>
 <p class="muted">Choose a backup version. Open it privately to find and recover one missing conversation, or recover the complete copy into an empty folder.</p>
 <div class="actions">
-<input id="restore-vault" readonly placeholder="Choose an existing Vault">
-<button id="choose-restore-vault" class="secondary">Choose Vault…</button>
+<input id="restore-vault" readonly placeholder="Choose an existing backup folder">
+<button id="choose-restore-vault" class="secondary">Choose folder…</button>
 </div>
 <div class="actions">
 <select id="restore-snapshot" aria-label="Backup version" disabled>
-<option value="">Choose a Vault to see backups</option>
+<option value="">Choose a backup folder to see versions</option>
 </select>
 <button id="browse-backup" disabled>Open this backup</button>
 </div>
@@ -186,8 +186,8 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 <option value="history">All saved titles</option>
 </select>
 <div id="history-location" class="actions" hidden>
-<input id="history-vault" readonly placeholder="Choose your encrypted Vault" aria-label="Vault for saved title search">
-<button id="choose-history-vault" type="button" class="secondary">Choose Vault…</button>
+<input id="history-vault" readonly placeholder="Choose your encrypted backup folder" aria-label="Backup folder for saved title search">
+<button id="choose-history-vault" type="button" class="secondary">Choose folder…</button>
 </div>
 <label class="muted" for="query">Words or phrase</label>
 <input id="query" required autocomplete="off">
@@ -270,7 +270,8 @@ history.replaceState(null,"",location.pathname+location.search);
 const requestedView=new URLSearchParams(location.search).get("view");
 const view=["backup","conversations","recovery"].includes(requestedView)?requestedView:"conversations";
 document.body.classList.add("view-"+view);
-const viewCopy={backup:["Backups / Set up","Protect this Mac.","Choose where your encrypted Vault lives and how often Codex Migrate should update it."],conversations:["Conversations","Find any conversation.","Search active and archived Codex threads stored on this Mac."],recovery:["Recovery","Recover what matters.","Open a verified backup, restore one missing conversation, or recover complete history safely."]}[view];
+const viewCopy={backup:["Backups / Set up","Protect this Mac.","Choose a local or cloud-sync folder for encrypted backups, then set a daily or manual schedule."],conversations:["Conversations","Find any conversation.","Search active and archived Codex threads stored on this Mac."],recovery:["Recovery","Recover what matters.","Open a verified backup, restore one missing conversation, or recover complete history safely."]}[view];
+document.title="Codex Backup — "+({backup:"Backups",conversations:"Conversations",recovery:"Recovery"}[view]);
 $("view-kicker").textContent=viewCopy[0];$("view-title").textContent=viewCopy[1];$("view-lede").textContent=viewCopy[2];
 for(const link of document.querySelectorAll("[data-route]")){link.classList.toggle("active",link.dataset.route===view);link.href=link.getAttribute("href")+"#token="+encodeURIComponent(token)}
 const fmt=n=>{const units=["B","KB","MB","GB","TB"];let i=0;while(n>=1000&&i<units.length-1){n/=1000;i++}return `${n.toFixed(n>=100?0:n>=10?1:2)} ${units[i]}`};
@@ -367,7 +368,7 @@ $("load-more").onclick=async()=>{
 };
 async function openSavedResult(item){
   const vault=chosenVault();
-  if(!vault){$("status").textContent="Choose your Vault in Recovery first.";return}
+  if(!vault){$("status").textContent="Choose your backup folder in Recovery first.";return}
   $("restore-vault").value=vault;
   $("status").textContent="Verifying and opening saved version…";
   try{
@@ -448,7 +449,7 @@ async function runSearch(append=false){
     let data;
     if(source==="history"){
       const vault=chosenVault();
-      if(!vault)throw Error("Choose your Vault before searching saved titles.");
+      if(!vault)throw Error("Choose a backup folder before searching saved titles.");
       data=await api("/api/vault/history-search?"+new URLSearchParams({vault,q:query}));
     }else data=await api("/api/vault/search?"+new URLSearchParams({q:query,limit:"20",offset:String(offset),source}));
     if(request!==searchRequest)return;
@@ -617,7 +618,7 @@ let verifiedBackup=false;
 let pendingAutomaticBackup=false;
 let lastSizedSnapshot="";
 function storageView(storage){const panel=$("storage-assessment");if(!storage){panel.hidden=true;return}panel.hidden=false;panel.className="storage-assessment "+storage.kind;$("storage-heading").textContent=storage.heading;$("storage-detail").textContent=storage.detail}
-async function refreshStorage(path){if(!path){storageView(null);return}try{storageView(await api("/api/vault/storage?path="+encodeURIComponent(path)))}catch(error){storageView({kind:"external_or_network",heading:"Storage protection unverified",detail:"Codex Migrate could not classify this location. Confirm how it is backed up before relying on it after loss of the Mac."})}}
+async function refreshStorage(path){if(!path){storageView(null);return}try{storageView(await api("/api/vault/storage?path="+encodeURIComponent(path)))}catch(error){storageView({kind:"external_or_network",heading:"Storage protection unverified",detail:"This location could not be classified. Confirm how it is backed up before relying on it after loss of the Mac."})}}
 function backupFrequencyView(){const daily=$("backup-frequency-daily").checked;$("backup").textContent=daily?"Create backup + turn on daily backup":"Create encrypted backup"}
 function backupView(data){
   const running=data.status==="running";
@@ -704,7 +705,7 @@ async function refreshSnapshots(){
   const selected=select.dataset.requested||select.value;
   select.dataset.ready="";
   select.disabled=true;
-  select.replaceChildren(new Option(vault?"Loading backup history…":"Choose a Vault to see backups",""));
+  select.replaceChildren(new Option(vault?"Loading backup history…":"Choose a backup folder to see versions",""));
   usage.hidden=!vault;
   usage.textContent=vault?"Measuring saved Vault files…":"";
   refreshRestoreButton();
