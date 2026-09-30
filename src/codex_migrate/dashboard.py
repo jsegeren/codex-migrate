@@ -23,7 +23,7 @@ HTML = r"""<!doctype html>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="icon" href="data:,">
-  <title>Codex Migrate</title>
+  <title>Codex Backup — Move Macs</title>
   <style>
     :root { color-scheme: dark; --bg:#080b10; --panel:#111722; --line:#273145; --text:#f7f8fa; --muted:#b9c3d2; --blue:#5b8cff; --action:#245bd7; --green:#40d18a; --amber:#ffbd59; --red:#ff6b75; }
     * { box-sizing:border-box; }
@@ -82,7 +82,7 @@ HTML = r"""<!doctype html>
 <body>
 <div class="app">
 <aside class="sidebar">
-  <div class="brand"><div class="brand-mark">CM</div><div><strong>Codex Migrate</strong><small>Mac migration</small></div></div>
+  <div class="brand"><div class="brand-mark">CB</div><div><strong>Codex Backup</strong><small>Find · Recover · Move</small></div></div>
   <nav class="nav" aria-label="Product">
     <a class="active" href="/"><span class="nav-icon">⇢</span>Move Macs</a>
   </nav>
@@ -164,7 +164,7 @@ HTML = r"""<!doctype html>
     </div>
   </section>
   <details class="scope"><summary>Recent migration events</summary><p>Up to 60 phase, status, and failure-category changes. Times are UTC. This is not raw command output.</p><ol id="migration-events"><li>No events recorded yet.</li></ol></details>
-  <footer>Codex Migrate is an independent open-source project. It is not made by, affiliated with, or endorsed by OpenAI.</footer>
+  <footer>Codex Backup is an independent open-source project. It is not made by, affiliated with, or endorsed by OpenAI.</footer>
 </main>
 </div>
 </div>

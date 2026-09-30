@@ -1,5 +1,21 @@
 # Desktop release readiness
 
+## September 30 backup-first hosted integration — draft only
+
+The hosted branch now includes the latest local application's Codex Backup
+branding and browser-title changes from the integration branch. Merge resolution
+preserves the hosted branch's database-backed history description, non-additive
+summary counts, prompt-title bounds, and physical-copy safeguards. Twelve focused
+dashboard JavaScript tests and 73 setup tests pass locally. This is source
+integration evidence, not a signed release or hosted recovery certification.
+
+A dedicated macOS Tahoe acceptance VM is being provisioned under a separate,
+owner-only Tart data directory. Its public base image download is still in
+progress; no guest restore test has run. It will use disposable data and guest
+credentials, not the Founder's OpenAI login or source home. The existing
+physical-Mac and source portability receipts remain separate evidence and are
+not relabelled as clean signed-app acceptance.
+
 ## September 30 structured-token-count recovery regression — draft only
 
 An upstream [Codex history-projection report](https://github.com/openai/codex/issues/42025)
