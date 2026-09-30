@@ -194,6 +194,17 @@ inert: worker contact email and approval references are records, not bearer
 credentials or administrator proof; no API authorizes from this table yet.
 Revoking a seat is irreversible in place and transactionally revokes its
 recorded device sessions; new device/session rows for that seat are refused.
+Migration 0034 and the dark server module add a 10-minute, rate-limited code
+sent only to the exact operator-approved administrator contact. Claiming that
+code mints a separate 12-hour metadata session. Its SendGrid adapter is
+sandbox-sink-only, and no HTTP route, device approval, content access, billing
+entitlement, or live mail is enabled. This tests administrator email control;
+it does not independently establish the sender's authority to act for a
+company. Before a pilot, the operator must verify that authority off-platform
+and record the approval, then the product must bind an audited admin action
+to seat/device enrollment and company-held recovery material.
+Changing the approved admin contact invalidates outstanding codes and revokes
+its sessions; the operator approval reference cannot be edited in place.
 
 Before a business pilot, establish one organization-owned account with an
 identified purchaser and designated administrator, explicit seat/device
