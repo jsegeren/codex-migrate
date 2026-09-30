@@ -5,6 +5,7 @@
 const { createHash } = require('node:crypto');
 const { uploadAllowance } = require('./stripe_entitlement');
 const { verifyUploadLease } = require('./upload_lease');
+const { businessDeviceTokenHash } = require('./business_worker');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const SESSION_TOKEN = /^hv1_[A-Za-z0-9_-]{43}$/;
@@ -22,6 +23,31 @@ const authorizedReadScopes = new WeakMap();
 const READ_SQL = `SELECT account_id, vault_id FROM hosted.device_sessions
   WHERE token_hash = $1 AND vault_id = $2 AND revoked_at IS NULL
     AND expires_at > clock_timestamp()`;
+const BUSINESS_DEVICE_SQL = `SELECT d.account_id, d.vault_id
+  FROM hosted.business_device_sessions AS d
+  JOIN hosted.business_seats AS s
+    ON s.account_id = d.account_id AND s.seat_id = d.seat_id
+  JOIN hosted.business_seat_vaults AS v
+    ON v.account_id = d.account_id AND v.seat_id = d.seat_id
+      AND v.vault_id = d.vault_id
+  WHERE d.token_hash = $1 AND d.vault_id = $2
+    AND d.revoked_at IS NULL AND d.expires_at > clock_timestamp()
+    AND s.revoked_at IS NULL`;
+const BUSINESS_UPLOAD_SQL = `SELECT d.account_id, d.vault_id,
+    e.allowance_bytes
+  FROM hosted.business_device_sessions AS d
+  JOIN hosted.business_seats AS s
+    ON s.account_id = d.account_id AND s.seat_id = d.seat_id
+  JOIN hosted.business_seat_vaults AS v
+    ON v.account_id = d.account_id AND v.seat_id = d.seat_id
+      AND v.vault_id = d.vault_id
+  JOIN hosted.business_backup_entitlements AS e
+    ON e.account_id = d.account_id
+  WHERE d.token_hash = $1 AND d.vault_id = $2
+    AND d.revoked_at IS NULL AND d.expires_at > clock_timestamp()
+    AND s.revoked_at IS NULL AND e.revoked_at IS NULL
+    AND e.starts_at <= clock_timestamp()
+    AND e.expires_at > clock_timestamp()`;
 
 class HostedAccessError extends Error {
   constructor() { super('hosted_access_denied'); }
@@ -33,6 +59,72 @@ function tokenHash(token) {
   }
   return createHash('sha256').update('codex-vault-hosted-session-v1\0').update(token)
     .digest('hex');
+}
+
+function businessTokenHash(token) {
+  try { return businessDeviceTokenHash(token); }
+  catch { throw new HostedAccessError(); }
+}
+
+async function businessDeviceRow({ sessionToken, vaultId, query, upload }) {
+  if (!UUID.test(vaultId) || typeof query !== 'function') {
+    throw new HostedAccessError();
+  }
+  try {
+    const result = await query(upload ? BUSINESS_UPLOAD_SQL : BUSINESS_DEVICE_SQL,
+      [businessTokenHash(sessionToken), vaultId]);
+    const row = result?.rows?.[0];
+    if (result?.rows?.length !== 1 || row?.vault_id !== vaultId ||
+        !UUID.test(row?.account_id)) throw new HostedAccessError();
+    if (upload) {
+      const allowanceBytes = Number(row.allowance_bytes);
+      if (!Number.isSafeInteger(allowanceBytes) || allowanceBytes < 1 ||
+          allowanceBytes > 1_000_000_000_000) throw new HostedAccessError();
+      return { accountId: row.account_id, vaultId, allowanceBytes };
+    }
+    return { accountId: row.account_id, vaultId };
+  } catch { throw new HostedAccessError(); }
+}
+
+// Dark business pilot only. Pairing proves device ownership, but this scope
+// additionally requires a current, operator-approved storage allowance.
+// No public route calls it until billing, privacy, and recovery gates pass.
+async function authorizeBusinessUploadScope({ sessionToken, vaultId, query }) {
+  const values = await businessDeviceRow({ sessionToken, vaultId, query,
+    upload: true });
+  const scope = Object.freeze(values);
+  authorizedScopes.set(scope, Date.now());
+  return scope;
+}
+
+async function authorizeBusinessReadScope({ sessionToken, vaultId, query }) {
+  const values = await businessDeviceRow({ sessionToken, vaultId, query,
+    upload: false });
+  const scope = Object.freeze(values);
+  authorizedReadScopes.set(scope, Date.now());
+  return scope;
+}
+
+async function authorizeBusinessLeasedUploadScope({ sessionToken, vaultId,
+  reservationId, lease, secret, query }) {
+  if (!UUID.test(reservationId)) throw new HostedAccessError();
+  try {
+    const digest = businessTokenHash(sessionToken);
+    const claim = verifyUploadLease(lease, secret);
+    if (claim.deviceHash !== digest || claim.vaultId !== vaultId ||
+        claim.reservationId !== reservationId) throw new HostedAccessError();
+    const values = await businessDeviceRow({ sessionToken, vaultId, query,
+      upload: true });
+    if (values.accountId !== claim.accountId ||
+        values.allowanceBytes < claim.allowanceBytes) {
+      throw new HostedAccessError();
+    }
+    const scope = Object.freeze({ ...values,
+      allowanceBytes: claim.allowanceBytes,
+      leaseExpiresAt: claim.expiresAt });
+    authorizedScopes.set(scope, Date.now());
+    return scope;
+  } catch { throw new HostedAccessError(); }
 }
 
 async function authorizeUploadScope({ sessionToken, vaultId, query,
@@ -143,4 +235,6 @@ function consumeAuthorizedReadScope(scope) {
 module.exports = { HostedAccessError, authorizeUploadScope,
   isAuthorizedScope, consumeAuthorizedScope, authorizeLeasedUploadScope,
   authorizeReadScope,
-  isAuthorizedReadScope, consumeAuthorizedReadScope, tokenHash };
+  isAuthorizedReadScope, consumeAuthorizedReadScope, tokenHash,
+  authorizeBusinessUploadScope, authorizeBusinessReadScope,
+  authorizeBusinessLeasedUploadScope, businessTokenHash };

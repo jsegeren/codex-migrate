@@ -219,8 +219,14 @@ new Vault and a device-token digest to that seat; a lost response can resolve
 the same token without repeating the claim. Revoking the seat revokes its
 recorded device sessions. The new route and email adapter are sandbox-only,
 closed by default, and never send to a real employee. This creates identity
-and device metadata only: there is still no business upload entitlement,
-company key-custody receipt, live pairing UI, or recovery authority.
+and device metadata only. Migration 0037 adds a separate, dark, time-bounded
+operator-approved storage allowance with immutable approval history and final
+revocation. The server has tested business-device authorization functions that
+require an active seat, matching Vault, and current allowance; an expired or
+revoked allowance cannot mint a new upload scope. These functions are not
+wired to the upload or recovery routes. There is still no customer billing
+entitlement, company key-custody receipt, live pairing UI, or recovery
+authority, and no business device can publish a hosted backup yet.
 
 Before a business pilot, establish one organization-owned account with an
 identified purchaser and designated administrator, explicit seat/device
