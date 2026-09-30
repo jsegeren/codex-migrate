@@ -20,6 +20,7 @@ from codex_migrate.vault_schedule import prepare_update, resume_after_update
 
 ACCOUNT = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 VAULT = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+SEAT = "22222222-2222-4222-8222-222222222222"
 DEVICE = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
 NEW_DEVICE = "11111111-1111-4111-8111-111111111111"
 SNAPSHOT = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
@@ -27,6 +28,8 @@ NEXT = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
 KEY = "ffffffff-ffff-4fff-8fff-ffffffffffff"
 METADATA = {"format": "codex-vault", "version": 1, "key_id": KEY,
             "created_at": "2026-09-29T00:00:00+00:00"}
+BUSINESS_METADATA = {**METADATA, "storage_codec": "lzfse-v1",
+                     "recovery_mode": "business-v1"}
 
 
 class HostedScheduleTests(unittest.TestCase):
@@ -73,6 +76,78 @@ class HostedScheduleTests(unittest.TestCase):
                       return_value=Path("/synthetic/helper")),
                 patch("codex_migrate.vault_hosted_schedule._loaded", return_value=False),
                 patch("codex_migrate.vault_hosted_schedule._launchctl"))
+
+    def _business_patches(self):
+        def rotate(old_id, new_id, account_id, seat_id, vault_id, **_kw):
+            self.rotation_calls.append((old_id, new_id, account_id,
+                                        seat_id, vault_id))
+            return {"accountId": account_id, "seatId": seat_id,
+                    "vaultId": vault_id, "deviceId": new_id}
+        enrollment = SimpleNamespace(
+            backup_clients=lambda *_args, **_kw: (self.upload, self.recovery),
+            create_device=lambda **_kw: NEW_DEVICE,
+            rotate_device=rotate,
+            resolve=lambda device_id, **_kw: {"accountId": ACCOUNT,
+                "seatId": SEAT, "vaultId": VAULT, "deviceId": device_id,
+                "accessPurpose": "worker"})
+        return (patch("codex_migrate.vault_hosted_schedule.BusinessHostedEnrollmentClient",
+                      return_value=enrollment),
+                patch("codex_migrate.vault_hosted_schedule._helper_path",
+                      return_value=Path("/synthetic/helper")),
+                patch("codex_migrate.vault_hosted_schedule._loaded", return_value=False),
+                patch("codex_migrate.vault_hosted_schedule._launchctl"))
+
+    def test_business_schedule_requires_business_key_and_exact_seat(self):
+        with self.assertRaisesRegex(MigrationError, "owner and key type"):
+            install_hosted_schedule(self.home, DEVICE, BUSINESS_METADATA,
+                                    engine_command=["/usr/bin/true"], apply=True)
+        with self.assertRaisesRegex(MigrationError, "owner and key type"):
+            install_hosted_schedule(self.home, DEVICE, METADATA,
+                business_seat_id=SEAT, engine_command=["/usr/bin/true"],
+                apply=True)
+        a, b, c, d = self._business_patches()
+        with a, b, c, d:
+            receipt = install_hosted_schedule(self.home, DEVICE,
+                BUSINESS_METADATA, business_seat_id=SEAT,
+                engine_command=["/usr/bin/true"], apply=True)
+        self.assertEqual(receipt["last_good_snapshot_id"], SNAPSHOT)
+        config_path, _, _, plist_path = _paths(self.home)
+        config = json.loads(config_path.read_text())
+        self.assertEqual((config["version"], config["owner_kind"],
+                          config["seat_id"]), (3, "business", SEAT))
+        self.assertEqual(config["key_metadata"], BUSINESS_METADATA)
+        self.assertNotIn("hvb1_", config_path.read_text() +
+                         plist_path.read_text())
+        self.assertFalse(hosted_schedule_status(self.home)[
+            "company_recovery_verified"])
+        with a, b, c, d:
+            with self.assertRaisesRegex(MigrationError, "existing hosted schedule"):
+                install_hosted_schedule(self.home, DEVICE, BUSINESS_METADATA,
+                    business_seat_id=SEAT, engine_command=["/usr/bin/true"],
+                    apply=True)
+
+    def test_business_scheduled_run_rotates_without_changing_seat_or_vault(self):
+        a, b, c, d = self._business_patches()
+        with a, b, c, d:
+            install_hosted_schedule(self.home, DEVICE, BUSINESS_METADATA,
+                business_seat_id=SEAT, engine_command=["/usr/bin/true"],
+                apply=True)
+        config_path, status_path, good_path, _ = _paths(self.home)
+        fake_run = SimpleNamespace(back_up_live_history=lambda *_args, **_kw: {
+            "unchanged": True, "lastGoodSnapshotId": SNAPSHOT,
+            "atRiskThreads": 0, "sourceCoverage": "complete"})
+        with a, b, patch("codex_migrate.vault_hosted_schedule.HostedLiveBackupRun",
+                         return_value=fake_run):
+            self.assertEqual(run_hosted_scheduled_backup(str(config_path)), 0)
+        self.assertEqual(self.rotation_calls,
+                         [(DEVICE, NEW_DEVICE, ACCOUNT, SEAT, VAULT)])
+        config = json.loads(config_path.read_text())
+        self.assertEqual((config["version"], config["device_id"],
+                          config["seat_id"]), (3, NEW_DEVICE, SEAT))
+        self.assertEqual(json.loads(status_path.read_text())["status"],
+                         "unchanged")
+        self.assertEqual(json.loads(good_path.read_text())["snapshot_id"],
+                         SNAPSHOT)
 
     def _install(self):
         a, b, c, d = self._patches()

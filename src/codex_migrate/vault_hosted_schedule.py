@@ -24,6 +24,9 @@ from codex_migrate.vault_backup import (
     _atomic_json, _fsync_directory, _helper_path, _metadata,
 )
 from codex_migrate.vault_hosted_enrollment_client import HostedEnrollmentClient
+from codex_migrate.vault_hosted_business_enrollment_client import (
+    BusinessHostedEnrollmentClient,
+)
 from codex_migrate.vault_hosted_live_run import HostedLiveBackupRun
 from codex_migrate.vault_hosted_upload_client import HostedUploadClient
 from codex_migrate.vault_schedule import (
@@ -122,12 +125,17 @@ def _configuration(path: Path) -> dict:
     value = _safe_json(path)
     base = {"format", "version", "source_home", "account_id",
             "vault_id", "device_id", "key_metadata", "installed_at"}
-    if (set(value) not in (base, base | {"session_rotated_at"}) or
+    business = base | {"session_rotated_at", "owner_kind", "seat_id"}
+    if (set(value) not in (base, base | {"session_rotated_at"}, business) or
             value.get("format") != _FORMAT or
-            value.get("version") not in (1, 2) or
+            value.get("version") not in (1, 2, 3) or
             type(value.get("version")) is not int or
             (value["version"] == 1 and set(value) != base) or
             (value["version"] == 2 and set(value) != base | {"session_rotated_at"}) or
+            (value["version"] == 3 and (set(value) != business or
+                value.get("owner_kind") != "business" or
+                not isinstance(value.get("seat_id"), str) or
+                not _UUID.fullmatch(value["seat_id"]))) or
             not isinstance(value.get("source_home"), str) or
             not Path(value["source_home"]).is_absolute() or
             any(not isinstance(value.get(key), str) or not _UUID.fullmatch(value[key])
@@ -136,13 +144,16 @@ def _configuration(path: Path) -> dict:
         raise MigrationError("The hosted backup schedule is invalid.")
     _metadata(value["key_metadata"])
     _timestamp(value.get("installed_at"))
-    if value["version"] == 2 and value["session_rotated_at"] is not None:
+    if value["version"] in (2, 3) and value["session_rotated_at"] is not None:
         _timestamp(value["session_rotated_at"])
+    if (value["version"] == 3) != (value["key_metadata"].get("recovery_mode") ==
+                                  "business-v1"):
+        raise MigrationError("The hosted backup owner and key type disagree.")
     return value
 
 
 def _rotate_if_due(config_path: Path, configuration: dict,
-                   enrollment: HostedEnrollmentClient, helper: Path) -> dict:
+                   enrollment: object, helper: Path) -> dict:
     """Durably hand a scheduled run to a new bearer before the old one expires."""
     pending_path = _rotation_path(configuration["source_home"])
     pending = _safe_json(pending_path) if pending_path.exists() else None
@@ -171,15 +182,22 @@ def _rotate_if_due(config_path: Path, configuration: dict,
                    "new_device_id": new_device_id}
         _atomic_json(pending_path, pending, replace=False)
 
-    identity = enrollment.rotate_device(
-        pending["old_device_id"], pending["new_device_id"],
-        configuration["account_id"], configuration["vault_id"],
-        crypto_helper=str(helper), apply=True)
-    if (identity != {"accountId": configuration["account_id"],
-                     "vaultId": configuration["vault_id"],
-                     "deviceId": pending["new_device_id"]}):
+    business = configuration["version"] == 3
+    expected = {"accountId": configuration["account_id"],
+                "vaultId": configuration["vault_id"],
+                "deviceId": pending["new_device_id"]}
+    if business:
+        expected["seatId"] = configuration["seat_id"]
+    arguments = [pending["old_device_id"], pending["new_device_id"],
+                 configuration["account_id"]]
+    if business:
+        arguments.append(configuration["seat_id"])
+    arguments.append(configuration["vault_id"])
+    identity = enrollment.rotate_device(*arguments,
+                                        crypto_helper=str(helper), apply=True)
+    if identity != expected:
         raise MigrationError("The hosted device handoff changed identity.")
-    updated = {**configuration, "version": 2,
+    updated = {**configuration, "version": 3 if business else 2,
                "device_id": pending["new_device_id"],
                "session_rotated_at": _now()}
     _atomic_json(config_path, updated, replace=True)
@@ -200,6 +218,7 @@ def _loaded() -> bool:
 def install_hosted_schedule(source_home: str, device_id: str, metadata: dict, *,
                             crypto_helper: Optional[str] = None,
                             engine_command: Optional[list] = None,
+                            business_seat_id: Optional[str] = None,
                             apply: bool = False) -> dict:
     """Install only after a remote snapshot decrypts with this Mac's key.
 
@@ -212,8 +231,14 @@ def install_hosted_schedule(source_home: str, device_id: str, metadata: dict, *,
     if not isinstance(device_id, str) or not _UUID.fullmatch(device_id):
         raise MigrationError("The hosted backup device is invalid.")
     key_id = _metadata(metadata)
+    business = business_seat_id is not None
+    if (business and (not isinstance(business_seat_id, str) or
+                      not _UUID.fullmatch(business_seat_id)) or
+            business != (metadata.get("recovery_mode") == "business-v1")):
+        raise MigrationError("The hosted backup owner and key type disagree.")
     helper = _helper_path(crypto_helper)
-    enrollment = HostedEnrollmentClient(SERVICE_ORIGIN)
+    enrollment = (BusinessHostedEnrollmentClient(SERVICE_ORIGIN) if business else
+                  HostedEnrollmentClient(SERVICE_ORIGIN))
     upload, recovery = enrollment.backup_clients(device_id, crypto_helper=str(helper))
     latest = recovery.latest_snapshot(expected_account_id=upload._account_id)
     if latest is None:
@@ -240,11 +265,14 @@ def install_hosted_schedule(source_home: str, device_id: str, metadata: dict, *,
     except KeyError as error:
         raise MigrationError("The macOS account home is unavailable.") from error
     configuration = {
-        "format": _FORMAT, "version": 2, "source_home": str(home),
+        "format": _FORMAT, "version": 3 if business else 2,
+        "source_home": str(home),
         "account_id": upload._account_id, "vault_id": upload._vault_id,
         "device_id": device_id, "key_metadata": metadata,
         "installed_at": _now(), "session_rotated_at": None,
     }
+    if business:
+        configuration.update(owner_kind="business", seat_id=business_seat_id)
     program = engine + ["vault", "--source-home", str(home),
                         "hosted-scheduled-run", "--config", str(config_path)]
     plist = plistlib.dumps({
@@ -255,13 +283,19 @@ def install_hosted_schedule(source_home: str, device_id: str, metadata: dict, *,
         "StandardOutPath": "/dev/null", "StandardErrorPath": "/dev/null",
     }, fmt=plistlib.FMT_XML, sort_keys=True)
     with _update_lock(str(home), nonblocking=True) as marker_path:
+        if business and (config_path.exists() or plist_path.exists()):
+            raise MigrationError("Remove the existing hosted schedule before business enrollment.")
         if _pending_update(marker_path) is not None:
             raise MigrationError("Wait for the app update before enabling hosted backup.")
         if _rotation_path(str(home)).exists():
             raise MigrationError("Complete the pending hosted device handoff first.")
         current = enrollment.resolve(device_id, crypto_helper=str(helper))
-        if current != {"accountId": upload._account_id,
-                       "vaultId": upload._vault_id, "deviceId": device_id}:
+        expected = {"accountId": upload._account_id,
+                    "vaultId": upload._vault_id, "deviceId": device_id}
+        if business:
+            expected["seatId"] = business_seat_id
+            expected["accessPurpose"] = "worker"
+        if current != expected:
             raise MigrationError("The hosted backup device changed identity.")
         previous_config = _safe_file(config_path)
         previous_plist = _safe_file(plist_path)
@@ -325,7 +359,9 @@ def run_hosted_scheduled_backup(config_path: str) -> int:
             _atomic_json(status_path, {"status": "running", "checked_at": _now()},
                          replace=True)
             helper = _helper_path(None)
-            enrollment = HostedEnrollmentClient(SERVICE_ORIGIN)
+            enrollment = (BusinessHostedEnrollmentClient(SERVICE_ORIGIN)
+                          if configuration["version"] == 3 else
+                          HostedEnrollmentClient(SERVICE_ORIGIN))
             configuration = _rotate_if_due(path, configuration, enrollment, helper)
             upload, recovery = enrollment.backup_clients(
                 configuration["device_id"], crypto_helper=str(helper))
@@ -388,6 +424,10 @@ def hosted_schedule_status(source_home: str) -> dict:
               "loaded": _loaded(), "interval_minutes": 30,
               "last_good_snapshot_id": None, "last_checked_at": None,
               "status": "awaiting_check"}
+    if configuration["version"] == 3:
+        # Backup freshness is not proof that the company kit exists off-device
+        # or that it passed a clean-Mac restore drill.
+        result["company_recovery_verified"] = False
     if good_path.exists():
         good = _safe_json(good_path)
         if (set(good) != {"snapshot_id", "observed_at"} or

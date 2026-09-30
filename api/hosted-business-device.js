@@ -7,7 +7,8 @@ const { sandboxDatabaseUrl,
   sandboxDatabaseRuntime } = require('../hosted/recovery_runtime');
 const { businessWorkerMail } = require('../hosted/business_worker_mail');
 const { beginBusinessWorkerPairing, claimBusinessFirstDevice,
-  resolveBusinessFirstDevice } = require('../hosted/business_worker');
+  resolveBusinessFirstDevice, rotateBusinessWorkerDevice } =
+  require('../hosted/business_worker');
 
 const ADMIN_BEARER = /^Bearer (hva1_[A-Za-z0-9_-]{43})$/;
 const DEVICE_BEARER = /^Bearer (hvb1_[A-Za-z0-9_-]{43})$/;
@@ -26,7 +27,9 @@ function requestBody(req) {
   const expected = data.action === 'begin' ? 'accountId,action,seatId' :
     data.action === 'claim' ?
       'accountId,action,code,deviceId,deviceTokenHash,seatId,vaultId' :
-    data.action === 'resolve' ? 'action,deviceId' : null;
+    data.action === 'resolve' ? 'action,deviceId' :
+    data.action === 'rotate' ?
+      'action,newDeviceId,newDeviceTokenHash,oldDeviceId' : null;
   if (keys !== expected ||
       (['begin', 'claim'].includes(data.action) &&
         (typeof data.accountId !== 'string' ||
@@ -34,7 +37,10 @@ function requestBody(req) {
       (data.action === 'claim' &&
         ['code', 'vaultId', 'deviceId', 'deviceTokenHash']
           .some(key => typeof data[key] !== 'string')) ||
-      (data.action === 'resolve' && typeof data.deviceId !== 'string')) {
+      (data.action === 'resolve' && typeof data.deviceId !== 'string') ||
+      (data.action === 'rotate' &&
+        ['oldDeviceId', 'newDeviceId', 'newDeviceTokenHash']
+          .some(key => typeof data[key] !== 'string'))) {
     throw Error('invalid_request');
   }
   return data;
@@ -63,7 +69,7 @@ function makeHandler(load = businessWorkerRuntime, env = process.env) {
     const adminToken = ADMIN_BEARER.exec(authorization)?.[1];
     const deviceToken = DEVICE_BEARER.exec(authorization)?.[1];
     if ((data.action === 'begin' && !adminToken) ||
-        (data.action === 'resolve' && !deviceToken)) {
+        (['resolve', 'rotate'].includes(data.action) && !deviceToken)) {
       return reply(res, 403, { error: 'access_denied' });
     }
     res.setHeader('Cache-Control', 'no-store');
@@ -81,6 +87,13 @@ function makeHandler(load = businessWorkerRuntime, env = process.env) {
           accountId: data.accountId, seatId: data.seatId,
           code: data.code, vaultId: data.vaultId, deviceId: data.deviceId,
           deviceTokenHash: data.deviceTokenHash, query,
+        }));
+      }
+      if (data.action === 'rotate') {
+        return reply(res, 200, await rotateBusinessWorkerDevice({
+          oldDeviceToken: deviceToken, oldDeviceId: data.oldDeviceId,
+          newDeviceId: data.newDeviceId,
+          newDeviceTokenHash: data.newDeviceTokenHash, query,
         }));
       }
       return reply(res, 200, await resolveBusinessFirstDevice({

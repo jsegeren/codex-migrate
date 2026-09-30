@@ -25,6 +25,10 @@ CODE = "hvwe1_" + "b" * 43
 ADMIN_TOKEN = "hva1_" + "c" * 43
 RECOVERY_CODE = "hvcr1_" + "d" * 43
 REQUEST = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
+NEW_DEVICE = "ffffffff-ffff-4fff-8fff-ffffffffffff"
+NEW_TOKEN = "hvb1_" + "e" * 43
+NEW_HASH = hashlib.sha256(b"codex-backup-business-device-v1\0" +
+                          NEW_TOKEN.encode("ascii")).hexdigest()
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -52,9 +56,32 @@ class _Handler(BaseHTTPRequestHandler):
                 return
             response = {"accountId": ACCOUNT, "seatId": SEAT,
                         "vaultId": VAULT, "deviceId": DEVICE}
-        else:
+        elif body["action"] == "rotate":
+            if (not self.server.rotation_active or self.server.rotated or
+                    body["oldDeviceId"] != DEVICE or
+                    body["newDeviceId"] != NEW_DEVICE or
+                    body["newDeviceTokenHash"] != NEW_HASH or
+                    authorization != "Bearer " + TOKEN):
+                self.send_error(503)
+                return
+            self.server.rotated = True
+            if self.server.lose_rotate_reply:
+                self.close_connection = True
+                return
             response = {"accountId": ACCOUNT, "seatId": SEAT,
-                        "vaultId": VAULT, "deviceId": DEVICE}
+                        "vaultId": VAULT, "deviceId": NEW_DEVICE}
+        else:
+            device_id = body["deviceId"]
+            if self.server.rotation_active:
+                expected_id = NEW_DEVICE if self.server.rotated else DEVICE
+                expected_token = NEW_TOKEN if self.server.rotated else TOKEN
+                if (device_id != expected_id or
+                        authorization != "Bearer " + expected_token):
+                    self.send_error(503)
+                    return
+            response = {"accountId": ACCOUNT, "seatId": SEAT,
+                        "vaultId": VAULT, "deviceId": device_id,
+                        "accessPurpose": self.server.device_purpose}
         raw = json.dumps(response).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -70,6 +97,10 @@ class BusinessHostedEnrollmentClientTests(unittest.TestCase):
         self.server.lose_claim_reply = False
         self.server.recovery_account = ACCOUNT
         self.server.worker_origin = "http://127.0.0.1:54321"
+        self.server.rotation_active = False
+        self.server.rotated = False
+        self.server.lose_rotate_reply = False
+        self.server.device_purpose = "worker"
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
         self.helper_calls = []
@@ -90,6 +121,9 @@ class BusinessHostedEnrollmentClientTests(unittest.TestCase):
             return {"device_id": DEVICE, "token_hash": HASH}
         if arguments == ["hosted-business-device-read", "--device-id", DEVICE]:
             return {"device_id": DEVICE, "token_hash": HASH, "token": TOKEN}
+        if arguments == ["hosted-business-device-read", "--device-id", NEW_DEVICE]:
+            return {"device_id": NEW_DEVICE, "token_hash": NEW_HASH,
+                    "token": NEW_TOKEN}
         raise AssertionError("unexpected helper operation")
 
     def helper_patches(self):
@@ -153,6 +187,7 @@ class BusinessHostedEnrollmentClientTests(unittest.TestCase):
             identity = client.claim_recovery(ACCOUNT, SEAT, VAULT, REQUEST,
                 RECOVERY_CODE, DEVICE, apply=True)
             self.assertEqual(identity["vaultId"], VAULT)
+            self.server.device_purpose = "recovery"
             recovery = client.recovery_client(DEVICE)
         self.assertIsInstance(recovery, HostedRecoveryClient)
         self.assertEqual([body["action"] for body, _ in self.server.calls],
@@ -164,6 +199,15 @@ class BusinessHostedEnrollmentClientTests(unittest.TestCase):
         self.assertTrue(all(auth == "Bearer " + TOKEN
                             for _, auth in self.server.calls[2:]))
         self.assertNotIn(TOKEN, repr(recovery))
+
+    def test_recovery_only_credential_cannot_start_worker_backup(self):
+        self.server.device_purpose = "recovery"
+        path_patch, helper_patch = self.helper_patches()
+        with path_patch, helper_patch:
+            with self.assertRaisesRegex(MigrationError, "recovery-only"):
+                self.client().backup_clients(DEVICE)
+        self.assertEqual([body["action"] for body, _ in self.server.calls],
+                         ["resolve"])
 
     def test_refuses_personal_token_and_account_substitution(self):
         def personal_helper(path, arguments):
@@ -182,6 +226,35 @@ class BusinessHostedEnrollmentClientTests(unittest.TestCase):
                 self.client().backup_clients(DEVICE)
         self.assertEqual([body["action"] for body, _ in self.server.calls],
                          ["resolve", "latest"])
+
+    def test_worker_rotation_reconciles_lost_ack_with_saved_new_key(self):
+        self.server.rotation_active = True
+        self.server.lose_rotate_reply = True
+        path_patch, helper_patch = self.helper_patches()
+        with path_patch, helper_patch:
+            client = self.client()
+            expected = {"accountId": ACCOUNT, "seatId": SEAT,
+                        "vaultId": VAULT, "deviceId": NEW_DEVICE}
+            self.assertEqual(client.rotate_device(DEVICE, NEW_DEVICE,
+                ACCOUNT, SEAT, VAULT, apply=True), expected)
+            self.assertEqual(client.rotate_device(DEVICE, NEW_DEVICE,
+                ACCOUNT, SEAT, VAULT, apply=True), expected)
+        actions = [body["action"] for body, _ in self.server.calls]
+        self.assertEqual(actions, ["resolve", "resolve", "rotate",
+                                   "resolve", "resolve"])
+        self.assertEqual(actions.count("rotate"), 1)
+        self.assertNotIn(NEW_TOKEN, json.dumps(self.server.calls[2][0]))
+        self.assertFalse(any("delete" in part for call in self.helper_calls
+                             for part in call))
+
+    def test_rotation_refuses_wrong_expected_seat_without_mutation(self):
+        self.server.rotation_active = True
+        path_patch, helper_patch = self.helper_patches()
+        with path_patch, helper_patch:
+            with self.assertRaisesRegex(MigrationError, "identity changed"):
+                self.client().rotate_device(DEVICE, NEW_DEVICE,
+                    ACCOUNT, VAULT, VAULT, apply=True)
+        self.assertFalse(self.server.rotated)
 
 
 if __name__ == "__main__":

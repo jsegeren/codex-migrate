@@ -15,12 +15,16 @@ const DELIVERY_SQL = `SELECT hosted.record_business_worker_challenge_delivery(
   $1::text, $2::text) AS recorded`;
 const CLAIM_SQL = `SELECT hosted.claim_business_first_device(
   $1::uuid, $2::uuid, $3::text, $4::uuid, $5::uuid, $6::text) AS vault_id`;
-const RESOLVE_SQL = `SELECT d.account_id, d.seat_id, d.vault_id, d.device_id
+const RESOLVE_SQL = `SELECT d.account_id, d.seat_id, d.vault_id, d.device_id,
+    d.access_purpose
   FROM hosted.business_device_sessions AS d
   JOIN hosted.business_seats AS s
     ON s.account_id = d.account_id AND s.seat_id = d.seat_id
   WHERE d.token_hash = $1 AND d.device_id = $2 AND d.revoked_at IS NULL
     AND d.expires_at > clock_timestamp() AND s.revoked_at IS NULL`;
+const ROTATE_SQL = `SELECT account_id, seat_id, vault_id
+  FROM hosted.rotate_business_worker_device($1::text, $2::uuid,
+    $3::text, $4::uuid)`;
 
 class BusinessWorkerError extends Error {
   constructor() { super('business_worker_unavailable'); }
@@ -103,12 +107,39 @@ async function resolveBusinessFirstDevice({ deviceToken, deviceId, query }) {
     if (result?.rows?.length !== 1 ||
         ![row?.account_id, row?.seat_id, row?.vault_id, row?.device_id]
           .every(value => typeof value === 'string' && UUID.test(value)) ||
-        row.device_id !== deviceId) throw new BusinessWorkerError();
+        row.device_id !== deviceId ||
+        !['worker', 'recovery'].includes(row.access_purpose)) {
+      throw new BusinessWorkerError();
+    }
     return Object.freeze({ accountId: row.account_id, seatId: row.seat_id,
-      vaultId: row.vault_id, deviceId });
+      vaultId: row.vault_id, deviceId,
+      accessPurpose: row.access_purpose });
+  } catch { throw new BusinessWorkerError(); }
+}
+
+async function rotateBusinessWorkerDevice({ oldDeviceToken, oldDeviceId,
+  newDeviceId, newDeviceTokenHash, query }) {
+  if (!UUID.test(oldDeviceId) || !UUID.test(newDeviceId) ||
+      oldDeviceId === newDeviceId || typeof newDeviceTokenHash !== 'string' ||
+      !DIGEST.test(newDeviceTokenHash) || typeof query !== 'function') {
+    throw new BusinessWorkerError();
+  }
+  try {
+    const result = await query(ROTATE_SQL, [
+      businessDeviceTokenHash(oldDeviceToken), oldDeviceId,
+      newDeviceTokenHash, newDeviceId]);
+    const row = result?.rows?.[0];
+    if (result?.rows?.length !== 1 ||
+        ![row?.account_id, row?.seat_id, row?.vault_id]
+          .every(value => typeof value === 'string' && UUID.test(value))) {
+      throw new BusinessWorkerError();
+    }
+    return Object.freeze({ accountId: row.account_id, seatId: row.seat_id,
+      vaultId: row.vault_id, deviceId: newDeviceId });
   } catch { throw new BusinessWorkerError(); }
 }
 
 module.exports = { BusinessWorkerError, beginBusinessWorkerPairing,
   claimBusinessFirstDevice, resolveBusinessFirstDevice,
+  rotateBusinessWorkerDevice,
   challengeHash, businessDeviceTokenHash };

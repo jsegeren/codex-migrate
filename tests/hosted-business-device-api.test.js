@@ -15,9 +15,12 @@ function fixture() {
   const seatId = randomUUID();
   const vaultId = randomUUID();
   const deviceId = randomUUID();
+  const newDeviceId = randomUUID();
   const token = `hvb1_${'a'.repeat(43)}`;
+  const newToken = `hvb1_${'c'.repeat(43)}`;
   const adminToken = `hva1_${'b'.repeat(43)}`;
   const hash = businessDeviceTokenHash(token);
+  const newHash = businessDeviceTokenHash(newToken);
   const env = { HOSTED_MODE: 'sandbox',
     HOSTED_BUSINESS_WORKER_SANDBOX_OPEN: 'yes' };
   let loads = 0;
@@ -42,10 +45,16 @@ function fixture() {
           vaultId, deviceId, hash]);
         return { rows: [{ vault_id: vaultId }] };
       }
+      if (sql.includes('rotate_business_worker_device')) {
+        assert.deepEqual(values, [hash, deviceId, newHash, newDeviceId]);
+        return { rows: [{ account_id: accountId, seat_id: seatId,
+          vault_id: vaultId }] };
+      }
       assert.match(sql, /business_device_sessions/);
       assert.deepEqual(values, [hash, deviceId]);
       return { rows: [{ account_id: accountId, seat_id: seatId,
-        vault_id: vaultId, device_id: deviceId }] };
+        vault_id: vaultId, device_id: deviceId,
+        access_purpose: 'worker' }] };
     }, sendChallenge: async message => { emailed = message; return 'accepted'; } };
   }, env);
   const req = { method: 'POST', headers: {
@@ -53,7 +62,8 @@ function fixture() {
     origin: 'https://codexbackup.segeren.com',
     authorization: `Bearer ${adminToken}`,
   }, body: { action: 'begin', accountId, seatId } };
-  return { env, req, token, hash, accountId, seatId, vaultId, deviceId,
+  return { env, req, token, hash, newToken, newHash, newDeviceId,
+    accountId, seatId, vaultId, deviceId,
     loads: () => loads, emailed: () => emailed,
     send: async () => { const res = response(); await handler(req, res); return res; } };
 }
@@ -96,11 +106,27 @@ test('worker email code pairs one metadata-only device', async () => {
   f.req.headers.authorization = `Bearer ${f.token}`;
   const resolved = await f.send();
   assert.equal(resolved.statusCode, 200);
-  assert.deepEqual(resolved.body, claimed.body);
+  assert.deepEqual(resolved.body, { ...claimed.body,
+    accessPurpose: 'worker' });
 });
 
 test('runtime refuses missing sandbox database configuration', async () => {
   await assert.rejects(businessWorkerRuntime({
     HOSTED_MODE: 'sandbox', HOSTED_BUSINESS_WORKER_SANDBOX_OPEN: 'yes',
   }));
+});
+
+test('business worker rotates only with its existing device bearer', async () => {
+  const f = fixture();
+  f.req.body = { action: 'rotate', oldDeviceId: f.deviceId,
+    newDeviceId: f.newDeviceId, newDeviceTokenHash: f.newHash };
+  f.req.headers.authorization = `Bearer ${f.token}`;
+  const rotated = await f.send();
+  assert.equal(rotated.statusCode, 200);
+  assert.deepEqual(rotated.body, { accountId: f.accountId, seatId: f.seatId,
+    vaultId: f.vaultId, deviceId: f.newDeviceId });
+  assert.equal(JSON.stringify(f.req.body).includes(f.newToken), false);
+  f.req.headers.authorization = `Bearer hv1_${'a'.repeat(43)}`;
+  assert.equal((await f.send()).statusCode, 403);
+  assert.equal(f.loads(), 1);
 });

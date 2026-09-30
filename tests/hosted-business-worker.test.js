@@ -39,7 +39,8 @@ test('exact worker email proof pairs one separately hashed device', async () => 
     assert.match(sql, /s\.revoked_at IS NULL/);
     assert.deepEqual(values, [deviceTokenHash, deviceId]);
     return { rows: [{ account_id: accountId, seat_id: seatId,
-      vault_id: vaultId, device_id: deviceId }] };
+      vault_id: vaultId, device_id: deviceId,
+      access_purpose: 'worker' }] };
   };
   assert.deepEqual(await beginBusinessWorkerPairing({ adminSessionToken,
     accountId, seatId,
@@ -53,7 +54,8 @@ test('exact worker email proof pairs one separately hashed device', async () => 
     code: mailed.code, vaultId, deviceId, deviceTokenHash, query }),
   { accountId, seatId, vaultId, deviceId });
   assert.deepEqual(await resolveBusinessFirstDevice({ deviceToken, deviceId,
-    query }), { accountId, seatId, vaultId, deviceId });
+    query }), { accountId, seatId, vaultId, deviceId,
+      accessPurpose: 'worker' });
 });
 
 test('unknown seat, uncertain mail, wrong code, and revoked device fail closed', async () => {

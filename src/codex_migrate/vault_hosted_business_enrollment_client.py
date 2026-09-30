@@ -1,8 +1,8 @@
 """Dark business worker pairing with a separate device-only Keychain secret.
 
 An administrator's approved seat and the worker's emailed code are needed to
-claim the first device. This is not company recovery authorization: a lost
-employee Mac still needs a separately governed replacement-device path.
+claim the first device. A separate, dark administrator-approved path pairs a
+short-lived read-only replacement device; it is not a customer recovery flow.
 """
 
 from __future__ import annotations
@@ -181,11 +181,63 @@ class BusinessHostedEnrollmentClient:
         token, _ = self._credential(device_id, crypto_helper)
         return self._resolve_with_token(device_id, token)
 
+    def rotate_device(self, old_device_id: str, new_device_id: str,
+                      expected_account_id: str, expected_seat_id: str,
+                      expected_vault_id: str, *,
+                      crypto_helper: Optional[str] = None,
+                      apply: bool = False) -> dict:
+        """Replace an active worker bearer; reconcile lost replies by new ID.
+
+        The caller saves the new Keychain credential and its ID first. Never
+        replay an ambiguous rotation or delete either credential here.
+        """
+        if (apply is not True or any(not isinstance(value, str) or
+                not _UUID.fullmatch(value) for value in
+                (old_device_id, new_device_id, expected_account_id,
+                 expected_seat_id, expected_vault_id)) or
+                old_device_id == new_device_id):
+            raise MigrationError("The business device rotation is invalid.")
+        new_token, new_digest = self._credential(new_device_id, crypto_helper)
+        def matching(value: dict) -> dict:
+            if "accessPurpose" in value:
+                if value["accessPurpose"] != "worker":
+                    raise MigrationError("A recovery-only device cannot rotate as a worker.")
+                value = {key: val for key, val in value.items()
+                         if key != "accessPurpose"}
+            return _identity(value, expected_account_id, expected_seat_id,
+                             expected_vault_id, new_device_id)
+
+        try:
+            return matching(self._resolve_with_token(new_device_id, new_token))
+        except MigrationError:
+            pass
+        old_token, _ = self._credential(old_device_id, crypto_helper)
+        old_identity = self._resolve_with_token(old_device_id, old_token)
+        if old_identity["accessPurpose"] != "worker":
+            raise MigrationError("A recovery-only device cannot rotate as a worker.")
+        _identity({key: val for key, val in old_identity.items()
+                   if key != "accessPurpose"},
+                  expected_account_id, expected_seat_id,
+                  expected_vault_id, old_device_id)
+        try:
+            return matching(self._post({"action": "rotate",
+                "oldDeviceId": old_device_id, "newDeviceId": new_device_id,
+                "newDeviceTokenHash": new_digest}, old_token))
+        except MigrationError:
+            try:
+                return matching(self._resolve_with_token(new_device_id,
+                                                         new_token))
+            except MigrationError:
+                raise MigrationError(
+                    "Business device rotation could not be confirmed.") from None
+
     def _resolve_with_token(self, device_id: str, token: str) -> dict:
         value = self._post({"action": "resolve", "deviceId": device_id}, token)
         if (not isinstance(value, dict) or
-                set(value) != {"accountId", "seatId", "vaultId", "deviceId"} or
+                set(value) != {"accountId", "seatId", "vaultId", "deviceId",
+                               "accessPurpose"} or
                 value.get("deviceId") != device_id or
+                value.get("accessPurpose") not in ("worker", "recovery") or
                 any(not isinstance(value.get(name), str) or
                     not _UUID.fullmatch(value[name]) for name in
                     ("accountId", "seatId", "vaultId"))):
@@ -196,6 +248,8 @@ class BusinessHostedEnrollmentClient:
                        crypto_helper: Optional[str] = None) -> tuple:
         token, _ = self._credential(device_id, crypto_helper)
         identity = self._resolve_with_token(device_id, token)
+        if identity["accessPurpose"] != "worker":
+            raise MigrationError("A recovery-only device cannot run backups.")
         recovery = HostedRecoveryClient(
             self._origin, token, identity["vaultId"], timeout=self._timeout,
             allow_loopback_http=self._allow_loopback_http)

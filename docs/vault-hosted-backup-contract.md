@@ -246,6 +246,18 @@ authorization mechanism, **not** proof that a customer can recover after Mac
 loss. A clean GUI-backed Mac restore, tested company custody, live business
 entitlement, notification handling, and operator acceptance remain required.
 
+Migration 0039 lets an active worker bearer atomically rotate to a new
+device-only Keychain credential before its 29-day expiry. A recovery-only
+credential cannot rotate into a worker. The dark 30-minute hosted scheduler
+now accepts a separately identified business seat and business key, requires
+the first remote snapshot to open, records a business-specific configuration,
+and rotates the worker credential every 14 days with a durable handoff. It
+does not overwrite an existing personal schedule. Its health response keeps
+`company_recovery_verified: false`: backup freshness cannot stand in for a
+company-held kit and clean-Mac recovery drill. This is still test-path code,
+not a signed-app customer enrollment or proof of unattended physical-Mac
+operation.
+
 Before a business pilot, establish one organization-owned account with an
 identified purchaser and designated administrator, explicit seat/device
 enrollment and revocation, a company-held recovery route, and a subscription
