@@ -9,7 +9,7 @@ import unittest
 from unittest.mock import patch
 from urllib.parse import quote
 
-from codex_migrate.dashboard import LoopbackHTTPServer
+from codex_migrate.dashboard import HTML as MIGRATION_HTML, LoopbackHTTPServer
 from codex_migrate.errors import MigrationError
 from codex_migrate.setup import SetupDashboard, SETUP_HTML
 from codex_migrate.vault_backup import BackupPlan, BackupResult
@@ -63,6 +63,9 @@ class SetupTests(unittest.TestCase):
     def test_setup_shell_exposes_no_local_paths_or_token(self):
         code, body = self.request("/", authorized=False)
         self.assertEqual(code, 200)
+        self.assertIn("<title>Codex Backup — Overview</title>", body)
+        self.assertIn("<strong>Codex Backup</strong>", body)
+        self.assertNotIn("Vault + Migration", body)
         self.assertIn("Choose folders on this Mac", body)
         self.assertNotIn(str(self.home), body)
         self.assertNotIn(self.helper.token, body)
@@ -76,8 +79,9 @@ class SetupTests(unittest.TestCase):
         }) + "\n", encoding="utf-8")
         code, shell = self.request("/vault", authorized=False)
         self.assertEqual(code, 200)
-        self.assertIn("Codex Migrate", shell)
-        self.assertIn("Vault + Migration", shell)
+        self.assertIn("<title>Codex Backup — Conversations</title>", shell)
+        self.assertIn("<strong>Codex Backup</strong>", shell)
+        self.assertNotIn("Vault + Migration", shell)
         self.assertIn("Print / Save PDF", shell)
         self.assertIn("Share thread", shell)
         self.assertIn("Create encrypted backup", shell)
@@ -127,6 +131,13 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertIn("PRIVATE VAULT FIXTURE", self.request(grant["url"], authorized=False)[1])
         self.assertEqual(self.request(grant["url"], authorized=False)[0], 409)
+
+    def test_migration_shell_keeps_backup_as_product_name(self):
+        shell = MIGRATION_HTML
+        self.assertIn("<title>Codex Backup — Move Macs</title>", shell)
+        self.assertIn("<strong>Codex Backup</strong>", shell)
+        self.assertIn("Move Macs", shell)
+        self.assertNotIn("Vault + Migration", shell)
 
     def test_vault_search_opens_active_conversation_at_matching_message(self):
         transcript = self.home / ".codex/sessions/2026/09/active.jsonl"
