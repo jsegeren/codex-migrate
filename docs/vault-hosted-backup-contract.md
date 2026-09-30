@@ -238,6 +238,13 @@ prove that a company retained its pair, attribute offline use, or revoke
 previously copied ciphertext. Until enrollment, custody confirmation, company
 recovery testing, and an audited access path are integrated, keep the helper
 commands dark and keep business protection claims off the buyer UI.
+The [synthetic producer](https://github.com/jsegeren/codex-migrate/actions/runs/36683267263/job/109783265819)
+and [independent-macOS-runner consumer](https://github.com/jsegeren/codex-migrate/actions/runs/36683267263/job/109783378441)
+verified one encrypted business Vault and restored the same conversation after
+importing each credential separately. The producer key was deleted before the
+artifact transfer. This proves portable cryptography for disposable test data;
+it does not prove organization enrollment, custody, audit, hosted R2 transport,
+or a customer disaster recovery drill.
 
 ### Business privacy and recovery boundary
 
