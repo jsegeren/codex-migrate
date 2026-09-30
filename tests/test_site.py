@@ -111,8 +111,12 @@ class SiteTests(unittest.TestCase):
 
     def test_business_design_partner_page_is_discoverable_without_pretending_to_sell_hosting(self):
         source = (SITE / "codex-backup-for-teams.html").read_text()
+        home = (SITE / "index.html").read_text()
         text = " ".join(self.parse("codex-backup-for-teams.html").text)
-        self.assertIn('href="/codex-backup-for-teams"', (SITE / "index.html").read_text())
+        self.assertEqual(home.count('href="/codex-backup-for-teams"'), 1)
+        self.assertLess(home.index('data-analytics-event="team_pilot_hero_click"'),
+                        home.index('class="fine-print"'))
+        self.assertIn("Responsible for a team? Help shape hosted backup", home)
         self.assertIn("https://migrate.segeren.com/codex-backup-for-teams",
                       (SITE / "sitemap.xml").read_text())
         self.assertIn("This hosted team service is not available yet", text)
