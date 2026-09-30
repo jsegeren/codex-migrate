@@ -527,11 +527,21 @@ class HostedUploadClientTests(unittest.TestCase):
         self.assertEqual(self.client.publish_hosted_stage(
             RESERVATION, staged, apply=True), {
             "snapshotId": SNAPSHOT, "verifiedObjectCount": 3,
+            "sourceCoverage": "complete",
             "encryptedBytes": len(FIRST) + len(SECOND) + 5,
             "transcriptFiles": 2, "transcriptBytes": 123,
             "restagedPlaintextBytes": 0, "reusedPlaintextBytes": 0,
             "atRiskThreads": 0, "titleIndexUnavailable": True,
         })
+        partial = HostedSnapshotStage(SNAPSHOT, RESERVATION, objects, 2, 123, 2)
+        with patch.object(self.client, "submit_pages", return_value=3), patch.object(
+                self.client, "verify_and_publish", return_value=3) as publish:
+            result = self.client.publish_hosted_stage(
+                RESERVATION, partial, apply=True)
+        self.assertEqual(result["sourceCoverage"], "needs_attention")
+        self.assertEqual(result["atRiskThreads"], 2)
+        self.assertEqual(publish.call_args.kwargs["source_coverage"],
+                         "needs_attention")
 
     def test_publication_requires_apply_and_exact_server_receipt(self):
         with self.assertRaises(MigrationError):

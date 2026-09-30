@@ -177,9 +177,16 @@ class HostedLiveBackupRun:
                     if status["snapshotId"] != snapshot_id:
                         raise MigrationError(
                             "The hosted publication does not match the pending snapshot.")
+                    published = self._recovery.published_snapshot(
+                        snapshot_id, expected_account_id=self._upload._account_id,
+                        expected_worker_origin=self._upload._worker_origin)
+                    if published["totalObjects"] != status["verifiedObjectCount"]:
+                        raise MigrationError(
+                            "The hosted publication receipt does not match its version.")
                     self._finish(snapshot_id)
                     return {"snapshotId": snapshot_id,
-                            "verifiedObjectCount": status["verifiedObjectCount"]}
+                            "verifiedObjectCount": status["verifiedObjectCount"],
+                            "sourceCoverage": published["sourceCoverage"]}
                 if status["state"] != "active":
                     raise MigrationError("The hosted upload needs cleanup or review.")
                 observed_id, base = self._upload.reserve_with_base(

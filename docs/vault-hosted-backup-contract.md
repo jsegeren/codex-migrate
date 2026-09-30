@@ -662,8 +662,12 @@ customer-facing cleanup UX remains a release gate.
 The separate dark hosted-only runner now records that ID before its first
 reserve request, pins the returned last-good base, and retries the same
 snapshot after interruption. It accepts a lost publication response only when
-the service reports that exact snapshot as published. It does not yet run on a
-schedule or in the installed app. After publication it removes only recognized,
+the service reports that exact snapshot as published and its authenticated
+version lookup agrees on object count and source-reported coverage. The dark
+30-minute schedule uses that coverage when reconciling a lost response; an
+unknown or incomplete version cannot be promoted to its local green receipt.
+The schedule is not enabled in the installed buyer app. After publication the
+runner removes only recognized,
 owner-only generated journal files; an unexpected file or unreceipted scratch
 chunk keeps the run marker and requires review rather than being deleted.
 Customer-facing cleanup and failure guidance remain release gates. None of

@@ -177,6 +177,7 @@ class HostedScheduleTests(unittest.TestCase):
         config_path, status_path, _, _ = _paths(self.home)
         fake_run = SimpleNamespace(back_up_live_history=lambda *_args, **_kw: {
             "snapshotId": NEXT, "atRiskThreads": 0,
+            "sourceCoverage": "complete",
             "titleIndexUnavailable": True})
         a, b, _, _ = self._patches()
         with a, b, patch("codex_migrate.vault_hosted_schedule.HostedLiveBackupRun",
@@ -295,13 +296,20 @@ class HostedScheduleTests(unittest.TestCase):
         self._install()
         config_path, status_path, good_path, _ = _paths(self.home)
         fake_run = SimpleNamespace(back_up_live_history=lambda *_args, **_kw: {
-            "snapshotId": NEXT, "atRiskThreads": 0})
+            "snapshotId": NEXT, "atRiskThreads": 0,
+            "sourceCoverage": "complete"})
         a, b, _, _ = self._patches()
         with a, b, patch("codex_migrate.vault_hosted_schedule.HostedLiveBackupRun",
                          return_value=fake_run):
             self.assertEqual(run_hosted_scheduled_backup(str(config_path)), 0)
         self.assertEqual(json.loads(status_path.read_text())["status"], "verified")
         self.assertEqual(json.loads(good_path.read_text())["snapshot_id"], NEXT)
+        fake_run.back_up_live_history = lambda *_args, **_kw: {
+            "snapshotId": NEXT, "sourceCoverage": "complete"}
+        with a, b, patch("codex_migrate.vault_hosted_schedule.HostedLiveBackupRun",
+                         return_value=fake_run):
+            self.assertEqual(run_hosted_scheduled_backup(str(config_path)), 0)
+        self.assertEqual(json.loads(status_path.read_text())["status"], "verified")
         fake_run.back_up_live_history = lambda *_args, **_kw: {"snapshotId": NEXT}
         with a, b, patch("codex_migrate.vault_hosted_schedule.HostedLiveBackupRun",
                          return_value=fake_run):

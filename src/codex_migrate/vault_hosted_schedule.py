@@ -344,7 +344,9 @@ def run_hosted_scheduled_backup(config_path: str) -> int:
             else:
                 snapshot_id = result["snapshotId"]
                 risk = result.get("atRiskThreads")
-                state = "verified" if risk == 0 else "needs_attention"
+                coverage = result.get("sourceCoverage")
+                state = ("verified" if coverage == "complete" and
+                         (risk is None or risk == 0) else "needs_attention")
             if not isinstance(snapshot_id, str) or not _UUID.fullmatch(snapshot_id):
                 raise MigrationError("The hosted backup receipt is invalid.")
             if state == "verified":

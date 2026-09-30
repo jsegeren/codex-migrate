@@ -36,6 +36,13 @@ class HostedLiveRunTests(unittest.TestCase):
             allow_loopback_http=True)
         self.recovery = HostedRecoveryClient(
             ORIGIN, TOKEN, VAULT, allow_loopback_http=True)
+        published = patch.object(
+            self.recovery, "published_snapshot",
+            side_effect=lambda snapshot_id, **_kwargs: {
+                "snapshotId": snapshot_id, "totalObjects": 3,
+                "totalBytes": 300, "sourceCoverage": "complete"})
+        self.published = published.start()
+        self.addCleanup(published.stop)
         self.run = HostedLiveBackupRun(self.upload, self.recovery, str(self.home))
         preflight = patch("codex_migrate.vault_hosted_live_run.unchanged_published_history",
                           return_value=None)
@@ -168,10 +175,37 @@ class HostedLiveRunTests(unittest.TestCase):
                     "verifiedObjectCount": 3}):
                 self.assertEqual(self.back_up(), {
                     "snapshotId": pending["snapshotId"],
-                    "verifiedObjectCount": 3})
+                    "verifiedObjectCount": 3, "sourceCoverage": "complete"})
             stage.assert_called_once()
             publish.assert_called_once()
+            self.published.assert_called_once_with(
+                pending["snapshotId"], expected_account_id=ACCOUNT,
+                expected_worker_origin="http://127.0.0.1:49112")
             self.assertIsNone(self.run.pending())
+
+    def test_lost_publication_ack_refuses_mismatched_remote_version(self):
+        pending = self.interrupted_run()
+        self.published.side_effect = lambda snapshot_id, **_kwargs: {
+            "snapshotId": snapshot_id, "totalObjects": 4,
+            "totalBytes": 300, "sourceCoverage": "complete"}
+        with patch.object(self.upload, "reservation_receipt", return_value={
+                "state": "published", "snapshotId": pending["snapshotId"],
+                "verifiedObjectCount": 3}):
+            with self.assertRaisesRegex(MigrationError, "receipt does not match"):
+                self.back_up()
+        self.assertEqual(self.run.pending(), pending)
+
+    def test_lost_publication_ack_preserves_partial_coverage(self):
+        pending = self.interrupted_run()
+        self.published.side_effect = lambda snapshot_id, **_kwargs: {
+            "snapshotId": snapshot_id, "totalObjects": 3,
+            "totalBytes": 300, "sourceCoverage": "needs_attention"}
+        with patch.object(self.upload, "reservation_receipt", return_value={
+                "state": "published", "snapshotId": pending["snapshotId"],
+                "verifiedObjectCount": 3}):
+            result = self.back_up()
+        self.assertEqual(result["sourceCoverage"], "needs_attention")
+        self.assertIsNone(self.run.pending())
 
     def test_foreign_publication_or_key_change_keeps_pending_state(self):
         with patch.object(self.upload, "reserve_with_base",

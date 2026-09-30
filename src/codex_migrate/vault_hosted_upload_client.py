@@ -469,6 +469,8 @@ class HostedUploadClient:
             raise MigrationError("The hosted publication receipt is incomplete.")
         return {"snapshotId": claim.snapshot_id,
                 "verifiedObjectCount": verified,
+                "sourceCoverage": ("complete" if staged.at_risk_threads == 0 else
+                                   "needs_attention"),
                 "encryptedBytes": claim.remote_bytes_checked,
                 "transcriptFiles": staged.transcript_files,
                 "transcriptBytes": staged.transcript_bytes,
