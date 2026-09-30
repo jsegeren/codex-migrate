@@ -86,13 +86,30 @@ def consume(bundle: Path, helper: Path) -> None:
         raise AssertionError("Independent Mac unexpectedly had the business Vault key")
     for role in ("company", "worker"):
         credential_path = bundle / (role + "-credential.json")
+        # Artifact download does not preserve the producer's 0600 file mode.
+        # These are disposable test credentials, but import still requires a
+        # private file on the independent runner.
+        credential_path.chmod(0o600)
         credential = json.loads(credential_path.read_text(encoding="utf-8"))
         if credential["envelope"]["role"] != role:
             raise AssertionError("Business recovery custodian was switched")
         imported = False
         try:
-            result = import_business_recovery_credential(
-                str(vault), credential, crypto_helper=str(helper))
+            if role == "company":
+                command = subprocess.run(
+                    [sys.executable, "-m", "codex_migrate", "vault",
+                     "business-key-import", "--vault", str(vault),
+                     "--kit", str(credential_path), "--crypto-helper",
+                     str(helper), "--apply"],
+                    capture_output=True, timeout=30, check=False,
+                )
+                if (command.returncode or key_id.encode() not in command.stdout or
+                        b"CVB1-" in command.stdout or b"CVB1-" in command.stderr):
+                    raise AssertionError("Business recovery CLI import failed safely")
+                result = key_id
+            else:
+                result = import_business_recovery_credential(
+                    str(vault), credential, crypto_helper=str(helper))
             imported = True
             if result != key_id:
                 raise AssertionError("Business recovery import changed key identity")
