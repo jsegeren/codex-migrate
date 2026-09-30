@@ -197,8 +197,10 @@ recorded device sessions; new device/session rows for that seat are refused.
 Migration 0034 and the dark server module add a 10-minute, rate-limited code
 sent only to the exact operator-approved administrator contact. Claiming that
 code mints a separate 12-hour metadata session. Its SendGrid adapter is
-sandbox-sink-only, and no HTTP route, device approval, content access, billing
-entitlement, or live mail is enabled. This tests administrator email control;
+sandbox-sink-only. A dark HTTP route accepts this proof only with both
+`HOSTED_MODE=sandbox` and `HOSTED_BUSINESS_ADMIN_SANDBOX_OPEN=yes`; it is closed
+by default and cannot approve a device, access content, grant billing
+entitlement, or send live mail. This tests administrator email control;
 it does not independently establish the sender's authority to act for a
 company. Before a pilot, the operator must verify that authority off-platform
 and record the approval, then the product must bind an audited admin action
