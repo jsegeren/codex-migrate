@@ -1,5 +1,34 @@
 # Desktop release readiness
 
+## September 30 structural-corruption rejection — draft only
+
+A new regression reproduced an invalid-source acceptance defect in the prior
+signed candidate: non-object JSONL records such as `null`, arrays, strings,
+numbers, and booleans were ignored during identity inspection, allowing a new
+backup reference to advance despite invalid conversation structure. The shared
+local/hosted scanner now refuses these records. Concurrent source changes
+remain retryable; unknown object-shaped records remain readable without an
+allowlist of Codex event types. This is structural validation, not proof that
+every syntactically valid conversation edit is semantically correct.
+
+The broader native-helper/source test run passed 112 tests with one explicit
+environment-specific skip. New local tests prove that malformed/non-object
+records leave the previous reference unchanged and that its restored bytes
+match the original. Hosted tests prove invalid records reach neither object
+staging nor snapshot-tail publication and leave source bytes untouched.
+
+Exact clean, pushed source `d26aa7efc4dc95b908ab1e7546ed947bfa274560`
+produced a Developer ID signed, **not notarized** local-test build 20. Strict
+signature validation passed. Its ZIP SHA-256 is
+`e086de339242c5386f3754806b5b7e527eed8e1006c2890c936f2b554f9ca673`.
+All nine packaged Vault tests passed, including corrupted-source refusal,
+exact previous-version recovery, scheduled database appends, attachments,
+and legacy build-16 reading. Separate packaged interruption and updater/restore
+contention tests passed. These used disposable data and test keys only.
+This candidate supersedes the earlier test package for acceptance work; it is
+not installed for customers, notarized, released, or a real-R2 clean-Mac
+disaster-recovery receipt. The clean acceptance VM download remains active.
+
 ## September 30 backup-first hosted integration — draft only
 
 The hosted branch now includes the latest local application's Codex Backup
