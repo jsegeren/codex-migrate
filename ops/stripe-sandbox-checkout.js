@@ -4,7 +4,7 @@ const { randomUUID } = require('node:crypto');
 
 const API = 'https://api.stripe.com/v1';
 const PRODUCT_NAME = 'Codex Migrate — Founding Edition (TEST ONLY)';
-const SITE = 'https://migrate.segeren.com';
+const SITE = 'https://codexbackup.segeren.com';
 const TAX_CODES = new Set(['txcd_10000000', 'txcd_10202000', 'txcd_10202001', 'txcd_10202003']);
 
 function configuration(env) {

@@ -7,7 +7,7 @@ test('homepage declares an accessible large social card with a real PNG asset', 
   const tags = [...html.matchAll(/<meta\s+(?:property|name)="([^"]+)"\s+content="([^"]*)"\s*\/?\s*>/g)];
   const meta = Object.fromEntries(tags.map(match => [match[1], match[2]]));
   for (const key of ['og:image', 'twitter:image']) {
-    assert.equal(meta[key], 'https://migrate.segeren.com/og.png');
+    assert.equal(meta[key], 'https://codexbackup.segeren.com/og.png');
     assert.equal(tags.filter(match => match[1] === key).length, 1);
   }
   assert.equal(meta['twitter:card'], 'summary_large_image');

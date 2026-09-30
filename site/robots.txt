@@ -3,4 +3,4 @@ Allow: /
 Disallow: /api/
 Disallow: /success
 
-Sitemap: https://migrate.segeren.com/sitemap.xml
+Sitemap: https://codexbackup.segeren.com/sitemap.xml

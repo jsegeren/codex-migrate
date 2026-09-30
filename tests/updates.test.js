@@ -23,7 +23,7 @@ test('appcast advertises only an approved, signed, compatible archive', () => {
   assert.equal(response.statusCode, 200);
   assert.match(response.data, /<sparkle:version>15<\/sparkle:version>/);
   assert.match(response.data, /sparkle:edSignature=/);
-  assert.match(response.data, /https:\/\/migrate\.segeren\.com\/api\/update-archive/);
+  assert.match(response.data, /https:\/\/codexbackup\.segeren\.com\/api\/update-archive/);
   assert.equal(response.data.includes('private.blob'), false);
   assert.equal(response.data.includes(token), false);
   for (const changed of [{ ...release, sparkleSignature: undefined },
