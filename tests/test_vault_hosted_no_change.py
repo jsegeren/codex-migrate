@@ -21,7 +21,7 @@ THREAD = "66666666-6666-4666-8666-666666666666"
 class Recovery:
     def __init__(self, size):
         self.pointer = {"snapshotId": SNAPSHOT, "totalObjects": 4,
-                        "totalBytes": 100}
+                        "totalBytes": 100, "sourceCoverage": "complete"}
         self.catalog = [{"collection": "active", "path": "thread.jsonl",
                          "size": size, "thread_id": THREAD, "titles": [],
                          "at_risk": False}]
@@ -68,7 +68,8 @@ class HostedNoChangeTests(unittest.TestCase):
     def test_exact_sealed_inventory_returns_a_check_not_a_new_snapshot(self):
         self.assertEqual(self.check(), {
             "unchanged": True, "lastGoodSnapshotId": SNAPSHOT,
-            "lastGoodObjectCount": 4, "atRiskThreads": 0})
+            "lastGoodObjectCount": 4, "sourceCoverage": "complete",
+            "atRiskThreads": 0})
         self.assertEqual(self.recovery.catalog_reads, 1)
         self.assertEqual(self.recovery.pointer_reads, 2)
 
@@ -110,3 +111,7 @@ class HostedNoChangeTests(unittest.TestCase):
         self.assertEqual(self.check()["atRiskThreads"], 1)
         del self.recovery.catalog[0]["at_risk"]
         self.assertEqual(self.check()["atRiskThreads"], 1)
+
+    def test_unchanged_catalog_does_not_promote_partial_service_claim(self):
+        self.recovery.pointer["sourceCoverage"] = "needs_attention"
+        self.assertEqual(self.check()["sourceCoverage"], "needs_attention")

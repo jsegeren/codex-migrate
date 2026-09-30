@@ -124,4 +124,5 @@ def unchanged_published_history(
         }
         return {"unchanged": True, "lastGoodSnapshotId": snapshot_id,
                 "lastGoodObjectCount": latest["totalObjects"],
+                "sourceCoverage": latest.get("sourceCoverage", "unknown"),
                 "atRiskThreads": len(at_risk)}

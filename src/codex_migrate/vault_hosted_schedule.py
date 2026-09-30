@@ -210,6 +210,10 @@ def install_hosted_schedule(source_home: str, device_id: str, metadata: dict, *,
     latest = recovery.latest_snapshot(expected_account_id=upload._account_id)
     if latest is None:
         raise MigrationError("Make and verify the first hosted backup before scheduling.")
+    if latest.get("sourceCoverage") != "complete":
+        raise MigrationError(
+            "The first hosted backup has incomplete or unknown source coverage. "
+            "Review it before scheduling protected backups.")
     observed, catalog = recovery.prior_catalog(
         key_id=key_id, crypto_helper=str(helper), max_bytes=MAX_PRIOR_BYTES,
         expected_snapshot_id=latest["snapshotId"],
@@ -326,7 +330,8 @@ def run_hosted_scheduled_backup(config_path: str) -> int:
                 max_prior_bytes=MAX_PRIOR_BYTES, apply=True)
             if result.get("unchanged") is True:
                 snapshot_id = result["lastGoodSnapshotId"]
-                state = ("unchanged" if result.get("atRiskThreads") == 0
+                state = ("unchanged" if result.get("atRiskThreads") == 0 and
+                         result.get("sourceCoverage") == "complete"
                          else "needs_attention")
             else:
                 snapshot_id = result["snapshotId"]
