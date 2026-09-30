@@ -1114,7 +1114,7 @@ class VaultBackupTests(unittest.TestCase):
                     assert expected_account_id == account_id
                     return (None if self.base_id is None else
                             {"snapshotId": self.base_id, "totalObjects": 6,
-                             "totalBytes": 100})
+                             "totalBytes": 100, "sourceCoverage": "complete"})
 
                 def prior_catalog(self, *, key_id, crypto_helper, max_bytes,
                                   expected_snapshot_id, expected_account_id,
@@ -1165,7 +1165,8 @@ class VaultBackupTests(unittest.TestCase):
                     max_prior_bytes=5_000_000, apply=True)
                 self.assertEqual(checked, {
                     "unchanged": True, "lastGoodSnapshotId": published["snapshotId"],
-                    "lastGoodObjectCount": 6, "atRiskThreads": 0})
+                    "lastGoodObjectCount": 6, "atRiskThreads": 0,
+                    "sourceCoverage": "complete"})
                 self.assertEqual(upload.store.writes, prior_writes)
                 self.assertEqual(upload.published_id, published["snapshotId"])
                 self.assertIsNone(runner.pending())
