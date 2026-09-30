@@ -44,6 +44,12 @@ Compliance API audit-log retention of up to 30 days for the local signed-in
 environment; those logs are not a demonstrated restore of complete local
 history. This is the specific business recovery gap to qualify, not a claim
 that OpenAI retains no Codex information at all.
+OpenAI's current [Codex administrator guidance](https://learn.chatgpt.com/docs/hipaa-configuration#shared-responsibility)
+states this workstation/cloud distinction directly and notes the up-to-30-day
+Codex audit records. Its [Remote connections guide](https://learn.chatgpt.com/docs/remote-connections#hand-off-a-chat-between-hosts)
+describes chat and Git-state handoff between connected hosts; handoff is not
+an independent, scheduled archive of all local Codex history. A chat already
+handed off may survive loss of the former host; do not claim otherwise.
 OpenAI also [documents local transcript persistence](https://learn.chatgpt.com/docs/config-file/config-advanced#history-persistence)
 and [now advertises conversation-content search](https://learn.chatgpt.com/docs/changelog).
 An [OpenAI engineer stated](https://github.com/openai/codex/discussions/13251)
@@ -213,6 +219,13 @@ offboarding procedure; retain read compatibility with existing individual
 Vaults. Until that implementation and its recovery drill are verified, a
 company-held copy of `CV1-` may be used only as a disclosed, assisted-pilot
 limitation, not as a completed business key-custody feature.
+Removing an employee's envelope or account access only blocks future service
+retrieval; it cannot revoke plaintext or ciphertext plus a key they already
+copied. Cryptographic revocation of retained versions requires a new data key,
+re-encryption of every version that must remain available, deletion of old
+hosted ciphertext, and an explicit warning that previously exported copies
+cannot be recalled. Do not promise retrospective revocation or a complete
+audit trail for offline decryption.
 
 ### Business privacy and recovery boundary
 
