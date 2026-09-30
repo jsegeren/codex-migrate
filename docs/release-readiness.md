@@ -1,5 +1,17 @@
 # Desktop release readiness
 
+## September 30 structured-token-count recovery regression — draft only
+
+An upstream [Codex history-projection report](https://github.com/openai/codex/issues/42025)
+describes intact rollout JSONL whose later turns disappear from Codex's UI
+after a structured `token_count` event. A sanitized fixture now verifies that
+Vault independently finds and exports a later message without indexing that
+telemetry as conversation text. A second fixture makes an encrypted snapshot,
+verifies it, restores the exact rollout bytes into a separate home, and finds
+the later message there. Both are synthetic Mac tests; they do not repair
+Codex's own projection, prove that every affected real thread is readable, or
+certify a hosted clean-Mac restore.
+
 ## September 30 large-history search cache — draft, not released
 
 A copy-only, read-only recovery set from one Mac contained 2,328 JSONL files,

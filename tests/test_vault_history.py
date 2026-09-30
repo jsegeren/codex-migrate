@@ -15,7 +15,9 @@ from codex_migrate import vault_identity
 from codex_migrate.vault_identity import (
     TranscriptChanged, loss_warnings, peek_identity, scan_transcript,
 )
-from codex_migrate.vault_recovery import list_snapshots, snapshot_catalog, verify_snapshot
+from codex_migrate.vault_recovery import (
+    list_snapshots, restore_snapshot, snapshot_catalog, verify_snapshot,
+)
 
 
 THREAD_ID = "44444444-4444-4444-8444-444444444444"
@@ -219,6 +221,45 @@ class EncryptedHistoryTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.build.cleanup()
+
+    def test_snapshot_restores_messages_after_structured_token_count_event(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            transcript = source / ".codex/sessions" / ("rollout-" + THREAD_ID + ".jsonl")
+            transcript.parent.mkdir(parents=True)
+            original = (
+                record("session_meta", {"id": THREAD_ID})
+                + record("event_msg", {"type": "token_count", "info": {
+                    "last_token_usage": {"input_tokens": 32},
+                    "rate_limits": {"credits": {"balance": 12.5}},
+                }})
+                + record("response_item", {"type": "message", "role": "assistant",
+                                           "content": [{"type": "output_text", "text":
+                                                        "Later decision survives projection failure."}]})
+            )
+            transcript.write_text(original)
+            vault = root / "vault"
+            restored_home = root / "restored-home"
+            restored_home.mkdir()
+            try:
+                saved = backup(str(source), str(vault), crypto_helper=str(self.helper))
+                verify_snapshot(str(vault), snapshot=saved.snapshot_id,
+                                crypto_helper=str(self.helper))
+                restore_snapshot(str(source), str(vault),
+                                 str(restored_home / ".codex"),
+                                 snapshot=saved.snapshot_id,
+                                 crypto_helper=str(self.helper))
+                self.assertEqual((restored_home / ".codex/sessions" /
+                                  transcript.name).read_text(), original)
+                self.assertEqual(len(search(str(restored_home),
+                                            "Later decision survives")), 1)
+            finally:
+                if (vault / "vault.json").exists():
+                    key_id = json.loads((vault / "vault.json").read_text())["key_id"]
+                    subprocess.run([str(self.helper), "delete-key", "--key-id", key_id],
+                                   check=True, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE)
 
     def test_state_database_titles_are_searchable_in_encrypted_snapshot(self):
         with tempfile.TemporaryDirectory() as temporary:

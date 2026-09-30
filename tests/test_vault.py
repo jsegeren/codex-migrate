@@ -89,6 +89,34 @@ class VaultTests(unittest.TestCase):
             self.assertEqual(search(str(root), "private/customer", limit=10), [])
             self.assertEqual(search(str(root), "secret-id", limit=10), [])
 
+    def test_token_count_shape_cannot_hide_later_conversation_text(self):
+        """A Codex projection failure must not truncate independent Vault reads."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            folder = root / ".codex/sessions"
+            folder.mkdir(parents=True)
+            transcript = folder / "rollout-11111111-1111-4111-8111-111111111111.jsonl"
+            records = [
+                {"type": "session_meta", "payload": {
+                    "id": "11111111-1111-4111-8111-111111111111"}},
+                {"type": "event_msg", "payload": {"type": "token_count", "info": {
+                    "last_token_usage": {"input_tokens": 32},
+                    "rate_limits": {"credits": {"balance": 12.5}},
+                }}},
+                {"type": "response_item", "payload": {"type": "message",
+                    "role": "assistant", "content": [{"type": "output_text",
+                        "text": "A later recovery marker remains readable."}]}},
+            ]
+            transcript.write_text("\n".join(json.dumps(row) for row in records) + "\n")
+
+            matches = search(str(root), "later recovery marker")
+            self.assertEqual(len(matches), 1)
+            self.assertEqual(matches[0].transcript, transcript.name)
+            self.assertEqual(search(str(root), "balance"), [])
+            exported = markdown(read_thread(str(root), "active", transcript.name))
+            self.assertIn("later recovery marker", exported)
+            self.assertNotIn("balance", exported)
+
     def test_ambiguous_fork_parent_keeps_other_transcripts_searchable(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
