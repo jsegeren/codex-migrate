@@ -4,6 +4,9 @@
   "cleanUrls": true,
   "trailingSlash": false,
   "redirects": [
+    { "source": "/", "has": [{ "type": "host", "value": "migrate.segeren.com" }], "destination": "https://codexbackup.segeren.com/", "permanent": true },
+    { "source": "/:page(codex-vault|codex-backup-for-teams|backup-codex-conversations-mac|search-codex-conversation-history|recover-missing-codex-chats|moving-to-a-new-mac|codex-history-missing-new-mac|backup-and-recovery|compare-codex-migration-tools|access-codex-from-another-machine|privacy|terms|refunds)", "has": [{ "type": "host", "value": "migrate.segeren.com" }], "destination": "https://codexbackup.segeren.com/:page", "permanent": true },
+    { "source": "/ja/codex-new-mac", "has": [{ "type": "host", "value": "migrate.segeren.com" }], "destination": "https://codexbackup.segeren.com/ja/codex-new-mac", "permanent": true },
     { "source": "/transfer-codex-to-new-mac", "destination": "/moving-to-a-new-mac", "permanent": true },
     { "source": "/move-codex-to-new-mac", "destination": "/moving-to-a-new-mac", "permanent": true },
     { "source": "/migrate-codex-to-new-mac", "destination": "/moving-to-a-new-mac", "permanent": true }
