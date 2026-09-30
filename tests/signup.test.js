@@ -37,6 +37,12 @@ test('valid request sends consent to fixed maintainer, not visitor', async () =>
   assert.match(res.body, /data-analytics-event="generate_lead"/);
   assert.match(res.body, /src="\/analytics\.js\?v=20260911-ecommerce"/);
 });
+test('new public host accepts the same signup without removing the legacy host', async () => {
+  const res = await submit({ headers: { origin: 'https://codexbackup.segeren.com',
+    'content-type': 'application/x-www-form-urlencoded' } });
+  assert.equal(res.statusCode, 200);
+  assert.equal(sent.length, 1);
+});
 test('team pilot request uses the same fixed recipient and only bounded qualification fields', async () => {
   const res = await submit({ body: {
     intent: 'team-pilot', email: 'buyer@example.net', team_size: '26-100',
