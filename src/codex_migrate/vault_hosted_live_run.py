@@ -190,10 +190,26 @@ class HostedLiveBackupRun:
                             "The hosted publication does not match the pending snapshot.")
                     published = self._confirmed_publication(
                         snapshot_id, status["verifiedObjectCount"])
+                    # A lost publish reply also loses the local risk count.
+                    # Reopen this exact encrypted manifest instead of treating
+                    # absent loss evidence as zero, or relying on server
+                    # coverage alone (the server cannot read conversations).
+                    observed, catalog = self._recovery.prior_catalog(
+                        key_id=key_id, crypto_helper=crypto_helper,
+                        max_bytes=max_prior_bytes, expected_snapshot_id=snapshot_id,
+                        expected_account_id=self._upload._account_id)
+                    if observed != snapshot_id:
+                        raise MigrationError("The hosted recovery catalog changed on retry.")
+                    at_risk = {
+                        (item["collection"], item.get("thread_id") or item["path"])
+                        for item in catalog if item["collection"] != "attachments"
+                        and item.get("at_risk") is not False
+                    }
                     self._finish(snapshot_id)
                     return {"snapshotId": snapshot_id,
                             "verifiedObjectCount": status["verifiedObjectCount"],
-                            "sourceCoverage": published["sourceCoverage"]}
+                            "sourceCoverage": published["sourceCoverage"],
+                            "atRiskThreads": len(at_risk)}
                 if status["state"] != "active":
                     raise MigrationError("The hosted upload needs cleanup or review.")
                 observed_id, base = self._upload.reserve_with_base(

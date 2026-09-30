@@ -372,17 +372,17 @@ def run_hosted_scheduled_backup(config_path: str) -> int:
             result = run.back_up_live_history(
                 configuration["key_metadata"], crypto_helper=str(helper),
                 max_prior_bytes=MAX_PRIOR_BYTES, apply=True)
+            risk = result.get("atRiskThreads")
+            # Unknown or malformed loss evidence is not a zero-loss receipt.
+            # In particular, bool and float compare equal to zero in Python.
+            complete = (result.get("sourceCoverage") == "complete" and
+                        type(risk) is int and risk == 0)
             if result.get("unchanged") is True:
                 snapshot_id = result["lastGoodSnapshotId"]
-                state = ("unchanged" if result.get("atRiskThreads") == 0 and
-                         result.get("sourceCoverage") == "complete"
-                         else "needs_attention")
+                state = "unchanged" if complete else "needs_attention"
             else:
                 snapshot_id = result["snapshotId"]
-                risk = result.get("atRiskThreads")
-                coverage = result.get("sourceCoverage")
-                state = ("verified" if coverage == "complete" and
-                         (risk is None or risk == 0) else "needs_attention")
+                state = "verified" if complete else "needs_attention"
             if not isinstance(snapshot_id, str) or not _UUID.fullmatch(snapshot_id):
                 raise MigrationError("The hosted backup receipt is invalid.")
             if state == "verified":

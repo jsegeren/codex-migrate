@@ -43,6 +43,12 @@ class HostedLiveRunTests(unittest.TestCase):
                 "totalBytes": 300, "sourceCoverage": "complete"})
         self.published = published.start()
         self.addCleanup(published.stop)
+        catalog = patch.object(self.recovery, "prior_catalog",
+            side_effect=lambda **kwargs: (kwargs["expected_snapshot_id"], [
+                {"collection": "active", "path": "synthetic.jsonl",
+                 "thread_id": KEY, "at_risk": False}]))
+        self.catalog = catalog.start()
+        self.addCleanup(catalog.stop)
         self.run = HostedLiveBackupRun(self.upload, self.recovery, str(self.home))
         preflight = patch("codex_migrate.vault_hosted_live_run.unchanged_published_history",
                           return_value=None)
@@ -177,13 +183,43 @@ class HostedLiveRunTests(unittest.TestCase):
                     "verifiedObjectCount": 3}):
                 self.assertEqual(self.back_up(), {
                     "snapshotId": pending["snapshotId"],
-                    "verifiedObjectCount": 3, "sourceCoverage": "complete"})
+                    "verifiedObjectCount": 3, "sourceCoverage": "complete",
+                    "atRiskThreads": 0})
             stage.assert_called_once()
             publish.assert_called_once()
             self.published.assert_called_once_with(
                 pending["snapshotId"], expected_account_id=ACCOUNT,
                 expected_worker_origin="http://127.0.0.1:49112")
             self.assertIsNone(self.run.pending())
+
+    def test_lost_ack_needs_exact_decryptable_catalog_before_finishing(self):
+        pending = self.interrupted_run()
+        for failure in (MigrationError("catalog unavailable"), "foreign-version"):
+            with self.subTest(failure=str(failure)):
+                self.catalog.side_effect = (
+                    failure if isinstance(failure, Exception) else
+                    lambda **kwargs: (OTHER, []))
+                with patch.object(self.upload, "reservation_receipt", return_value={
+                        "state": "published", "snapshotId": pending["snapshotId"],
+                        "verifiedObjectCount": 3}):
+                    with self.assertRaises(MigrationError):
+                        self.back_up()
+                self.assertEqual(self.run.pending(), pending)
+
+    def test_lost_ack_preserves_unknown_and_flagged_catalog_risk(self):
+        for flag in (True, None, False):
+            with self.subTest(flag=flag):
+                pending = self.interrupted_run()
+                self.catalog.side_effect = lambda **kwargs: (
+                    kwargs["expected_snapshot_id"], [
+                        {"collection": "active", "path": "synthetic.jsonl",
+                         "thread_id": KEY, "at_risk": flag}])
+                with patch.object(self.upload, "reservation_receipt", return_value={
+                        "state": "published", "snapshotId": pending["snapshotId"],
+                        "verifiedObjectCount": 3}):
+                    result = self.back_up()
+                self.assertEqual(result["atRiskThreads"], 0 if flag is False else 1)
+                self.assertIsNone(self.run.pending())
 
     def test_lost_publication_ack_refuses_mismatched_remote_version(self):
         pending = self.interrupted_run()

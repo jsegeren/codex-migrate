@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timedelta, timezone
 import os
 from pathlib import Path
 import plistlib
@@ -408,13 +409,61 @@ class HostedScheduleTests(unittest.TestCase):
         with a, b, patch("codex_migrate.vault_hosted_schedule.HostedLiveBackupRun",
                          return_value=fake_run):
             self.assertEqual(run_hosted_scheduled_backup(str(config_path)), 0)
-        self.assertEqual(json.loads(status_path.read_text())["status"], "verified")
+        self.assertEqual(json.loads(status_path.read_text())["status"], "needs_attention")
         fake_run.back_up_live_history = lambda *_args, **_kw: {"snapshotId": NEXT}
         with a, b, patch("codex_migrate.vault_hosted_schedule.HostedLiveBackupRun",
                          return_value=fake_run):
             self.assertEqual(run_hosted_scheduled_backup(str(config_path)), 0)
         self.assertEqual(json.loads(status_path.read_text())["status"], "needs_attention")
         self.assertEqual(json.loads(good_path.read_text())["snapshot_id"], NEXT)
+
+    def test_ambiguous_risk_cannot_advance_or_green_last_good(self):
+        self._install()
+        config_path, status_path, good_path, _ = _paths(self.home)
+        before = good_path.read_bytes()
+        for unchanged in (False, True):
+            for risk in (None, False, 0.0, -1, "0", [], {}):
+                with self.subTest(unchanged=unchanged, risk=risk):
+                    result = {"sourceCoverage": "complete", "atRiskThreads": risk}
+                    result.update({"unchanged": True, "lastGoodSnapshotId": NEXT}
+                                  if unchanged else {"snapshotId": NEXT})
+                    fake_run = SimpleNamespace(
+                        back_up_live_history=lambda *_args, **_kw: result)
+                    a, b, _, _ = self._patches()
+                    with a, b, patch(
+                            "codex_migrate.vault_hosted_schedule.HostedLiveBackupRun",
+                            return_value=fake_run):
+                        self.assertEqual(run_hosted_scheduled_backup(str(config_path)), 0)
+                    self.assertEqual(good_path.read_bytes(), before)
+                    self.assertEqual(json.loads(status_path.read_text())["status"],
+                                     "needs_attention")
+                    with patch("codex_migrate.vault_hosted_schedule._loaded", return_value=True):
+                        self.assertFalse(hosted_schedule_status(self.home)["healthy"])
+
+    def test_stale_or_unloaded_check_never_implies_background_protection(self):
+        self._install()
+        _, status_path, good_path, _ = _paths(self.home)
+        before = good_path.read_bytes()
+        now = datetime.now(timezone.utc)
+        for state, age, loaded, expected in (
+                ("verified", 10, True, True),
+                ("unchanged", 10, True, True),
+                ("verified", 3 * 3600, True, False),
+                ("unchanged", 3 * 3600, True, False),
+                ("verified", 10, False, False),
+                ("failed", 10, True, False),
+                ("running", 10, True, False),
+                ("needs_attention", 10, True, False)):
+            with self.subTest(state=state, age=age, loaded=loaded):
+                status_path.write_text(json.dumps({
+                    "status": state, "snapshot_id": SNAPSHOT,
+                    "checked_at": (now - timedelta(seconds=age)).isoformat()}))
+                with patch("codex_migrate.vault_hosted_schedule._loaded", return_value=loaded):
+                    status = hosted_schedule_status(self.home)
+                self.assertEqual(status["healthy"], expected)
+                self.assertEqual(status["last_good_snapshot_id"], SNAPSHOT)
+                self.assertEqual("error" in status, not expected)
+                self.assertEqual(good_path.read_bytes(), before)
 
     def test_at_risk_publication_keeps_prior_green_receipt(self):
         self._install()

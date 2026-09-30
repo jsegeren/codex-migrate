@@ -1,5 +1,28 @@
 # Desktop release readiness
 
+## September 30 unattended loss-evidence gate — source only
+
+The hosted scheduler previously accepted a missing risk count on a complete
+publication and Python values such as `false` or `0.0` as zero. A regression
+demonstrated that this could advance the last-good receipt without explicit
+loss evidence. Both new and unchanged runs now require complete coverage and
+an actual integer zero risk count before reporting clean protection. Unknown
+or malformed counts retain the prior receipt and report `needs_attention`.
+
+When the service published a snapshot but its reply was lost, the retry path
+now opens that exact encrypted manifest and derives risk from its catalog
+before finishing. An unavailable or mismatched catalog preserves the pending
+run; missing/flagged catalog risk cannot become a zero-risk claim. This adds a
+read only to publication reconciliation, not every ordinary upload. Stale
+checks, unloaded schedules, failed/running checks, and attention states are
+also covered by health-state tests that preserve the prior receipt.
+
+The focused scheduler/live-run/no-change/drill suite passed 63 tests. These
+use synthetic clients and disposable paths; they do not prove production
+credential renewal, real hosted background execution, or clean-Mac recovery.
+The signed candidate identified below predates this source fix and must be
+rebuilt and retested before release acceptance.
+
 ## September 30 packaged recovery drill — harness validated, VM pending
 
 `tests/packaged_vault_portability.py` now provides a stdlib-only producer and
