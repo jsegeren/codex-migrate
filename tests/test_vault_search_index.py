@@ -77,7 +77,8 @@ class SearchIndexTests(unittest.TestCase):
                                        "search", "Clerk", "--json"]), 0)
             self.assertEqual([item["transcript"] for item in json.loads(output.getvalue())],
                              [clear + ".jsonl"])
-            self.assertIn("Results may be incomplete", errors.getvalue())
+            self.assertIn("ambiguous history copies", errors.getvalue())
+            self.assertIn("inherited text was not searched", errors.getvalue())
 
     @unittest.skipUnless(supported(), "requires SQLite FTS5 contentless-delete")
     def test_index_refuses_to_consume_the_last_five_gigabytes(self):
