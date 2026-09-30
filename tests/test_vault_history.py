@@ -344,6 +344,50 @@ class EncryptedHistoryTests(unittest.TestCase):
                                    check=True, stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE)
 
+    def test_corrupt_paginated_database_keeps_last_verified_snapshot(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            codex = source / ".codex"
+            codex.mkdir(parents=True)
+            database = codex / "thread_history_1.sqlite"
+            with sqlite3.connect(database) as connection:
+                connection.execute("CREATE TABLE thread_items (thread_id TEXT, turn_id TEXT, "
+                                   "item_id TEXT, rollout_ordinal INTEGER, created_at_ms INTEGER, "
+                                   "item_json TEXT, item_type TEXT, updated_at_ordinal INTEGER)")
+                connection.execute("CREATE TABLE thread_history_projection_state ("
+                                   "thread_id TEXT, next_rollout_byte_offset INTEGER, "
+                                   "next_rollout_ordinal INTEGER)")
+                connection.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                   (THREAD_ID, "turn-1", "item-1", 1, 100,
+                                    json.dumps({"id": "item-1", "type": "userMessage",
+                                                "content": [{"type": "text", "text": "saved before damage"}]}),
+                                    "userMessage", 1))
+            vault = root / "vault"
+            try:
+                good = backup(str(source), str(vault), crypto_helper=str(self.helper))
+                verify_snapshot(str(vault), snapshot=good.snapshot_id,
+                                crypto_helper=str(self.helper))
+                database.write_bytes(b"not a SQLite database")
+                with self.assertRaises(MigrationError):
+                    backup(str(source), str(vault), crypto_helper=str(self.helper))
+                self.assertEqual([item.snapshot_id for item in list_snapshots(str(vault))],
+                                 [good.snapshot_id])
+                verify_snapshot(str(vault), snapshot=good.snapshot_id,
+                                crypto_helper=str(self.helper))
+                restored = root / "restored"
+                restore_snapshot(str(source), str(vault), str(restored),
+                                 snapshot=good.snapshot_id,
+                                 crypto_helper=str(self.helper))
+                self.assertIn("saved before damage", (restored / "paginated_history" /
+                              (THREAD_ID + ".jsonl")).read_text())
+            finally:
+                if (vault / "vault.json").exists():
+                    key_id = json.loads((vault / "vault.json").read_text())["key_id"]
+                    subprocess.run([str(self.helper), "delete-key", "--key-id", key_id],
+                                   check=True, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE)
+
     def test_unreadable_optional_title_index_does_not_block_transcript_backup(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
