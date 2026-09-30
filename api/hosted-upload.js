@@ -4,8 +4,9 @@
 const { reply } = require('../commerce/http');
 const { allowedBrowserOrigin } = require('../hosted/http_origin');
 const { uploadRuntime } = require('../hosted/upload_runtime');
-const { authorizeUploadScope, authorizeLeasedUploadScope, authorizeReadScope,
-  consumeAuthorizedScope, tokenHash, HostedAccessError } = require('../hosted/access');
+const { consumeAuthorizedScope, HostedAccessError } = require('../hosted/access');
+const { deviceCredential, deviceHash, authorizeWrite, authorizeRead,
+  authorizeLeasedWrite } = require('../hosted/request_access');
 const { HostedUploadLeaseError, mintUploadLease,
   requireActiveReservation } = require('../hosted/upload_lease');
 const { createUploadReservation, renewUploadReservation,
@@ -17,7 +18,6 @@ const { prepareUploadBatch, MAX_ITEMS } = require('../hosted/upload_batch');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const UUID_PATH = '[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
-const BEARER = /^Bearer (hv1_[A-Za-z0-9_-]{43})$/;
 const RELATIVE = new RegExp(`^(?:metadata/${UUID_PATH}\\.json|objects/[0-9a-f]{2}/[0-9a-f]{62}\\.cvchunk|manifests/${UUID_PATH}\\.cvmanifest|refs/${UUID_PATH}\\.json)$`);
 const HEX = /^[0-9a-f]{64}$/;
 const MAX_BODY = 700;
@@ -89,8 +89,8 @@ function makeHandler(load = uploadRuntime, env = process.env) {
     let data;
     try { data = requestBody(req); }
     catch { return reply(res, 400, { error: 'invalid_request' }); }
-    const token = BEARER.exec(req.headers.authorization || '')?.[1];
-    if (!token) return reply(res, 403, { error: 'access_denied' });
+    const credential = deviceCredential(req.headers.authorization, env);
+    if (!credential) return reply(res, 403, { error: 'access_denied' });
     const scopedObject = ['decide', 'put', 'batch'].includes(data.action);
     if (scopedObject &&
         (typeof req.headers['x-hosted-upload-lease'] !== 'string' ||
@@ -99,20 +99,20 @@ function makeHandler(load = uploadRuntime, env = process.env) {
     }
     try {
       const { query, getEntitlement, verifyPurchase, live, priceCatalog,
-        workerOrigin, secret } = await load(env);
+        workerOrigin, secret } = await load(env, credential);
       if (live !== false) throw Error('hosted_upload_unavailable');
       if (data.action === 'abandon' || data.action === 'status') {
-        const scope = await authorizeReadScope({ sessionToken: token,
+        const scope = await authorizeRead({ credential,
           vaultId: data.vaultId, query });
         return reply(res, 200, await (data.action === 'abandon' ?
           abandonUploadReservation : readUploadReservationStatus)({ scope,
             reservationId: data.reservationId, query }));
       }
-      const scope = scopedObject ? await authorizeLeasedUploadScope({
-        sessionToken: token, vaultId: data.vaultId,
+      const scope = scopedObject ? await authorizeLeasedWrite({
+        credential, vaultId: data.vaultId,
         reservationId: data.reservationId,
         lease: req.headers['x-hosted-upload-lease'], secret, query,
-      }) : await authorizeUploadScope({ sessionToken: token,
+      }) : await authorizeWrite({ credential,
         vaultId: data.vaultId, query, getEntitlement, verifyPurchase,
         live, priceCatalog });
       if (data.action === 'lease') {
@@ -121,7 +121,7 @@ function makeHandler(load = uploadRuntime, env = process.env) {
         if (!consumeAuthorizedScope(scope)) throw Error('upload_scope_expired');
         return reply(res, 200, { lease: mintUploadLease({
           accountId: scope.accountId, vaultId: scope.vaultId,
-          reservationId: data.reservationId, deviceHash: tokenHash(token),
+          reservationId: data.reservationId, deviceHash: deviceHash(credential),
           allowanceBytes: scope.allowanceBytes, secret,
         }) });
       }

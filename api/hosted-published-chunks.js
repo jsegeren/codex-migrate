@@ -4,12 +4,12 @@
 const { reply } = require('../commerce/http');
 const { allowedBrowserOrigin } = require('../hosted/http_origin');
 const { uploadRuntime } = require('../hosted/upload_runtime');
-const { authorizeUploadScope, HostedAccessError } = require('../hosted/access');
+const { HostedAccessError } = require('../hosted/access');
+const { deviceCredential, authorizeWrite } = require('../hosted/request_access');
 const { lookupPublishedChunks } = require('../hosted/published_chunks');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const HEX = /^[0-9a-f]{64}$/;
-const BEARER = /^Bearer (hv1_[A-Za-z0-9_-]{43})$/;
 const MAX_BODY = 18_000;
 
 function requestBody(req) {
@@ -43,13 +43,13 @@ function makeHandler(load = uploadRuntime, env = process.env) {
     let data;
     try { data = requestBody(req); }
     catch { return reply(res, 400, { error: 'invalid_request' }); }
-    const token = BEARER.exec(req.headers.authorization || '')?.[1];
-    if (!token) return reply(res, 403, { error: 'access_denied' });
+    const credential = deviceCredential(req.headers.authorization, env);
+    if (!credential) return reply(res, 403, { error: 'access_denied' });
     try {
       const { query, getEntitlement, verifyPurchase, live, priceCatalog } =
-        await load(env);
+        await load(env, credential);
       if (live !== false) throw Error('hosted_lookup_unavailable');
-      const scope = await authorizeUploadScope({ sessionToken: token,
+      const scope = await authorizeWrite({ credential,
         vaultId: data.vaultId, query, getEntitlement, verifyPurchase,
         live, priceCatalog });
       const objects = await lookupPublishedChunks({ scope,

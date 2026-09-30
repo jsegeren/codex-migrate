@@ -4,13 +4,13 @@
 const { reply } = require('../commerce/http');
 const { allowedBrowserOrigin } = require('../hosted/http_origin');
 const { recoveryRuntime } = require('../hosted/recovery_runtime');
-const { authorizeReadScope, HostedAccessError } = require('../hosted/access');
+const { HostedAccessError } = require('../hosted/access');
+const { deviceCredential, authorizeRead } = require('../hosted/request_access');
 const { getAccountStorageUsage, getLastGoodSnapshot, getPublishedSnapshot,
   getLatestSourceCompleteSnapshot, listPublishedSnapshots, listPublishedObjects } =
   require('../hosted/read_inventory');
 const { issuePublishedGet, issueLastGoodManifest } = require('../hosted/read_grant');
 
-const BEARER = /^Bearer (hv1_[A-Za-z0-9_-]{43})$/;
 const MAX_BODY = 600;
 
 function requestBody(req) {
@@ -66,15 +66,20 @@ function makeHandler(load = recoveryRuntime, env = process.env) {
       return reply(res, 405, { error: 'post_required' });
     }
     let data;
-    let token;
+    let credential;
     try {
       data = requestBody(req);
-      token = BEARER.exec(req.headers.authorization || '')?.[1];
-      if (!token) return reply(res, 403, { error: 'access_denied' });
+      credential = deviceCredential(req.headers.authorization, env);
+      if (!credential) return reply(res, 403, { error: 'access_denied' });
+      // Company storage totals belong in a future admin health view, not in
+      // an individual worker device response.
+      if (credential.kind === 'business' && data.action === 'usage') {
+        return reply(res, 403, { error: 'access_denied' });
+      }
     } catch { return reply(res, 400, { error: 'invalid_request' }); }
     try {
       const { query, workerOrigin, secret } = await load(env);
-      const scope = await authorizeReadScope({ sessionToken: token,
+      const scope = await authorizeRead({ credential,
         vaultId: data.vaultId, query });
       if (data.action === 'usage') {
         return reply(res, 200, { accountId: scope.accountId,

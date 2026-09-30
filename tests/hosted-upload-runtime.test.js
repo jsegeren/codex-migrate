@@ -99,3 +99,28 @@ test('absent or cross-environment enrollment cannot become entitlement', async (
     /hosted_upload_unavailable/);
   assert.equal(providerReads, 0);
 });
+
+test('business pilot runtime needs its own sandbox gate and never opens Stripe', async () => {
+  let databaseCalls = 0;
+  let commerceCalls = 0;
+  const businessEnv = { ...env,
+    HOSTED_BUSINESS_BACKUP_SANDBOX_OPEN: 'yes',
+    COMMERCE_MODE: undefined,
+    HOSTED_SANDBOX_PRICE_ID: undefined };
+  const options = { kind: 'business',
+    openDatabase: async () => { databaseCalls++; return async () => ({ rows: [] }); },
+    openCommerce: async () => { commerceCalls++; throw Error('wrong authority'); } };
+  const runtime = await uploadRuntime(businessEnv, options);
+  assert.equal(runtime.live, false);
+  assert.equal(runtime.workerOrigin, 'https://r2.fixture.test');
+  assert.equal(typeof runtime.query, 'function');
+  assert.equal(runtime.getEntitlement, undefined);
+  assert.equal(databaseCalls, 1);
+  assert.equal(commerceCalls, 0);
+  for (const change of [{ HOSTED_BUSINESS_BACKUP_SANDBOX_OPEN: 'no' },
+    { HOSTED_MODE: 'live' }]) {
+    await assert.rejects(uploadRuntime({ ...businessEnv, ...change }, options),
+      /hosted_upload_unavailable/);
+  }
+  assert.equal(databaseCalls, 1);
+});

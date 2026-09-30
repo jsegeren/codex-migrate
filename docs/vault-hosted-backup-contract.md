@@ -223,10 +223,15 @@ and device metadata only. Migration 0037 adds a separate, dark, time-bounded
 operator-approved storage allowance with immutable approval history and final
 revocation. The server has tested business-device authorization functions that
 require an active seat, matching Vault, and current allowance; an expired or
-revoked allowance cannot mint a new upload scope. These functions are not
-wired to the upload or recovery routes. There is still no customer billing
-entitlement, company key-custody receipt, live pairing UI, or recovery
-authority, and no business device can publish a hosted backup yet.
+revoked allowance cannot mint a new upload scope. Under a separate, default-off
+sandbox flag, the same device can now use the staged upload, verification,
+publication, and owner-read routes without inheriting an employee purchase or
+Stripe subscription. Route tests cover reservation, a leased object grant,
+publication, read, and revocation. A worker device cannot query company-wide
+storage totals; that belongs in a future admin health view. There is still no
+customer billing entitlement, company key-custody receipt, live pairing UI,
+or company recovery authority. No business backup is customer-accessible or
+certified yet.
 
 Before a business pilot, establish one organization-owned account with an
 identified purchaser and designated administrator, explicit seat/device

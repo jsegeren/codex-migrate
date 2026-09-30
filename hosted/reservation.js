@@ -1,6 +1,6 @@
 // Server-only reservation boundary. The caller must freshly authorize the
-// device, app purchase, and subscription for *each* create or renewal. Never
-// trust an account, Vault, or allowance sent by a device.
+// device and its separate individual or business entitlement for each create
+// or renewal. Never trust an account, Vault, or allowance sent by a device.
 const { randomUUID } = require('node:crypto');
 const { consumeAuthorizedScope, consumeAuthorizedReadScope } = require('./access');
 

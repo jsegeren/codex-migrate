@@ -1,6 +1,7 @@
-// Default runtime for the dark sandbox upload route. The server loads the
-// subscription enrollment from its pinned database and rechecks Stripe for
-// each full authorization. Object requests use only a freshly signed,
+// Default runtime for the dark sandbox upload route. Individual devices use
+// a current subscription and purchase check; the separately gated business
+// pilot uses its operator-approved allowance without an employee checkout.
+// Object requests use only a freshly signed,
 // one-minute lease plus a live device-session check; client input, webhooks,
 // and checkout redirects are never entitlement.
 const { runtime: commerceRuntime } = require('../commerce/runtime');
@@ -39,8 +40,24 @@ function uploadConfiguration(env) {
   }]]) });
 }
 
-async function uploadRuntime(env = process.env, { openDatabase = sandboxDatabaseRuntime,
+async function uploadRuntime(env = process.env, { kind = 'individual',
+  openDatabase = sandboxDatabaseRuntime,
   openCommerce = commerceRuntime } = {}) {
+  if (kind === 'business') {
+    if (env.HOSTED_MODE !== 'sandbox' ||
+        env.HOSTED_BUSINESS_BACKUP_SANDBOX_OPEN !== 'yes') {
+      throw new HostedUploadRuntimeError();
+    }
+    try {
+      const config = storageConfiguration(env);
+      const query = await openDatabase(env);
+      // A business pilot has its own operator-approved allowance. Neither an
+      // employee checkout nor a Stripe subscription is a company credential.
+      return Object.freeze({ query, live: false,
+        workerOrigin: config.workerOrigin, secret: config.secret });
+    } catch { throw new HostedUploadRuntimeError(); }
+  }
+  if (kind !== 'individual') throw new HostedUploadRuntimeError();
   const config = uploadConfiguration(env);
   try {
     const [query, commerce] = await Promise.all([
