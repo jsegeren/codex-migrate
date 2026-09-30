@@ -1,5 +1,25 @@
 # Desktop release readiness
 
+## September 30 large-history search cache — draft, not released
+
+A copy-only, read-only recovery set from one Mac contained 2,328 JSONL files,
+1,866 database-backed thread IDs, and about 93 GB of transcript files. The
+optional positional search cache completed against that copy in 1,343.8 seconds
+and occupied 24,689,582,080 bytes. With the cache complete, three bounded
+five-result searches took 5.12 seconds for a miss, 15.62 seconds for one
+multi-word hit, and 5.06 seconds for another hit. Earlier unpositioned-cache
+searches could exceed 45 seconds or a minute on this same copy. Query and
+conversation content were not recorded in the receipt; no live Codex source or
+hosted object was changed.
+
+This is a meaningful speed improvement but a **large disk and initial-build
+cost**, not a universal fast-search guarantee. The cache remains opt-in,
+unencrypted, owner-only, rebuildable, and separate from encrypted backups. The
+UI now warns that its text terms and positions may reveal content. Synthetic
+tests additionally prevent the cache from hiding matches stored only in pasted
+text attachments. This copy-only measurement does not certify the signed app,
+ongoing live-history refresh, complete search recall, or hosted recovery.
+
 ## September 29 physical two-Mac synthetic restore — narrow pass
 
 The second physical Mac successfully ran the corrected one-file receiver

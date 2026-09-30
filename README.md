@@ -103,8 +103,9 @@ It is an owner-only, rebuildable SQLite file under
 positions, not full conversation bodies. Those terms can reveal conversation
 content to someone who can read the Mac account; **the cache itself is not
 encrypted**.
-It is not included in encrypted Vault snapshots. Building it can take minutes
-and several gigabytes of local disk on a very large history. Once built, Vault
+It is not included in encrypted Vault snapshots. On a very large history,
+building it can take tens of minutes and tens of gigabytes of disk; one roughly
+93 GB test history took 22 minutes and produced a 25 GB cache. Once built, Vault
 still verifies candidate matches against the original conversations. It covers
 both transcript files and supported database-backed threads. New or changed
 transcripts, and database history changed since its last complete index, are
