@@ -24,6 +24,7 @@ from codex_migrate.vault_identity import MAX_RECORD_BYTES
 INDEX_VERSION = 4
 BLOCK_CHARS = 128 * 1024
 QUERY_CHARS = 500
+MAX_ATTACHMENT_QUERY_BYTES = 32 * 1024 * 1024
 MIN_FREE_BYTES = 5 * 1024 * 1024 * 1024
 INDEX_FOLDER = ("Library", "Caches", "Codex Migrate")
 
@@ -152,6 +153,29 @@ def _database_stamp(source_home: str) -> Optional[str]:
             stamps.append((info.st_dev, info.st_ino, info.st_size,
                            info.st_mtime_ns, info.st_ctime_ns))
     return json.dumps(stamps, separators=(",", ":"))
+
+
+def _attachment_may_match(source_home: str, folded: str) -> bool:
+    """Do not let an index of JSON/SQLite hide separately stored pasted text."""
+    from codex_migrate.vault_attachments import attachment_files, read_pasted_text
+    from codex_migrate.vault_identity import canonical_id
+
+    total = 0
+    for _, path, relative in attachment_files(source_home):
+        parts = relative.split("/")
+        if (len(parts) != 2 or parts[1] != "pasted-text.txt"
+                or canonical_id(parts[0]) != parts[0]):
+            continue
+        try:
+            total += path.lstat().st_size
+        except OSError:
+            return True
+        if total > MAX_ATTACHMENT_QUERY_BYTES:
+            return True  # Too much to inspect cheaply: use the complete scan.
+        body = read_pasted_text(source_home, parts[0])
+        if body is None or folded in body.casefold():
+            return True
+    return False
 
 
 def _schema(connection: sqlite3.Connection) -> None:
@@ -544,6 +568,8 @@ def candidates(source_home: str, query: str,
     target = _path(source_home)
     if "\x00" in folded or len(folded) < 3 or len(folded) > QUERY_CHARS:
         return None
+    if _attachment_may_match(source_home, folded):
+        return None
     try:
         _safe_parent(target.parent)
         available = _owned_regular(target)
@@ -588,6 +614,8 @@ def paginated_candidates(source_home: str, query: str) -> Optional[Set[str]]:
     """Return candidate physical rollout IDs only for a complete, current index."""
     folded = query.casefold()
     if "\x00" in folded or len(folded) < 3 or len(folded) > QUERY_CHARS:
+        return None
+    if _attachment_may_match(source_home, folded):
         return None
     source_stamp = _database_stamp(source_home)
     if source_stamp is None:

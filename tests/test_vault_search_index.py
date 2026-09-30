@@ -265,6 +265,28 @@ class SearchIndexTests(unittest.TestCase):
                                                                  "Unification Foundation")],
                              ["exact.jsonl"])
 
+    @unittest.skipUnless(supported(), "requires SQLite FTS5 contentless-delete")
+    def test_index_cannot_hide_pasted_text_stored_outside_the_transcript(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            attachment_id = "33333333-3333-4333-8333-333333333333"
+            attachment = home / ".codex/attachments" / attachment_id / "pasted-text.txt"
+            attachment.parent.mkdir(parents=True)
+            attachment.write_text("Unification Foundation", encoding="utf-8")
+            reference = "/Users/old/.codex/attachments/" + attachment_id + "/pasted-text.txt"
+            thread = home / ".codex/sessions/reference.jsonl"
+            write_thread(thread, reference)
+            paginated_id = "44444444-4444-4444-8444-444444444444"
+            write_paginated(home, ((paginated_id, 1, reference),))
+            build(temporary, apply=True)
+            self.assertIsNone(candidates(temporary, "Unification Foundation",
+                                         list(_transcripts(temporary))))
+            self.assertIsNone(paginated_candidates(temporary, "Unification Foundation"))
+            self.assertEqual({(item.collection, item.transcript)
+                              for item in search(temporary, "Unification Foundation")},
+                             {("active", "reference.jsonl"),
+                              ("paginated", paginated_id + ".jsonl")})
+
     def test_plan_does_not_create_a_cache(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
