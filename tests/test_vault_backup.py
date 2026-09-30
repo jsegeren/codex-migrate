@@ -172,6 +172,22 @@ class BusinessVaultWiringTests(unittest.TestCase):
                     })
                 imported.assert_not_called()
 
+    def test_personal_key_commands_refuse_business_vault(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            vault = Path(temporary) / "vault"
+            vault.mkdir()
+            (vault / "vault.json").write_text(json.dumps({
+                "format": "codex-vault", "version": 1,
+                "storage_codec": "lzfse-v1", "recovery_mode": "business-v1",
+                "key_id": self.key_id, "created_at": "2026-09-30T00:00:00+00:00",
+            }), encoding="utf-8")
+            with patch("codex_migrate.vault_recovery._run_helper") as helper:
+                with self.assertRaisesRegex(ValueError, "role-bound"):
+                    import_recovery_key(str(vault), "CV1-synthetic")
+                with self.assertRaisesRegex(ValueError, "cannot be exported"):
+                    export_recovery_key(str(vault))
+                helper.assert_not_called()
+
 
 @unittest.skipUnless(platform.system() == "Darwin", "CryptoKit backup helper requires macOS")
 class VaultBackupTests(unittest.TestCase):

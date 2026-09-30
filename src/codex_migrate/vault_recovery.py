@@ -379,7 +379,10 @@ def import_recovery_key(
     crypto_helper: Optional[str] = None,
 ) -> str:
     root = _vault_root(vault)
-    key_id = _metadata(_read_json(root / "vault.json"))
+    metadata = _read_json(root / "vault.json")
+    key_id = _metadata(metadata)
+    if metadata.get("recovery_mode") == "business-v1":
+        raise ValueError("business Vaults require a role-bound recovery credential")
     if not recovery_key.startswith("CV1-") or len(recovery_key) > 256:
         raise ValueError("recovery key has an invalid format")
     helper = _helper_path(crypto_helper)
@@ -433,7 +436,10 @@ def export_recovery_key(
     crypto_helper: Optional[str] = None,
 ) -> str:
     root = _vault_root(vault)
-    key_id = _metadata(_read_json(root / "vault.json"))
+    metadata = _read_json(root / "vault.json")
+    key_id = _metadata(metadata)
+    if metadata.get("recovery_mode") == "business-v1":
+        raise ValueError("business Vault recovery credentials cannot be exported")
     helper = _helper_path(crypto_helper)
     result = _run_helper(helper, ["export-key", "--key-id", key_id])
     recovery_key = result.get("recovery_key")
