@@ -316,6 +316,34 @@ are storage-plus-payment contribution examples, not product gross margins.
 The first included hosted month needs a separately approved capacity policy;
 an unbounded free month is not implied by this price hypothesis.
 
+### Managed-service labor sensitivity — not a price decision
+
+The $49/month storage-plus-card example above is **not** a defensible managed
+business gross-margin claim. As a conservative first-customer stress test,
+assume 100 GB retained for the full month ($1.50 R2 Standard), assign the
+entire $5 Workers Paid minimum to that one account, reserve an **unmeasured
+$5** for database/API/verification, and value support and recovery labor at
+an **assumed $100 per hour**. Domestic-card Payments plus pay-as-you-go Billing
+are modeled as 3.6% of revenue plus $0.30. These are sensitivity assumptions,
+not observed COGS, contracted rates, or an approved customer price.
+
+| Monthly account revenue | Margin with no support | Margin with one support hour | Maximum support hours for 80% margin |
+| ---: | ---: | ---: | ---: |
+| $49 | 72% | negative | none |
+| $199 | 90% | 40% | 0.21 |
+| $499 | 94% | 74% | 0.70 |
+| $699 | 95% | 80% | 1.03 |
+
+Even before labor, a lone $49 business account misses an 80% all-in margin
+under this allocation. Shared fixed infrastructure improves scale economics,
+but an assisted onboarding or real recovery can consume the entire monthly
+contribution. Do not quietly promise unlimited hands-on support at a storage-
+only price. Test buyer willingness to pay for a distinct managed business
+offer and measure actual setup, monitoring, incident, and recovery time;
+consider a separately disclosed onboarding/recovery service fee rather than
+burying episodic labor in every storage subscription. The current $49/month
+hypothesis remains unapproved, and no price or entitlement changes here.
+
 The proposed billing unit is retained **encrypted object bytes**, not raw
 Codex-folder size, upload volume, thread count, snapshot count, or number of
 Macs. A reused object is counted once within its Vault; separate Vaults are
