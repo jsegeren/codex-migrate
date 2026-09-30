@@ -1,0 +1,8 @@
+{
+  // Dark sandbox-only deployment. Do not set SCAN_ENABLED=yes until the
+  // endpoint secret, mail reconciliation, and recovery drill are approved.
+  "name": "codex-backup-alert-scan-sandbox",
+  "main": "./worker.mjs",
+  "compatibility_date": "2026-09-30",
+  "triggers": { "crons": ["*/15 * * * *"] }
+}

@@ -282,6 +282,13 @@ no production scheduler, no customer email route, and no recovery certificate.
 The operator must reconcile any stuck or uncertain delivery. A business pilot
 still needs a reliable sub-90-minute trigger, delivery monitoring, and a
 clean-Mac restore drill before protection or alerts can be promised.
+The isolated Cloudflare Worker source at `hosted/alert_scheduler` defines a
+15-minute trigger with no public HTTP surface, R2 binding, database secret, or
+customer content access. It is not deployed. Its schedule remains inert until
+an operator installs a separate endpoint secret and explicitly enables the
+sandbox scan; failed scans and unresolved delivery outcomes fail the scheduled
+run. Production scheduling, notification of operator failures, and real
+customer email still require a separate release gate.
 
 Before a business pilot, establish one organization-owned account with an
 identified purchaser and designated administrator, explicit seat/device
