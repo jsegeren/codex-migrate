@@ -212,6 +212,15 @@ and record the approval, then the product must bind an audited admin action
 to seat/device enrollment and company-held recovery material.
 Changing the approved admin contact invalidates outstanding codes and revokes
 its sessions; the operator approval reference cannot be edited in place.
+Migration 0036 adds a separate first-device pairing gate. Only a still-valid
+administrator session can trigger a 10-minute, rate-limited challenge to the
+exact approved worker email. The worker's one-use code can atomically bind one
+new Vault and a device-token digest to that seat; a lost response can resolve
+the same token without repeating the claim. Revoking the seat revokes its
+recorded device sessions. The new route and email adapter are sandbox-only,
+closed by default, and never send to a real employee. This creates identity
+and device metadata only: there is still no business upload entitlement,
+company key-custody receipt, live pairing UI, or recovery authority.
 
 Before a business pilot, establish one organization-owned account with an
 identified purchaser and designated administrator, explicit seat/device
