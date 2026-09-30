@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { commerceSite, configuration, SITE, LEGACY_SITE } = require('../commerce/config');
+const { commerceSite, configuration, SITE, PUBLIC_SITE } = require('../commerce/config');
 const { body } = require('../commerce/http');
 const { makeHandler: purchase } = require('../api/purchase');
 const { makeHandler: checkout } = require('../api/checkout');
@@ -42,9 +42,9 @@ test('origin matching is exact and does not accept forwarded host headers', () =
     assert.throws(() => body(req, origin), /invalid_origin/);
   }
 });
-test('live purchase accepts the old signed-app origin, but preview does not', () => {
-  assert.deepEqual(body(request({}, LEGACY_SITE), SITE), {});
-  assert.throws(() => body(request({}, LEGACY_SITE), origin), /invalid_origin/);
+test('live purchase accepts the new public origin, but preview does not', () => {
+  assert.deepEqual(body(request({}, PUBLIC_SITE), SITE), {});
+  assert.throws(() => body(request({}, PUBLIC_SITE), origin), /invalid_origin/);
 });
 test('preview checkout still requires operator authentication before runtime access', async () => {
   let calls = 0;

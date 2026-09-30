@@ -11,10 +11,12 @@ The public site is deployed to the existing `codex-migrate` Vercel project.
 Its canonical hostname is `codexbackup.segeren.com`; Squarespace manages DNS.
 The `codexbackup` CNAME points to the existing Vercel project. Keep the
 `migrate.segeren.com` CNAME and Vercel alias: released Mac builds use it for
-their update feed, purchase entitlement, and download APIs, and old public
-links must continue to work. Both exact origins are accepted for production
-purchase and signup requests; only the new hostname appears in canonical,
-social, and sitemap URLs. Never redirect the legacy API hostname wholesale.
+their update feed, purchase entitlement, private purchase links, and download
+APIs, and old public links must continue to work. Checkout returns and buyer
+emails remain on that hostname until a signed app update accepts the new one.
+Both exact origins are accepted for production purchase and signup requests;
+only the new hostname appears in canonical, social, and sitemap URLs. Never
+redirect the existing API hostname wholesale.
 Three additional CNAMEs authenticate
 `segeren.com` for SendGrid (return path plus two DKIM selectors); preserve them
 with the existing strict DMARC record. Do not change the apex site, MX records,

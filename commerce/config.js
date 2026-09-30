@@ -1,7 +1,9 @@
 const releases = require('./releases.json');
 
-const SITE = 'https://codexbackup.segeren.com';
-const LEGACY_SITE = 'https://migrate.segeren.com';
+// Released Mac builds pin this host for purchase links and Sparkle updates.
+// Keep commerce here until a signed app update accepts the public hostname.
+const SITE = 'https://migrate.segeren.com';
+const PUBLIC_SITE = 'https://codexbackup.segeren.com';
 const PRICE_USD = 49;
 const PRICE_CENTS = 4900;
 const SANDBOX_PRICE_CENTS = 5000;
@@ -69,5 +71,5 @@ function configuration(env = process.env, catalog = releases) {
 function releaseContentType(release) {
   return release.filename.endsWith('.dmg') ? 'application/x-apple-diskimage' : 'application/zip';
 }
-module.exports = { configuration, CommerceError, SITE, LEGACY_SITE, PRICE_USD, PRICE_CENTS, SANDBOX_PRICE_CENTS,
+module.exports = { configuration, CommerceError, SITE, PUBLIC_SITE, PRICE_USD, PRICE_CENTS, SANDBOX_PRICE_CENTS,
   currentPriceCents, validRelease, releaseContentType, commerceSite };

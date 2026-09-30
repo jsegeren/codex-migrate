@@ -1,4 +1,4 @@
-const { CommerceError, SITE, LEGACY_SITE } = require('./config');
+const { CommerceError, SITE, PUBLIC_SITE } = require('./config');
 function reply(res, status, value) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -13,9 +13,9 @@ function failure(res, error) {
     { error: error instanceof CommerceError ? error.code : 'temporarily_unavailable' });
 }
 function body(req, origin = SITE) {
-  // Existing signed Mac builds still call the old hostname. Keep its exact
-  // origin valid while the public site moves; never widen preview origins.
-  if (req.headers.origin !== origin && !(origin === SITE && req.headers.origin === LEGACY_SITE)) {
+  // The public site can call the same production API without changing the
+  // updater/purchase hostname pinned in already-released Mac builds.
+  if (req.headers.origin !== origin && !(origin === SITE && req.headers.origin === PUBLIC_SITE)) {
     throw new CommerceError('invalid_origin', 403);
   }
   if ((req.headers['content-type'] || '').split(';')[0] !== 'application/json') throw new CommerceError('invalid_request', 415);

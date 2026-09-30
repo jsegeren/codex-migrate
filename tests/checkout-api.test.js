@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { makeHandler } = require('../api/checkout');
-const { SITE } = require('../commerce/config');
+const { SITE, PUBLIC_SITE } = require('../commerce/config');
 
 const requestId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const operator = 'a'.repeat(64); // Synthetic test token, not a credential.
@@ -53,6 +53,14 @@ test('configured live buyer does not need the sandbox operator token', async () 
   const f = fixture(true); delete f.request.headers.authorization;
   assert.equal((await f.send()).statusCode, 200);
   assert.match(f.calls.find(c => typeof c === 'object').options.idempotencyKey, /-live-/);
+});
+test('buyer on the new public hostname can check out while return links stay app-compatible', async () => {
+  const f = fixture(true);
+  f.request.headers.origin = PUBLIC_SITE;
+  delete f.request.headers.authorization;
+  assert.equal((await f.send()).statusCode, 200);
+  assert.equal(f.calls.find(c => typeof c === 'object').data.success_url,
+    `${SITE}/purchase#session={CHECKOUT_SESSION_ID}`);
 });
 test('paid beta checkout discloses limits before payment and records the beta channel', async () => {
   const f = fixture(true); f.config.checkoutProvider = 'stripe';

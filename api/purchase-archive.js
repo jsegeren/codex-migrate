@@ -1,11 +1,11 @@
 const { Readable } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
 const { runtime } = require('../commerce/runtime');
-const { CommerceError, configuration, commerceSite, validRelease, SITE, LEGACY_SITE } = require('../commerce/config');
+const { CommerceError, configuration, commerceSite, validRelease, SITE, PUBLIC_SITE } = require('../commerce/config');
 const { tokenSession } = require('../commerce/service');
 
 async function fields(req, origin) {
-  if (req.headers.origin !== origin && !(origin === SITE && req.headers.origin === LEGACY_SITE)) {
+  if (req.headers.origin !== origin && !(origin === SITE && req.headers.origin === PUBLIC_SITE)) {
     throw new CommerceError('invalid_origin', 403);
   }
   if ((req.headers['content-type'] || '').split(';')[0] !== 'application/x-www-form-urlencoded') {

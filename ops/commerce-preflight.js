@@ -41,7 +41,7 @@ function dependencies(env) {
       mode: 'payment', line_items: [{ price: EXPECTED.price, quantity: 1 }],
       billing_address_collection: 'required', expires_at: Math.floor(Date.now() / 1000) + 1860,
       metadata: { product: 'codex-migrate', purpose: 'operator-standard-checkout-verification', checkout_provider: 'stripe' },
-      success_url: 'https://codexbackup.segeren.com/purchase', cancel_url: 'https://codexbackup.segeren.com/',
+      success_url: 'https://migrate.segeren.com/purchase', cancel_url: 'https://migrate.segeren.com/',
     }, { idempotencyKey: 'codex-migrate-standard-proof-' + env.COMMERCE_CHECKOUT_PROOF_ID }),
     expireSession: id => stripe.checkout.sessions.expire(id),
     database: async () => {

@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const { PassThrough } = require('node:stream');
 const { makeHandler } = require('../api/purchase-archive');
 const { tokenFor } = require('../commerce/service');
+const { PUBLIC_SITE } = require('../commerce/config');
 
 const release = { ...require('../commerce/releases.json')['beta-build16-arm64'], size: 25 };
 const original = { ...require('../commerce/releases.json')['beta-build15-arm64'], size: 22 };
@@ -41,7 +42,9 @@ test('buyer download streams latest and original through the first-party endpoin
     const res = response();
     const received = [];
     res.on('data', chunk => received.push(chunk));
-    await handler(request(version), res);
+    const req = request(version);
+    if (version === 'original') req.headers.origin = PUBLIC_SITE;
+    await handler(req, res);
     assert.equal(res.statusCode, 200);
     assert.equal(res.headers['Content-Length'], String(entry.size));
     assert.equal(res.headers['Content-Disposition'], `attachment; filename="${entry.filename}"`);
