@@ -93,9 +93,10 @@ def consume(bundle: Path, helper: Path) -> None:
         credential = json.loads(credential_path.read_text(encoding="utf-8"))
         if credential["envelope"]["role"] != role:
             raise AssertionError("Business recovery custodian was switched")
-        imported = False
+        import_attempted = False
         try:
             if role == "company":
+                import_attempted = True
                 command = subprocess.run(
                     [sys.executable, "-m", "codex_migrate", "vault",
                      "business-key-import", "--vault", str(vault),
@@ -108,9 +109,9 @@ def consume(bundle: Path, helper: Path) -> None:
                     raise AssertionError("Business recovery CLI import failed safely")
                 result = key_id
             else:
+                import_attempted = True
                 result = import_business_recovery_credential(
                     str(vault), credential, crypto_helper=str(helper))
-            imported = True
             if result != key_id:
                 raise AssertionError("Business recovery import changed key identity")
             verified = verify_snapshot(str(vault), crypto_helper=str(helper))
@@ -124,7 +125,9 @@ def consume(bundle: Path, helper: Path) -> None:
                     (output / RELATIVE).read_bytes() != TRANSCRIPT):
                 raise AssertionError("Independent-Mac business conversation restore failed")
         finally:
-            if imported:
+            # An import can persist the synthetic key before its reply fails.
+            # Never leave that key in the independent runner's Keychain.
+            if import_attempted:
                 helper_call(helper, "delete-key", "--key-id", key_id)
     print("Both custodians restored the same synthetic Vault on independent Mac")
 
