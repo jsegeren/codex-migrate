@@ -80,6 +80,15 @@ and mobile layout, keyboard labels, consent, successful delivery, and failure
 messages. Test actual sending only to the maintainer's controlled address.
 Verify the receipt in the inbox; remove test entries from any manual launch list.
 
+On September 30, 2026, one controlled `team-pilot` POST from
+`codexbackup.segeren.com` using Joshua's own address returned HTTP 200. The
+handler returns that result only after SendGrid accepts its message with 202.
+This is **one test submission, not a customer lead**. Receipt in the configured
+maintainer inbox was not independently verified: the connected Gmail account
+available for this check was a different address. Do not call the production
+intake end-to-end accepted until that inbox shows the test notice; do not
+resubmit blindly and create duplicate requests.
+
 On September 5, 2026, Squarespace's authoritative DNS returned all three
 SendGrid CNAMEs and SendGrid confirmed `segeren.com` as authenticated. The
 existing DMARC policy was unchanged. Production and Preview sender configuration
