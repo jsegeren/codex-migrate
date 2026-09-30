@@ -21,7 +21,7 @@ from codex_migrate.errors import MigrationError
 from codex_migrate.vault_identity import MAX_RECORD_BYTES
 
 
-INDEX_VERSION = 2
+INDEX_VERSION = 4
 BLOCK_CHARS = 128 * 1024
 QUERY_CHARS = 500
 MIN_FREE_BYTES = 5 * 1024 * 1024 * 1024
@@ -143,19 +143,37 @@ def _database_stamp(source_home: str) -> Optional[str]:
         if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid()
                 or info.st_nlink != 1):
             return None
-        stamps.append((info.st_dev, info.st_ino, info.st_size,
-                       info.st_mtime_ns, info.st_ctime_ns))
+        # SQLite may create an empty WAL while opening a read-only view. It
+        # contains no committed pages, so its appearance must not invalidate
+        # an otherwise complete index. Still reject unsafe zero-byte files.
+        if path != database and info.st_size == 0:
+            stamps.append(None)
+        else:
+            stamps.append((info.st_dev, info.st_ino, info.st_size,
+                           info.st_mtime_ns, info.st_ctime_ns))
     return json.dumps(stamps, separators=(",", ":"))
 
 
 def _schema(connection: sqlite3.Connection) -> None:
     connection.execute("PRAGMA foreign_keys=ON")
     version = connection.execute("PRAGMA user_version").fetchone()[0]
-    if version not in (0, 1, INDEX_VERSION):
+    if version not in (0, 1, 2, 3, INDEX_VERSION):
         raise MigrationError("This local search index has an unsupported format.")
     if version == 0 and connection.execute(
             "SELECT 1 FROM sqlite_master WHERE type IN ('table','view') LIMIT 1").fetchone():
         raise MigrationError("The local search index has an incomplete or unexpected format.")
+    if version in (1, 2, 3):
+        # Older caches cannot verify whole phrases inside their unpositioned
+        # trigram blocks. Reset only the disposable projections that changed.
+        with connection:
+            if version == 2:
+                connection.execute("DELETE FROM paginated_stamp")
+                connection.execute("DROP TABLE paginated_terms")
+                connection.execute("DELETE FROM paginated_blocks")
+                connection.execute("DELETE FROM paginated_threads")
+            connection.execute("DROP TABLE text_terms")
+            connection.execute("DELETE FROM blocks")
+            connection.execute("DELETE FROM files")
     connection.execute("CREATE TABLE IF NOT EXISTS files ("
                        "id INTEGER PRIMARY KEY, collection TEXT NOT NULL, relative TEXT NOT NULL, "
                        "dev INTEGER NOT NULL, ino INTEGER NOT NULL, size INTEGER NOT NULL, "
@@ -165,7 +183,7 @@ def _schema(connection: sqlite3.Connection) -> None:
                        "id INTEGER PRIMARY KEY, file_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE)")
     connection.execute("CREATE INDEX IF NOT EXISTS blocks_file ON blocks(file_id)")
     connection.execute("CREATE VIRTUAL TABLE IF NOT EXISTS text_terms USING fts5("
-                       "body, content='', contentless_delete=1, tokenize='trigram', detail='none')")
+                       "body, content='', contentless_delete=1, tokenize='trigram')")
     connection.execute("CREATE TABLE IF NOT EXISTS paginated_stamp ("
                        "id INTEGER PRIMARY KEY CHECK(id=1), source_stamp TEXT NOT NULL)")
     connection.execute("CREATE TABLE IF NOT EXISTS paginated_threads ("
@@ -176,7 +194,7 @@ def _schema(connection: sqlite3.Connection) -> None:
     connection.execute("CREATE INDEX IF NOT EXISTS paginated_blocks_thread "
                        "ON paginated_blocks(thread_id)")
     connection.execute("CREATE VIRTUAL TABLE IF NOT EXISTS paginated_terms USING fts5("
-                       "body, content='', contentless_delete=1, tokenize='trigram', detail='none')")
+                       "body, content='', contentless_delete=1, tokenize='trigram')")
     connection.execute("PRAGMA user_version=%d" % INDEX_VERSION)
 
 
@@ -539,7 +557,7 @@ def candidates(source_home: str, query: str,
         try:
             if connection.execute("PRAGMA user_version").fetchone()[0] != INDEX_VERSION:
                 return None
-            expression = _matching_expression(folded)
+            expression = _phrase_expression(folded)
             matches = set(connection.execute(
                 "SELECT DISTINCT f.collection,f.relative FROM text_terms "
                 "JOIN blocks b ON b.id=text_terms.rowid JOIN files f ON f.id=b.file_id "
@@ -562,13 +580,8 @@ def candidates(source_home: str, query: str,
     return result
 
 
-def _matching_expression(folded: str) -> str:
-    positions = list(range(len(folded) - 2))
-    if len(positions) > 16:
-        positions = sorted({positions[(i * (len(positions) - 1)) // 15]
-                            for i in range(16)})
-    grams = list(dict.fromkeys(folded[i:i + 3] for i in positions))
-    return " AND ".join('"%s"' % gram.replace('"', '""') for gram in grams)
+def _phrase_expression(folded: str) -> str:
+    return '"' + folded.replace('"', '""') + '"'
 
 
 def paginated_candidates(source_home: str, query: str) -> Optional[Set[str]]:
@@ -596,7 +609,7 @@ def paginated_candidates(source_home: str, query: str) -> Optional[Set[str]]:
             matches = {thread_id for (thread_id,) in connection.execute(
                 "SELECT DISTINCT b.thread_id FROM paginated_terms "
                 "JOIN paginated_blocks b ON b.id=paginated_terms.rowid "
-                "WHERE paginated_terms MATCH ?", (_matching_expression(folded),))}
+                "WHERE paginated_terms MATCH ?", (_phrase_expression(folded),))}
         finally:
             connection.close()
     except (MigrationError, OSError, sqlite3.Error):

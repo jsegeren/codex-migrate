@@ -83,6 +83,23 @@ class PaginatedSource:
         except sqlite3.Error as error:
             raise MigrationError("Codex paginated history could not be listed safely.") from error
 
+    def thread_ids_recent_subset(self, thread_ids: List[str]) -> List[str]:
+        """Order a small indexed candidate set without sorting the whole database."""
+        if (not isinstance(thread_ids, list) or len(thread_ids) > 700
+                or any(canonical_id(value) != value for value in thread_ids)):
+            raise ValueError("invalid paginated conversation candidate set")
+        if not thread_ids:
+            return []
+        try:
+            placeholders = ",".join("?" for _ in thread_ids)
+            rows = self._connection.execute(
+                "SELECT thread_id FROM thread_items WHERE thread_id IN (" + placeholders + ") "
+                "GROUP BY thread_id ORDER BY MAX(created_at_ms) DESC, thread_id",
+                thread_ids)
+            return [thread_id for (thread_id,) in rows]
+        except sqlite3.Error as error:
+            raise MigrationError("Codex paginated history could not be listed safely.") from error
+
     def has_thread(self, thread_id: str) -> bool:
         if canonical_id(thread_id) != thread_id:
             raise ValueError("thread id must be a canonical UUID")
@@ -352,7 +369,7 @@ def _reader_main(source_home: str) -> int:
             _send_protocol(sys.stdout.buffer, {"ready": True})
             items = None
             for line in sys.stdin.buffer:
-                if len(line) > 4096:
+                if len(line) > 32768:
                     raise MigrationError("Invalid paginated reader request.")
                 request = json.loads(line)
                 if not isinstance(request, dict):
@@ -363,6 +380,9 @@ def _reader_main(source_home: str) -> int:
                         _send_protocol(sys.stdout.buffer, {"id": thread_id})
                 elif operation == "thread_ids_recent":
                     for thread_id in source.thread_ids_recent():
+                        _send_protocol(sys.stdout.buffer, {"id": thread_id})
+                elif operation == "thread_ids_recent_subset":
+                    for thread_id in source.thread_ids_recent_subset(request.get("thread_ids")):
                         _send_protocol(sys.stdout.buffer, {"id": thread_id})
                 elif operation == "has_thread":
                     _send_protocol(sys.stdout.buffer, {"has": source.has_thread(request.get("thread_id"))})
@@ -428,6 +448,14 @@ class _SandboxedPaginatedSource:
     def thread_ids_recent(self) -> List[str]:
         self._cancel_range()
         return [response["id"] for response in self._request({"op": "thread_ids_recent"})]
+
+    def thread_ids_recent_subset(self, thread_ids: List[str]) -> List[str]:
+        self._cancel_range()
+        if (not isinstance(thread_ids, list) or len(thread_ids) > 700
+                or any(canonical_id(value) != value for value in thread_ids)):
+            raise ValueError("invalid paginated conversation candidate set")
+        return [response["id"] for response in self._request(
+            {"op": "thread_ids_recent_subset", "thread_ids": thread_ids})]
 
     def has_thread(self, thread_id: str) -> bool:
         self._cancel_range()

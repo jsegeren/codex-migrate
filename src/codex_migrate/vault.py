@@ -330,6 +330,34 @@ def _paginated_ranges(source_home: str, thread_id: str,
     return ranges
 
 
+def _indexed_paginated_threads(source_home: str, indexed_rollouts: set,
+                               indexed_titles: Dict[str, List[str]], needle: str,
+                               discovered, selected, rollouts) -> Optional[List[str]]:
+    """Keep a complete indexed search to the small set of possible DB threads.
+
+    The index names physical rollouts, while a visible fork can inherit a
+    parent's items. Resolve current lineage before excluding any thread.
+    A large candidate set uses the original full scan instead.
+    """
+    possible = set(indexed_rollouts)
+    possible.update(thread_id for thread_id, aliases in indexed_titles.items()
+                    if canonical_id(thread_id) == thread_id
+                    and any(needle in title.casefold() for title in aliases))
+    for thread_id in selected:
+        try:
+            ranges = _paginated_ranges(source_home, thread_id, discovered, selected, rollouts)
+        except (AmbiguousLineage, UnreadableTranscript):
+            # Preserve the existing needs-review warning path for a database
+            # thread whose physical lineage cannot safely be resolved.
+            possible.add(thread_id)
+            continue
+        if any(rollout_id in indexed_rollouts for rollout_id, _, _ in ranges):
+            possible.add(thread_id)
+        if len(possible) > 700:
+            return None
+    return sorted(possible) if len(possible) <= 700 else None
+
+
 def _lineage_records(segments: List[Tuple[Path, int]], cursor: int = 0,
                      stable: bool = False):
     """Yield (record, virtual byte cursor, virtual line) across a fork lineage."""
@@ -629,7 +657,12 @@ def search(
                 # SQLite read view. A write between an earlier index check and
                 # this BEGIN could otherwise hide a newly added message.
                 indexed_rollouts = paginated_candidates(source_home, query.strip())
-                for thread_id in source.thread_ids_recent():
+                candidate_ids = (_indexed_paginated_threads(
+                    source_home, indexed_rollouts, indexed, needle, discovered,
+                    selected_rollouts, rollouts) if indexed_rollouts is not None else None)
+                thread_ids = (source.thread_ids_recent_subset(candidate_ids)
+                              if candidate_ids is not None else source.thread_ids_recent())
+                for thread_id in thread_ids:
                     transcript = thread_id + ".jsonl"
                     aliases = indexed.get(thread_id, [])
                     title = aliases[-1] if aliases else None

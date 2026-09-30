@@ -96,6 +96,10 @@ class PaginatedSourceTests(unittest.TestCase):
             with open_paginated_source(str(home)) as source:
                 self.assertEqual(source.thread_ids(), [THREAD_ID, newer])
                 self.assertEqual(source.thread_ids_recent(), [newer, THREAD_ID])
+                self.assertEqual(source.thread_ids_recent_subset([THREAD_ID, newer]),
+                                 [newer, THREAD_ID])
+                self.assertEqual(source.thread_ids_recent_subset([THREAD_ID]), [THREAD_ID])
+                self.assertEqual(source.thread_ids_recent_subset([]), [])
 
     def test_large_paginated_record_excerpts_and_can_continue(self):
         with tempfile.TemporaryDirectory() as temporary:

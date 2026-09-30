@@ -106,6 +106,8 @@ class SearchIndexTests(unittest.TestCase):
             self.assertEqual(result["paginated_threads"], 2)
             self.assertEqual(paginated_candidates(temporary, "Clerk"), {first})
             self.assertEqual(paginated_candidates(temporary, "STRASSE"), {second})
+            Path(str(database) + "-wal").touch()
+            self.assertEqual(paginated_candidates(temporary, "Clerk"), {first})
             self.assertEqual([(item.collection, item.transcript)
                               for item in search(temporary, "Clerk")],
                              [("paginated", first + ".jsonl")])
@@ -206,9 +208,62 @@ class SearchIndexTests(unittest.TestCase):
                                    (child_id, 3, "Child-local work")))
             build(temporary, apply=True)
             self.assertEqual(paginated_candidates(temporary, "Clerk"), {parent_id})
-            self.assertEqual({item.transcript for item in search(temporary, "Clerk")
-                              if item.collection == "paginated"},
-                             {parent_id + ".jsonl", child_id + ".jsonl"})
+            with patch("codex_migrate.vault_paginated.PaginatedSource.thread_ids_recent",
+                       side_effect=AssertionError("indexed search sorted the whole database")):
+                self.assertEqual({item.transcript for item in search(temporary, "Clerk")
+                                  if item.collection == "paginated"},
+                                 {parent_id + ".jsonl", child_id + ".jsonl"})
+
+    @unittest.skipUnless(supported(), "requires SQLite FTS5 contentless-delete")
+    def test_indexed_database_search_preserves_recency_without_global_sort(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            older = "11111111-1111-4111-8111-111111111111"
+            newer = "22222222-2222-4222-8222-222222222222"
+            write_paginated(home, ((older, 1, "Clerk old"),
+                                   (newer, 2, "Clerk new")))
+            build(temporary, apply=True)
+            with patch("codex_migrate.vault_paginated.PaginatedSource.thread_ids_recent",
+                       side_effect=AssertionError("indexed search sorted the whole database")):
+                self.assertEqual([item.transcript for item in search(temporary, "Clerk")],
+                                 [newer + ".jsonl", older + ".jsonl"])
+                self.assertEqual(search(temporary, "absent phrase"), [])
+
+    @unittest.skipUnless(supported(), "requires SQLite FTS5 contentless-delete")
+    def test_paginated_phrase_index_does_not_match_words_in_separate_items(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            exact = "11111111-1111-4111-8111-111111111111"
+            separated = "22222222-2222-4222-8222-222222222222"
+            write_paginated(home, ((exact, 1, "Unification Foundation"),
+                                   (separated, 2, "Unification without the other word"),
+                                   (separated, 3, "Foundation later")))
+            build(temporary, apply=True)
+            self.assertEqual(paginated_candidates(temporary, "Unification Foundation"),
+                             {exact})
+            index_path = _path(temporary)
+            with sqlite3.connect(index_path) as connection:
+                connection.execute("PRAGMA user_version=2")
+            self.assertIsNone(paginated_candidates(temporary, "Unification Foundation"))
+            build(temporary, apply=True)
+            self.assertEqual(paginated_candidates(temporary, "Unification Foundation"),
+                             {exact})
+
+    @unittest.skipUnless(supported(), "requires SQLite FTS5 contentless-delete")
+    def test_transcript_phrase_index_excludes_separate_words(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            exact = home / ".codex/sessions/exact.jsonl"
+            separate = home / ".codex/sessions/separate.jsonl"
+            write_thread(exact, "Unification Foundation")
+            write_thread(separate, "Unification happened", "Foundation followed")
+            build(temporary, apply=True)
+            found = candidates(temporary, "Unification Foundation",
+                               list(_transcripts(temporary)))
+            self.assertEqual(found, {exact})
+            self.assertEqual([item.transcript for item in search(temporary,
+                                                                 "Unification Foundation")],
+                             ["exact.jsonl"])
 
     def test_plan_does_not_create_a_cache(self):
         with tempfile.TemporaryDirectory() as temporary:
