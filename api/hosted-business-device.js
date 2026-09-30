@@ -1,5 +1,6 @@
-// Dark sandbox-only first-device pairing. Its bearer resolves metadata, not
-// upload, subscription, company recovery, or content access.
+// Dark sandbox-only first-device pairing. Separately gated upload/owner-read
+// still requires a current business allowance; pairing alone grants neither
+// storage, company recovery, nor administrator content access.
 const { reply } = require('../commerce/http');
 const { allowedBrowserOrigin } = require('../hosted/http_origin');
 const { sandboxDatabaseUrl,

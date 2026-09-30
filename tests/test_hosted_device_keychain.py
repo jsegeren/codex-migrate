@@ -62,6 +62,44 @@ class HostedDeviceKeychainTests(unittest.TestCase):
         self.assertFalse(any(item["device_id"] == device_id
                              for item in listed["devices"]))
 
+    def test_business_device_uses_independent_keychain_service_and_digest(self):
+        business_id = None
+        personal_id = None
+        try:
+            _, business = self.command("hosted-business-device-create")
+            business_id = business["device_id"]
+            self.assertNotIn("token", business)
+            _, personal = self.command("hosted-device-create")
+            personal_id = personal["device_id"]
+            _, read = self.command("hosted-business-device-read", "--device-id",
+                                   business_id)
+            token = read["token"]
+            self.assertRegex(token, r"^hvb1_[A-Za-z0-9_-]{43}$")
+            digest = hashlib.sha256(b"codex-backup-business-device-v1\0" +
+                                    token.encode("ascii")).hexdigest()
+            self.assertEqual(business["token_hash"], digest)
+            self.assertEqual(read["token_hash"], digest)
+            _, listed_business = self.command("hosted-business-device-list")
+            _, listed_personal = self.command("hosted-device-list")
+            self.assertIn(business, listed_business["devices"])
+            self.assertIn(personal, listed_personal["devices"])
+            self.assertNotIn(business, listed_personal["devices"])
+            self.assertNotIn(personal, listed_business["devices"])
+            denied, _ = self.command("hosted-device-read", "--device-id",
+                                     business_id, check=False)
+            self.assertNotEqual(denied.returncode, 0)
+            self.assertEqual(denied.stdout, b"")
+            denied, _ = self.command("hosted-business-device-read", "--device-id",
+                                     personal_id, check=False)
+            self.assertNotEqual(denied.returncode, 0)
+            self.assertEqual(denied.stdout, b"")
+        finally:
+            if business_id is not None:
+                self.command("hosted-business-device-delete", "--device-id",
+                             business_id)
+            if personal_id is not None:
+                self.command("hosted-device-delete", "--device-id", personal_id)
+
 
 if __name__ == "__main__":
     unittest.main()

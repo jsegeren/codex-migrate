@@ -25,7 +25,7 @@ from codex_migrate.vault_remote_transfer import (
 
 
 _UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z")
-_TOKEN = re.compile(r"hv1_[A-Za-z0-9_-]{43}\Z")
+_TOKEN = re.compile(r"(?:hv1_|hvb1_)[A-Za-z0-9_-]{43}\Z")
 _GRANT = re.compile(r"[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\Z")
 _HEX = re.compile(r"[0-9a-f]{64}\Z")
 _MAX_RESPONSE = 2048

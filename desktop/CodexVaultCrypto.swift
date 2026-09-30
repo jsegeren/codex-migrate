@@ -8,6 +8,7 @@ import Security
 private let keychainService = "com.segeren.codex-vault"
 private let businessKeychainService = "com.segeren.codex-vault-business"
 private let hostedDeviceService = "com.segeren.codex-vault-hosted-device"
+private let hostedBusinessDeviceService = "com.segeren.codex-vault-hosted-business-device"
 private let keychainInteractionError = "Vault could not access its key without interactive Keychain approval. No backup was published. Contact support if this persists"
 private let formatVersion = 1
 private let snapshotFormatVersion = 4
@@ -247,9 +248,10 @@ private func businessKeyQuery(_ keyID: String) -> [CFString: Any] {
     return query
 }
 
-private func hostedDeviceQuery(_ deviceID: String) -> [CFString: Any] {
+private func hostedDeviceQuery(_ deviceID: String,
+                               business: Bool = false) -> [CFString: Any] {
     var query = legacyKeyQuery(deviceID)
-    query[kSecAttrService] = hostedDeviceService
+    query[kSecAttrService] = business ? hostedBusinessDeviceService : hostedDeviceService
 #if !CODEX_VAULT_TEST_LEGACY_KEYCHAIN
     query[kSecUseDataProtectionKeychain] = true
     query[kSecAttrAccessGroup] = "P9J3JK79KQ.com.segeren.codex-migrate.vault-crypto"
@@ -257,14 +259,17 @@ private func hostedDeviceQuery(_ deviceID: String) -> [CFString: Any] {
     return query
 }
 
-private func hostedDeviceHash(_ token: String) -> String {
-    var bytes = Data("codex-vault-hosted-session-v1\0".utf8)
+private func hostedDeviceHash(_ token: String, business: Bool = false) -> String {
+    let domain = business ? "codex-backup-business-device-v1\0" :
+        "codex-vault-hosted-session-v1\0"
+    var bytes = Data(domain.utf8)
     bytes.append(Data(token.utf8))
     return hex(SHA256.hash(data: bytes))
 }
 
-private func hostedDeviceToken(_ deviceID: String) throws -> String {
-    var query = hostedDeviceQuery(deviceID)
+private func hostedDeviceToken(_ deviceID: String,
+                               business: Bool = false) throws -> String {
+    var query = hostedDeviceQuery(deviceID, business: business)
     query[kSecReturnData] = true
     query[kSecMatchLimit] = kSecMatchLimitOne
     var item: CFTypeRef?
@@ -272,46 +277,50 @@ private func hostedDeviceToken(_ deviceID: String) throws -> String {
     if status == errSecInteractionNotAllowed {
         throw VaultError.message("the hosted device credential needs interactive Keychain approval")
     }
+    let prefix = business ? "hvb1_" : "hv1_"
     guard status == errSecSuccess, let data = item as? Data,
           let token = String(data: data, encoding: .utf8),
-          token.range(of: "^hv1_[A-Za-z0-9_-]{43}$", options: .regularExpression) != nil else {
+          token.range(of: "^" + prefix + "[A-Za-z0-9_-]{43}$",
+                      options: .regularExpression) != nil else {
         throw VaultError.message("the hosted device credential is unavailable")
     }
     return token
 }
 
-private func createHostedDeviceCommand() throws {
+private func createHostedDeviceCommand(business: Bool = false) throws {
     let deviceID = UUID().uuidString.lowercased()
-    let token = "hv1_" + base64URL(rawKey(SymmetricKey(size: .bits256)))
-    var query = hostedDeviceQuery(deviceID)
+    let token = (business ? "hvb1_" : "hv1_") +
+        base64URL(rawKey(SymmetricKey(size: .bits256)))
+    var query = hostedDeviceQuery(deviceID, business: business)
     query[kSecValueData] = Data(token.utf8)
     query[kSecAttrAccessible] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
     let status = SecItemAdd(query as CFDictionary, nil)
     guard status == errSecSuccess else {
         throw VaultError.message("the hosted device credential could not be saved in Keychain")
     }
-    guard try hostedDeviceToken(deviceID) == token else {
+    guard try hostedDeviceToken(deviceID, business: business) == token else {
         throw VaultError.message("the hosted device credential could not be verified")
     }
     // This output is safe for enrollment requests. The bearer token stays in
     // Keychain and never enters argv, a browser response, or this JSON result.
     try printJSON(HostedDeviceResult(device_id: deviceID,
-                                     token_hash: hostedDeviceHash(token),
+                                     token_hash: hostedDeviceHash(token, business: business),
                                      token: nil))
 }
 
-private func readHostedDeviceCommand(_ arguments: [String]) throws {
+private func readHostedDeviceCommand(_ arguments: [String],
+                                     business: Bool = false) throws {
     let deviceID = try canonicalKeyID(argument("--device-id", in: arguments))
-    let token = try hostedDeviceToken(deviceID)
+    let token = try hostedDeviceToken(deviceID, business: business)
     // A future authenticated native transport may consume this over a private
     // pipe. Never display, log, or send this bearer secret through browser JS.
     try printJSON(HostedDeviceResult(device_id: deviceID,
-                                     token_hash: hostedDeviceHash(token),
+                                     token_hash: hostedDeviceHash(token, business: business),
                                      token: token))
 }
 
-private func listHostedDevicesCommand() throws {
-    var query = hostedDeviceQuery("unused")
+private func listHostedDevicesCommand(business: Bool = false) throws {
+    var query = hostedDeviceQuery("unused", business: business)
     query.removeValue(forKey: kSecAttrAccount)
     query[kSecReturnAttributes] = true
     query[kSecMatchLimit] = kSecMatchLimitAll
@@ -329,16 +338,19 @@ private func listHostedDevicesCommand() throws {
             throw VaultError.message("a hosted device credential has an invalid identifier")
         }
         let deviceID = try canonicalKeyID(rawID)
-        let token = try hostedDeviceToken(deviceID)
+        let token = try hostedDeviceToken(deviceID, business: business)
         return HostedDeviceResult(device_id: deviceID,
-                                  token_hash: hostedDeviceHash(token), token: nil)
+                                  token_hash: hostedDeviceHash(token, business: business),
+                                  token: nil)
     }.sorted { $0.device_id < $1.device_id }
     try printJSON(HostedDeviceListResult(devices: devices))
 }
 
-private func deleteHostedDeviceCommand(_ arguments: [String]) throws {
+private func deleteHostedDeviceCommand(_ arguments: [String],
+                                       business: Bool = false) throws {
     let deviceID = try canonicalKeyID(argument("--device-id", in: arguments))
-    let status = SecItemDelete(hostedDeviceQuery(deviceID) as CFDictionary)
+    let status = SecItemDelete(hostedDeviceQuery(deviceID,
+                                                business: business) as CFDictionary)
     guard status == errSecSuccess || status == errSecItemNotFound else {
         throw VaultError.message("the hosted device credential could not be removed")
     }
@@ -1403,6 +1415,11 @@ private func run() throws {
     case "hosted-device-read": try readHostedDeviceCommand(arguments)
     case "hosted-device-list": try listHostedDevicesCommand()
     case "hosted-device-delete": try deleteHostedDeviceCommand(arguments)
+    case "hosted-business-device-create": try createHostedDeviceCommand(business: true)
+    case "hosted-business-device-read": try readHostedDeviceCommand(arguments, business: true)
+    case "hosted-business-device-list": try listHostedDevicesCommand(business: true)
+    case "hosted-business-device-delete": try deleteHostedDeviceCommand(arguments,
+                                                                        business: true)
     case "store-chunks": try storeChunksCommand(arguments)
     case "store-chunks-with-known": try storeChunksWithKnownCommand(arguments)
     case "plan-chunks": try planChunksCommand(arguments)

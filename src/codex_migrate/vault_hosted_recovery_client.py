@@ -27,7 +27,7 @@ from codex_migrate.vault_remote_recovery import _Object, _copy_to_file, _objects
 _UUID = r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
 _KEY = re.compile(rf"(?:metadata/{_UUID}\.json|manifests/{_UUID}\.cvmanifest|"
                   rf"refs/{_UUID}\.json|objects/[0-9a-f]{{2}}/[0-9a-f]{{62}}\.cvchunk)\Z")
-_TOKEN = re.compile(r"hv1_[A-Za-z0-9_-]{43}\Z")
+_TOKEN = re.compile(r"(?:hv1_|hvb1_)[A-Za-z0-9_-]{43}\Z")
 _GRANT = re.compile(r"[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\Z")
 _PAGE_SIZE = 256
 _HISTORY_PAGE_SIZE = 50
