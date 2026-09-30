@@ -7,6 +7,10 @@ The working customer-facing name for the new offer is **Codex Backup**.
 Codex Migrate remains the name of the currently shipped Mac beta until a
 separately reviewed release. `Vault` remains a format/CLI identifier for
 compatibility, not the new hosted offer's customer-facing name.
+The dark hosted client targets `codexbackup.segeren.com`; sandbox API calls
+from that public origin or the older `migrate.segeren.com` origin are accepted,
+while native clients continue without a browser Origin header. This domain
+alignment does not activate the hosted service or its checkout.
 
 ## Customer choice
 

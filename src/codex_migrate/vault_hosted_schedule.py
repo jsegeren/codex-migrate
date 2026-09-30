@@ -34,7 +34,7 @@ from codex_migrate.vault_schedule import (
 
 
 LABEL = "com.segeren.codex-vault.hosted-backup"
-SERVICE_ORIGIN = "https://migrate.segeren.com"
+SERVICE_ORIGIN = "https://codexbackup.segeren.com"
 INTERVAL_SECONDS = 30 * 60
 ROTATION_INTERVAL = timedelta(days=14)
 MAX_PRIOR_BYTES = 64 * 1024 * 1024

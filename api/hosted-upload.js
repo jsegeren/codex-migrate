@@ -2,6 +2,7 @@
 // storage credentials: it reserves quota and issues exact, short-lived grants
 // after either a fresh Stripe check or a one-minute, device-bound lease.
 const { reply } = require('../commerce/http');
+const { allowedBrowserOrigin } = require('../hosted/http_origin');
 const { uploadRuntime } = require('../hosted/upload_runtime');
 const { authorizeUploadScope, authorizeLeasedUploadScope, authorizeReadScope,
   consumeAuthorizedScope, tokenHash, HostedAccessError } = require('../hosted/access');
@@ -32,7 +33,7 @@ function validRequestItem(item) {
 }
 
 function requestBody(req) {
-  if (req.headers.origin && req.headers.origin !== 'https://migrate.segeren.com') {
+  if (!allowedBrowserOrigin(req.headers.origin)) {
     throw Error('invalid_request');
   }
   const limit = req.body?.action === 'batch' ? MAX_BATCH_BODY : MAX_BODY;

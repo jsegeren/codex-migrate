@@ -2,6 +2,7 @@
 // release gates: enrollment, retention, trial/billing, scheduled backup, and
 // a clean-Mac disaster restore. No production environment can open this route.
 const { reply } = require('../commerce/http');
+const { allowedBrowserOrigin } = require('../hosted/http_origin');
 const { recoveryRuntime } = require('../hosted/recovery_runtime');
 const { authorizeReadScope, HostedAccessError } = require('../hosted/access');
 const { getAccountStorageUsage, getLastGoodSnapshot, getPublishedSnapshot,
@@ -13,7 +14,7 @@ const BEARER = /^Bearer (hv1_[A-Za-z0-9_-]{43})$/;
 const MAX_BODY = 600;
 
 function requestBody(req) {
-  if (req.headers.origin && req.headers.origin !== 'https://migrate.segeren.com') {
+  if (!allowedBrowserOrigin(req.headers.origin)) {
     throw Error('invalid_request');
   }
   if ((req.headers['content-type'] || '').split(';')[0] !== 'application/json' ||

@@ -2,6 +2,7 @@
 // existing purchase and email, but grants zero upload capacity. Neither
 // action starts a hosted trial, subscription, or backup.
 const { reply } = require('../commerce/http');
+const { allowedBrowserOrigin } = require('../hosted/http_origin');
 const { runtime: commerceRuntime } = require('../commerce/runtime');
 const { sandboxDatabaseUrl,
   sandboxDatabaseRuntime } = require('../hosted/recovery_runtime');
@@ -14,7 +15,7 @@ const BEARER = /^Bearer (hv1_[A-Za-z0-9_-]{43})$/;
 const MAX_BODY = 700;
 
 function requestBody(req) {
-  if (req.headers.origin && req.headers.origin !== 'https://migrate.segeren.com') {
+  if (!allowedBrowserOrigin(req.headers.origin)) {
     throw Error('invalid_request');
   }
   if ((req.headers['content-type'] || '').split(';')[0] !== 'application/json' ||

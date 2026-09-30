@@ -3,6 +3,7 @@
 // every exact object with provider-backed R2 HEADs, then atomically advances
 // last-good. A timeout or lost response can be retried against the same set.
 const { reply } = require('../commerce/http');
+const { allowedBrowserOrigin } = require('../hosted/http_origin');
 const { uploadRuntime } = require('../hosted/upload_runtime');
 const { authorizeUploadScope, HostedAccessError } = require('../hosted/access');
 const { createBatchVerifier } = require('../hosted/batch_verifier');
@@ -13,7 +14,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{1
 const BEARER = /^Bearer (hv1_[A-Za-z0-9_-]{43})$/;
 
 function requestBody(req) {
-  if (req.headers.origin && req.headers.origin !== 'https://migrate.segeren.com') {
+  if (!allowedBrowserOrigin(req.headers.origin)) {
     throw Error('invalid_request');
   }
   if ((req.headers['content-type'] || '').split(';')[0] !== 'application/json' ||

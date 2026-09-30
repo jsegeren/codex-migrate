@@ -2,6 +2,7 @@
 // bytes and is not a capability: later HEAD/PUT and publication still require
 // their own fresh authorization and independent provider verification.
 const { reply } = require('../commerce/http');
+const { allowedBrowserOrigin } = require('../hosted/http_origin');
 const { uploadRuntime } = require('../hosted/upload_runtime');
 const { authorizeUploadScope, HostedAccessError } = require('../hosted/access');
 const { lookupPublishedChunks } = require('../hosted/published_chunks');
@@ -12,7 +13,7 @@ const BEARER = /^Bearer (hv1_[A-Za-z0-9_-]{43})$/;
 const MAX_BODY = 18_000;
 
 function requestBody(req) {
-  if (req.headers.origin && req.headers.origin !== 'https://migrate.segeren.com') {
+  if (!allowedBrowserOrigin(req.headers.origin)) {
     throw Error('invalid_request');
   }
   if ((req.headers['content-type'] || '').split(';')[0] !== 'application/json' ||

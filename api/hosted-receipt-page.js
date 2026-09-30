@@ -1,6 +1,7 @@
 // Dark sandbox-only admission of bounded ciphertext object claims. An ACK
 // does not verify R2 or advance last-good; publication is a separate job.
 const { reply } = require('../commerce/http');
+const { allowedBrowserOrigin } = require('../hosted/http_origin');
 const { uploadRuntime } = require('../hosted/upload_runtime');
 const { authorizeUploadScope, HostedAccessError } = require('../hosted/access');
 const { appendStagedPage } = require('../hosted/receipt_pages');
@@ -10,7 +11,7 @@ const BEARER = /^Bearer (hv1_[A-Za-z0-9_-]{43})$/;
 const MAX_BODY = 256 * 1024;
 
 function requestBody(req) {
-  if (req.headers.origin && req.headers.origin !== 'https://migrate.segeren.com') {
+  if (!allowedBrowserOrigin(req.headers.origin)) {
     throw Error('invalid_request');
   }
   if ((req.headers['content-type'] || '').split(';')[0] !== 'application/json' ||
