@@ -1202,7 +1202,13 @@ class VaultBackupTests(unittest.TestCase):
                         item.key: self.store.objects[item.key] for item in staged.objects
                     }
                     return {"snapshotId": staged.snapshot_id,
-                            "verifiedObjectCount": len(staged.objects)}
+                            "verifiedObjectCount": len(staged.objects),
+                            "encryptedBytes": staged.upload_claim().remote_bytes_checked,
+                            "transcriptFiles": staged.transcript_files,
+                            "transcriptBytes": staged.transcript_bytes,
+                            "restagedPlaintextBytes": staged.restaged_plaintext_bytes,
+                            "reusedPlaintextBytes": staged.reused_plaintext_bytes,
+                            "atRiskThreads": staged.at_risk_threads}
 
             class Recovery(HostedRecoveryClient):
                 def __init__(self):
@@ -1220,7 +1226,7 @@ class VaultBackupTests(unittest.TestCase):
                                   include_chunks=False):
                     assert expected_snapshot_id == self.base_id
                     assert expected_account_id == account_id
-                    if not include_chunks and self.base_id is not None:
+                    if self.base_id is not None:
                         with tempfile.TemporaryDirectory() as temporary_manifest:
                             manifest = Path(temporary_manifest) / "prior.cvmanifest"
                             manifest.write_bytes(upload.store.objects[
@@ -1281,8 +1287,9 @@ class VaultBackupTests(unittest.TestCase):
                     metadata, crypto_helper=str(self.helper),
                     max_prior_bytes=5_000_000, apply=True)
                 self.assertNotEqual(second["snapshotId"], published["snapshotId"])
-                self.assertGreater(second["restagedPlaintextBytes"], 0)
-                self.assertGreater(second["reusedPlaintextBytes"], 0)
+                # These synthetic rollouts have no verified thread IDs, so
+                # the safe path rereads them even though ciphertext dedupes.
+                self.assertEqual(second["reusedPlaintextBytes"], 0)
                 self.assertEqual(second["restagedPlaintextBytes"] +
                                  second["reusedPlaintextBytes"],
                                  second["transcriptBytes"])
