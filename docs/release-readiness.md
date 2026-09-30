@@ -16,6 +16,28 @@ credentials, not the Founder's OpenAI login or source home. The existing
 physical-Mac and source portability receipts remain separate evidence and are
 not relabelled as clean signed-app acceptance.
 
+Exact clean source `39afe98bdbbbe64c254013407142a9e55ac492cb` produced a
+Developer ID signed, provisioned, **not notarized** local-test build 20.
+The ZIP has SHA-256
+`a2811e437574d99ca9aa86045c0566488d2e3df3929fb72cf461ec08ce505b04`.
+Strict app-signature validation passed. All eight packaged Vault tests passed
+with the daily LaunchAgent and archived public build-16 compatibility checks
+enabled: synthetic transcript/database/attachment recovery, live search,
+search-cache behavior, scheduled database append, and legacy backup reading.
+Separate opt-in packaged tests passed killed-backup preservation/retry and
+128 MiB restore/updater contention with exact restored-byte comparisons.
+Only disposable history, test Keychain items, and a temporary schedule were
+used; those tests clean their keys, processes, and schedule on exit. Neither
+real Codex home was backed up or modified.
+
+The independent macOS source-format local, hosted, and business export/import
+pairs also passed for this exact commit in
+[CI run 36788553625](https://github.com/jsegeren/codex-migrate/actions/runs/36788553625).
+The PostgreSQL hosted-authority job passed; the full Python jobs were still
+running when this receipt was written. These source-format jobs do not run
+the signed package or a deployed R2 customer service. The signed package has
+not run in the clean acceptance VM and is not approved for distribution.
+
 ## September 30 structured-token-count recovery regression — draft only
 
 An upstream [Codex history-projection report](https://github.com/openai/codex/issues/42025)
