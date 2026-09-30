@@ -186,6 +186,14 @@ business account from inheriting the individual purchase enrollment or its
 device-session path. Contact addresses in that table are **not** administrator
 authentication, contractual entitlement, or proof of company key custody.
 No business device can upload or restore through this migration alone.
+Migration 0033 records explicitly approved seats, assigns each business Vault
+to exactly one seat, and keeps business device-session digests in a table
+separate from the individual purchase-backed sessions. Account/seat/Vault
+foreign keys reject cross-company or cross-seat assignment. These rows remain
+inert: worker contact email and approval references are records, not bearer
+credentials or administrator proof; no API authorizes from this table yet.
+Revoking a seat is irreversible in place and transactionally revokes its
+recorded device sessions; new device/session rows for that seat are refused.
 
 Before a business pilot, establish one organization-owned account with an
 identified purchaser and designated administrator, explicit seat/device
