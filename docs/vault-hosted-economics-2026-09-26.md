@@ -304,9 +304,10 @@ verified recovery, service obligations, and buyer evidence rather than merely
 marking up object storage. Neither this example nor the old consumer proposal
 is a live subscription or checkout entitlement.
 
-The current business pricing hypothesis to test with buyers is **$49/month
-including 100 GB of retained encrypted objects, plus $0.15 per additional
-GB-month**. This is not Founder-approved pricing or a live entitlement. With
+The earlier storage-led business example was **$49/month including 100 GB of
+retained encrypted objects, plus $0.15 per additional GB-month**. It is **not
+the current managed-business price hypothesis**, Founder-approved pricing, or
+a live entitlement. With
 published US domestic-card Stripe Payments and pay-as-you-go Billing rates,
 and R2 Standard storage at $0.015/GB-month, a steady 75 GB account would
 leave about $45.81 of a $49 charge (93.5%), and a steady 1,000 GB account
@@ -335,14 +336,24 @@ not observed COGS, contracted rates, or an approved customer price.
 | $699 | 95% | 80% | 1.03 |
 
 Even before labor, a lone $49 business account misses an 80% all-in margin
-under this allocation. Shared fixed infrastructure improves scale economics,
-but an assisted onboarding or real recovery can consume the entire monthly
-contribution. Do not quietly promise unlimited hands-on support at a storage-
-only price. Test buyer willingness to pay for a distinct managed business
-offer and measure actual setup, monitoring, incident, and recovery time;
-consider a separately disclosed onboarding/recovery service fee rather than
-burying episodic labor in every storage subscription. The current $49/month
-hypothesis remains unapproved, and no price or entitlement changes here.
+under this allocation. With 3.6% modeled payment/Billing fees, a $0.30 fixed
+charge, and the $11.50 non-labor cost above, the 80% margin floor is
+`($11.50 + $0.30 + $100 × monthly support hours) / (0.20 - 0.036)`:
+about **$682/month with one support hour** or **$1,292/month with two**.
+The calculation excludes onboarding, incident spikes, taxes, refunds, and
+unmeasured service costs; it is a sensitivity threshold, not a price quote.
+
+The next buyer-discovery hypothesis is therefore a **scoped, assisted business
+pilot in the $699–$1,299/month range**, with an explicit organization, seat,
+retained-byte, retention, and support scope agreed before any charge. $699
+barely clears the modeled 80% target at one support hour and is unsuitable
+if the pilot needs two. Test willingness to pay and measure actual setup,
+monitoring, incident, and recovery labor before selecting a tier. A separately
+disclosed onboarding or exceptional recovery fee may be necessary; do not
+bury unlimited hands-on help in a storage-only subscription. This is not an
+approved public offer, a service-level promise, or a live entitlement. The
+Founder's first-free-hosted-month direction for individual $49 app buyers does
+not automatically create a free managed-business pilot.
 
 The proposed billing unit is retained **encrypted object bytes**, not raw
 Codex-folder size, upload volume, thread count, snapshot count, or number of
