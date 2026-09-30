@@ -53,12 +53,15 @@ test('team pilot request uses the same fixed recipient and only bounded qualific
   const payload = JSON.parse(sent[0].options.body);
   assert.deepEqual(payload.personalizations, [{ to: [{ email: 'maintainer@example.com' }] }]);
   assert.equal(payload.subject, '[Codex Backup] Team pilot conversation request');
+  assert.equal(payload.from.name, 'Codex Backup');
   assert.equal(payload.reply_to.email, 'buyer@example.net');
   assert.match(payload.content[0].value, /26–100 people/);
   assert.match(payload.content[0].value, /Mac app and CLI\/IDE/);
   assert.match(payload.content[0].value, /not available yet/);
   assert.doesNotMatch(JSON.stringify(payload), /conversation text|repository content/);
   assert.match(res.body, /data-analytics-event="team_pilot_request_sent"/);
+  assert.match(res.body, /<title>Team pilot request sent — Codex Backup<\/title>/);
+  assert.match(res.body, /<a class="brand" href="\/">Codex Backup<\/a>/);
   assert.match(res.body, /href="\/codex-backup-for-teams"/);
   assert.doesNotMatch(res.body, /buyer@example/);
 });
