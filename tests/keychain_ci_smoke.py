@@ -5,8 +5,11 @@ Never print the recovery key, helper output, or runner Keychain contents.
 
 import json
 import os
+from pathlib import Path
 import subprocess
 import sys
+import tempfile
+import uuid
 
 
 def invoke(helper, command, *args, input_text=None):
@@ -69,27 +72,45 @@ def main():
         assert business["company_envelope"]["role"] == "company"
         assert invoke(helper, "export-key", "--key-id", business_id).returncode != 0, (
             "business master key was exposed through personal export")
-        for role, credential in (("worker", worker), ("company", company)):
-            envelope = business[role + "_envelope"]
-            require_success(invoke(helper, "delete-key", "--key-id", business_id),
-                            "business key delete")
-            wrong = company if role == "worker" else worker
-            rejected = invoke(helper, "business-key-import", "--key-id", business_id,
-                              input_text=json.dumps({"recovery_key": wrong,
-                                                     "envelope": envelope}))
-            assert rejected.returncode != 0, "wrong custodian credential opened the Vault"
-            swapped = {**envelope, "role": "company" if role == "worker" else "worker"}
-            rejected = invoke(helper, "business-key-import", "--key-id", business_id,
-                              input_text=json.dumps({"recovery_key": credential,
-                                                     "envelope": swapped}))
-            assert rejected.returncode != 0, "swapped custodian role opened the Vault"
-            require_success(invoke(helper, "business-key-import", "--key-id", business_id,
-                                   input_text=json.dumps({"recovery_key": credential,
-                                                          "envelope": envelope})),
-                            role + " import")
-            assert invoke(helper, "export-key", "--key-id", business_id).returncode != 0, (
-                "imported business master key was exposed through personal export")
-        print("Vault Keychain create/export/delete/import round trip passed on disposable CI")
+        with tempfile.TemporaryDirectory(prefix="vault-business-key-smoke-") as temporary:
+            snapshot_id = str(uuid.uuid4())
+            manifest = Path(temporary) / "synthetic.cvmanifest"
+            plaintext = json.dumps({"format": "codex-vault-snapshot", "version": 1,
+                                    "snapshot_id": snapshot_id,
+                                    "created_at": "2026-09-30T00:00:00Z", "files": []})
+            require_success(invoke(helper, "seal-manifest", "--key-id", business_id,
+                                   "--snapshot-id", snapshot_id, "--output", str(manifest),
+                                   input_text=plaintext), "business manifest seal")
+            original = require_success(invoke(
+                helper, "manifest-fingerprint", "--key-id", business_id,
+                "--snapshot-id", snapshot_id, "--manifest", str(manifest)),
+                "business manifest open")
+            for role, credential in (("worker", worker), ("company", company)):
+                envelope = business[role + "_envelope"]
+                require_success(invoke(helper, "delete-key", "--key-id", business_id),
+                                "business key delete")
+                wrong = company if role == "worker" else worker
+                rejected = invoke(helper, "business-key-import", "--key-id", business_id,
+                                  input_text=json.dumps({"recovery_key": wrong,
+                                                         "envelope": envelope}))
+                assert rejected.returncode != 0, "wrong custodian credential opened the Vault"
+                swapped = {**envelope, "role": "company" if role == "worker" else "worker"}
+                rejected = invoke(helper, "business-key-import", "--key-id", business_id,
+                                  input_text=json.dumps({"recovery_key": credential,
+                                                         "envelope": swapped}))
+                assert rejected.returncode != 0, "swapped custodian role opened the Vault"
+                require_success(invoke(helper, "business-key-import", "--key-id", business_id,
+                                       input_text=json.dumps({"recovery_key": credential,
+                                                              "envelope": envelope})),
+                                role + " import")
+                opened = require_success(invoke(
+                    helper, "manifest-fingerprint", "--key-id", business_id,
+                    "--snapshot-id", snapshot_id, "--manifest", str(manifest)),
+                    role + " manifest open")
+                assert opened == original, role + " could not reopen the encrypted snapshot"
+                assert invoke(helper, "export-key", "--key-id", business_id).returncode != 0, (
+                    "imported business master key was exposed through personal export")
+        print("Vault personal and business recovery round trips passed on disposable CI")
     finally:
         if key_id is not None:
             deleted = invoke(helper, "delete-key", "--key-id", key_id)
