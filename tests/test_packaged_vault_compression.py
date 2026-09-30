@@ -46,6 +46,48 @@ def run_packaged(command, timeout=30):
 @unittest.skipUnless(os.environ.get("CODEX_MIGRATE_PACKAGED_APP"),
                      "requires an explicit packaged app path")
 class PackagedVaultCompressionTests(unittest.TestCase):
+    def test_invalid_source_record_does_not_displace_recoverable_snapshot(self):
+        app = Path(os.environ["CODEX_MIGRATE_PACKAGED_APP"])
+        engine = app / "Contents/Resources/engine/codex-migrate-engine"
+        helper = app / "Contents/Helpers/CodexVaultCrypto.app/Contents/MacOS/CodexVaultCrypto"
+        if not helper.is_file():
+            helper = app / "Contents/Resources/CodexVaultCrypto"
+        with tempfile.TemporaryDirectory(prefix="vault-package-corruption-test-") as temporary:
+            root = Path(temporary)
+            source, vault = root / "source", root / "vault"
+            transcript = source / ".codex/sessions/fixture.jsonl"
+            transcript.parent.mkdir(parents=True)
+            original = (json.dumps({"type": "session_meta", "payload": {
+                "id": "66666666-6666-4666-8666-666666666666"}}) + "\n" +
+                json.dumps({"type": "response_item", "payload": {
+                    "role": "user", "content": "synthetic-package-recovery"}}) + "\n").encode()
+            transcript.write_bytes(original)
+            command = [str(engine), "vault", "--source-home", str(source),
+                       "backup", "--destination", str(vault), "--apply", "--json"]
+            key_id = None
+            try:
+                run_packaged(command, timeout=120)
+                key_id = json.loads((vault / "vault.json").read_text())["key_id"]
+                reference = (vault / "latest.json").read_bytes()
+                for invalid in (b'{"type":', b"null\n", b"[]\n", b"true\n"):
+                    with self.subTest(record=invalid):
+                        transcript.write_bytes(original + invalid)
+                        with self.assertRaisesRegex(AssertionError, "packaged Vault command failed"):
+                            run_packaged(command, timeout=120)
+                        self.assertEqual((vault / "latest.json").read_bytes(), reference)
+                run_packaged([str(engine), "vault", "verify", "--vault", str(vault),
+                              "--json"], timeout=120)
+                restored = root / "restored"
+                run_packaged([str(engine), "vault", "--source-home", str(source),
+                              "restore", "--vault", str(vault), "--output", str(restored),
+                              "--apply", "--json"], timeout=120)
+                self.assertEqual((restored / "sessions/fixture.jsonl").read_bytes(), original)
+            finally:
+                if key_id is None and (vault / "vault.json").is_file():
+                    key_id = json.loads((vault / "vault.json").read_text())["key_id"]
+                if key_id is not None:
+                    run_packaged([str(helper), "delete-key", "--key-id", key_id])
+
     def test_bundled_engine_restores_pasted_prompt_attachment(self):
         app = Path(os.environ["CODEX_MIGRATE_PACKAGED_APP"])
         resources = app / "Contents/Resources"

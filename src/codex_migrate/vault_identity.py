@@ -253,7 +253,9 @@ def scan_transcript(path: Path, relative: str, titles: Dict[str, List[str]]) -> 
                     raise MigrationError("A conversation record is too large for safe identity inspection.")
                 try:
                     record = json.loads(raw)
-                except (UnicodeError, json.JSONDecodeError) as error:
+                    if not isinstance(record, dict):
+                        raise ValueError("Conversation records must be JSON objects")
+                except (UnicodeError, ValueError) as error:
                     changed = os.fstat(handle.fileno())
                     if (before.st_dev, before.st_ino, before.st_size,
                             before.st_mtime_ns, before.st_ctime_ns) != (
@@ -261,8 +263,6 @@ def scan_transcript(path: Path, relative: str, titles: Dict[str, List[str]]) -> 
                             changed.st_mtime_ns, changed.st_ctime_ns):
                         raise TranscriptChanged("A conversation changed during identity inspection.") from error
                     raise MigrationError("A conversation contains unreadable JSON; it was not backed up.") from error
-                if not isinstance(record, dict):
-                    continue
                 records += 1
                 payload = record.get("payload")
                 stack = [payload]

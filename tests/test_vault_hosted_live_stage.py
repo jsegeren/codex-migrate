@@ -79,6 +79,36 @@ class HostedLiveStageTests(unittest.TestCase):
                         apply=True)
                 upload.assert_not_called()
 
+    def test_non_object_source_never_reaches_hosted_upload_or_publication(self):
+        for invalid in ("null", "[]", '"synthetic"', "42", "true"):
+            with self.subTest(record=invalid), tempfile.TemporaryDirectory() as temporary:
+                source = Path(temporary) / "source"
+                active = source / ".codex/sessions/current.jsonl"
+                active.parent.mkdir(parents=True, mode=0o700)
+                active.write_text(
+                    '{"type":"session_meta","payload":{"id":"' + OTHER + '"}}\n' +
+                    invalid + "\n", encoding="utf-8")
+                original = active.read_bytes()
+                journal_dir = Path(temporary) / "journal"
+                journal_dir.mkdir(mode=0o700)
+                with HostedChunkJournal(
+                        journal_dir, account_id=ACCOUNT, vault_id=VAULT,
+                        reservation_id=RESERVATION, snapshot_id=SNAPSHOT,
+                        key_id=KEY, base_snapshot_id=BASE) as journal, patch(
+                        "codex_migrate.vault_hosted_snapshot_stage.published_source_facts",
+                        return_value=({}, None)), patch(
+                        "codex_migrate.vault_hosted_snapshot_stage.stage_remote_aware_file_windowed"
+                        ) as upload, patch(
+                        "codex_migrate.vault_hosted_snapshot_stage.stage_hosted_snapshot_tail"
+                        ) as publish:
+                    with self.assertRaisesRegex(MigrationError, "unreadable JSON"):
+                        stage_hosted_snapshot(
+                            str(source), self.metadata, [], journal, object(),
+                            crypto_helper="/unused-helper", apply=True)
+                    upload.assert_not_called()
+                    publish.assert_not_called()
+                self.assertEqual(active.read_bytes(), original)
+
     def test_partial_deletion_requires_review_but_archive_move_does_not(self):
         original = {"collection": "active", "path": "old.jsonl",
                     "thread_id": BASE, "identity_state": "verified"}

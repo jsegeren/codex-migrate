@@ -251,6 +251,34 @@ class VaultBackupTests(unittest.TestCase):
             self.assertEqual(result.transcript_files, 2)
             self.assertFalse(destination.exists())
 
+    def test_invalid_source_record_preserves_prior_verified_recovery(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, vault = root / "source", root / "vault"
+            self.fixture(source)
+            transcript = source / ".codex/sessions/2026/09/17/active.jsonl"
+            original = transcript.read_bytes()
+            try:
+                first = backup(str(source), str(vault), crypto_helper=str(self.helper))
+                reference = (vault / "latest.json").read_bytes()
+                for invalid in (b'{"type":', b"null\n", b"[]\n",
+                                b'"synthetic"\n', b"42\n", b"true\n"):
+                    with self.subTest(record=invalid):
+                        transcript.write_bytes(original + invalid)
+                        with self.assertRaises(MigrationError):
+                            backup(str(source), str(vault), crypto_helper=str(self.helper))
+                        self.assertEqual((vault / "latest.json").read_bytes(), reference)
+                        self.assertEqual(verify_snapshot(
+                            str(vault), crypto_helper=str(self.helper)).snapshot_id,
+                            first.snapshot_id)
+                output = root / "recovered"
+                restore_snapshot(str(source), str(vault), str(output),
+                                 crypto_helper=str(self.helper))
+                self.assertEqual((output / "sessions/2026/09/17/active.jsonl").read_bytes(),
+                                 original)
+            finally:
+                self.delete_key(vault)
+
     def test_pasted_prompt_attachment_is_encrypted_and_restored(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -106,6 +106,16 @@ class IdentityTests(unittest.TestCase):
                 scan_transcript(path, path.name, {})
             self.assertNotIsInstance(raised.exception, TranscriptChanged)
 
+    def test_non_object_json_record_is_not_a_valid_conversation(self):
+        for invalid in (None, [], "synthetic", 42, True):
+            with self.subTest(kind=type(invalid).__name__), tempfile.TemporaryDirectory() as temporary:
+                path = Path(temporary) / "active.jsonl"
+                path.write_text(record("session_meta", {"id": THREAD_ID}) +
+                                json.dumps(invalid) + "\n", encoding="utf-8")
+                with self.assertRaises(MigrationError) as raised:
+                    scan_transcript(path, path.name, {})
+                self.assertNotIsInstance(raised.exception, TranscriptChanged)
+
     def test_partial_record_with_concurrent_append_is_retryable(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "active.jsonl"
