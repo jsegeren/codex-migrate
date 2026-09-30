@@ -16,6 +16,9 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 #salvage-error{color:#ffc3c8}#salvage-status{color:var(--muted)}#salvage-search{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end}#salvage-search label{grid-column:1/-1}#salvage-search input{min-width:0}
 .app{min-height:100vh;display:grid;grid-template-columns:238px 1fr}.sidebar{position:sticky;top:0;height:100vh;padding:28px 18px 24px;border-right:1px solid var(--line);background:#0c1018;display:flex;flex-direction:column}.brand{display:flex;gap:12px;align-items:center;padding:0 8px 26px}.brand-mark{width:36px;height:36px;display:grid;place-items:center;border-radius:11px;background:linear-gradient(145deg,#9475ff,#5735d6);font-size:14px;font-weight:850;box-shadow:0 10px 30px #6f4cff44}.brand strong,.brand small{display:block}.brand small{color:var(--muted);font-size:12px}.nav{display:grid;gap:8px}.nav a{display:flex;align-items:center;gap:12px;padding:12px 14px;color:#aeb8ca;border-radius:11px;text-decoration:none;font-weight:700}.nav a:hover,.nav a.active{color:white;background:#1d2434}.nav-icon{width:18px;text-align:center;color:#a991ff}.protection{margin-top:auto;border-top:1px solid var(--line);padding:18px 8px 0;font-size:13px;color:var(--muted)}.protection strong{color:var(--text)}.dot{display:inline-block;width:9px;height:9px;margin-right:8px;border-radius:50%;background:#45dfa0;box-shadow:0 0 0 5px #45dfa014}.content{min-width:0}.topline{font-size:14px;color:var(--muted);font-weight:750}.view-head h1{font-size:clamp(38px,5vw,58px)}.view-head{align-items:center;margin-bottom:26px}.panel h2{margin-top:0}.storage-assessment{border:1px solid var(--line);border-radius:13px;padding:14px 16px;margin:14px 0;background:#0c121d}.storage-assessment strong,.storage-assessment span{display:block}.storage-assessment span{color:var(--muted);font-size:14px;margin-top:3px}.storage-assessment.cloud_sync{border-color:#25654d;background:#0d251c}.storage-assessment.cloud_sync strong{color:#5ee5aa}.storage-assessment.local{border-color:#7a5824;background:#2c210f}.storage-assessment.local strong{color:#ffd58a}.storage-assessment.external_or_network{border-color:#4c5a74}.view-backup .summary,.view-recovery .summary,.view-backup #restore-panel,.view-backup #search-panel,.view-backup #results-panel,.view-backup #thread,.view-conversations #backup-panel,.view-conversations #restore-panel,.view-recovery #backup-panel,.view-recovery #search-panel,.view-recovery #results-panel,.view-recovery #thread{display:none!important}.view-conversations main{width:min(1120px,calc(100% - 48px))}.view-conversations #search-panel{margin-bottom:12px}.view-conversations #results-panel{width:36%;float:left;margin-right:14px}.view-conversations #thread{overflow:hidden;min-height:420px}.view-conversations #status,.view-conversations #error{clear:both}.view-recovery main{width:min(980px,calc(100% - 48px))}
 @media(max-width:820px){.app{display:block}.sidebar{position:static;width:auto;height:auto;padding:16px}.brand{padding-bottom:12px}.nav{display:flex;overflow-x:auto}.nav a{white-space:nowrap}.protection{display:none}.view-conversations #results-panel{float:none;width:auto;margin-right:0}.view-conversations #thread{min-height:0}}
+@media(min-width:821px){.summary{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(min-width:621px) and (max-width:820px){.summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.summary-note{grid-column:1/-1;color:var(--muted);font-size:15px;margin:0 2px 2px}
 @media(max-width:620px){header{display:block}.view-head a.button{display:inline-block;margin-top:16px}.summary{grid-template-columns:1fr}.panel{padding:16px}main,.view-conversations main,.view-recovery main{width:min(100% - 24px,960px);margin-top:22px}.nav a{padding:10px}.nav-icon{display:none}}
 @media(max-width:620px){#salvage-search{grid-template-columns:1fr}#salvage-search button{width:100%}}
 @media print{body{background:white;color:black}header,.summary,#backup-panel,#restore-panel,#search-panel,#results-panel,.actions,#error,#status{display:none!important}main{width:auto;margin:0}.panel{border:0;padding:0;background:white}.entry{break-inside:avoid;border-color:#bbb}.entry time{color:#444}}
@@ -53,7 +56,7 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 <div>
 <div class="topline" id="view-kicker">Conversations</div>
 <h1 id="view-title">Find any conversation.</h1>
-<p class="lede" id="view-lede">Search active and archived Codex threads stored on this Mac.</p>
+<p class="lede" id="view-lede">Search local Codex transcripts and database-backed history.</p>
 </div>
 <a class="button secondary" href="#migration-help">Help</a>
 </header>
@@ -67,9 +70,14 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 <strong id="archived">—</strong>
 </div>
   <div class="metric">
+<span>Database-backed threads</span>
+<strong id="paginated">—</strong>
+</div>
+  <div class="metric">
 <span>Transcript data</span>
 <strong id="bytes">—</strong>
 </div>
+<p class="summary-note" id="paginated-note" hidden>Database-backed threads may also have transcript files; these counts are not additive.</p>
 </section>
 <section class="panel" id="backup-panel">
 <h2>Backup settings</h2>
@@ -270,7 +278,7 @@ history.replaceState(null,"",location.pathname+location.search);
 const requestedView=new URLSearchParams(location.search).get("view");
 const view=["backup","conversations","recovery"].includes(requestedView)?requestedView:"conversations";
 document.body.classList.add("view-"+view);
-const viewCopy={backup:["Backups / Set up","Protect this Mac.","Choose where your encrypted Vault lives and how often Codex Migrate should update it."],conversations:["Conversations","Find any conversation.","Search active and archived Codex threads stored on this Mac."],recovery:["Recovery","Recover what matters.","Open a verified backup, restore one missing conversation, or recover complete history safely."]}[view];
+const viewCopy={backup:["Backups / Set up","Protect this Mac.","Choose where your encrypted Vault lives and how often Codex Migrate should update it."],conversations:["Conversations","Find any conversation.","Search local Codex transcripts and database-backed history."],recovery:["Recovery","Recover what matters.","Open a verified backup, restore one missing conversation, or recover complete history safely."]}[view];
 $("view-kicker").textContent=viewCopy[0];$("view-title").textContent=viewCopy[1];$("view-lede").textContent=viewCopy[2];
 for(const link of document.querySelectorAll("[data-route]")){link.classList.toggle("active",link.dataset.route===view);link.href=link.getAttribute("href")+"#token="+encodeURIComponent(token)}
 const fmt=n=>{const units=["B","KB","MB","GB","TB"];let i=0;while(n>=1000&&i<units.length-1){n/=1000;i++}return `${n.toFixed(n>=100?0:n>=10?1:2)} ${units[i]}`};
@@ -781,6 +789,8 @@ api("/api/vault/summary").then(data=>{
   const attachmentNote=attachmentFiles?` plus ${attachmentFiles.toLocaleString()} attachment ${attachmentFiles===1?"file":"files"} (${fmt(data.attachment_bytes||0)})`:"";
   $("active").textContent=data.active_transcripts.toLocaleString();
   $("archived").textContent=data.archived_transcripts.toLocaleString();
+  $("paginated").textContent=data.paginated_database_present?data.paginated_threads.toLocaleString():"None found";
+  $("paginated-note").hidden=!data.paginated_database_present;
   $("bytes").textContent=fmt(data.transcript_bytes);
   if(data.paginated_database_present){
     $("backup-footprint").textContent=`History found: ${files.toLocaleString()} transcript ${files===1?"file":"files"} (${fmt(data.transcript_bytes)}) plus ${data.paginated_threads.toLocaleString()} database-backed ${data.paginated_threads===1?"thread":"threads"} (${fmt(data.paginated_database_bytes)} of SQLite storage)${attachmentNote}. These may be the same conversations. The encrypted backup size may differ; keep room for all sources plus overhead until verification finishes.`;

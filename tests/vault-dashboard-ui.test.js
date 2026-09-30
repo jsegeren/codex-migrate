@@ -14,6 +14,31 @@ const threadParams = vm.runInNewContext(
 const markdownFile = source.match(/async function markdownFile\(\)\{[\s\S]*?\n\}/)[0];
 const backupView = source.match(/function backupView\(data\)\{[\s\S]*?\n\}/)[0];
 const scheduleView = source.match(/function scheduleView\(data\)\{[\s\S]*?\n\}/)[0];
+const summaryCallback = source.match(/api\("\/api\/vault\/summary"\)\.then\(data=>\{([\s\S]*?)\}\)\.catch/)[1];
+
+test('local history shows database-backed threads without double-counting them', () => {
+  const elements = new Map();
+  const render = vm.runInNewContext('(data => {' + summaryCallback + '})', {
+    $: id => {
+      if (!elements.has(id)) elements.set(id, { textContent: '', hidden: false });
+      return elements.get(id);
+    },
+    fmt: bytes => `${bytes} bytes`,
+  });
+  assert.match(source, /id="paginated"/);
+  assert.match(source, /Database-backed threads may also have transcript files/);
+  assert.match(source, /conversations:\["Conversations","Find any conversation\.","Search local Codex transcripts and database-backed history\."\]/);
+  render({ active_transcripts: 2, archived_transcripts: 1, transcript_bytes: 12,
+    paginated_database_present: true, paginated_threads: 2,
+    paginated_database_bytes: 34, attachment_files: 0 });
+  assert.equal(elements.get('paginated').textContent, '2');
+  assert.equal(elements.get('paginated-note').hidden, false);
+  render({ active_transcripts: 2, archived_transcripts: 1, transcript_bytes: 12,
+    paginated_database_present: false, paginated_threads: 0,
+    paginated_database_bytes: 0, attachment_files: 0 });
+  assert.equal(elements.get('paginated').textContent, 'None found');
+  assert.equal(elements.get('paginated-note').hidden, true);
+});
 
 test('long Codex prompt-titles stay scannable without hiding the matching phrase', () => {
   const title = 'Opening prompt '.repeat(30) + 'Unification Foundation' + ' tail'.repeat(30);
