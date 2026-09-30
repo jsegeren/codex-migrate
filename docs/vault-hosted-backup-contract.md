@@ -12,6 +12,56 @@ from that public origin or the older `migrate.segeren.com` origin are accepted,
 while native clients continue without a browser Origin header. This domain
 alignment does not activate the hosted service or its checkout.
 
+## September 30 Founder amendment — individual first
+
+This amendment takes precedence over older sequencing and pricing below.
+Finish one individual's hosted backup and recovery journey before expanding
+company administration. The customer can be an independent developer or an
+employee using Codex for real work. Keep existing business primitives dark;
+new team dashboards, seat management, aggregate insights, and organizational
+onboarding are deferred, not release prerequisites for the individual offer.
+
+- Run incremental backups in the background without a browser window. Open
+  the UI only on the customer's request. Preserve visible last-good, overdue,
+  offline, and failed states; the 30-minute check target remains subject to
+  runtime and recovery proof, not a zero-loss promise.
+- Keep the current email-challenge identity path for the first release. Google
+  OAuth is not implemented or a release prerequisite; do not add Google data
+  access. Signing in and billing authorization remain separate controls.
+- Recover to a separate folder by default on either a clean or already-used
+  Mac. Repositories and existing Codex work remain untouched. Explicit selected
+  insertion may add an absent thread, skip an identical one, and flag a
+  divergent identity. Never silently overwrite or merge conflicts. Offer
+  keep-existing/read-or-export-backup and email support first; complex merges
+  are deferred. Do not imply that Codex will resume every restored record.
+- Keep a clear Help / Email support path to joshua@segeren.com. The existing
+  shared Help section already offers that address and an opt-in, reviewable
+  diagnostic report without raw conversations or keys.
+- Preserve dated, immutable recovery versions. Verify authenticated ciphertext
+  and reconstructed file bytes, inspect supported source structure, and detect
+  missing attachments, disappearing threads, and suspicious shortening.
+  Suspect captures may be retained separately with an attention warning but
+  must never replace the latest known-good recovery choice or erase it. Prove
+  this with corrupt, truncated, missing-source, and interrupted-run tests before
+  release. A valid hash does not establish that the source was semantically
+  correct; neither the client nor encrypted server can detect every bad edit.
+- The new pricing direction is **2× fully loaded COGS** (100% markup; 50%
+  gross margin if cost is correctly measured). This supersedes the earlier
+  3× minimum / 80% target. Include retained-version storage, provider requests,
+  Workers/API/database/email/monitoring, payment fees, allocated support and
+  recovery costs, and fixed overhead—not storage alone. The internal markup
+  formula is not public copy. Final customer prices, allowance, usage units,
+  and renewal terms still need a measured, customer-visible offer before billing.
+- There are no confirmed external customers. Maintain the existing checkout
+  and update path without expanding a legacy-purchase compatibility project;
+  elaborate older-download fallback work is not a new hosted release gate.
+  Do not delete the existing paid beta or unnecessarily break it.
+
+The current signed-package and synthetic/source portability receipts are not
+a completed hosted recovery journey. The remaining critical sequence is
+real-service backup → clean-Mac recovery → unattended operation → measured
+offer/billing → independently reviewed, notarized customer release.
+
 ## Customer choice
 
 The Mac app will offer two destinations for the *same* portable, encrypted
@@ -443,13 +493,13 @@ backup telemetry as a covert individual-productivity or conversation-monitoring
 system. Decide with pilot buyers whether any further aggregate work insights
 are useful and permissible before collecting additional content-derived data.
 
-The Founder rejected a customer-set spending cap and directed pricing toward
-a substantially higher-value business offer. Price the recovery service at
-**no less than 3× fully loaded per-customer cost**, with an 80% gross-margin
-target (about 5× cost) after measuring retained encrypted bytes and version
+The Founder rejected a customer-set spending cap. The September 30 amendment
+replaces the earlier 3× minimum and 80% margin target: price the recovery
+service at **2× fully loaded per-customer cost** after measuring retained
+encrypted bytes and version
 growth, R2 and Worker operations, database/API/monitoring, payment processing,
 expected support and recovery drills, refunds, and allocated fixed overhead.
-Three times cost is only a 66.7% margin, not the desired ceiling. Bound included
+Twice cost yields a 50% gross margin only when all costs are included. Bound included
 retention and storage in the published offer, price exceptional usage
 explicitly, and do not silently pause backup or delete the last good version
 when a customer crosses a limit. Any $20/month plus usage example is only an
