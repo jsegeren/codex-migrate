@@ -258,6 +258,18 @@ company-held kit and clean-Mac recovery drill. This is still test-path code,
 not a signed-app customer enrollment or proof of unattended physical-Mac
 operation.
 
+Migration 0040 adds a dark, worker-authenticated check-in after each business
+scheduled run. It stores only the server receipt time, device, client-reported
+state, and exact published snapshot pointer. A recovery-only or revoked device
+cannot report; a claimed green check must match the service's current published
+snapshot with complete source coverage. A separate sandbox-only administrator
+read returns per-seat metadata, marks a check overdue after 90 minutes, and
+never exposes conversation content. This makes an offline Mac detectable by
+the service, but it is **not** an alert: no mail delivery, paging, customer UI,
+physical 30-minute-run proof, or company recovery-kit drill is certified yet.
+The response keeps company recovery explicitly unverified. Admins must not
+call a recent worker-reported check a tested restore.
+
 Before a business pilot, establish one organization-owned account with an
 identified purchaser and designated administrator, explicit seat/device
 enrollment and revocation, a company-held recovery route, and a subscription

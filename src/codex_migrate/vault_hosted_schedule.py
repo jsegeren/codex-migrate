@@ -395,8 +395,24 @@ def run_hosted_scheduled_backup(config_path: str) -> int:
                    if result.get("titleIndexUnavailable") is True else {}),
                 "cost_metrics": _cost_metrics(started, upload, result),
             })
+            if configuration["version"] == 3:
+                # The company cannot detect an offline Mac from local status.
+                # Failure to publish the check-in makes this run unhealthy;
+                # it never invalidates a previously verified snapshot.
+                enrollment.report_backup_check(
+                    configuration["device_id"], state, snapshot_id,
+                    crypto_helper=str(helper))
             return 0
     except Exception:
+        if ("configuration" in locals() and
+                configuration.get("version") == 3 and
+                "enrollment" in locals() and "helper" in locals()):
+            try:
+                enrollment.report_backup_check(
+                    configuration["device_id"], "failed", None,
+                    crypto_helper=str(helper))
+            except Exception:
+                pass
         try:
             if "status_path" in locals():
                 _write_run_status(status_path, {

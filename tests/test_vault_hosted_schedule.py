@@ -5,7 +5,7 @@ import plistlib
 import tempfile
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from codex_migrate.cli import parser
 from codex_migrate.errors import MigrationError
@@ -56,6 +56,7 @@ class HostedScheduleTests(unittest.TestCase):
                                            "sourceCoverage": "complete"},
             prior_catalog=lambda **_kw: (SNAPSHOT, []))
         self.rotation_calls = []
+        self.business_reports = []
         self.enrollment = SimpleNamespace(
             backup_clients=lambda *_args, **_kw: (self.upload, self.recovery),
             create_device=lambda **_kw: NEW_DEVICE,
@@ -87,6 +88,8 @@ class HostedScheduleTests(unittest.TestCase):
             backup_clients=lambda *_args, **_kw: (self.upload, self.recovery),
             create_device=lambda **_kw: NEW_DEVICE,
             rotate_device=rotate,
+            report_backup_check=lambda device_id, state, snapshot_id, **_kw:
+                self.business_reports.append((device_id, state, snapshot_id)),
             resolve=lambda device_id, **_kw: {"accountId": ACCOUNT,
                 "seatId": SEAT, "vaultId": VAULT, "deviceId": device_id,
                 "accessPurpose": "worker"})
@@ -148,6 +151,27 @@ class HostedScheduleTests(unittest.TestCase):
                          "unchanged")
         self.assertEqual(json.loads(good_path.read_text())["snapshot_id"],
                          SNAPSHOT)
+        self.assertEqual(self.business_reports,
+                         [(NEW_DEVICE, "unchanged", SNAPSHOT)])
+
+    def test_business_checkin_failure_marks_run_failed_but_keeps_last_good(self):
+        a, b, c, d = self._business_patches()
+        with a, b, c, d:
+            install_hosted_schedule(self.home, DEVICE, BUSINESS_METADATA,
+                business_seat_id=SEAT, engine_command=["/usr/bin/true"],
+                apply=True)
+        config_path, status_path, good_path, _ = _paths(self.home)
+        fake_run = SimpleNamespace(back_up_live_history=lambda *_args, **_kw: {
+            "unchanged": True, "lastGoodSnapshotId": SNAPSHOT,
+            "atRiskThreads": 0, "sourceCoverage": "complete"})
+        with a as business_cls, b, patch(
+                "codex_migrate.vault_hosted_schedule.HostedLiveBackupRun",
+                return_value=fake_run):
+            business_cls.return_value.report_backup_check = Mock(
+                side_effect=MigrationError("service unavailable"))
+            self.assertEqual(run_hosted_scheduled_backup(str(config_path)), 1)
+        self.assertEqual(json.loads(status_path.read_text())["status"], "failed")
+        self.assertEqual(json.loads(good_path.read_text())["snapshot_id"], SNAPSHOT)
 
     def _install(self):
         a, b, c, d = self._patches()

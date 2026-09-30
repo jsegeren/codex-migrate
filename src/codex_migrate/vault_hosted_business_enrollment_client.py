@@ -54,9 +54,12 @@ class BusinessHostedEnrollmentClient:
         self._opener = build_opener(_NoRedirect())
 
     def _post(self, claim: dict, token: str = "", *,
-              recovery: bool = False, admin: bool = False) -> dict:
+              recovery: bool = False, admin: bool = False,
+              health: bool = False) -> dict:
         body = json.dumps(claim, separators=(",", ":")).encode("utf-8")
         if (len(body) > (768 if recovery else 512) or
+                (health and (recovery or admin or
+                             claim.get("action") != "report")) or
                 (admin and (not recovery or claim.get("action") != "begin")) or
                 (token and not (_ADMIN_TOKEN if admin else _TOKEN).fullmatch(token))):
             raise MigrationError("The business enrollment request is invalid.")
@@ -64,7 +67,8 @@ class BusinessHostedEnrollmentClient:
                    "Content-Length": str(len(body))}
         if token:
             headers["Authorization"] = "Bearer " + token
-        endpoint = ("/api/hosted-business-recovery-device" if recovery else
+        endpoint = ("/api/hosted-business-health" if health else
+                    "/api/hosted-business-recovery-device" if recovery else
                     "/api/hosted-business-device")
         request = Request(self._origin + endpoint,
                           data=body, headers=headers, method="POST")
@@ -261,6 +265,31 @@ class BusinessHostedEnrollmentClient:
             identity["vaultId"], timeout=self._timeout,
             allow_loopback_http=self._allow_loopback_http)
         return upload, recovery
+
+    def report_backup_check(self, device_id: str, reported_state: str,
+                            snapshot_id: Optional[str], *,
+                            crypto_helper: Optional[str] = None) -> dict:
+        """Report an observation; this does not certify company recovery."""
+        if (reported_state not in ("verified", "unchanged", "needs_attention",
+                                   "failed") or
+                (reported_state == "failed") != (snapshot_id is None) or
+                (snapshot_id is not None and
+                 (not isinstance(snapshot_id, str) or
+                  not _UUID.fullmatch(snapshot_id)))):
+            raise MigrationError("The business backup check is invalid.")
+        token, _ = self._credential(device_id, crypto_helper)
+        identity = self._resolve_with_token(device_id, token)
+        if identity["accessPurpose"] != "worker":
+            raise MigrationError("A recovery-only device cannot report worker health.")
+        result = self._post({"action": "report", "deviceId": device_id,
+                             "reportedState": reported_state,
+                             "snapshotId": snapshot_id}, token, health=True)
+        if (set(result) != {"accountId", "seatId", "vaultId", "checkedAt"} or
+                any(result.get(key) != identity[key] for key in
+                    ("accountId", "seatId", "vaultId")) or
+                not isinstance(result.get("checkedAt"), str)):
+            raise MigrationError("The business backup check response is invalid.")
+        return result
 
     def recovery_client(self, device_id: str, *,
                         crypto_helper: Optional[str] = None) -> HostedRecoveryClient:

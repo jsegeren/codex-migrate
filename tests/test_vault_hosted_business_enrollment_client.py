@@ -38,6 +38,7 @@ class _Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path not in ("/api/hosted-business-device",
                              "/api/hosted-business-recovery-device",
+                             "/api/hosted-business-health",
                              "/api/hosted-recovery"):
             self.send_error(404)
             return
@@ -47,6 +48,21 @@ class _Handler(BaseHTTPRequestHandler):
         if self.path == "/api/hosted-recovery":
             response = {"accountId": self.server.recovery_account,
                         "workerOrigin": self.server.worker_origin, "latest": None}
+        elif self.path == "/api/hosted-business-health":
+            valid_reports = (
+                {"action": "report", "deviceId": DEVICE,
+                 "reportedState": "unchanged", "snapshotId": VAULT},
+                {"action": "report", "deviceId": DEVICE,
+                 "reportedState": "failed", "snapshotId": None},
+            )
+            if (body not in valid_reports or
+                    authorization != "Bearer " + TOKEN or
+                    self.server.device_purpose != "worker"):
+                self.send_error(503)
+                return
+            response = {"accountId": ACCOUNT, "seatId": SEAT,
+                        "vaultId": VAULT,
+                        "checkedAt": "2026-09-30T18:00:00Z"}
         elif (self.path == "/api/hosted-business-recovery-device" and
               body["action"] == "begin"):
             response = {"requestId": REQUEST, "status": "sent"}
@@ -208,6 +224,22 @@ class BusinessHostedEnrollmentClientTests(unittest.TestCase):
                 self.client().backup_clients(DEVICE)
         self.assertEqual([body["action"] for body, _ in self.server.calls],
                          ["resolve"])
+
+    def test_worker_health_check_is_separate_from_recovery_authority(self):
+        path_patch, helper_patch = self.helper_patches()
+        with path_patch, helper_patch:
+            client = self.client()
+            self.assertEqual(client.report_backup_check(
+                DEVICE, "unchanged", VAULT)["seatId"], SEAT)
+            self.assertEqual(client.report_backup_check(
+                DEVICE, "failed", None)["seatId"], SEAT)
+            with self.assertRaisesRegex(MigrationError, "invalid"):
+                client.report_backup_check(DEVICE, "failed", VAULT)
+            self.server.device_purpose = "recovery"
+            with self.assertRaisesRegex(MigrationError, "recovery-only"):
+                client.report_backup_check(DEVICE, "unchanged", VAULT)
+        self.assertEqual([body["action"] for body, _ in self.server.calls],
+                         ["resolve", "report", "resolve", "report", "resolve"])
 
     def test_refuses_personal_token_and_account_substitution(self):
         def personal_helper(path, arguments):
