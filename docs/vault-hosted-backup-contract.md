@@ -292,6 +292,12 @@ never key material. Files left on the originating Mac are **not** company
 custody: an assisted pilot must transfer the company kit to the designated
 off-device custodian and prove import plus restore on a clean Mac. A failed
 export or a file's mere existence never establishes protection.
+For a controlled clean-Mac drill, the hidden
+`vault business-key-import --vault <absolute-path> --kit <absolute-path> --apply`
+command reads only an owner-only regular kit file, refuses links, and passes
+the credential to the native helper over stdin. It prints only the key ID;
+the operator must still verify and restore a known snapshot. This is not a
+buyer-facing recovery flow.
 The personal `CV1-` export command refuses a business key. This does **not**
 convert an existing personal Vault, store envelopes in the hosted service,
 prove that a company retained its pair, attribute offline use, or revoke

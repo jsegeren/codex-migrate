@@ -7,6 +7,7 @@ pass a clean-Mac import-and-restore drill before calling the seat protected.
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 import stat
@@ -123,3 +124,36 @@ def save_business_recovery_kits(
         for _, descriptor, _ in opened:
             os.close(descriptor)
     return {"worker_kit": str(worker), "company_kit": str(company)}
+
+
+def load_business_recovery_kit(path: str) -> Dict[str, object]:
+    """Read one private kit for clean-Mac import without echoing its secret."""
+    candidate = Path(path).expanduser()
+    if not candidate.is_absolute():
+        raise ValueError("Business recovery kit path must be absolute.")
+    _require_unlinked_path(candidate)
+    candidate = _canonical_macos_path(candidate)
+    try:
+        descriptor = os.open(candidate, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError as error:
+        raise MigrationError("The business recovery kit is unavailable.") from error
+    try:
+        info = os.fstat(descriptor)
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or
+                info.st_nlink != 1 or info.st_mode & 0o077 or
+                not 0 < info.st_size <= 4096):
+            raise MigrationError("The business recovery kit is not a private regular file.")
+        encoded = os.read(descriptor, 4097)
+        if len(encoded) != info.st_size:
+            raise MigrationError("The business recovery kit changed while reading.")
+    except OSError as error:
+        raise MigrationError("The business recovery kit could not be read.") from error
+    finally:
+        os.close(descriptor)
+    try:
+        value = json.loads(encoded)
+    except (UnicodeError, ValueError) as error:
+        raise MigrationError("The business recovery kit is invalid.") from error
+    if not isinstance(value, dict):
+        raise MigrationError("The business recovery kit is invalid.")
+    return value

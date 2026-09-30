@@ -1,14 +1,20 @@
 """Business recovery kits must be durable, private, and never overwrite."""
 
+import contextlib
+import io
 import json
 from pathlib import Path
 import tempfile
 import unittest
 import uuid
+from unittest.mock import patch
 
+from codex_migrate import cli
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_backup import BusinessRecoverySetup, STORAGE_CODEC
-from codex_migrate.vault_business_kits import save_business_recovery_kits
+from codex_migrate.vault_business_kits import (
+    load_business_recovery_kit, save_business_recovery_kits,
+)
 
 
 class BusinessKitTests(unittest.TestCase):
@@ -85,6 +91,38 @@ class BusinessKitTests(unittest.TestCase):
         with self.assertRaisesRegex(MigrationError, "invalid"):
             self.save(setup=wrong)
         self.assertFalse(self.worker.exists())
+
+    def test_import_loader_requires_private_regular_file(self):
+        self.save()
+        self.assertEqual(load_business_recovery_kit(str(self.company)),
+                         self.setup.company_credential)
+        self.company.chmod(0o644)
+        with self.assertRaisesRegex(MigrationError, "private"):
+            load_business_recovery_kit(str(self.company))
+        self.company.chmod(0o600)
+        linked = self.kits / "company-link.json"
+        linked.symlink_to(self.company)
+        with self.assertRaises(MigrationError):
+            load_business_recovery_kit(str(linked))
+        self.company.write_text("not json")
+        with self.assertRaisesRegex(MigrationError, "invalid"):
+            load_business_recovery_kit(str(self.company))
+
+    def test_hidden_cli_requires_apply_and_never_prints_kit(self):
+        self.save()
+        arguments = ["vault", "business-key-import", "--vault", str(self.vault),
+                     "--kit", str(self.company)]
+        with patch("codex_migrate.vault_recovery.import_business_recovery_credential",
+                   return_value=self.setup.key_id) as importer:
+            with contextlib.redirect_stdout(io.StringIO()) as output:
+                self.assertEqual(cli.main(arguments), 0)
+            importer.assert_not_called()
+            self.assertIn("--apply", output.getvalue())
+            with contextlib.redirect_stdout(io.StringIO()) as output:
+                self.assertEqual(cli.main(arguments + ["--apply"]), 0)
+            importer.assert_called_once()
+            self.assertEqual(importer.call_args.args[1], self.setup.company_credential)
+            self.assertNotIn("CVB1-", output.getvalue())
 
 
 if __name__ == "__main__":

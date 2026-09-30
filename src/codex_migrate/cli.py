@@ -167,6 +167,12 @@ def parser() -> argparse.ArgumentParser:
         "key-export", help="Display the Vault recovery key for password-manager storage")
     vault_export.add_argument("--vault", required=True)
     vault_export.add_argument("--crypto-helper")
+    business_import = vault_commands.add_parser(
+        "business-key-import", help=argparse.SUPPRESS)
+    business_import.add_argument("--vault", required=True)
+    business_import.add_argument("--kit", required=True)
+    business_import.add_argument("--crypto-helper")
+    business_import.add_argument("--apply", action="store_true")
     vault_schedule = vault_commands.add_parser(
         "schedule", help="Create a recurring verified Vault backup on this Mac")
     vault_schedule.add_argument("--vault", required=True)
@@ -297,6 +303,18 @@ def main(argv: Optional[List[str]] = None) -> int:
             return 0
         if args.command == "vault":
             from codex_migrate.vault import inspect as inspect_vault, search as search_vault
+            if args.vault_command == "business-key-import":
+                if not args.apply:
+                    print("Planning mode only; add --apply to import a private business recovery kit.")
+                    return 0
+                from codex_migrate.vault_business_kits import load_business_recovery_kit
+                from codex_migrate.vault_recovery import import_business_recovery_credential
+                key_id = import_business_recovery_credential(
+                    args.vault, load_business_recovery_kit(args.kit),
+                    crypto_helper=args.crypto_helper)
+                print("Business recovery key imported into this Mac's Keychain: %s" % key_id)
+                print("Verify and restore the selected snapshot before claiming recovery.")
+                return 0
             if args.vault_command == "hosted-scheduled-run":
                 from codex_migrate.vault_hosted_schedule import run_hosted_scheduled_backup
                 return run_hosted_scheduled_backup(args.config)
