@@ -34,6 +34,11 @@ function fixture() {
         tokenHash = values[2];
         return { rows: [{ account_id: accountId }] };
       }
+      if (sql.includes('approve_business_seat')) {
+        assert.equal(values[0], tokenHash);
+        assert.equal(values[2], 'worker@example.test');
+        return { rows: [{ seat_id: values[1] }] };
+      }
       assert.match(sql, /business_admin_sessions/);
       assert.deepEqual(values, [tokenHash]);
       return { rows: [{ account_id: accountId }] };
@@ -89,6 +94,15 @@ test('sandbox admin proof returns only a short-lived bearer after code claim', a
   const resolved = await f.send();
   assert.equal(resolved.statusCode, 200);
   assert.deepEqual(resolved.body, { accountId: f.accountId });
+
+  const seatId = randomUUID();
+  f.req.body = { action: 'approve-seat', seatId,
+    approvalReference: randomUUID(), workerEmail: 'worker@example.test' };
+  const approved = await f.send();
+  assert.equal(approved.statusCode, 200);
+  assert.deepEqual(approved.body, { seatId });
+  f.req.headers.authorization = 'Bearer invalid';
+  assert.equal((await f.send()).statusCode, 403);
 });
 
 test('database or email failure does not expose internal details', async () => {

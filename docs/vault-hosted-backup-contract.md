@@ -200,7 +200,12 @@ code mints a separate 12-hour metadata session. Its SendGrid adapter is
 sandbox-sink-only. A dark HTTP route accepts this proof only with both
 `HOSTED_MODE=sandbox` and `HOSTED_BUSINESS_ADMIN_SANDBOX_OPEN=yes`; it is closed
 by default and cannot approve a device, access content, grant billing
-entitlement, or send live mail. This tests administrator email control;
+entitlement, or send live mail. Migration 0035 lets this sandbox session
+approve an exact worker-email seat only under an operator-set pilot seat
+ceiling, with an immutable admin-action record and exact retry behavior.
+The default ceiling is zero; approving a seat grants no Vault, device bearer,
+storage allowance, recovery route, or subscription. This tests
+administrator email control and bounded seat assignment;
 it does not independently establish the sender's authority to act for a
 company. Before a pilot, the operator must verify that authority off-platform
 and record the approval, then the product must bind an audited admin action

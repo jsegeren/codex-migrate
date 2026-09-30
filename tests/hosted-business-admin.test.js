@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
 const { beginBusinessAdminAccess, claimBusinessAdminAccess,
-  resolveBusinessAdmin } = require('../hosted/business_admin');
+  resolveBusinessAdmin, approveBusinessSeat } = require('../hosted/business_admin');
 const { businessAdminMail } = require('../hosted/business_admin_mail');
 
 test('exact approved contact gets one code and a separate metadata session', async () => {
@@ -77,6 +77,34 @@ test('unknown, uncertain, malformed, and replayed proof fail closed', async () =
   await assert.rejects(resolveBusinessAdmin({ sessionToken: 'bad-token',
     query: async () => { throw Error('must not query'); } }),
   /business_admin_unavailable/);
+});
+
+test('approved administrator can allocate only an exact audited seat', async () => {
+  const seatId = randomUUID();
+  const approvalReference = randomUUID();
+  const sessionToken = `hva1_${'a'.repeat(43)}`;
+  let calls = 0;
+  const query = async (statement, values) => {
+    calls++;
+    assert.match(statement, /approve_business_seat/);
+    assert.match(values[0], /^[0-9a-f]{64}$/);
+    assert.deepEqual(values.slice(1, 4),
+      [seatId, 'worker@company.example', approvalReference]);
+    assert.match(values[4], /^[0-9a-f-]{36}$/);
+    return { rows: [{ seat_id: seatId }] };
+  };
+  assert.deepEqual(await approveBusinessSeat({ sessionToken, seatId,
+    workerEmail: 'worker@company.example', approvalReference, query }),
+  { seatId });
+  assert.equal(calls, 1);
+  await assert.rejects(approveBusinessSeat({ sessionToken, seatId,
+    workerEmail: 'Worker@company.example', approvalReference, query }),
+  /business_admin_unavailable/);
+  await assert.rejects(approveBusinessSeat({ sessionToken, seatId,
+    workerEmail: 'worker@company.example', approvalReference,
+    query: async () => ({ rows: [{ seat_id: null }] }) }),
+  /business_admin_unavailable/);
+  assert.equal(calls, 1);
 });
 
 test('business admin mail is sandbox-only and does not track', async () => {

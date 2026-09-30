@@ -1,7 +1,7 @@
 // Dark assisted-pilot administrator proof. The business account and exact
 // contact are operator-approved records; a matching email domain, employee
 // purchase, or this short-lived session cannot grant content recovery.
-const { createHash, randomBytes } = require('node:crypto');
+const { createHash, randomBytes, randomUUID } = require('node:crypto');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const EMAIL = /^[^\s<>@\r\n]+@[^\s<>@\r\n]+\.[^\s<>@\r\n]+$/;
@@ -16,6 +16,8 @@ const CLAIM_SQL = `SELECT hosted.claim_business_admin_session(
 const RESOLVE_SQL = `SELECT account_id FROM hosted.business_admin_sessions
   WHERE token_hash = $1 AND revoked_at IS NULL
     AND expires_at > clock_timestamp()`;
+const APPROVE_SEAT_SQL = `SELECT hosted.approve_business_seat(
+  $1::text, $2::uuid, $3::text, $4::uuid, $5::uuid) AS seat_id`;
 
 class BusinessAdminError extends Error {
   constructor() { super('business_admin_unavailable'); }
@@ -96,5 +98,22 @@ async function resolveBusinessAdmin({ sessionToken, query }) {
   } catch { throw new BusinessAdminError(); }
 }
 
+async function approveBusinessSeat({ sessionToken, seatId, workerEmail,
+  approvalReference, query }) {
+  if (typeof query !== 'function' || !UUID.test(seatId) ||
+      !UUID.test(approvalReference) || typeof workerEmail !== 'string' ||
+      workerEmail.length > 254 || workerEmail !== workerEmail.toLowerCase() ||
+      !EMAIL.test(workerEmail)) throw new BusinessAdminError();
+  try {
+    const result = await query(APPROVE_SEAT_SQL, [sessionHash(sessionToken),
+      seatId, workerEmail, approvalReference, randomUUID()]);
+    if (result?.rows?.length !== 1 || result.rows[0]?.seat_id !== seatId) {
+      throw new BusinessAdminError();
+    }
+    return Object.freeze({ seatId });
+  } catch { throw new BusinessAdminError(); }
+}
+
 module.exports = { BusinessAdminError, beginBusinessAdminAccess,
-  claimBusinessAdminAccess, resolveBusinessAdmin, challengeHash, sessionHash };
+  claimBusinessAdminAccess, resolveBusinessAdmin, approveBusinessSeat,
+  challengeHash, sessionHash };

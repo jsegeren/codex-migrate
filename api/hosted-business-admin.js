@@ -1,15 +1,15 @@
-// Dark sandbox-only administrator email proof. No seat approval, backup,
-// recovery, or business entitlement is reachable through this route.
+// Dark sandbox-only administrator proof and bounded seat approval. No backup,
+// device enrollment, recovery, or business entitlement is reachable here.
 const { reply } = require('../commerce/http');
 const { allowedBrowserOrigin } = require('../hosted/http_origin');
 const { sandboxDatabaseUrl,
   sandboxDatabaseRuntime } = require('../hosted/recovery_runtime');
 const { businessAdminMail } = require('../hosted/business_admin_mail');
 const { beginBusinessAdminAccess, claimBusinessAdminAccess,
-  resolveBusinessAdmin } = require('../hosted/business_admin');
+  resolveBusinessAdmin, approveBusinessSeat } = require('../hosted/business_admin');
 
 const BEARER = /^Bearer (hva1_[A-Za-z0-9_-]{43})$/;
-const MAX_BODY = 256;
+const MAX_BODY = 512;
 
 function requestBody(req) {
   if (!allowedBrowserOrigin(req.headers.origin) ||
@@ -23,11 +23,17 @@ function requestBody(req) {
   const keys = Object.keys(data).sort().join(',');
   const expected = data.action === 'begin' ? 'accountId,action' :
     data.action === 'claim' ? 'accountId,action,code' :
-    data.action === 'resolve' ? 'action' : null;
+    data.action === 'resolve' ? 'action' :
+    data.action === 'approve-seat' ?
+      'action,approvalReference,seatId,workerEmail' : null;
   if (keys !== expected ||
       (['begin', 'claim'].includes(data.action) &&
         typeof data.accountId !== 'string') ||
-      (data.action === 'claim' && typeof data.code !== 'string')) {
+      (data.action === 'claim' && typeof data.code !== 'string') ||
+      (data.action === 'approve-seat' &&
+        (typeof data.seatId !== 'string' ||
+         typeof data.workerEmail !== 'string' ||
+         typeof data.approvalReference !== 'string'))) {
     throw Error('invalid_request');
   }
   return data;
@@ -53,7 +59,7 @@ function makeHandler(load = businessAdminRuntime, env = process.env) {
     try { data = requestBody(req); }
     catch { return reply(res, 400, { error: 'invalid_request' }); }
     const token = BEARER.exec(req.headers.authorization || '')?.[1];
-    if (data.action === 'resolve' && !token) {
+    if (['resolve', 'approve-seat'].includes(data.action) && !token) {
       return reply(res, 403, { error: 'access_denied' });
     }
     res.setHeader('Cache-Control', 'no-store');
@@ -67,6 +73,13 @@ function makeHandler(load = businessAdminRuntime, env = process.env) {
       if (data.action === 'claim') {
         return reply(res, 200, await claimBusinessAdminAccess({
           accountId: data.accountId, code: data.code, query,
+        }));
+      }
+      if (data.action === 'approve-seat') {
+        return reply(res, 200, await approveBusinessSeat({
+          sessionToken: token, seatId: data.seatId,
+          workerEmail: data.workerEmail,
+          approvalReference: data.approvalReference, query,
         }));
       }
       return reply(res, 200, await resolveBusinessAdmin({
