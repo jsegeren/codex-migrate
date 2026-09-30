@@ -1,5 +1,36 @@
 # Desktop release readiness
 
+## September 30 packaged recovery drill — harness validated, VM pending
+
+`tests/packaged_vault_portability.py` now provides a stdlib-only producer and
+receiver for the clean-Mac acceptance guest. It runs the actual signed app's
+engine and native helper, checks its signature and clean source revision,
+creates only synthetic active/archived history and a pasted-text attachment,
+and saves a disposable recovery key outside the source home. The producer
+removes its test Keychain item. The receiver refuses an already-present key,
+imports the saved key, verifies and restores the snapshot into a separate
+temporary folder, checks exact fixture bytes and the restore receipt, and
+requires attachment text to be searchable. Both sides remove their test keys;
+command output and recovery keys are never printed. Six focused safety tests
+pass, covering isolation, package mismatch, ambiguous import cleanup, and
+restored-byte mismatch.
+
+The producer and receiver both passed on the current Mac using the signed,
+not-notarized source-`d26aa7efc4dc95b908ab1e7546ed947bfa274560` candidate
+identified below. This is **same-host harness validation**, not a clean-Mac,
+real-R2 download, customer UI, or disaster-recovery acceptance result. The
+dedicated guest download remains in progress. No real Codex files were read or
+changed by this drill. The exact source-fix CI and subsequent receipt-only CI
+runs both completed successfully.
+
+For the guest, transfer only the signed candidate, this script, and its
+generated synthetic bundle. Run the receiver with explicit absolute paths:
+
+```bash
+python3 packaged_vault_portability.py --confirm-disposable-test consume \
+  '/absolute/path/Codex Migrate.app' '/absolute/path/synthetic-bundle'
+```
+
 ## September 30 structural-corruption rejection — draft only
 
 A new regression reproduced an invalid-source acceptance defect in the prior
