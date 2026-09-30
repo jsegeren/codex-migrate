@@ -15,6 +15,21 @@ INSERT INTO hosted.business_seats
    'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb3', 'worker@example.test',
    'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb4');
 DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM hosted.claim_business_backup_alerts()) THEN
+    RAISE EXCEPTION 'approved seat without entitlement was alerted';
+  END IF;
+END;
+$$;
+INSERT INTO hosted.business_backup_entitlements
+  (entitlement_id, account_id, approval_reference, allowance_bytes,
+   starts_at, expires_at) VALUES
+  ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb9',
+   'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1',
+   'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbba', 1000000,
+   clock_timestamp() - interval '1 hour',
+   clock_timestamp() + interval '1 day');
+DO $$
 DECLARE v_claimed integer;
 BEGIN
   SELECT count(*) INTO v_claimed FROM hosted.claim_business_backup_alerts();

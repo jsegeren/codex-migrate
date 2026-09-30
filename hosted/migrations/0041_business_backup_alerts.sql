@@ -18,6 +18,11 @@ SELECT s.account_id, s.seat_id, sv.vault_id,
     ELSE NULL
   END AS reason
 FROM hosted.business_seats AS s
+JOIN hosted.business_backup_entitlements AS entitlement
+  ON entitlement.account_id = s.account_id
+    AND entitlement.revoked_at IS NULL
+    AND entitlement.starts_at <= clock_timestamp()
+    AND entitlement.expires_at > clock_timestamp()
 LEFT JOIN hosted.business_seat_vaults AS sv
   ON sv.account_id = s.account_id AND sv.seat_id = s.seat_id
 LEFT JOIN hosted.vaults AS v

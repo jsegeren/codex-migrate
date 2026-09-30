@@ -272,7 +272,8 @@ call a recent worker-reported check a tested restore.
 
 Migration 0041 adds a dark sandbox-only incident ledger and explicit scan
 endpoint. A scan independently detects missing, failed, stale, mismatched, or
-incomplete seat backups even if a Mac is offline; it closes incidents when
+incomplete seat backups for an active, operator-approved business entitlement
+even if a Mac is offline; it closes incidents when
 health recovers or a seat is revoked. Each incident is claimed before a
 metadata-only test email to the designated administrator. Accepted, rejected,
 and uncertain deliveries are recorded separately; a claimed or uncertain
