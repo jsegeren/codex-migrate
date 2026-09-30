@@ -270,6 +270,18 @@ physical 30-minute-run proof, or company recovery-kit drill is certified yet.
 The response keeps company recovery explicitly unverified. Admins must not
 call a recent worker-reported check a tested restore.
 
+Migration 0041 adds a dark sandbox-only incident ledger and explicit scan
+endpoint. A scan independently detects missing, failed, stale, mismatched, or
+incomplete seat backups even if a Mac is offline; it closes incidents when
+health recovers or a seat is revoked. Each incident is claimed before a
+metadata-only test email to the designated administrator. Accepted, rejected,
+and uncertain deliveries are recorded separately; a claimed or uncertain
+message is never retried blindly. This is **not** live alerting: the scan has
+no production scheduler, no customer email route, and no recovery certificate.
+The operator must reconcile any stuck or uncertain delivery. A business pilot
+still needs a reliable sub-90-minute trigger, delivery monitoring, and a
+clean-Mac restore drill before protection or alerts can be promised.
+
 Before a business pilot, establish one organization-owned account with an
 identified purchaser and designated administrator, explicit seat/device
 enrollment and revocation, a company-held recovery route, and a subscription
