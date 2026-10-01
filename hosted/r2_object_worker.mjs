@@ -1,4 +1,6 @@
-// Deliberately undeployed: no Wrangler binding or public route points here.
+// Sandbox deployment is explicit via r2-sandbox.wrangler.jsonc, never the
+// local-only probe Worker. The checked-in config contains no signing key;
+// without a separately provisioned key every request stays dark.
 // Production may use this only after authenticated grant issuance, quota,
 // billing, retention, recovery, and clean-Mac acceptance are complete.
 import capability from './object_capability.js';

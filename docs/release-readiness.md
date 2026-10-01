@@ -1,5 +1,37 @@
 # Desktop release readiness
 
+## September 30 authenticated R2 endpoint — deployment preparation verified
+
+`hosted/r2-sandbox.wrangler.jsonc` now pins the real capability-protected
+object Worker, Cloudflare account `c6c00211d9bf8d7b4f493b2a6d352b9a`, and the
+existing `codex-vault-sandbox-20260927` bucket. It contains no signing key,
+production route, cron, probe handler, or public bucket configuration. Version
+Preview URLs and persisted Worker observability are explicitly disabled.
+The explicit `workers.dev` endpoint is intended for authenticated sandbox
+service calls; without a separately provisioned signing key all requests
+remain dark. A capability authenticates an exact object request, not a buyer,
+subscription, published snapshot, or completed backup.
+
+The new entrypoint/config tests passed 3/3 and the combined focused object
+suite passed 8/8. The full Node suite passed 615 tests with one skipped.
+Wrangler 4.141.0's actual deployment dry-run built the configured entrypoint
+successfully: 22.31 KiB uncompressed / 5.46 KiB gzip and only the intended R2
+binding. `/root/public_release_review` independently accepted the bounded
+config, entrypoint denial behavior, no-secret defaults and header wording;
+its related security suite passed 16/16. Provider-side bucket privacy must
+still be checked during deployment.
+
+No token was created, no signing key provisioned, and no Worker deployed by
+this preparation. The Cloudflare review form is prepared for an account-only
+Workers Scripts Write token with the shortest currently usable expiry date;
+its creation awaits explicit action-time confirmation. It would permit
+modifying other Workers in this account until revoked, not only this sandbox
+Worker. Use it only for the approved endpoint deployment, verify the result,
+and revoke it immediately. Do not deploy `tests/r2-live/worker.mjs` or expose
+its local-only grant fixture. Real subscription/device authorization,
+published encrypted backup/recovery, clean-Mac key import and unattended
+off-device protection remain unproved. Public build 16 is unchanged.
+
 ## September 30 hosted sandbox schema — provisioned and read back
 
 Clean source `011b15cd31475e4e61230007481d55e2c702fd75` is pushed to draft

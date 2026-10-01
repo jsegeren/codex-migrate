@@ -1,0 +1,15 @@
+{
+  "name": "codex-backup-service-sandbox",
+  "account_id": "c6c00211d9bf8d7b4f493b2a6d352b9a",
+  "main": "./r2_object_worker.mjs",
+  "compatibility_date": "2026-09-30",
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": { "enabled": false },
+  "r2_buckets": [
+    {
+      "binding": "HOSTED_BUCKET",
+      "bucket_name": "codex-vault-sandbox-20260927"
+    }
+  ]
+}
