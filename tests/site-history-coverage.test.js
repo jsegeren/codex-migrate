@@ -12,6 +12,6 @@ test('current-beta pages disclose the paginated-history coverage limit', () => {
     'recover-missing-codex-chats.html',
   ]) {
     const html = fs.readFileSync(path.join(__dirname, '..', 'site', page), 'utf8');
-    assert.match(html, /paginated-history database|history stored only in a separate database/, `${page} omits the beta limit`);
+    assert.match(html, /paginated-history database|history stored only in a separate database|database-only Codex history/, `${page} omits the beta limit`);
   }
 });

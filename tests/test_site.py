@@ -264,6 +264,8 @@ class SiteTests(unittest.TestCase):
                            "pristine-Mac installation", "broader hardware coverage remain ongoing"):
             self.assertIn(limitation, text)
         self.assertIn("Keep your old Mac and an independent backup", text)
+        self.assertIn("A Vault folder kept only on this Mac cannot protect against its loss or failure", text)
+        self.assertIn("the app cannot confirm cloud sync", text)
         self.assertIn("it does not merge two active workspaces", text)
         self.assertIn('<div id="checkout-panel">', source)
         self.assertIn('<div id="edition-disclosure" hidden>', source)

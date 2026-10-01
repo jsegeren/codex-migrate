@@ -83,7 +83,7 @@
           <article><span>02</span><h3>Search your history</h3><p>Find and read local Codex work outside Codex.</p><ul><li>Search active and archived conversations</li><li>Open and export Markdown or PDF</li><li>Recover one missing conversation without replacing the rest</li></ul></article>
           <article><span>03</span><h3>Move to another Mac</h3><p>Bring the supported Codex state and selected workspaces with you.</p><ul><li>Git branches, worktrees, and unfinished files</li><li>Resumable transfer over SSH</li><li>Destination backup and post-move checks</li></ul></article>
         </div>
-        <p class="jobs-note">Automatic backup runs locally through macOS—even when the app is closed—and needs the Mac and your chosen Vault folder to be available. It is not real-time sync.</p>
+        <p class="jobs-note">Automatic backup runs even when the app is closed, while the Mac and chosen folder are available. A backup kept only on this Mac will be lost with it. This is not real-time sync.</p>
       </section>
 
       <section class="demo-section shell" id="watch" aria-labelledby="watch-heading">
@@ -136,7 +136,7 @@
             </div>
             <div id="checkout-panel">
               <p id="checkout-platform" class="disclosure">For Apple silicon Macs. $49 USD plus applicable tax. Secure checkout through Stripe.</p>
-              <p id="beta-limits" class="disclosure"><strong>Beta:</strong> Vault can miss Codex history stored only in a separate database. Keep your old Mac and an independent backup until you verify recovery or migration. Migration replaces selected destination data; it does not merge two active workspaces.</p>
+              <p id="beta-limits" class="disclosure"><strong>Before you buy:</strong> A Vault folder kept only on this Mac cannot protect against its loss or failure. Verify any off-device copy; the app cannot confirm cloud sync. <strong>Beta:</strong> Vault can miss database-only Codex history. Keep your old Mac and an independent backup until you verify recovery or migration. Migration replaces selected destination data; it does not merge two active workspaces.</p>
               <details class="beta-details"><summary>Current testing boundary</summary><p>Selected-thread recovery, VoiceOver, permission denial, and physical Wi-Fi interruption/resume testing have passed. Retention controls, cloud-folder health monitoring, broader Codex-version coverage, guided permission recovery, direct-cable interruption, pristine-Mac installation, and broader hardware coverage remain ongoing.</p></details>
               <button id="checkout-button" class="button button-primary full" data-analytics-event="begin_checkout" type="button" aria-describedby="checkout-platform beta-limits migration-guarantee checkout-status">Protect my Codex work — $49</button>
               <p id="checkout-status" role="status"></p>
