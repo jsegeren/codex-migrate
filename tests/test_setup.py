@@ -251,8 +251,14 @@ class SetupTests(unittest.TestCase):
                 self.assertEqual(self.request("/api/shutdown", {})[0], 409)
                 release.set()
                 worker.join(3)
+                self.assertFalse(worker.is_alive())
                 self.assertEqual(flow.snapshot()["status"], "stopped")
                 self.assertEqual(self.request("/api/vault/hosted-recovery", stop)[0], 400)
+                # Reading the HTTP response does not imply the handler's
+                # finally block has released its request lock yet. Wait for
+                # that exact boundary; do not loosen the app's quit guard.
+                self.assertTrue(self.helper._request_lock.acquire(timeout=3))
+                self.helper._request_lock.release()
                 self.assertTrue(self.helper.can_shutdown())
         finally:
             release.set()
