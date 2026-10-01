@@ -1,4 +1,4 @@
-# Hosted Vault backup — product and release contract
+# Hosted Codex Backup — product and release contract
 
 Status: approved direction with local and synthetic live-R2 transport tests, **not a hosted
 service or for sale**. This document does not authorize a production bucket, a
@@ -45,12 +45,11 @@ onboarding are deferred, not release prerequisites for the individual offer.
   this with corrupt, truncated, missing-source, and interrupted-run tests before
   release. A valid hash does not establish that the source was semantically
   correct; neither the client nor encrypted server can detect every bad edit.
-- The new pricing direction is **2× fully loaded COGS** (100% markup; 50%
-  gross margin if cost is correctly measured). This supersedes the earlier
-  3× minimum / 80% target. Include retained-version storage, provider requests,
+- Keep internal pricing policy and commercial sensitivities outside this
+  public repository. Measure retained-version storage, provider requests,
   Workers/API/database/email/monitoring, payment fees, allocated support and
-  recovery costs, and fixed overhead—not storage alone. The internal markup
-  formula is not public copy. Final customer prices, allowance, usage units,
+  recovery costs, and fixed overhead—not storage alone. Final customer prices,
+  allowance, usage units,
   and renewal terms still need a measured, customer-visible offer before billing.
 - There are no confirmed external customers. Maintain the existing checkout
   and update path without expanding a legacy-purchase compatibility project;
@@ -130,14 +129,14 @@ Vault format:
    app. That folder may be local, on an external drive, or in the customer's
    cloud-sync provider. A detected cloud folder is not proof that its remote
    copy has synced; a local-only folder does not insure against Mac loss.
-2. **Segeren-hosted backup for the current individual path.** A buyer may opt in after buying the $49 Mac app.
-   Their **first hosted month is free**. The earlier $10/month direction was
-   rejected as too low. Business pricing, allowances, and billing are not
-   approved or live. It uploads client-encrypted history and attachment objects and required
+2. **Segeren-hosted backup for the current individual path.** This optional
+   service is not available or for sale. Pricing, capacity, retention,
+   introductory terms, and renewal terms require an approved customer-visible
+   offer before enrollment or billing opens. It uploads client-encrypted
+   history and attachment objects and required
    non-content Vault metadata to operated object storage, then reports the last
    remotely verified snapshot. Existing Mac-app buyers retain their local
-   edition, must not repurchase it to add hosting, and receive the same one-time
-   free hosted month when they first opt in. The trial and subsequent renewal
+   edition and must not repurchase it to add hosting. Any trial and subsequent renewal
    must be clear before enrollment opens. A subscription is not needed to
    browse/search current local history or backups the customer controls.
 
@@ -552,17 +551,15 @@ backup telemetry as a covert individual-productivity or conversation-monitoring
 system. Decide with pilot buyers whether any further aggregate work insights
 are useful and permissible before collecting additional content-derived data.
 
-The Founder rejected a customer-set spending cap. The September 30 amendment
-replaces the earlier 3× minimum and 80% margin target: price the recovery
-service at **2× fully loaded per-customer cost** after measuring retained
-encrypted bytes and version
-growth, R2 and Worker operations, database/API/monitoring, payment processing,
-expected support and recovery drills, refunds, and allocated fixed overhead.
-Twice cost yields a 50% gross margin only when all costs are included. Bound included
+Measure the fully loaded
+cost of retained encrypted bytes and version growth, R2 and Worker operations,
+database/API/monitoring, payment processing, expected support and recovery
+drills, refunds, and allocated fixed overhead. Internal pricing policy belongs
+in private commercial records, not public engineering documentation. Bound included
 retention and storage in the published offer, price exceptional usage
 explicitly, and do not silently pause backup or delete the last good version
-when a customer crosses a limit. Any $20/month plus usage example is only an
-obsolete economics floor, not approved business pricing. Publish no hosted
+when a customer crosses a limit. Earlier commercial models do not establish
+approved business pricing. Publish no hosted
 price or enterprise protection claim until product proof, service scope,
 retention, billing behavior, and customer-facing terms are approved.
 
@@ -582,9 +579,9 @@ existing one-time checkout must remain operable independently.
 Use **R2 Standard** as the first provider candidate, subject to a proof with
 realistic object counts and a clean-Mac restore. Vercel Blob is a technically
 plausible alternative because private signed URLs permit direct transfers, but
-its first-time download transfer charges make large disaster restores and a
-flat $10 allowance materially riskier. See the
-[measured sizing and provider comparison](vault-hosted-economics-2026-09-26.md).
+its download transfer charges must be included when evaluating large disaster
+restores. See the
+[storage-cost validation method](vault-hosted-economics-2026-09-26.md).
 Cloudflare's setup requires a separate Cloudflare account and R2 subscription
 checkout, even for included free monthly usage; hosting the website on Vercel
 does not itself activate R2. The Founder activated R2 on September 27, 2026,
@@ -600,13 +597,12 @@ the account token list showed no remaining user API tokens. This small
 proof does not establish authenticated customer uploads, realistic object-count
 performance, quota enforcement, retention, or clean-Mac restore. See the
 [R2 setup documentation](https://developers.cloudflare.com/r2/get-started/).
-An account billing alert now emails the Founder at $10 of Cloudflare spend;
-it is an early warning, **not** a hard spending cap. No customer workload is
-enabled, and the R2 dashboard showed $0.00 billable usage after the proof.
+An account billing alert is configured as an early warning, **not** a hard
+spending cap. No customer workload is enabled.
 R2's presigned S3 PUT alone does not satisfy immutable SHA-256 verification:
 the candidate transport uses a small authenticated Worker with R2's
-checksum-checked conditional PUT. Its $5/month paid-plan minimum matters for
-the first few customers. The adapter is still test-only; the full storage
+checksum-checked conditional PUT. Account-level compute minimums must be
+included in service costing. The adapter is still test-only; the full storage
 transport and disaster-recovery release gates below remain open.
 The draft object Worker now accepts only a short-lived HMAC capability for one
 exact method, account/Vault-scoped key, byte length, and SHA-256. Uploads are
@@ -901,15 +897,9 @@ hosting/API compute, payment fees, monitoring, failed retries, support, and
 retained versions still cost money. See the [R2 pricing](https://developers.cloudflare.com/r2/pricing/)
 and [presigned-URL contract](https://developers.cloudflare.com/r2/api/s3/presigned-urls/).
 
-At **75 GB stored**, R2 storage alone is about **$1.13/month** before retention
-growth and other costs. At 250 GB it is $3.75/month; at 500 GB it is
-$7.50/month. These are pricing scenarios, not measurements of a complete
-encrypted backup. Source-folder size does not establish stored size after
+Source-folder size does not establish stored size after
 compression and version retention; measure actual encrypted bytes on both Macs
-before locking an allowance. A $10 flat *unlimited* plan is not defensible. A
-**250 GB at $10** is no longer a defensible initial allowance. Earlier
-capacity tiers in the linked economics note are superseded pricing scenarios,
-not launched entitlements: measure incremental version growth and worst-case
+before locking an allowance. Measure incremental version growth and worst-case
 operations, then approve the business offer and exact billing behavior before
 publishing a subscription. Do not replace usage pricing with a customer-set
 spending cap. If a disclosed service-side safety or plan limit is eventually
@@ -1279,9 +1269,8 @@ egress allowance. Do not claim that B2 restores are always free. See its
 
 ## Build sequence and release gates
 
-1. **Freeze the billing contract:** $49 for the app, an explicitly opted-in
-   one-time free hosted month for any buyer, then the approved capacity-tier
-   subscription while active;
+1. **Freeze the billing contract:** keep the existing app purchase separate
+   from an explicitly opted-in, approved hosted subscription;
    define the exact trial start and renewal dates, existing-buyer enrollment,
    included bytes, over-limit behavior, taxes/refunds, cancellation/read-only recovery period, and
    storage-region disclosure. Model heavy histories and retained versions
