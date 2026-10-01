@@ -57,6 +57,7 @@ test('hosted setup is gated and pairing never claims backup or automatic protect
   assert.match(elements.get('hosted-setup-status').textContent, /Automatic protection is not active/);
   assert.equal(elements.get('hosted-setup-error').textContent, '');
   assert.match(source, /This setup has not created a backup/);
+  assert.match(source, /\.brand small,\.protection\{font-size:14px\}/);
   assert.match(source, /if\(view==="backup"\)refreshHostedSetup\(\)/);
   assert.match(source, /@media print\{#hosted-setup-panel,#hosted-recovery-panel\{display:none!important\}\}/);
 });

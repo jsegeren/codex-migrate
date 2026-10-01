@@ -24,6 +24,7 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 @media print{body{background:white;color:black}header,.summary,#backup-panel,#restore-panel,#search-panel,#results-panel,.actions,#error,#status{display:none!important}main{width:auto;margin:0}.panel{border:0;padding:0;background:white}.entry{break-inside:avoid;border-color:#bbb}.entry time{color:#444}}
 .hosted-step label{display:block;margin:14px 0 8px;font-weight:700}.hosted-step input,.hosted-step select{max-width:100%;width:100%;margin-bottom:14px}.hosted-step button{margin:8px 0}.hosted-step .actions input{width:auto}.view-backup #hosted-recovery-panel,.view-conversations #hosted-recovery-panel{display:none!important}#hosted-recovery-error{color:#ffc3c8}#hosted-recovery-status{color:var(--muted)}
 .view-conversations #hosted-setup-panel,.view-recovery #hosted-setup-panel{display:none!important}#hosted-setup-error{color:#ffc3c8}#hosted-setup-status{color:var(--muted)}
+.brand small,.protection{font-size:14px}
 @media print{#hosted-setup-panel,#hosted-recovery-panel{display:none!important}}
 </style>
 </head>
