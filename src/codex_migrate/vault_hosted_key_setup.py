@@ -113,3 +113,10 @@ class HostedKeySetup:
                 result.get("key_id") != key_id or result.get("verified") is not True):
             raise MigrationError("Your saved recovery key could not be verified.")
         self._save({**value, "saved_copy_confirmed": True})
+
+    def backup_metadata(self, binding):
+        """Return only checked, non-secret metadata after saved-copy confirmation."""
+        value = self._bound(binding)
+        if value is None or value["saved_copy_confirmed"] is not True:
+            raise MigrationError("Confirm your saved recovery key before hosted backup.")
+        return self._metadata_file(value["metadata"]), value["metadata"]["key_id"]

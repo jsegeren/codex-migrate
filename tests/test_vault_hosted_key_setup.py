@@ -113,6 +113,23 @@ class HostedKeySetupTests(unittest.TestCase):
         self.assertTrue(all(call.args[1][0] in ("prepare-key", "check-recovery-key")
                             for call in self.native.call_args_list))
 
+    def test_backup_metadata_requires_confirmed_copy_and_never_reads_key_material(self):
+        with self.assertRaises(MigrationError):
+            self.setup.backup_metadata(BINDING)
+        self.setup.prepare(BINDING)
+        with self.assertRaises(MigrationError):
+            self.setup.backup_metadata(BINDING)
+        self.setup.confirm(BINDING, SECRET)
+        self.native.reset_mock()
+        path, key_id = self.setup.backup_metadata(BINDING)
+        self.assertEqual(path, self.registry.root / "hosted-key.json")
+        self.assertEqual(key_id, self.registry.read()["hosted_setup_key"]["metadata"]["key_id"])
+        self.native.assert_not_called()
+        path.write_text("{}")
+        with self.assertRaises(MigrationError):
+            self.setup.backup_metadata(BINDING)
+        self.assertEqual(path.read_text(), "{}")
+
     def test_key_binding_disagreement_never_changes_saved_state(self):
         self.setup.prepare(BINDING)
         before = self.registry.path.read_bytes()

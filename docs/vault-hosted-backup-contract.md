@@ -120,7 +120,7 @@ enrollment, recovery-key setup/custody, the customer backup UI, hosted billing,
 scheduled-run certification or clean-Mac recovery. Those gates still precede
 availability. Use only a disposable synthetic account until they pass.
 
-### First-device pairing controller — acceptance only
+### First-device setup controller — acceptance only
 
 The local helper has a disabled-by-default first-device pairing controller
 behind `CODEX_BACKUP_HOSTED_SETUP_ACCEPTANCE=yes`. Its private, loopback-only
@@ -159,6 +159,24 @@ and after success. This saved-copy match is **not** a clean-Mac recovery test,
 proof of independently retained recovery material, or automatic protection.
 Approved hosted entitlement, first backup, real-service clean-Mac recovery and
 scheduled-run certification remain required before availability.
+
+After pairing and saved-copy confirmation, a separate acceptance-only
+**Create my first hosted backup** action invokes the existing manual upload
+engine. It binds the saved account, Vault, device and encryption-key IDs; an
+identity or key mismatch is refused before staging or uploading. Server-side
+storage authorization is still required: this action does not create an
+entitlement, start a trial/subscription, or install a schedule. Pending uploads
+reuse the engine's durable reservation journal after interruption.
+
+Only an allowlisted receipt from the remote-manifest verification step is
+saved as the latest completed check. Unknown or at-risk coverage stays visibly
+`needs_attention`; a failed attempt preserves the previous completed receipt.
+On restart, the saved connection must be rechecked before another upload.
+The receipt records snapshot identity, coverage and completion time, not keys,
+bearers, transcripts or signed URLs. Publication and manifest verification are
+not full clean-Mac reconstruction or proof of unattended protection. Real R2
+backup/recovery, scheduled operation, billing and the notarized release remain
+separate gates; neither Founder's Mac is enrolled or scheduled by this work.
 
 ## Customer choice
 

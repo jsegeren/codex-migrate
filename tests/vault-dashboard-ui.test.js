@@ -21,7 +21,7 @@ const hostedSetupStep = source.match(/async function hostedSetupStep\(action,ste
 const refreshHostedSetup = source.match(/async function refreshHostedSetup\(\)\{[\s\S]*?\n\}/)[0];
 
 function setupFixture() {
-  const phases = ['start', 'email', 'pairing_checkpoint', 'pairing_uncertain', 'paired', 'key_save', 'key_ready'];
+  const phases = ['start', 'email', 'pairing_checkpoint', 'pairing_uncertain', 'paired', 'key_save', 'key_ready', 'backup_ready'];
   const blocks = phases.map(phase => ({ dataset: { setupPhase: phase }, hidden: false }));
   const document = { activeElement: { outside: true } };
   const controls = phases.map(phase => ({ phase, disabled: false, focus() { document.activeElement = this; } }));
@@ -171,6 +171,32 @@ test('an older status response cannot repaint recovery material after confirmati
   await old;
   assert.equal(elements.get('setup-recovery').value, '');
   assert.match(elements.get('hosted-setup-status').textContent, /Saved recovery key confirmed/);
+});
+
+test('first hosted backup is an explicit action and never claims automatic protection', async () => {
+  const { context, elements, blocks } = setupFixture();
+  const calls = [];
+  context.api = async (path, payload) => {
+    calls.push({ path, payload });
+    return { enabled: true, status: 'running', phase: 'key_ready', step: 'first_backup' };
+  };
+  await context.hostedSetupStep('first_backup');
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [{ path: '/api/vault/hosted-setup',
+    payload: { action: 'first_backup', step: { apply: true } } }]);
+  assert.match(elements.get('hosted-setup-status').textContent, /Encrypting, uploading and verifying/);
+  assert.ok(blocks.every(block => block.hidden));
+  for (const status of ['published', 'unchanged', 'needs_attention']) {
+    context.hostedSetupView({ enabled: true, status: 'ready', phase: 'backup_ready',
+      last_backup: { status }, last_backup_checked_at: '2026-10-01T00:00:00+00:00' });
+    assert.match(elements.get('hosted-setup-status').textContent, /Automatic protection is not active/);
+    assert.equal(blocks.find(block => block.dataset.setupPhase === 'backup_ready').hidden, false);
+    assert.equal(elements.get('setup-recovery').value, '');
+    assert.match(elements.get('setup-backup-receipt').textContent,
+      status === 'needs_attention' ? /incomplete or at-risk/ : status === 'unchanged' ?
+        /existing hosted snapshot was verified again/ : /encrypted conversation manifest/);
+  }
+  assert.match(source, /This does not back up your Git repositories or your whole Mac/);
+  assert.match(source, /recovery on a clean Mac still needs verification/);
 });
 
 test('hosted recovery stays hidden until enabled and key verification is not recovery', () => {
