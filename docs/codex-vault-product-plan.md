@@ -49,13 +49,10 @@ Keep the first offer simple while the market is being proven:
   verified recovery, the complete Mac migration, updates during the beta, and
   best-effort support.
 - **Optional hosted Codex Backup:** offer a second backup destination operated by
-  Segeren Studio, with client-side encryption. A buyer pays $49 for the Mac app
-  whether they use a folder they control or opt into hosting. The first month
-  of hosted backup is free if they opt in. Final recurring prices, capacity,
-  retention, usage units, and renewal terms are not approved or live.
-  Existing app buyers may opt in later
-  without repurchasing the app and receive the same
-  one-time free hosted month. The customer-owned-folder backup remains
+  Segeren Studio, with client-side encryption. Final recurring prices, capacity,
+  retention, usage units, introductory terms, and renewal terms are not live
+  and require an approved customer-visible offer. Existing app buyers may opt
+  in later without repurchasing the app. The customer-owned-folder backup remains
   available without a subscription. The hosted tier is approved product
   direction, **not a shipping feature or an open checkout**; its storage limit,
   billing, key recovery, off-device restore, and operational gates must pass
