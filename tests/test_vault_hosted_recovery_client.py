@@ -10,6 +10,7 @@ import threading
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
+from urllib.error import URLError
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_hosted_disaster_recovery import recover_hosted_snapshot
@@ -243,7 +244,8 @@ class HostedRecoveryClientTests(unittest.TestCase):
             self.client().account_storage_usage(expected_account_id=ACCOUNT)
 
     def test_prepares_validated_receipt_and_exact_get_grant(self):
-        receipt, store = self.client().prepare(max_bytes=1_000_000)
+        client = self.client()
+        receipt, store = client.prepare(max_bytes=1_000_000)
         self.assertEqual(receipt["snapshot_id"], SNAPSHOT)
         self.assertEqual([item["key"] for item in receipt["objects"]],
                          [f"metadata/{SNAPSHOT}.json",
@@ -252,6 +254,63 @@ class HostedRecoveryClientTests(unittest.TestCase):
             self.assertEqual(stream.read(), b"metadata")
         self.assertEqual([item["action"] for item in self.server.requests],
                          ["latest", "objects", "get"])
+        self.assertEqual(client.service_request_counts(),
+                         {"latest": 1, "objects": 1, "get": 1})
+        self.assertEqual(client.worker_attempt_counts(), {"get": 1})
+        counts = client.service_request_counts()
+        counts["latest"] = 999
+        worker_counts = client.worker_attempt_counts()
+        worker_counts["get"] = 999
+        self.assertEqual(client.service_request_counts()["latest"], 1)
+        self.assertEqual(client.worker_attempt_counts()["get"], 1)
+
+    def test_service_cost_counts_failed_attempts_without_private_action_labels(self):
+        client = self.client()
+        with patch.object(client._opener, "open", side_effect=URLError("private detail")):
+            with self.assertRaises(MigrationError):
+                client.latest_snapshot(expected_account_id=ACCOUNT)
+            with self.assertRaises(MigrationError):
+                client._post({"action": "private-title-or-token"})
+            with self.assertRaises(MigrationError):
+                client._post({"action": "latest", "oversized": "x" * 601})
+        self.assertEqual(client.service_request_counts(), {"latest": 1, "unknown": 1})
+        self.assertEqual(client.worker_attempt_counts(), {"get": 0})
+        self.assertNotIn("private", json.dumps(client.service_request_counts()))
+
+    def test_worker_cost_counts_network_failure_but_not_invalid_grant_or_key(self):
+        client = self.client()
+        _, store = client.prepare(max_bytes=1_000_000)
+        key = f"metadata/{SNAPSHOT}.json"
+        with self.assertRaises(MigrationError):
+            store.open_read(f"metadata/{OLDER}.json")
+        with patch.object(store, "_grant", return_value="invalid"):
+            with self.assertRaises(MigrationError):
+                store.open_read(key)
+        self.assertEqual(client.worker_attempt_counts(), {"get": 0})
+        with patch.object(store._opener._opener, "open",
+                          side_effect=URLError("private detail")):
+            with self.assertRaises(MigrationError):
+                store.open_read(key)
+        self.assertEqual(client.service_request_counts(),
+                         {"latest": 1, "objects": 1, "get": 1})
+        self.assertEqual(client.worker_attempt_counts(), {"get": 1})
+        self.assertEqual(self.server.get_requests, [])
+
+    def test_prior_catalog_counts_manifest_read_without_object_details(self):
+        client = self.client()
+        with patch("codex_migrate.vault_hosted_recovery_client._helper_path",
+                   return_value=Path("/synthetic/helper")), patch(
+                   "codex_migrate.vault_hosted_recovery_client._run_helper",
+                   return_value={"snapshot_id": SNAPSHOT, "files": []}):
+            self.assertEqual(client.prior_catalog(key_id="synthetic-key",
+                crypto_helper="/synthetic/helper", max_bytes=1_000_000,
+                expected_snapshot_id=SNAPSHOT), (SNAPSHOT, []))
+        self.assertEqual(client.service_request_counts(), {"latest": 1, "manifest": 1})
+        self.assertEqual(client.worker_attempt_counts(), {"get": 1})
+        self.assertEqual(len(self.server.get_requests), 1)
+        metrics = json.dumps([client.service_request_counts(), client.worker_attempt_counts()])
+        for private_value in (ACCOUNT, VAULT, SNAPSHOT, TOKEN, "synthetic-key", "cvmanifest"):
+            self.assertNotIn(private_value, metrics)
 
     def test_discovers_and_prepares_an_older_published_version(self):
         old = inventory(snapshot_id=OLDER)

@@ -28,6 +28,7 @@ from codex_migrate.vault_hosted_business_enrollment_client import (
     BusinessHostedEnrollmentClient,
 )
 from codex_migrate.vault_hosted_live_run import HostedLiveBackupRun
+from codex_migrate.vault_hosted_recovery_client import HostedRecoveryClient
 from codex_migrate.vault_hosted_connection import (
     active_binding, connection_path, save_connection, validate_binding,
 )
@@ -57,12 +58,15 @@ def _now() -> str:
 
 
 def _cost_metrics(started: float, upload: object = None,
-                  published: object = None) -> dict:
+                  published: object = None, *, recovery: object = None) -> dict:
     """Private counts only; never persist an object key, token, or transcript."""
     result = {"elapsed_ms": max(0, int((time.monotonic() - started) * 1000))}
     if isinstance(upload, HostedUploadClient):
         result["upload_service_attempts"] = upload.service_request_counts()
         result["worker_attempts"] = upload.worker_attempt_counts()
+    if isinstance(recovery, HostedRecoveryClient):
+        result["recovery_service_attempts"] = recovery.service_request_counts()
+        result["recovery_worker_attempts"] = recovery.worker_attempt_counts()
     if isinstance(published, dict):
         for field, target in (("restagedPlaintextBytes", "restaged_plaintext_bytes"),
                               ("reusedPlaintextBytes", "reused_plaintext_bytes"),
@@ -405,6 +409,7 @@ def run_hosted_scheduled_backup(config_path: str) -> int:
     """One unattended check; failures are visible and leave last-good intact."""
     started = time.monotonic()
     upload = None
+    recovery = None
     try:
         path = Path(config_path).expanduser()
         if not path.is_absolute():
@@ -465,7 +470,7 @@ def run_hosted_scheduled_backup(config_path: str) -> int:
                 "snapshot_id": snapshot_id,
                 **({"title_index_unavailable": True}
                    if result.get("titleIndexUnavailable") is True else {}),
-                "cost_metrics": _cost_metrics(started, upload, result),
+                "cost_metrics": _cost_metrics(started, upload, result, recovery=recovery),
             })
             if configuration["version"] == 3:
                 # The company cannot detect an offline Mac from local status.
@@ -489,7 +494,7 @@ def run_hosted_scheduled_backup(config_path: str) -> int:
             if "status_path" in locals():
                 _write_run_status(status_path, {
                     "status": "failed", "checked_at": _now(), "error": _FAILED,
-                    "cost_metrics": _cost_metrics(started, upload),
+                    "cost_metrics": _cost_metrics(started, upload, recovery=recovery),
                 })
         except Exception:
             pass

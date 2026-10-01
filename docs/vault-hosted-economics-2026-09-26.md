@@ -87,6 +87,11 @@ no titles, conversation text, credentials, recovery keys, or source paths.
   payment fees, and allocated operational/support/recovery costs.
 
 The current client counters are diagnostic evidence, not a provider invoice.
+Scheduled run receipts include attempted recovery-service calls and Worker GETs
+used to read the prior manifest, including network failures. A request rejected
+locally before a network attempt is not an object operation. These counts do
+not measure downloaded bytes, service-side verification, enrollment/rotation,
+database operations, or provider CPU; those still require separate evidence.
 Re-staged plaintext is not a complete disk-I/O counter; claimed ciphertext can
 include reused objects; a confirmed upload does not prove new retained bytes.
 The bounded local sample history can have gaps that a measurement review must
