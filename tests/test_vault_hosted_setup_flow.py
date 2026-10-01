@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
@@ -279,6 +280,120 @@ class HostedSetupFlowTests(unittest.TestCase):
         self.client.claim.assert_not_called()
         self.saved["hosted_setup_device"] = dict(IDENTITY)
         self.assertEqual(HostedSetupFlow(self.registry).snapshot()["phase"], "pairing_uncertain")
+
+    def ready_for_backup(self):
+        key_id = "44444444-4444-4444-8444-444444444444"
+        self.saved.update(hosted_setup_device=dict(IDENTITY), hosted_setup_key={
+            "binding": dict(IDENTITY), "saved_copy_confirmed": True,
+            "metadata": {"format": "codex-vault", "version": 1, "key_id": key_id,
+                         "created_at": "2026-10-01T00:00:00+00:00"}})
+        self.flow = HostedSetupFlow(self.registry, "/synthetic/home")
+        self.step("resolve")
+        self.flow._keys = Mock()
+        self.flow._keys.backup_metadata.return_value = (
+            Path("/synthetic/state/hosted-key.json"), key_id)
+        self.receipt = {"applied": True, "snapshot_id": VAULT, "status": "published",
+                        "source_coverage": "complete", "at_risk_threads": 0,
+                        "automatic_protection_verified": False}
+        patcher = patch("codex_migrate.vault_hosted_setup_flow.back_up_hosted_history",
+                        return_value=dict(self.receipt))
+        self.backup = patcher.start()
+        self.addCleanup(patcher.stop)
+        return key_id
+
+    def test_first_backup_requires_saved_key_and_explicit_separate_action(self):
+        with self.assertRaises(MigrationError):
+            self.flow.stage("first_backup", {"apply": True})
+        key_id = self.ready_for_backup()
+        self.backup.assert_not_called()
+        result = self.step("first_backup")
+        self.backup.assert_called_once_with("/synthetic/home", DEVICE,
+            "/synthetic/state/hosted-key.json",
+            expected_binding={**IDENTITY, "keyId": key_id}, apply=True)
+        self.assertEqual(result["phase"], "backup_ready")
+        self.assertEqual(result["last_backup"], self.receipt)
+        self.assertFalse(result["automatic_protection_verified"])
+        self.assertFalse(result["upload_authorized"])
+        self.assertEqual(self.saved["hosted_setup_backup"]["receipt"], self.receipt)
+        self.assertNotIn("keyId", result["last_backup"])
+        self.client.backup_clients.assert_not_called()
+
+    def test_first_backup_failure_keeps_previous_receipt_and_same_retry_binding(self):
+        self.ready_for_backup()
+        self.step("first_backup")
+        previous = json.dumps(self.saved["hosted_setup_backup"], sort_keys=True)
+        self.backup.side_effect = MigrationError("private bearer and transcript")
+        result = self.step("first_backup")
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["phase"], "backup_ready")
+        self.assertEqual(result["last_backup"], self.receipt)
+        self.assertEqual(json.dumps(self.saved["hosted_setup_backup"], sort_keys=True), previous)
+        self.assertNotIn("private bearer", result["error"])
+        self.assertIn("same connection and key", result["error"])
+        self.backup.side_effect = None
+        self.assertEqual(self.step("first_backup")["status"], "ready")
+        self.assertEqual(self.backup.call_args_list[0], self.backup.call_args_list[-1])
+
+    def test_setup_restart_preserves_receipt_but_still_requires_connection_check(self):
+        self.ready_for_backup()
+        self.step("first_backup")
+        self.flow = HostedSetupFlow(self.registry, "/synthetic/home")
+        self.assertEqual(self.flow.snapshot()["phase"], "pairing_uncertain")
+        with self.assertRaises(MigrationError):
+            self.flow.stage("first_backup", {"apply": True})
+        result = self.step("resolve")
+        self.assertEqual(result["phase"], "backup_ready")
+        self.assertEqual(result["last_backup"], self.receipt)
+        self.assertFalse(result["automatic_protection_verified"])
+
+    def test_bad_backup_receipts_cannot_be_saved_or_claim_success(self):
+        self.ready_for_backup()
+        for field, value in (("applied", 1), ("snapshot_id", "bad"),
+                ("automatic_protection_verified", True), ("status", "protected"),
+                ("at_risk_threads", False), ("source_coverage", "unknown")):
+            with self.subTest(field=field):
+                self.backup.return_value = {**self.receipt, field: value}
+                result = self.step("first_backup")
+                self.assertEqual(result["status"], "failed")
+                self.assertNotIn("hosted_setup_backup", self.saved)
+        self.backup.return_value = {**self.receipt, "private": "secret"}
+        self.assertEqual(self.step("first_backup")["status"], "failed")
+
+    def test_at_risk_capture_keeps_explicit_attention_and_no_protection(self):
+        self.ready_for_backup()
+        self.backup.return_value = {**self.receipt, "status": "needs_attention",
+                                   "source_coverage": "needs_attention", "at_risk_threads": 2}
+        result = self.step("first_backup")
+        self.assertEqual(result["phase"], "backup_ready")
+        self.assertEqual(result["last_backup"]["status"], "needs_attention")
+        self.assertFalse(result["automatic_protection_verified"])
+
+    def test_unsaved_key_or_checkpoint_failure_cannot_finish_backup_step(self):
+        self.ready_for_backup()
+        self.flow._keys.backup_metadata.side_effect = MigrationError("unconfirmed")
+        self.assertEqual(self.step("first_backup")["status"], "failed")
+        self.backup.assert_not_called()
+        self.flow._keys.backup_metadata.side_effect = None
+        self.registry.sync_recovery_checkpoint.side_effect = OSError("disk")
+        result = self.step("first_backup")
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["phase"], "key_ready")
+        self.assertNotIn("last_backup", result)
+
+    def test_mismatched_saved_backup_refuses_startup_before_provider_work(self):
+        self.ready_for_backup()
+        self.step("first_backup")
+        self.factory.reset_mock()
+        saved = dict(self.saved["hosted_setup_backup"])
+        for bad in ({**saved, "binding": {**IDENTITY, "accountId": VAULT}},
+                    {**saved, "key_id": DEVICE},
+                    {**saved, "checked_at": "bad"},
+                    {**saved, "receipt": {**self.receipt, "at_risk_threads": -1}}):
+            with self.subTest(bad=bad):
+                self.saved["hosted_setup_backup"] = bad
+                with self.assertRaises(MigrationError):
+                    HostedSetupFlow(self.registry, "/synthetic/home")
+        self.factory.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -36,7 +36,7 @@ class HostedManualTests(unittest.TestCase):
         self.helper.write_text("#!/bin/sh\nexit 1\n")
         self.helper.chmod(0o700)
         self.client = Mock()
-        self.upload = SimpleNamespace(_account_id=ACCOUNT)
+        self.upload = SimpleNamespace(_account_id=ACCOUNT, _vault_id=OTHER)
         self.recovery = Mock()
         self.client.backup_clients.return_value = (self.upload, self.recovery)
         self.run = Mock()
@@ -87,6 +87,28 @@ class HostedManualTests(unittest.TestCase):
         self.assertEqual(self.backup()["status"], "unchanged")
         self.assertEqual(self.recovery.prior_catalog.call_args.kwargs[
             "expected_snapshot_id"], SNAPSHOT)
+
+    def test_setup_binding_is_checked_before_any_staging_or_upload(self):
+        binding = {"deviceId": DEVICE, "accountId": ACCOUNT,
+                   "vaultId": OTHER, "keyId": KEY}
+        self.assertEqual(self.backup(expected_binding=binding)["status"], "published")
+        self.live.reset_mock()
+        for field in ("accountId", "vaultId"):
+            with self.subTest(field=field):
+                with self.assertRaises(MigrationError):
+                    self.backup(expected_binding={**binding, field: SNAPSHOT})
+                self.live.assert_not_called()
+
+    def test_bad_setup_binding_stops_before_provider_or_helper_work(self):
+        binding = {"deviceId": DEVICE, "accountId": ACCOUNT,
+                   "vaultId": OTHER, "keyId": KEY}
+        for bad in ({}, {**binding, "keyId": OTHER}, {**binding, "deviceId": OTHER},
+                    {**binding, "accountId": "bad"}, {**binding, "secret": "private"}):
+            with self.subTest(bad=bad):
+                with self.assertRaises(MigrationError):
+                    self.backup(expected_binding=bad)
+                self.enrollment.assert_not_called()
+                self.live.assert_not_called()
 
     def test_at_risk_and_unknown_versions_never_claim_protection(self):
         for coverage, risk in (("complete", 1), ("needs_attention", 1), ("unknown", 0)):

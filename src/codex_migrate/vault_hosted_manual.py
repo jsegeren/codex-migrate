@@ -18,6 +18,7 @@ from codex_migrate.vault_schedule import _home, _pending_update, _safe_json, _up
 
 def back_up_hosted_history(source_home: str, device_id: str, metadata_path: str, *,
                            crypto_helper: Optional[str] = None,
+                           expected_binding: Optional[dict] = None,
                            apply: bool = False) -> dict:
     """Publish or resume one snapshot, then reopen its remote sealed manifest.
 
@@ -36,6 +37,14 @@ def back_up_hosted_history(source_home: str, device_id: str, metadata_path: str,
     key_id = _metadata(metadata)
     if type(metadata["version"]) is not int or "recovery_mode" in metadata:
         raise MigrationError("This backup path requires an individual Vault key.")
+    if expected_binding is not None:
+        if (not isinstance(expected_binding, dict) or
+                set(expected_binding) != {"deviceId", "accountId", "vaultId", "keyId"} or
+                any(not isinstance(value, str) or not _UUID.fullmatch(value)
+                    for value in expected_binding.values()) or
+                expected_binding["deviceId"] != device_id or
+                expected_binding["keyId"] != key_id):
+            raise MigrationError("The hosted backup does not match its saved connection and key.")
     helper = _helper_path(crypto_helper)
     with _update_lock(home, nonblocking=True) as marker_path:
         if _pending_update(marker_path) is not None:
@@ -43,6 +52,10 @@ def back_up_hosted_history(source_home: str, device_id: str, metadata_path: str,
         try:
             enrollment = HostedEnrollmentClient(SERVICE_ORIGIN)
             upload, recovery = enrollment.backup_clients(device_id, crypto_helper=str(helper))
+            if expected_binding is not None and (
+                    upload._account_id != expected_binding["accountId"] or
+                    upload._vault_id != expected_binding["vaultId"]):
+                raise MigrationError("The hosted backup connection changed identity.")
             result = HostedLiveBackupRun(upload, recovery, home).back_up_live_history(
                 metadata, crypto_helper=str(helper), max_prior_bytes=MAX_PRIOR_BYTES,
                 apply=True)

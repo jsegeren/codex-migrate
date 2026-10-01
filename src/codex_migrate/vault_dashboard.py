@@ -85,7 +85,7 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 </section>
 <section class="panel" id="hosted-setup-panel" hidden>
 <h2>Connect this Mac</h2>
-<p class="muted">Hosted backup acceptance preview. This connection step does not start a subscription or back up your work.</p>
+<p class="muted">Hosted backup acceptance preview. Connecting and saving a key do not start a subscription or back up your work. Upload requires the separate backup step and authorized hosted storage.</p>
 <p id="hosted-setup-status" role="status" aria-live="polite" tabindex="-1"></p>
 <p id="hosted-setup-error" role="alert"></p>
 <div class="hosted-step" data-setup-phase="start">
@@ -126,9 +126,18 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 <p class="muted">We check it against the key protected in this Mac’s Keychain. It is not sent to our hosted service. This check does not prove recovery on another Mac.</p>
 </div>
 <div class="hosted-step" data-setup-phase="key_ready" hidden>
-<p>Your saved copy matches this Mac’s recovery key. No backup has been created or uploaded, and automatic protection is not active.</p>
-<p class="muted">Hosted storage authorization and verified backup are the next release steps. Connection and key setup alone do not protect your work.</p>
+<p>Your saved copy matches this Mac’s recovery key. A hosted backup has not yet been confirmed, and automatic protection is not active.</p>
+<p>Back up your Codex conversations and referenced attachments securely to hosted storage. Content is encrypted on this Mac before upload. This does not back up your Git repositories or your whole Mac.</p>
+<p class="muted">Hosted storage must already be authorized. This step does not start a subscription, install a schedule, or prove recovery on another Mac.</p>
+<button id="setup-first-backup">Create or resume hosted backup</button>
 <button id="setup-check-key-ready" class="secondary">Check saved connection</button>
+</div>
+<div class="hosted-step" data-setup-phase="backup_ready" hidden>
+<h3>Hosted backup check completed</h3>
+<p id="setup-backup-receipt"></p>
+<p class="muted">This is a completed backup check, not continuous protection. Automatic backups are not enabled, and recovery on a clean Mac still needs verification. Your existing Codex files and repositories have not been changed.</p>
+<button id="setup-backup-again">Back up again</button>
+<button id="setup-check-backup-ready" class="secondary">Check saved connection</button>
 </div>
 <p class="muted">Need help? <a href="mailto:joshua@segeren.com">Email Joshua</a>. Never email your private purchase link, setup code or recovery key.</p>
 </section>
@@ -414,8 +423,9 @@ function hostedSetupView(data){
   const running=data.status==="running";
   for(const block of panel.querySelectorAll("[data-setup-phase]"))block.hidden=running||block.dataset.setupPhase!==data.phase;
   for(const control of panel.querySelectorAll("button,input,textarea"))control.disabled=running;
-  const messages={start:"Verify your purchase email to connect this Mac.",email:"Check your purchase email for the setup code.",pairing_checkpoint:"The connection still needs to be saved.",pairing_uncertain:"The saved connection needs confirmation.",paired:"This Mac is connected. Automatic protection is not active.",key_save:"Save your recovery key outside this Mac, then confirm your saved copy.",key_ready:"Saved recovery key confirmed. Automatic protection is not active."};
-  const working={send_code:"Requesting your setup email…",pair:"Saving and connecting this Mac…",retry_save:"Retrying the saved connection…",resolve:"Checking the saved connection…",reauthorize:"Preparing email verification…",prepare_key:"Preparing the same protected recovery key…",confirm_key:"Checking your saved recovery key…"};
+  const messages={start:"Verify your purchase email to connect this Mac.",email:"Check your purchase email for the setup code.",pairing_checkpoint:"The connection still needs to be saved.",pairing_uncertain:"The saved connection needs confirmation.",paired:"This Mac is connected. Automatic protection is not active.",key_save:"Save your recovery key outside this Mac, then confirm your saved copy.",key_ready:"Saved recovery key confirmed. Automatic protection is not active.",backup_ready:data.last_backup?.status==="needs_attention"?"Backup coverage needs attention. Automatic protection is not active.":"Hosted backup verified. Automatic protection is not active."};
+  $("setup-backup-receipt").textContent=data.last_backup?`${data.last_backup.status==="needs_attention"?"The encrypted capture has incomplete or at-risk content. Keep previous good versions and contact Joshua if you need help.":data.last_backup.status==="unchanged"?"No changes were found; the existing hosted snapshot was verified again.":"The hosted snapshot and its encrypted conversation manifest were verified."} Last completed check: ${new Date(data.last_backup_checked_at).toLocaleString()}.`:"";
+  const working={send_code:"Requesting your setup email…",pair:"Saving and connecting this Mac…",retry_save:"Retrying the saved connection…",resolve:"Checking the saved connection…",reauthorize:"Preparing email verification…",prepare_key:"Preparing the same protected recovery key…",confirm_key:"Checking your saved recovery key…",first_backup:"Encrypting, uploading and verifying your Codex backup… Keep this Mac awake."};
   $("hosted-setup-status").textContent=running?working[data.step]||"Checking setup…":messages[data.phase]||"Setup needs attention.";
   $("hosted-setup-error").textContent=data.error||"";
   if(focusOwned&&(phaseChanged||document.activeElement.disabled||(!running&&document.activeElement===$("hosted-setup-status")))){
@@ -463,6 +473,9 @@ $("setup-reauthorize").onclick=()=>hostedSetupStep("reauthorize");
 $("setup-prepare-key").onclick=()=>hostedSetupStep("prepare_key");
 $("setup-confirm-key").onclick=()=>{const recovery_key=$("setup-saved-key").value.trim();$("setup-saved-key").value="";return hostedSetupStep("confirm_key",{recovery_key})};
 $("setup-check-key-ready").onclick=()=>hostedSetupStep("resolve");
+$("setup-first-backup").onclick=()=>hostedSetupStep("first_backup");
+$("setup-backup-again").onclick=()=>hostedSetupStep("first_backup");
+$("setup-check-backup-ready").onclick=()=>hostedSetupStep("resolve");
 $("setup-copy-key").onclick=async()=>{try{await navigator.clipboard.writeText($("setup-recovery").value);$("hosted-setup-status").textContent="Key copied. Save it outside this Mac before confirming."}catch(error){$("hosted-setup-error").textContent="Copy failed. Select the recovery key and copy it manually."}};
 let hostedRecoveryTimer=null,hostedRecoveryState=null,hostedRecoveryPhase=null;
 function hostedRecoveryView(data){
