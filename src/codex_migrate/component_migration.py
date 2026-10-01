@@ -122,7 +122,7 @@ class ComponentMigrationEngine(MigrationEngine):
         # Selective repairs verify their skills, not whole workspaces.
         return None
 
-    def _install_and_verify(self, prepared_workspaces=None):
+    def _install_and_verify(self, prepared_workspaces=None, *, frozen_skills=None):
         items = self._skill_plan()
         migration_id = self.state.read().get("migration_id")
         if not isinstance(migration_id, str) or not re.fullmatch(r"[0-9a-f]{32}", migration_id):
@@ -130,7 +130,8 @@ class ComponentMigrationEngine(MigrationEngine):
         backup = new_backup_path(self.config.target_home, "Codex-Migrate-Component-Backup")
         self.state.update(pending_backup=backup)
         self.exporter.transport = self.transport
-        receipt = self.exporter._install(items, self.config.target_staging, migration_id, backup=backup)
+        receipt = self.exporter._install(items, self.config.target_staging, migration_id,
+                                        backup=backup, frozen_checks=frozen_skills)
         receipt.update(items=[item.as_dict() for item in items], item_count=len(items),
                        skills_verified=len(items), components=list(self.components), applied=True)
         return receipt

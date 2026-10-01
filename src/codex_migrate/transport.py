@@ -564,6 +564,7 @@ class SSHTransport:
         dry_run: bool = False,
         safe_links: bool = False,
         copy_links: bool = False,
+        phase: str = "data",
     ) -> "TransferProcess":
         source_path = str(Path(source))
         if not source_path.endswith("/"):
@@ -573,7 +574,7 @@ class SSHTransport:
         remote = "%s:%s" % (rsync_target, destination.rstrip("/") + "/")
         command = [
             "/usr/bin/rsync",
-            "-aE",
+            *rsync_phase_options(phase),
             "--partial",
             "--delete-after",
             "--progress",
@@ -593,6 +594,15 @@ class SSHTransport:
             command.extend(["--exclude", pattern])
         command.extend([source_path, remote])
         return TransferProcess(command)
+
+
+def rsync_phase_options(phase: str) -> List[str]:
+    """Mac metadata needs writable staging; mode restoration is a separate pass."""
+    if phase in ("data", "modes"):
+        return ["-a"]
+    if phase == "metadata":
+        return ["-aE", "--no-perms"]
+    raise ValueError("Unsupported staging transfer phase")
 
 
 class TransferProcess:

@@ -1,5 +1,67 @@
 # Desktop release readiness
 
+## October 1 read-only Mac metadata transfer — guarded candidate
+
+The read-only Git-object failure below now has an integrated three-pass staging
+path: archive data, apply Mac extended metadata while staged regular files are
+owner-writable, then restore source POSIX modes. Full migrations, browser skill
+repairs and the one-shot skill exporter use the same path. Every phase keeps
+the same SSH/machine/destination-lock guards, exclusions and link policy; no
+error falls back to a metadata-free copy. Every retry starts from validation
+and runs all phases again.
+
+The destination helper requires the exact private staging root and owner marker.
+It validates the entire static subtree before changing permissions, walks through
+open directory descriptors, rejects foreign-owned/special/multiply-linked files,
+and treats symlinks as inert nodes. Temporary ACL removal uses batches of at most
+32 inherited, pinned file descriptors through macOS `/dev/fd`, not original
+pathnames. The metadata pass reapplies source file ACLs and the final archive
+pass restores modes. Node/depth/path/time limits and the registered remote
+process group bound the work; Pause/Stop cancels that group. Staging stays
+incomplete after any failure or stop. Final validation requires the selected
+subtree still to exist at the same path. Detached/replaced roots are refused.
+
+Full finalization freezes source workspaces and retained Codex state before the
+first transfer phase, compares them again afterward, and verifies staging and
+installed data against that original baseline. Skills likewise use original
+pre-copy byte/tree checks. A file added, rewritten or deleted during the copy
+cannot silently acquire a new post-copy baseline. Source authentication and
+installation identity are still excluded and never opened by these checks.
+
+Disposable fixtures verify repeated transfers of a 0444 file with deny-write
+ACL, resource fork and custom xattr; modes, bytes, links, ACL and attributes
+match afterward. Outside symlink targets and hard-linked victims remain untouched;
+unsafe static trees fail before permission changes. Injected failures and stops
+at every phase refuse continuation; a retry restores the temporarily writable
+staging file to 0444. Late source changes block installation before destination
+backup or replacement.
+
+Independent reviewer `/root/public_release_review` accepted this bounded
+implementation after identifying two retry/scope defects that were corrected:
+deny-write file ACLs now reset only through pinned staging descriptors, and
+detached or newly missing selected roots cannot pass final validation. Its
+focused rerun passed 89 tests. The exact final helper/pipeline suite passed
+34 tests, including repeated metadata transfers and restrictive-directory
+failure. The full Python suite then passed against the exact final source:
+1,371 tests run, 33 skipped, no failures (247.860 seconds). Release/notarization
+messages emitted by mocked packaging tests are not a real distribution receipt.
+This is implementation acceptance, not customer release certification.
+
+This is not an atomic filesystem snapshot or adversarial same-account sandbox.
+Close writing apps for finalization. Frozen content digests still exclude ACLs,
+xattrs, ownership, timestamps and hard-link topology; the metadata fixture is
+direct evidence for the tested layout, not general independent metadata
+verification. Restrictive directory ACLs that deny child creation/deletion still
+fail closed, as they did with the original system rsync; they are not stripped
+or silently declared supported. Unusually deep trees and older macOS versions
+need compatibility acceptance. No real workspace, schedule, public paid build,
+hosted runtime or purchase changed. Packaging, independent receiver recovery,
+hosted service acceptance and commercial gates remain separate.
+
+The previous acceptance VM clone exited after network loss at 47%. Registry
+connectivity subsequently recovered; one retry of the same target reused cached
+layers and reached 69%. No VM has booted or produced independent receiver proof.
+
 ## September 30 first/manual hosted backup — acceptance entrypoint
 
 The previously library-only first hosted backup now has an explicit dark CLI

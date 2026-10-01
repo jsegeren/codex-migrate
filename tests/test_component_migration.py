@@ -15,7 +15,7 @@ import test_full_skills as fixtures
 from codex_migrate.component_migration import ComponentMigrationEngine
 from codex_migrate.migration import MigrationError
 from codex_migrate.state import StateStore
-from codex_migrate.transport import TransferProcess
+from codex_migrate.transport import TransferProcess, rsync_phase_options
 
 
 @unittest.skipUnless(platform.system() == "Darwin", "APFS browser-engine fixtures")
@@ -48,9 +48,15 @@ class ComponentMigrationTests(unittest.TestCase):
                     raise RuntimeError("Fixture command failed (%d): %s" % (result.returncode, result.stderr))
                 return result
 
-            def rsync_process(self, source, destination, excludes=(), copy_links=False):
-                owner.copied_sources.append(source)
-                args = ["/usr/bin/rsync", "-aE", "--partial", "--delete-after"]
+            def run_remote_cancellable(self, script, timeout, cancelled):
+                if cancelled():
+                    raise MigrationError('Fixture command stopped')
+                return self.run_remote(script, timeout)
+
+            def rsync_process(self, source, destination, excludes=(), copy_links=False, phase='data'):
+                if phase == 'data':
+                    owner.copied_sources.append(source)
+                args = ["/usr/bin/rsync", *rsync_phase_options(phase), "--partial", "--delete-after"]
                 if owner.rate_limit:
                     args.append("--bwlimit=%d" % owner.rate_limit)
                 if copy_links:

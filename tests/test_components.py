@@ -255,11 +255,14 @@ class ComponentTests(unittest.TestCase):
                     self.options = options
                     return FakeProcess()
 
+                def run_remote_cancellable(self, script, timeout, cancelled):
+                    return self.run_remote(script, timeout)
+
             transport = FakeTransport()
             exporter.transport = transport
             result = exporter.run()
             self.assertTrue(result["applied"])
-            self.assertEqual(processes, ["started"])
+            self.assertEqual(processes, ["started"] * 3)
             self.assertTrue(transport.options["copy_links"])
             self.assertIn("rollback_needed=1", scripts[-1])
             self.assertIn("cp -P", scripts[-1])
