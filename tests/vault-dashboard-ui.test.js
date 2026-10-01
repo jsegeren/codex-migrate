@@ -197,6 +197,8 @@ test('first hosted backup is an explicit action and never claims automatic prote
   }
   assert.match(source, /This does not back up your Git repositories or your whole Mac/);
   assert.match(source, /recovery on a clean Mac still needs verification/);
+  assert.match(source, /A hosted backup has not yet been confirmed/);
+  assert.match(source, /Create or resume hosted backup/);
 });
 
 test('hosted recovery stays hidden until enabled and key verification is not recovery', () => {

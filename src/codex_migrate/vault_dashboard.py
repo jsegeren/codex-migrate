@@ -126,10 +126,10 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 <p class="muted">We check it against the key protected in this Mac’s Keychain. It is not sent to our hosted service. This check does not prove recovery on another Mac.</p>
 </div>
 <div class="hosted-step" data-setup-phase="key_ready" hidden>
-<p>Your saved copy matches this Mac’s recovery key. No backup has been created or uploaded, and automatic protection is not active.</p>
+<p>Your saved copy matches this Mac’s recovery key. A hosted backup has not yet been confirmed, and automatic protection is not active.</p>
 <p>Back up your Codex conversations and referenced attachments securely to hosted storage. Content is encrypted on this Mac before upload. This does not back up your Git repositories or your whole Mac.</p>
 <p class="muted">Hosted storage must already be authorized. This step does not start a subscription, install a schedule, or prove recovery on another Mac.</p>
-<button id="setup-first-backup">Create my first hosted backup</button>
+<button id="setup-first-backup">Create or resume hosted backup</button>
 <button id="setup-check-key-ready" class="secondary">Check saved connection</button>
 </div>
 <div class="hosted-step" data-setup-phase="backup_ready" hidden>

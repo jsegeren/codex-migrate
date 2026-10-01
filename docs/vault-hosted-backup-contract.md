@@ -161,7 +161,7 @@ Approved hosted entitlement, first backup, real-service clean-Mac recovery and
 scheduled-run certification remain required before availability.
 
 After pairing and saved-copy confirmation, a separate acceptance-only
-**Create my first hosted backup** action invokes the existing manual upload
+**Create or resume hosted backup** action invokes the existing manual upload
 engine. It binds the saved account, Vault, device and encryption-key IDs; an
 identity or key mismatch is refused before staging or uploading. Server-side
 storage authorization is still required: this action does not create an

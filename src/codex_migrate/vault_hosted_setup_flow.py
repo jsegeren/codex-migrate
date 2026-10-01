@@ -135,8 +135,8 @@ class HostedSetupFlow:
                 # Provider and native exceptions may contain private proofs.
                 self._update(status="failed", error=(
                     "Hosted backup could not be confirmed. Keep the pending state and "
-                    "retry with this same connection and key. A previous verified receipt "
-                    "was not replaced. Automatic protection is not active; contact "
+                    "retry with this same connection and key. Previously verified snapshots "
+                    "are kept. Automatic protection is not active; contact "
                     "joshua@segeren.com if needed." if action == "first_backup" else
                     "Backup setup could not be confirmed. No backup or subscription "
                     "was started. Check setup status before continuing, "
