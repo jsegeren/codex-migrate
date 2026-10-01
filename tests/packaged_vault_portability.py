@@ -7,14 +7,19 @@ harness, not independent-Mac or real hosted-service recovery.
 """
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
 import platform
 import re
+import select
 import signal
 import subprocess
 import tempfile
+import time
+from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.request import Request, urlopen
 
 
 THREAD = "66666666-6666-4666-8666-666666666666"
@@ -37,6 +42,72 @@ FILES = {
 }
 UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z")
 KEY = re.compile(r"CV1-[A-Za-z0-9_-]{43}\n?\Z")
+
+
+def startup_line(process, timeout=30):
+    """Bound the entire line read, including a child that stalls mid-line."""
+    deadline = time.monotonic() + timeout
+    data = bytearray()
+    descriptor = process.stdout.fileno()
+    while len(data) < 8192:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0 or not select.select([descriptor], [], [], remaining)[0]:
+            raise AssertionError("Packaged reader startup timed out")
+        block = os.read(descriptor, min(1024, 8192 - len(data)))
+        if not block:
+            raise AssertionError("Packaged reader did not start")
+        data.extend(block)
+        if b"\n" in data:
+            return data.split(b"\n", 1)[0].decode("utf-8")
+    raise AssertionError("Packaged reader startup line exceeded limit")
+
+
+def stop_process(process):
+    if process.poll() is None:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.communicate(timeout=10)
+
+
+def read_and_export(engine, home):
+    """Use the actual packaged HTTP reader/exporter, not source imports."""
+    env = {key: value for key, value in os.environ.items() if key in
+           ("HOME", "USER", "LOGNAME", "TMPDIR", "LANG", "__CF_USER_TEXT_ENCODING")}
+    env["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin"
+    process = subprocess.Popen([str(engine), "launch", "--no-open", "--port", "0",
+        "--source-home", str(home), "--state-dir", str(home / "test-state")],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True, env=env)
+    try:
+        line = startup_line(process)
+        prefix = "Codex Migrate dashboard: "
+        if not line.startswith(prefix):
+            raise AssertionError("Packaged reader did not start")
+        parsed = urlparse(line[len(prefix):].strip())
+        if parsed.scheme != "http" or parsed.hostname != "127.0.0.1" or not parsed.port:
+            raise AssertionError("Packaged reader did not bind loopback")
+        token = parse_qs(parsed.fragment)["token"][0]
+        base = "http://127.0.0.1:%d" % parsed.port
+        query = urlencode({"collection": "archived", "transcript": "archived.jsonl"})
+        for endpoint in ("thread", "export"):
+            with urlopen(Request(base + "/api/vault/" + endpoint + "?" + query,
+                    headers={"X-Codex-Migrate-Token": token}), timeout=10) as response:
+                body = response.read(1024 * 1024)
+                if b"SYNTHETIC-ARCHIVED-WORK" not in body:
+                    raise AssertionError("Recovered conversation could not be read/exported")
+                if endpoint == "export" and "text/markdown" not in response.headers.get("Content-Type", ""):
+                    raise AssertionError("Recovered export was not Markdown")
+        with urlopen(Request(base + "/api/shutdown", data=b"{}", headers={
+                "X-Codex-Migrate-Token": token, "Content-Type": "application/json",
+                "Origin": base}), timeout=10) as response:
+            if json.load(response) != {"closing": True}:
+                raise AssertionError("Packaged reader did not close safely")
+        process.communicate(timeout=10)
+        if process.returncode != 0:
+            raise AssertionError("Packaged reader exited unsuccessfully; output withheld")
+    finally:
+        stop_process(process)
 
 
 def command(arguments, *, input_bytes=b"", allow_failure=False):
@@ -103,8 +174,11 @@ def produce(app, bundle):
                 handle.flush()
                 os.fsync(handle.fileno())
             (bundle / "fixture.json").write_text(json.dumps({
-                "format": "codex-backup-packaged-drill", "version": 1,
+                "format": "codex-backup-packaged-drill", "version": 2,
                 "key_id": key_id, "source_revision": revision,
+                "snapshot_id": saved["snapshot_id"],
+                "manifest_sha256": hashlib.sha256((vault / "manifests" /
+                    (saved["snapshot_id"] + ".cvmanifest")).read_bytes()).hexdigest(),
             }), encoding="utf-8")
     finally:
         if key_id is None and (vault / "vault.json").is_file():
@@ -119,8 +193,14 @@ def consume(app, bundle):
     vault = bundle / "vault"
     key_id = json.loads((vault / "vault.json").read_text())["key_id"]
     marker = json.loads((bundle / "fixture.json").read_text())
-    if marker != {"format": "codex-backup-packaged-drill", "version": 1,
-                  "key_id": key_id, "source_revision": revision}:
+    snapshot_id = marker.get("snapshot_id")
+    if not isinstance(snapshot_id, str) or not UUID.fullmatch(snapshot_id):
+        raise AssertionError("Only a generated disposable drill bundle is accepted")
+    manifest = vault / "manifests" / (snapshot_id + ".cvmanifest")
+    digest = hashlib.sha256(manifest.read_bytes()).hexdigest()
+    if marker != {"format": "codex-backup-packaged-drill", "version": 2,
+                  "key_id": key_id, "source_revision": revision,
+                  "snapshot_id": snapshot_id, "manifest_sha256": digest}:
         raise AssertionError("Only a generated disposable drill bundle is accepted")
     recovery = (bundle / "recovery-key.txt").read_bytes()
     if not UUID.fullmatch(key_id) or not KEY.fullmatch(recovery.decode("ascii")):
@@ -137,8 +217,17 @@ def consume(app, bundle):
     attempted = False
     try:
         attempted = True
-        _, output = command([str(helper), "import-key", "--key-id", key_id],
-                            input_bytes=recovery)
+        arguments = [str(helper), "import-key-verified", "--key-id", key_id,
+                     "--snapshot-id", snapshot_id, "--manifest", str(manifest),
+                     "--manifest-sha256", digest]
+        wrong = b"CV1-" + (b"B" if recovery[4:5] != b"B" else b"C") + recovery[5:]
+        status, _ = command(arguments, input_bytes=wrong, allow_failure=True)
+        if status == 0:
+            raise AssertionError("Wrong recovery key was accepted")
+        status, _ = command([str(helper), "export-key", "--key-id", key_id], allow_failure=True)
+        if status == 0:
+            raise AssertionError("Wrong recovery key occupied the receiver Keychain slot")
+        _, output = command(arguments, input_bytes=recovery)
         imported = json.loads(output)
         if imported.get("key_id") != key_id or imported.get("imported") is not True:
             raise AssertionError("Packaged recovery key import did not confirm")
@@ -160,11 +249,12 @@ def consume(app, bundle):
                                   "search", MARKER, "--json"])
             if not any(row.get("collection") == "active" for row in json.loads(matches)):
                 raise AssertionError("Recovered attachment text was not searchable")
+            read_and_export(engine, inspection)
     finally:
         # Import may persist a key before a timeout or failed reply.
         if attempted:
             command([str(helper), "delete-key", "--key-id", key_id])
-    print("Packaged synthetic recovery and search passed; receiver test key removed")
+    print("Packaged synthetic recovery, search, read and export passed; receiver test key removed")
 
 
 def main():

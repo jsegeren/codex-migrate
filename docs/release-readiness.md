@@ -1,5 +1,36 @@
 # Desktop release readiness
 
+## September 30 packaged recovery drill — independently reviewed preparation
+
+The disposable packaged drill now binds its version-2 artifact to the exact
+clean source revision, snapshot ID and encrypted manifest digest before any
+receiver Keychain operation. It refuses an existing receiver key, proves a
+wrong recovery key cannot occupy that slot, then uses native
+`import-key-verified` rather than unchecked import. It checks exact restored
+active/archived transcript and pasted-attachment bytes, attachment search,
+and archived read/Markdown export through the packaged engine's real HTTP API.
+Producer and receiver remove only their disposable test key afterward.
+
+The driver independently bounds the entire startup-line read (including a
+partial line), rejects a nonzero engine exit after shutdown, and tolerates
+process-exit cleanup races. All nine targeted safety tests passed; independent
+reviewer `/root/public_release_review` accepted the two-file diff after those
+three lifecycle findings were fixed. The exact signed/provisioned
+`8359f19d7a34d8391df64c8e8c4f5413042d3d35` package passed the revised drill
+on this Mac. Source CI run `36812976167` completed successfully.
+
+This is **same-host harness evidence**, not clean-Mac or hosted-service proof.
+The isolated Tahoe VM image clone remains live at 60% after transient network
+retries; it has not booted. Cloudflare's authenticated dashboard confirms the
+private sandbox bucket is empty (0 B), public access is disabled, no Worker
+projects are deployed, and current billable usage is $0.00. A read-only Vercel
+Preview configuration inventory confirms existing commerce settings but no
+hosted-service variables. No new credential, cloud deployment, customer upload,
+subscription, public package or checkout change was made in this checkpoint.
+The next distinct proof is exact-package recovery in the isolated VM, followed
+by authenticated sandbox service enrollment/publication/recovery using real R2;
+repeating the already-passed object-transfer probe would not close that gate.
+
 ## September 30 hosted recovery progress and Stop/Resume — accepted internally
 
 Runtime/test source `8359f19d7a34d8391df64c8e8c4f5413042d3d35` is pushed to
