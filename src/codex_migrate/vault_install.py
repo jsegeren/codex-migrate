@@ -20,7 +20,7 @@ import uuid
 from codex_migrate.errors import MigrationError
 from codex_migrate.processes import codex_running
 from codex_migrate.source_availability import check_info, require_local
-from codex_migrate.vault import TRANSCRIPT_FOLDERS
+from codex_migrate.vault import TRANSCRIPT_FOLDERS, _lineage_segments, _rollout_map
 from codex_migrate.vault_identity import peek_identity
 from codex_migrate.vault_backup import (
     _atomic_json,
@@ -30,7 +30,7 @@ from codex_migrate.vault_backup import (
     _require_unlinked_path,
 )
 from codex_migrate.vault_local_lock import local_history_lock
-from codex_migrate.vault_recovery import restore_snapshot, verify_snapshot
+from codex_migrate.vault_recovery import restore_snapshot, snapshot_catalog, verify_snapshot
 
 
 JOURNAL_NAME = ".codex-vault-install.json"
@@ -171,7 +171,7 @@ def _tree_records(
     _require_unlinked_path(root)
     require_local(root)
     if strict_root:
-        allowed = set(TRANSCRIPT_FOLDERS) | {"restore-receipt.json"}
+        allowed = set(TRANSCRIPT_FOLDERS) | {"restore-receipt.json", "paginated_history"}
         try:
             if any(item.name not in allowed for item in root.iterdir()):
                 raise MigrationError("The recovered snapshot contains an unexpected item.")
@@ -258,6 +258,15 @@ def _selected_source(
     if logical not in records:
         raise MigrationError("The selected conversation is not present in this Vault snapshot.")
     source = recovered / folder / Path(*relative.parts)
+    discovered = []
+    for candidate in records:
+        candidate_path = PurePosixPath(candidate)
+        candidate_folder = candidate_path.parts[0]
+        discovered.append((candidate_folder, recovered / Path(*candidate_path.parts),
+                           PurePosixPath(*candidate_path.parts[1:]).as_posix()))
+    # A physical child alone is useful to read or export, but not safe to copy
+    # back into Codex when its inherited parent cannot be proven exactly.
+    _lineage_segments(str(recovered), source, discovered, _rollout_map(discovered))
     source_id, source_state = peek_identity(source, relative.as_posix())
     if source_state == "verified" and source_id:
         for other in records:
@@ -787,6 +796,16 @@ def recover_interrupted_install(source_home: str, *, apply: bool = False) -> Dic
         }
 
 
+def _require_installable_snapshot(vault: str, snapshot_id: str,
+                                  crypto_helper: Optional[str]) -> None:
+    if any(item["collection"] in ("paginated", "attachments") for item in snapshot_catalog(
+            vault, snapshot=snapshot_id, crypto_helper=crypto_helper)):
+        raise MigrationError(
+            "This backup includes paginated history or attachments that cannot be "
+            "installed into Codex safely. "
+            "Open or export its saved conversations instead; whole-history install is refused.")
+
+
 def plan_install(
     source_home: str,
     vault: str,
@@ -800,6 +819,7 @@ def plan_install(
             raise MigrationError("An interrupted Vault installation must be rolled back first.")
         verified = verify_snapshot(
             vault, snapshot=_snapshot_id(snapshot), crypto_helper=crypto_helper)
+        _require_installable_snapshot(vault, verified.snapshot_id, crypto_helper)
         return InstallPlan(
             vault=verified.vault, snapshot_id=verified.snapshot_id,
             transcript_files=verified.transcript_files,
@@ -823,6 +843,7 @@ def install_snapshot(
                 raise MigrationError("Close Codex and its CLI sessions before installing a backup.")
             verified = verify_snapshot(
                 vault, snapshot=_snapshot_id(snapshot), crypto_helper=crypto_helper)
+            _require_installable_snapshot(vault, verified.snapshot_id, crypto_helper)
             stage = Path(tempfile.mkdtemp(prefix=".codex-vault-stage-", dir=str(home)))
             os.chmod(stage, 0o700)
             backup = home / (

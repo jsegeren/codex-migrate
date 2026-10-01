@@ -1,0 +1,13 @@
+{
+  // Local-only sandbox proof. Never deploy this test Worker.
+  "name": "codex-vault-r2-sandbox-proof",
+  "main": "./worker.mjs",
+  "compatibility_date": "2026-09-27",
+  "r2_buckets": [
+    {
+      "binding": "SANDBOX_BUCKET",
+      "bucket_name": "codex-vault-sandbox-20260927",
+      "remote": true
+    }
+  ]
+}

@@ -74,6 +74,7 @@ class VaultInstallTests(unittest.TestCase):
     def install(self, process_states=(False, False, False)):
         with patch("codex_migrate.vault_install.verify_snapshot",
                    return_value=self.verified()), \
+                patch("codex_migrate.vault_install.snapshot_catalog", return_value=[]), \
                 patch("codex_migrate.vault_install.restore_snapshot",
                       side_effect=self.restored), \
                 patch("codex_migrate.vault_install.codex_running",
@@ -85,6 +86,7 @@ class VaultInstallTests(unittest.TestCase):
                          process_states=(False, False, False)):
         with patch("codex_migrate.vault_install.verify_snapshot",
                    return_value=self.verified()), \
+                patch("codex_migrate.vault_install.snapshot_catalog", return_value=[]), \
                 patch("codex_migrate.vault_install.restore_snapshot",
                       side_effect=self.restored), \
                 patch("codex_migrate.vault_install.codex_running",
@@ -139,6 +141,7 @@ class VaultInstallTests(unittest.TestCase):
 
         with patch("codex_migrate.vault_install.verify_snapshot",
                    return_value=self.verified()), \
+                patch("codex_migrate.vault_install.snapshot_catalog", return_value=[]), \
                 patch("codex_migrate.vault_install.restore_snapshot",
                       side_effect=self.restored), \
                 patch("codex_migrate.vault_install.codex_running",
@@ -178,6 +181,7 @@ class VaultInstallTests(unittest.TestCase):
 
         with patch("codex_migrate.vault_install.verify_snapshot",
                    return_value=self.verified()), \
+                patch("codex_migrate.vault_install.snapshot_catalog", return_value=[]), \
                 patch("codex_migrate.vault_install.restore_snapshot",
                       side_effect=unsafe_restore), \
                 patch("codex_migrate.vault_install.codex_running",
@@ -319,6 +323,41 @@ class VaultInstallTests(unittest.TestCase):
                 plan_thread_install(str(self.home), str(self.vault), "archived", "new.jsonl",
                                     snapshot=self.snapshot)
         self.assertFalse((self.codex / "archived_sessions/new.jsonl").exists())
+
+    def test_selected_install_refuses_child_with_ambiguous_parent_copy(self):
+        parent_id = "44444444-4444-4444-8444-444444444444"
+        def ambiguous_fork(*args, **kwargs):
+            result = self.restored(*args, **kwargs)
+            root = Path(result.output)
+            parent_content = json.dumps({"type": "session_meta", "payload": {
+                "id": parent_id}}) + "\n"
+            for folder in ("sessions/new", "archived_sessions"):
+                (root / folder / ("rollout-" + parent_id + ".jsonl")).write_text(
+                    parent_content)
+            child_content = (
+                json.dumps({"type": "session_meta", "payload": {
+                    "id": self.ACTIVE_ID, "history_base": {
+                        "thread_id": parent_id, "end_ordinal_exclusive": 0,
+                        "end_byte_offset": 0}}}) + "\n"
+                + json.dumps({"payload": {"text": "child-only text"}}) + "\n")
+            (root / "sessions/new/thread.jsonl").write_text(child_content)
+            return RestoreResult(
+                vault=result.vault, snapshot_id=result.snapshot_id,
+                transcript_files=result.transcript_files + 2,
+                transcript_bytes=(result.transcript_bytes
+                                  - len(self.active_content().encode())
+                                  + len(child_content.encode())
+                                  + 2 * len(parent_content.encode())),
+                output=result.output)
+
+        with patch("codex_migrate.vault_install.verify_snapshot",
+                   return_value=self.verified()), \
+                patch("codex_migrate.vault_install.restore_snapshot",
+                      side_effect=ambiguous_fork):
+            with self.assertRaisesRegex(MigrationError, "ambiguous"):
+                plan_thread_install(str(self.home), str(self.vault), "active",
+                                    "new/thread.jsonl", snapshot=self.snapshot)
+        self.assertFalse((self.codex / "sessions/new/thread.jsonl").exists())
 
     def test_selected_install_rolls_back_if_receipt_write_fails(self):
         with patch("codex_migrate.vault_install.verify_snapshot",

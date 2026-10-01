@@ -1,0 +1,311 @@
+from contextlib import redirect_stderr, redirect_stdout
+import io
+from pathlib import Path
+import tempfile
+import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
+
+from codex_migrate.cli import main, parser
+from codex_migrate.errors import MigrationError
+from codex_migrate.vault_hosted_disaster_recovery import (
+    hosted_recovery_options, import_hosted_recovery_key, prepare_hosted_recovery,
+    recover_hosted_snapshot,
+)
+
+
+ACCOUNT = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+VAULT = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+DEVICE = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+SNAPSHOT = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+WORKER = "https://backup-worker.example.test"
+
+
+class HostedDisasterRecoveryTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix="hosted-restore-test-")
+        self.addCleanup(self.temporary.cleanup)
+        self.home = str(Path(self.temporary.name) / "home")
+        Path(self.home).mkdir()
+        self.output = str(Path(self.temporary.name) / "restored")
+        self.upload = SimpleNamespace(_account_id=ACCOUNT, _worker_origin=WORKER)
+        self.pointer = (ACCOUNT, WORKER, {"snapshotId": SNAPSHOT,
+                                         "totalObjects": 3, "totalBytes": 300,
+                                         "sourceCoverage": "complete"})
+        self.prepared = []
+
+        def prepare(**kwargs):
+            self.prepared.append(kwargs)
+            return {"version": 1, "snapshot_id": SNAPSHOT}, object()
+
+        self.recovery = SimpleNamespace(_latest=lambda: self.pointer,
+                                        latest_source_complete_snapshot=lambda **_kw:
+                                        self.complete,
+                                        prepare=prepare)
+        self.complete = self.pointer[2]
+        self.enrollment = SimpleNamespace(
+            backup_clients=lambda *_args, **_kw: (self.upload, self.recovery))
+        catalog = patch("codex_migrate.vault_hosted_disaster_recovery.snapshot_catalog",
+                        return_value=[{"collection": "active", "thread_id": None,
+                                       "path": "synthetic.jsonl", "at_risk": False}])
+        self.catalog = catalog.start()
+        self.addCleanup(catalog.stop)
+
+    def _patches(self):
+        return (patch("codex_migrate.vault_hosted_disaster_recovery._helper_path",
+                      return_value=Path("/synthetic/helper")),
+                patch("codex_migrate.vault_hosted_disaster_recovery.HostedEnrollmentClient",
+                      return_value=self.enrollment),
+                patch("codex_migrate.vault_hosted_disaster_recovery.download_encrypted_snapshot",
+                      return_value=SimpleNamespace(
+                          vault=self.output, snapshot_id=SNAPSHOT,
+                          downloaded_files=3, reused_files=0,
+                          encrypted_bytes_checked=300, transcript_files=1)))
+
+    def test_explicit_recovery_binds_pointer_and_returns_verified_staging_only(self):
+        helper, enrollment, download = self._patches()
+        with helper, enrollment, download as receiver:
+            result = recover_hosted_snapshot(
+                self.home, self.output, DEVICE, max_bytes=400,
+                snapshot_id=SNAPSHOT, apply=True)
+        self.assertEqual(result["vault"], self.output)
+        self.assertEqual(result["snapshot_id"], SNAPSHOT)
+        self.assertEqual(result["transcript_files"], 1)
+        self.assertFalse(result["needs_attention"])
+        self.assertEqual(result["source_coverage"], "complete")
+        self.assertEqual(result["at_risk_sources"], 0)
+        self.catalog.assert_called_once_with(self.output, snapshot=SNAPSHOT,
+                                             crypto_helper="/synthetic/helper")
+        self.assertEqual(self.prepared, [{
+            "max_bytes": 400, "expected_pointer": self.pointer,
+            "selected_snapshot_id": SNAPSHOT}])
+        self.assertEqual(receiver.call_args.args[0:2],
+                         (str(Path(self.home).resolve()), self.output))
+        self.assertEqual(receiver.call_args.kwargs["max_bytes"], 400)
+        self.assertFalse((Path(self.home) / ".codex").exists())
+
+    def test_preparation_binds_the_same_authority_without_downloading_history(self):
+        helper, enrollment, download = self._patches()
+        prepared = {"vault": self.output, "snapshot_id": SNAPSHOT,
+                    "status": "awaiting_recovery_key"}
+        with helper, enrollment, download as receiver, patch(
+                "codex_migrate.vault_hosted_disaster_recovery.prepare_encrypted_recovery",
+                return_value=prepared) as metadata:
+            result = prepare_hosted_recovery(
+                self.home, self.output, DEVICE, max_bytes=400,
+                snapshot_id=SNAPSHOT, apply=True)
+        self.assertEqual(result, prepared)
+        self.assertEqual(metadata.call_args.args[0:2],
+                         (str(Path(self.home).resolve()), self.output))
+        self.assertEqual(metadata.call_args.kwargs, {"max_bytes": 400})
+        self.assertEqual(self.prepared, [{"max_bytes": 400,
+            "expected_pointer": self.pointer, "selected_snapshot_id": SNAPSHOT}])
+        receiver.assert_not_called()
+        self.catalog.assert_not_called()
+
+    def test_recovered_ciphertext_does_not_hide_incomplete_conversations(self):
+        self.catalog.return_value = [
+            {"collection": "active", "thread_id": SNAPSHOT,
+             "path": "current.jsonl", "at_risk": True},
+            {"collection": "paginated", "thread_id": SNAPSHOT,
+             "path": SNAPSHOT + ".jsonl", "at_risk": True},
+            {"collection": "attachments", "thread_id": None,
+             "path": "pasted-text.txt", "at_risk": False},
+        ]
+        helper, enrollment, download = self._patches()
+        with helper, enrollment, download:
+            result = recover_hosted_snapshot(
+                self.home, self.output, DEVICE, max_bytes=400, apply=True)
+        self.assertTrue(result["needs_attention"])
+        self.assertEqual(result["at_risk_sources"], 2)
+
+    def test_verified_import_binds_authority_and_never_downloads_conversations(self):
+        secret = "CV1-" + "A" * 43
+        helper, enrollment, download = self._patches()
+        with helper, enrollment, download as receiver, patch(
+                "codex_migrate.vault_hosted_disaster_recovery.import_encrypted_recovery_key",
+                return_value={"status": "ready_to_download"}) as imported:
+            result = import_hosted_recovery_key(self.home, self.output, DEVICE, secret,
+                max_bytes=400, snapshot_id=SNAPSHOT, apply=True)
+        self.assertEqual(result, {"status": "ready_to_download"})
+        self.assertEqual(imported.call_args.args[:2],
+                         (str(Path(self.home).resolve()), self.output))
+        self.assertEqual(imported.call_args.args[-1], secret)
+        self.assertEqual(self.prepared, [{"max_bytes": 400,
+            "expected_pointer": self.pointer, "selected_snapshot_id": SNAPSHOT}])
+        receiver.assert_not_called()
+        self.catalog.assert_not_called()
+
+    def test_verified_import_requires_apply_before_credentials_or_prompt(self):
+        with patch("codex_migrate.vault_hosted_disaster_recovery.HostedEnrollmentClient") as client:
+            with self.assertRaisesRegex(MigrationError, "explicit confirmation"):
+                import_hosted_recovery_key(self.home, self.output, DEVICE,
+                                          "CV1-" + "A" * 43, max_bytes=400)
+            client.assert_not_called()
+        with patch("codex_migrate.cli.getpass.getpass") as prompt, redirect_stderr(io.StringIO()):
+            self.assertNotEqual(main([
+                "vault", "--source-home", self.home, "hosted-import-recovery-key",
+                "--device-id", DEVICE, "--output", self.output, "--max-bytes", "400"]), 0)
+            prompt.assert_not_called()
+
+    def test_verified_import_cli_never_echoes_the_key_or_claims_full_recovery(self):
+        secret = "CV1-" + "A" * 43
+        printed = io.StringIO()
+        with patch("codex_migrate.cli.getpass.getpass", return_value=secret), patch(
+                "codex_migrate.vault_hosted_disaster_recovery.import_hosted_recovery_key",
+                return_value={"status": "ready_to_download"}) as imported, redirect_stdout(printed):
+            self.assertEqual(main([
+                "vault", "--source-home", self.home, "hosted-import-recovery-key",
+                "--device-id", DEVICE, "--output", self.output, "--max-bytes", "400",
+                "--apply"]), 0)
+        self.assertEqual(imported.call_args.kwargs["recovery_key"], secret)
+        self.assertNotIn(secret, printed.getvalue())
+        self.assertIn("complete backup next", printed.getvalue())
+
+    def test_unknown_coverage_does_not_become_a_clean_recovery_claim(self):
+        self.pointer[2]["sourceCoverage"] = "unknown"
+        helper, enrollment, download = self._patches()
+        with helper, enrollment, download:
+            result = recover_hosted_snapshot(
+                self.home, self.output, DEVICE, max_bytes=400,
+                snapshot_id=SNAPSHOT, apply=True)
+        self.assertTrue(result["needs_attention"])
+        self.assertEqual(result["at_risk_sources"], 0)
+        self.assertEqual(result["source_coverage"], "unknown")
+
+    def test_incomplete_latest_requires_explicit_selection_before_download(self):
+        self.pointer[2]["sourceCoverage"] = "needs_attention"
+        helper, enrollment, download = self._patches()
+        with helper, enrollment, download as receiver:
+            with self.assertRaisesRegex(MigrationError, "select a published version"):
+                recover_hosted_snapshot(
+                    self.home, self.output, DEVICE, max_bytes=400, apply=True)
+            receiver.assert_not_called()
+            result = recover_hosted_snapshot(
+                self.home, self.output, DEVICE, max_bytes=400,
+                snapshot_id=SNAPSHOT, apply=True)
+        self.assertTrue(result["needs_attention"])
+
+    def test_recovery_options_offer_older_complete_without_choosing_it_silently(self):
+        older = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
+        self.pointer[2]["sourceCoverage"] = "needs_attention"
+        self.complete = {"snapshotId": older, "totalObjects": 3,
+                         "totalBytes": 200, "sourceCoverage": "complete"}
+        helper, enrollment, download = self._patches()
+        with helper, enrollment, download as receiver:
+            options = hosted_recovery_options(DEVICE)
+        self.assertTrue(options["coverage_gap"])
+        self.assertEqual(options["latest"]["snapshotId"], SNAPSHOT)
+        self.assertEqual(options["latest_source_complete"]["snapshotId"], older)
+        receiver.assert_not_called()
+        self.complete = None
+        with helper, enrollment, download:
+            options = hosted_recovery_options(DEVICE)
+        self.assertIsNone(options["latest_source_complete"])
+
+    def test_hosted_backups_cli_is_read_only_and_names_coverage_gap(self):
+        self.pointer[2]["sourceCoverage"] = "needs_attention"
+        self.complete = None
+        printed = io.StringIO()
+        helper, enrollment, download = self._patches()
+        with helper, enrollment, download as receiver, redirect_stdout(printed):
+            self.assertEqual(main(["vault", "hosted-backups", "--device-id", DEVICE]), 0)
+        self.assertIn("Newest published backup", printed.getvalue())
+        self.assertIn("none available", printed.getvalue())
+        receiver.assert_not_called()
+
+    def test_recovery_options_refuse_a_changing_latest_pointer(self):
+        self.pointer[2]["sourceCoverage"] = "needs_attention"
+        self.complete = None
+        def advance(**_kwargs):
+            self.pointer = (ACCOUNT, WORKER, {"snapshotId":
+                "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+                "totalObjects": 3, "totalBytes": 100,
+                "sourceCoverage": "complete"})
+            return None
+        self.recovery.latest_source_complete_snapshot = advance
+        helper, enrollment, download = self._patches()
+        with helper, enrollment, download as receiver:
+            with self.assertRaisesRegex(MigrationError, "versions changed"):
+                hosted_recovery_options(DEVICE)
+        receiver.assert_not_called()
+
+    def test_plan_and_bad_limit_do_not_open_credentials(self):
+        with patch("codex_migrate.vault_hosted_disaster_recovery.HostedEnrollmentClient") as client:
+            for operation in (prepare_hosted_recovery, recover_hosted_snapshot):
+                with self.subTest(operation=operation.__name__):
+                    with self.assertRaisesRegex(MigrationError, "explicit confirmation"):
+                        operation(self.home, self.output, DEVICE, max_bytes=400)
+                    with self.assertRaisesRegex(MigrationError, "size limit"):
+                        operation(self.home, self.output, DEVICE, max_bytes=0, apply=True)
+            client.assert_not_called()
+
+    def test_preparation_cli_does_not_claim_verified_recovery(self):
+        printed = io.StringIO()
+        with patch("codex_migrate.vault_hosted_disaster_recovery.prepare_hosted_recovery",
+                   return_value={"vault": self.output,
+                                 "status": "awaiting_recovery_key"}), \
+                redirect_stdout(printed):
+            self.assertEqual(main([
+                "vault", "--source-home", self.home, "hosted-prepare-recovery",
+                "--device-id", DEVICE, "--output", self.output,
+                "--max-bytes", "400", "--apply"]), 0)
+        self.assertIn("No conversations have been decrypted or verified", printed.getvalue())
+        self.assertNotIn("snapshot verified", printed.getvalue())
+
+    def test_pointer_or_worker_substitution_refuses_download(self):
+        self.pointer = (DEVICE, WORKER, self.pointer[2])
+        helper, enrollment, download = self._patches()
+        with helper, enrollment, download as receiver:
+            with self.assertRaisesRegex(MigrationError, "authority changed"):
+                recover_hosted_snapshot(self.home, self.output, DEVICE,
+                                        max_bytes=400, apply=True)
+            receiver.assert_not_called()
+        self.pointer = (ACCOUNT, "https://other-worker.example.test", self.pointer[2])
+        helper, enrollment, download = self._patches()
+        with helper, enrollment, download as receiver:
+            with self.assertRaisesRegex(MigrationError, "authority changed"):
+                recover_hosted_snapshot(self.home, self.output, DEVICE,
+                                        max_bytes=400, apply=True)
+            receiver.assert_not_called()
+
+    def test_hidden_cli_requires_apply_and_no_secret_argument(self):
+        options = parser().parse_args([
+            "vault", "--source-home", self.home, "hosted-recover",
+            "--device-id", DEVICE, "--output", self.output,
+            "--max-bytes", "400", "--snapshot", SNAPSHOT, "--apply"])
+        self.assertEqual(options.vault_command, "hosted-recover")
+        self.assertTrue(options.apply)
+        self.assertEqual(options.snapshot, SNAPSHOT)
+
+    def test_cli_distinguishes_verified_ciphertext_from_complete_history(self):
+        printed = io.StringIO()
+        warning = io.StringIO()
+        with patch("codex_migrate.vault_hosted_disaster_recovery.recover_hosted_snapshot",
+                   return_value={"vault": self.output, "needs_attention": True,
+                                 "at_risk_sources": 2}), redirect_stdout(printed), \
+                redirect_stderr(warning):
+            self.assertEqual(main([
+                "vault", "--source-home", self.home, "hosted-recover",
+                "--device-id", DEVICE, "--output", self.output,
+                "--max-bytes", "400", "--apply"]), 0)
+        self.assertIn("Encrypted hosted snapshot verified", printed.getvalue())
+        self.assertIn("2 conversation source(s) have missing or changed content",
+                      warning.getvalue())
+
+    def test_cli_warns_about_unknown_coverage_without_inventing_lost_sources(self):
+        warning = io.StringIO()
+        with patch("codex_migrate.vault_hosted_disaster_recovery.recover_hosted_snapshot",
+                   return_value={"vault": self.output, "needs_attention": True,
+                                 "at_risk_sources": 0,
+                                 "source_coverage": "unknown"}), \
+                redirect_stderr(warning):
+            self.assertEqual(main([
+                "vault", "--source-home", self.home, "hosted-recover",
+                "--device-id", DEVICE, "--output", self.output,
+                "--max-bytes", "400", "--apply"]), 0)
+        self.assertIn("source coverage is unknown", warning.getvalue())
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,9 +1,1143 @@
 # Desktop release readiness
 
+Dated sections record historical checkpoints. Later receipts supersede older
+progress statements; use the latest receipt for current acceptance status.
+
+## October 1 source consolidation — main integration candidate
+
+The release stack is consolidated in PR #48, now targeting `main` directly.
+Current `main` was merged without dropping the Backup UI identity, domain
+redirects or team-intake branding. The local-only backup risk disclosure from
+PR #60 is included. The team page retains `main`'s existing source paragraph
+rather than reverting it to the older release-branch copy.
+
+PRs #26, #41 and #38 have their commits preserved in this candidate. The only
+non-ancestral search-index commit from PR #40 is patch-equivalent to incorporated
+commit `202376a`; `git cherry` marks it already applied. The parked research
+commit from PR #35 is also preserved; inclusion of that document does not activate
+multi-Mac sync or expand this release's scope. None of these branches should be
+deleted to retire their superseded PRs.
+
+Local integration checks passed: 1,371 Python tests run with 33 skips; 78 setup
+tests passed separately; 36 website tests passed separately; the Node suite
+reported 615 passes and one skip; seven object-Worker tests passed. Mocked
+notarization messages are test output, not a newly notarized release. CI and
+independent integration review must pass before merging the consolidated source.
+
+The accepted live release catalog is identical to `main`. The added build-20
+catalog entry remains `testingOnly: true`, `accepted: false`. Production
+environment-variable metadata lists no hosted activation or sandbox bootstrap
+flags. Hosted routes require explicit sandbox flags and the pinned sandbox
+database; the optional build bootstrap/preflight skip ordinary builds. This
+source merge must not provision Production schema, open hosted billing or
+publish a new paid installer. Those remain separate acceptance gates.
+
+The independent packaged-recovery receipt below still describes its exact older
+artifact and source. It is not proof for a newly packaged consolidated release.
+Real R2 publication/recovery, unattended off-device protection, final notarized
+package/update acceptance and commercial activation remain open.
+
+## October 1 independent packaged recovery — passed, release still held
+
+Current clean source `b52ca326f21eaa232015561e0fbc858ec82b5cc5` produced a
+Developer ID signed, provisioned, **not notarized** local-test build 20. The
+actual bundled engine/native helper then passed key import, authenticated
+snapshot verification, exact-byte separate-folder restore, attachment search,
+conversation read and Markdown export on the independent macOS acceptance VM.
+The producer key was absent on the receiver; wrong-key refusal and cleanup
+were checked. The vendor Command Line Tools and Homebrew Python were moved
+aside; system Python failed and no active developer directory was available.
+All nine CI jobs for this exact source passed. The VM is stopped.
+
+The [exact receipt](codex-backup-packaged-recovery-2026-10-01.md) records package
+and driver checksums, environment preparation, related packaged tests and
+remaining gates. This is not real R2, hosted scheduling, notarized first-launch,
+customer UI or real Codex resume acceptance. No public app, real user schedule,
+live data or paid catalog changed. That exact artifact predates incorporation
+of current `main`; the source consolidation above does not change its receipt.
+
+## October 1 read-only Mac metadata transfer — guarded candidate
+
+The read-only Git-object failure below now has an integrated three-pass staging
+path: archive data, apply Mac extended metadata while staged regular files are
+owner-writable, then restore source POSIX modes. Full migrations, browser skill
+repairs and the one-shot skill exporter use the same path. Every phase keeps
+the same SSH/machine/destination-lock guards, exclusions and link policy; no
+error falls back to a metadata-free copy. Every retry starts from validation
+and runs all phases again.
+
+The destination helper requires the exact private staging root and owner marker.
+It validates the entire static subtree before changing permissions, walks through
+open directory descriptors, rejects foreign-owned/special/multiply-linked files,
+and treats symlinks as inert nodes. Temporary ACL removal uses batches of at most
+32 inherited, pinned file descriptors through macOS `/dev/fd`, not original
+pathnames. The metadata pass reapplies source file ACLs and the final archive
+pass restores modes. Node/depth/path/time limits and the registered remote
+process group bound the work; Pause/Stop cancels that group. Staging stays
+incomplete after any failure or stop. Final validation requires the selected
+subtree still to exist at the same path. Detached/replaced roots are refused.
+
+Full finalization freezes source workspaces and retained Codex state before the
+first transfer phase, compares them again afterward, and verifies staging and
+installed data against that original baseline. Skills likewise use original
+pre-copy byte/tree checks. A file added, rewritten or deleted during the copy
+cannot silently acquire a new post-copy baseline. Source authentication and
+installation identity are still excluded and never opened by these checks.
+
+Disposable fixtures verify repeated transfers of a 0444 file with deny-write
+ACL, resource fork and custom xattr; modes, bytes, links, ACL and attributes
+match afterward. Outside symlink targets and hard-linked victims remain untouched;
+unsafe static trees fail before permission changes. Injected failures and stops
+at every phase refuse continuation; a retry restores the temporarily writable
+staging file to 0444. Late source changes block installation before destination
+backup or replacement.
+
+Independent reviewer `/root/public_release_review` accepted this bounded
+implementation after identifying two retry/scope defects that were corrected:
+deny-write file ACLs now reset only through pinned staging descriptors, and
+detached or newly missing selected roots cannot pass final validation. Its
+focused rerun passed 89 tests. The exact final helper/pipeline suite passed
+34 tests, including repeated metadata transfers and restrictive-directory
+failure. The full Python suite then passed against the exact final source:
+1,371 tests run, 33 skipped, no failures (247.860 seconds). Release/notarization
+messages emitted by mocked packaging tests are not a real distribution receipt.
+This is implementation acceptance, not customer release certification.
+
+This is not an atomic filesystem snapshot or adversarial same-account sandbox.
+Close writing apps for finalization. Frozen content digests still exclude ACLs,
+xattrs, ownership, timestamps and hard-link topology; the metadata fixture is
+direct evidence for the tested layout, not general independent metadata
+verification. Restrictive directory ACLs that deny child creation/deletion still
+fail closed, as they did with the original system rsync; they are not stripped
+or silently declared supported. Unusually deep trees and older macOS versions
+need compatibility acceptance. No real workspace, schedule, public paid build,
+hosted runtime or purchase changed. Notarized packaging, real hosted-service
+recovery and commercial gates remain separate. The following packaged recovery
+drill is now passed under the latest receipt above.
+
+The acceptance VM clone initially exited after network loss at 47%. One cached
+retry subsequently completed; the VM booted, passed the current-candidate
+recovery drill and was stopped. See the exact October 1 receipt above.
+
+## September 30 first/manual hosted backup — acceptance entrypoint
+
+The previously library-only first hosted backup now has an explicit dark CLI
+entrypoint, `vault hosted-backup`. It uses an already enrolled native device and
+existing individual Vault key metadata; it does not create a key, accept a
+bearer or caller-selected provider origin, or install a schedule. The default
+plan does no metadata/Keychain/network work. Applied runs share the existing
+app-update/LaunchAgent lock, preserve the live engine's durable reservation
+retries and independently reopen the exact remote sealed manifest. A changed
+pointer, wrong key, invalid receipt or disagreeing loss evidence refuses
+success. Suspect coverage remains `needs_attention`, and the returned status
+explicitly does not claim automatic protection.
+
+All 17 focused tests passed, including actual file-lock contention and an actual
+pending update marker, safe CLI routing/defaults, unchanged-versus-published
+results, malformed risk evidence, provider-error sanitization and no schedule
+creation. The initial related hosted-client suite passed 220 tests before the
+two additional real-guard tests were added. Independent reviewer
+`/root/public_release_review` accepted the implementation/security boundaries
+and documentation, then accepted the CLI/error wording after two corrections:
+pending state is not presumed to exist, and key metadata is distinguished from
+the Keychain-held encryption key. Its focused rerun passed 17/17, and its
+initial related run passed 70/70. These are synthetic unit tests, not real
+hosted service, provider retention or clean-Mac recovery acceptance. No customer
+data, real Mac schedule, public app, production runtime or paid catalog changed.
+
+### Separate migration compatibility failure discovered by the full local run
+
+The full Python suite ran 1,336 tests: 40 errors, 33 skipped. It did **not**
+pass. The observed errors fail in existing Git/workspace migration fixtures at
+the system rsync copy, not the new hosted manual command. A separate disposable
+Git fixture reproduced `/usr/bin/rsync -aE` failing with `openat: Permission
+denied` on a read-only `.git/objects` file. The same source copied with `-a`
+exited successfully. This isolates the extended-metadata path but does not
+establish the underlying OS implementation defect or a safe replacement.
+Do not remove `-E`, change source permissions, skip these tests or call this
+Mac's migration coverage green. Preserve metadata/content guarantees, investigate
+a compatible transfer path, and rerun the failing fixtures before certifying
+full migration here. Hosted backup/recovery acceptance remains separate.
+
+## September 30 authenticated R2 endpoint — deployment preparation verified
+
+`hosted/r2-sandbox.wrangler.jsonc` now pins the real capability-protected
+object Worker, Cloudflare account `c6c00211d9bf8d7b4f493b2a6d352b9a`, and the
+existing `codex-vault-sandbox-20260927` bucket. It contains no signing key,
+production route, cron, probe handler, or public bucket configuration. Version
+Preview URLs and persisted Worker observability are explicitly disabled.
+The explicit `workers.dev` endpoint is intended for authenticated sandbox
+service calls; without a separately provisioned signing key all requests
+remain dark. A capability authenticates an exact object request, not a buyer,
+subscription, published snapshot, or completed backup.
+
+The new entrypoint/config tests passed 3/3 and the combined focused object
+suite passed 8/8. The full Node suite passed 615 tests with one skipped.
+Wrangler 4.141.0's actual deployment dry-run built the configured entrypoint
+successfully: 22.31 KiB uncompressed / 5.46 KiB gzip and only the intended R2
+binding. `/root/public_release_review` independently accepted the bounded
+config, entrypoint denial behavior, no-secret defaults and header wording;
+its related security suite passed 16/16. Provider-side bucket privacy must
+still be checked during deployment.
+
+No token was created, no signing key provisioned, and no Worker deployed by
+this preparation. The Cloudflare review form is prepared for an account-only
+Workers Scripts Write token with the shortest currently usable expiry date;
+its creation awaits explicit action-time confirmation. It would permit
+modifying other Workers in this account until revoked, not only this sandbox
+Worker. Use it only for the approved endpoint deployment, verify the result,
+and revoke it immediately. Do not deploy `tests/r2-live/worker.mjs` or expose
+its local-only grant fixture. Real subscription/device authorization,
+published encrypted backup/recovery, clean-Mac key import and unattended
+off-device protection remain unproved. Public build 16 is unchanged.
+
+## September 30 hosted sandbox schema — provisioned and read back
+
+Clean source `011b15cd31475e4e61230007481d55e2c702fd75` is pushed to draft
+PR #48. The explicit operator bootstrap skips ordinary builds and runs only
+against this project's pinned sandbox Preview with checkout closed. Independent
+reviewer `/root/public_release_review` accepted its installed Neon transaction
+API usage, guard ordering, bounded output and no-retry behavior. All 31 focused
+bootstrap/preflight tests passed; the full Node suite passed 612 tests with one
+skip. This review does not certify the hosted service or customer recovery.
+
+Read-only deployment `dpl_3Mu9LYivhCYr2PSVebks2aJdEYnC` independently proved
+the sandbox identity, absent hosted namespace and existing migration ledger.
+Only after that observation, deployment `dpl_4N5y8vzgYm41j3vnpHuy2Td3fRWa`
+submitted one Serializable PostgreSQL transaction containing an advisory lock,
+repeated environment/empty-schema/receipt guards, all 194 migration statements
+and 42 exact receipts. Any existing hosted namespace is refused; the bootstrap
+does not repair or replay partial/untracked schemas. A provider error or timeout
+requires read-only reconciliation before any retry.
+
+The actual transaction reported 42 committed migrations. Its separate follow-up
+preflight re-opened the sandbox database, matched all 42 source hashes/timestamps
+and verified the required table names. The Preview completed successfully.
+**The previously verified provisioning gap is now closed.** Receipt/table
+presence does not prove absence of schema drift or functional correctness.
+
+No production schema, public app, release catalog or checkout changed. Preview
+hosted runtime and checkout remained explicitly closed; no customer row was
+created, no email/payment was sent and no R2 content was uploaded. Hosted
+enrollment/subscription authorization, authenticated R2 publication/recovery,
+independent receiver key import, scheduled off-device protection, pricing/billing
+and final notarized distribution remain outstanding. The VM download is live,
+has retried transient network losses and has not booted.
+
+## September 30 hosted provisioning — database gap verified
+
+Source `ea9eed4d9335bc4c6ce9e5717c72228ca431f56d` is pushed to draft PR #48.
+The new operator preflight runs only on this project's sandbox Preview with
+checkout closed. Ordinary builds skip without opening a provider. It reads only
+the environment identity, bounded migration receipts and required-table presence;
+it never reads customer rows or prints credentials, hashes or provider errors.
+Independent reviewer `/root/public_release_review` accepted the implementation
+and count-only diagnostic refinement; all 19 focused tests passed. The first
+revision also passed the full Node suite (598 passed, one skipped).
+
+Actual Vercel deployment `dpl_JDJVtKJ8mLN9kHAzFbPAcw6ZyMSx` reached the pinned
+sandbox database and passed its environment identity check. The ledger exists,
+but **zero of this branch's 42 hosted migration receipts match**. The opt-in
+build correctly failed at `migration-receipts`; this is not a runtime regression
+or proof that hosted tables are absent. Before applying migrations, inspect the
+existing hosted schema and refuse a blind replay over partial/untracked state.
+Neither diagnostic Preview changed schema, sent mail, created a payment or
+uploaded customer data. Hosted runtime and Preview checkout were explicitly
+closed. Production, public build 16 and the paid catalog are unchanged.
+
+The prior Stop/shutdown test fix at `610fa539fa6d6da4f1eb7c5be6296a1aa1cc16e5`
+passed all 78 setup tests, 30 repeated targeted runs, independent review and
+whole CI run `36814863816`. The exact runtime-8359 package additionally passed
+the self-contained PyInstaller recovery driver with developer tools excluded
+from PATH. Embedded driver libraries were signed with the same Developer ID;
+library validation was not weakened. Driver SHA-256 is
+`c1e2ec686992057ab105c979d5388c45950782a57e92eaca2f18abfbdf6641a9`.
+This remains same-host evidence, not an independent receiver receipt.
+
+At this September 30 checkpoint, the interrupted VM clone's tool handle was
+missing and process inventory confirmed no clone was running. A cached retry
+was then live but had not booted. This progress state is superseded by the
+passed October 1 independent receiver receipt above.
+Its prepared read-only share contains only the exact app, self-contained driver
+and disposable synthetic encrypted fixture. No real home or credential is shared.
+The then-remaining gates were independent receiver recovery, authenticated hosted service
+publication/recovery, scheduled off-device protection, pricing/billing acceptance
+and final reviewed notarized distribution. Provisioning evidence does not close
+those functional gates.
+
+## September 30 packaged recovery drill — independently reviewed preparation
+
+The disposable packaged drill now binds its version-2 artifact to the exact
+clean source revision, snapshot ID and encrypted manifest digest before any
+receiver Keychain operation. It refuses an existing receiver key, proves a
+wrong recovery key cannot occupy that slot, then uses native
+`import-key-verified` rather than unchecked import. It checks exact restored
+active/archived transcript and pasted-attachment bytes, attachment search,
+and archived read/Markdown export through the packaged engine's real HTTP API.
+Producer and receiver remove only their disposable test key afterward.
+
+The driver independently bounds the entire startup-line read (including a
+partial line), rejects a nonzero engine exit after shutdown, and tolerates
+process-exit cleanup races. All nine targeted safety tests passed; independent
+reviewer `/root/public_release_review` accepted the two-file diff after those
+three lifecycle findings were fixed. The exact signed/provisioned
+`8359f19d7a34d8391df64c8e8c4f5413042d3d35` package passed the revised drill
+on this Mac. Source CI run `36812976167` completed successfully.
+
+This checkpoint is **same-host harness evidence**, not clean-Mac or hosted-
+service proof. At this September 30 observation the Tahoe clone was live at 60%
+and had not booted; the VM progress and packaged receiver gap are now superseded
+by the October 1 receipt above. Cloudflare's authenticated dashboard confirmed the
+private sandbox bucket is empty (0 B), public access is disabled, no Worker
+projects are deployed, and current billable usage is $0.00. A read-only Vercel
+Preview configuration inventory confirms existing commerce settings but no
+hosted-service variables. No new credential, cloud deployment, customer upload,
+subscription, public package or checkout change was made in this checkpoint.
+The next distinct proof is exact-package recovery in the isolated VM, followed
+by authenticated sandbox service enrollment/publication/recovery using real R2;
+repeating the already-passed object-transfer probe would not close that gate.
+
+## September 30 hosted recovery progress and Stop/Resume — accepted internally
+
+Runtime/test source `8359f19d7a34d8391df64c8e8c4f5413042d3d35` is pushed to
+`origin/codex/hosted-vault-service` in draft PR #48. The acceptance-gated
+recovery wizard now shows encrypted bytes read and receipt-checked file
+counts, distinctly from final whole-snapshot verification. A full progress
+bar does not mean recovery is complete. Download can be stopped cooperatively
+and retried against the same selected version and folder.
+
+Stop checks run before folder creation, between hosted planning requests and
+inventory pages, between network reads and reused-file checksum reads, and
+before final publication. HTTP reads use available-byte reads where supported,
+not a mandatory megabyte fill. Completed checksum-verified files are retained;
+owned partial `.cvdownload` files are removed. Retry rechecks reused bytes and
+never overwrites existing final files. The private interruption marker remains
+until the native helper authenticates the whole snapshot and `latest.json` is
+published. A Stop arriving after that commit boundary may lose to successful
+completion; the UI reports actual completion, not a fictional partial state.
+
+Cancellation does not kill native integrity checks or release the existing
+worker's operation exclusion early. The UI truthfully says Stop can wait for
+the current network request or native integrity check. The authenticated,
+origin-guarded Stop endpoint signals the same worker; backups, installs,
+updates and quit stay excluded until it exits. No live Codex history is changed.
+Progress exposes stages and counts, not object keys, hashes or credentials.
+
+Verification: 124 preparation/flow/disaster-recovery/setup tests passed;
+205 hosted tests passed; all 15 Node dashboard tests passed. These overlap and
+are not additive. The native CryptoKit plus synthetic loopback hosted-service
+test additionally stopped during an encrypted chunk, retained no published
+latest or partial temp file, resumed the selected older snapshot and decrypted
+the original conversation byte-for-byte. That test uses a disposable helper
+with test-only legacy Keychain mode; it is not clean-Mac or real-R2 proof.
+
+Independent reviewer `/root/public_release_review` accepted the safety diff
+and 1280px/320px rendered states. A stopped-but-still-verifying copy bug was
+fixed, regression-tested and independently re-rendered. Panel text remains
+16px, Stop is approximately 49px high, no horizontal overflow was observed,
+and keyboard focus moves to visible status/Resume without stealing outside
+focus. The preview used only synthetic provider/native mocks.
+
+The exact clean-source Developer ID signed/provisioned build-20 candidate is
+`build/desktop-pg387ot3/Codex Migrate.app`; strict deep signature verification
+passed. Its local-test archive SHA-256 is
+`c936e2910271f92495ff8d17c696f4c0003b70cc9786b616895da1da0fb8ca68`.
+All 11 exact-package compression/corruption/attachment/search/interruption,
+LaunchAgent/paginated, legacy-key and updater/restore-contention checks passed.
+Three verified-key-import tests passed against its provisioned native helper.
+Its engine HTTP smoke test passed with hosted recovery dark and acceptance-
+enabled. The package is **not notarized, distributed or customer-certified**.
+
+The prior VM image pull exited with network failure, rather than merely
+timing out during observation. A cache-reusing retry of the same image is live
+and has reached 55%; the VM has not booted. Remaining release gates are clean-
+Mac exact-package key import/read/export recovery, real hosted enrollment and
+upload/download/recovery, pricing/billing acceptance, and final reviewed
+notarized distribution. Public build 16 and checkout are unchanged. No real
+customer content was uploaded and no hosted subscription was enabled.
+
+## September 30 guided hosted recovery — internal acceptance, release held
+
+Clean runtime source `85008ebfe39e9ead479e24669986f01c17b1e502` is pushed to
+`origin/codex/hosted-vault-service` in draft PR #48. The local Recovery page
+now has an acceptance-gated hosted wizard: purchase receipt → emailed proof →
+owned backup selection → saved device pairing → newest/last-complete version
+selection → metadata preparation → verified CV1 key import → full download and
+verification → opening the recovered backup for search/read/export. It is
+hidden and its mutation API refuses requests unless
+`CODEX_BACKUP_HOSTED_RECOVERY_UI=yes` explicitly enables the acceptance session.
+No public hosted checkout, subscription or customer recovery route was enabled.
+
+Email proofs and recovery keys remain transient; they are not returned in
+status JSON, persisted in dashboard state, put in URLs, or sent to the hosted
+service as a decryption key. Only opaque device/Vault IDs survive restart.
+The existing native helper keeps the device bearer and verified backup key in
+Keychain. Metadata and encrypted manifest verification precede bulk transfer;
+key confirmation is explicitly **not** full recovery. Recovery uses a separate
+folder and does not install or overwrite live Codex history.
+
+Independent review found and then accepted fixes for a failed-save pairing
+dead end, missing durable checkpoint synchronization and hidden keyboard focus.
+The saved binding is file/directory-synced and macOS full-synced before claim.
+Save/sync failures retry the same identity without sending a claim. Ambiguous
+claims resolve the exact saved credential. If a restart occurred before claim,
+the user can explicitly re-verify their purchase email; the list remains
+confined to the saved Vault and resolution is tried before claiming that same
+device with fresh email authority. There is no automatic new credential or
+blind claim retry. Invalid saved binding startup releases its process lock.
+
+Verification against this slice:
+
+- 92 recovery-flow/setup tests passed, including strict input and local
+  token/origin guards, private asynchronous steps, operation/quit exclusion,
+  wrong-key retry, interrupted download retry, update/full-sync failures,
+  same-ID reauthorization, wrong-Vault refusal and startup-lock release.
+- All 202 `test_vault_hosted*.py` tests passed. Separately, 34 enrollment,
+  disaster-recovery and state tests passed. These suites overlap; the counts
+  must not be added into a supposed independent-test total.
+- All 15 Node dashboard tests passed, including focus retention without
+  stealing outside focus and truthful key-vs-full-recovery/coverage messages.
+- Browser keyboard interaction exercised every wizard step with a synthetic
+  provider. Focus moved to visible controls after each step. Desktop and
+  390px layouts were checked; the latter had no horizontal page overflow.
+  Independent reviewer `/root/public_release_review` accepted the bounded
+  diff and desktop/320px render, including readable 16px panel text and usable
+  controls. This preview mocked provider/native recovery calls and is not
+  evidence of real cloud recovery or restored bytes.
+
+The exact Developer ID signed/provisioned build-20 candidate is
+`build/desktop-gboo5adb/Codex Migrate.app`. Its embedded receipt records the
+runtime revision above and `source_dirty: false`; strict deep signature
+verification passed. The archive is
+`build/desktop-gboo5adb/Codex-Migrate-0.1.0-build20-arm64-LOCAL-UNSIGNED.zip`,
+SHA-256 `c52fbf04e50f829321f01b1bbfe111d5841cb4412fe091fef33fa19ea8ed9c54`.
+The local-test filename is conservative: it is Developer ID signed but **not
+notarized or distributed**.
+
+All 11 packaged compression, corruption, attachment/search, interruption,
+LaunchAgent/paginated, older-key and updater/restore-contention checks passed
+against that exact app. All three native verified-key-import tests passed
+against its provisioned ThisDeviceOnly helper. The real packaged-engine HTTP
+smoke test passed both with the default dark gate and with the acceptance flag:
+the controller/module is bundled, status requires the local token, and an
+invalid download step is refused before provider or Keychain access. All data
+and keys in these tests were disposable; no real customer history or cloud
+account was used. The additional HTTP assertions are in `tests/test_desktop.py`.
+
+Remaining customer-release gates: measurable download progress and a Stop
+control; independent clean-Mac key import/read/export recovery from the exact
+package; real hosted enrollment/upload/download/recovery proof; hosted billing
+and pricing acceptance; final reviewed release, notarization and distribution.
+The clean VM image pull remains active despite transient network retries.
+These internal checks do not certify the whole product or hosted business
+service. Existing public paid build 16 and checkout are unchanged.
+
+## September 30 verified recovery-key import — signed candidate, release held
+
+The ordinary import could store a well-formed but wrong recovery key before
+trying to open the backup. The new dark hosted import fetches only bound
+metadata and the encrypted manifest. Native `import-key-verified` first checks
+the supplied manifest digest and opens it with the candidate key entirely in
+memory, validating the snapshot identity/format before any Keychain write.
+It then stores or confirms the exact same personal key, refuses a conflicting
+existing/legacy/business key, and never silently replaces or deletes one.
+The key travels on private stdin, not arguments, diagnostics or return JSON.
+Import success means `ready_to_download`, not complete recovery.
+
+Twenty-eight focused tests passed, including three native tests using disposable
+legacy-test Keychain entries: wrong-key refusal without storing it, successful
+retry and repeated correct import, subsequent full snapshot verification, and
+preservation of both existing Vaults when an alternate valid key/manifest targets
+an occupied key ID, and refusal of changed manifest digests or snapshot IDs
+before storing any key. Source tests also prove bounded-key syntax checks before
+filesystem/network work, no bulk chunk download, receipt/authority binding,
+unconfirmed-import refusal, no prompt before explicit apply, and CLI secrecy.
+The related backup/recovery regression suite passed 169 tests (one explicitly
+opt-in physical large-history probe skipped). The prior source CI runs
+36794649072 and 36794887993 are fully green. The new source CI run 36796611251
+was queued when this receipt was recorded; it is not counted as passed.
+
+The exact clean source candidate is
+`65935091ed6dbd9f1f95a684d6701decb552aef0`, pushed to
+`origin/codex/hosted-vault-service`. Its Developer ID signed/provisioned app is
+`build/desktop-kbhwc7id/Codex Migrate.app`, with `source_dirty: false` in the
+embedded build receipt. Strict deep signature verification passed. The archive
+is `build/desktop-kbhwc7id/Codex-Migrate-0.1.0-build20-arm64-LOCAL-UNSIGNED.zip`,
+SHA-256 `8395782373806395196f10424a4e39d19ecd70b7dc0cc1b52a9fe2d73c2fa611`.
+Despite the conservative local-test filename, the app is Developer ID signed;
+it is **not notarized or approved for distribution**.
+
+All three new native key-import tests passed again using that exact app's
+provisioned ThisDeviceOnly helper, not the compiled legacy-test helper. All
+11 opt-in packaged compression, corruption, attachment/search, interruption,
+LaunchAgent/paginated, older-key and update/restore-contention checks passed
+against the same exact app. These are same-Mac package proofs, not a clean-Mac
+or real hosted-service proof. The clean macOS VM image pull remains active
+(40% at the last live-session observation) despite transient network retries.
+The guided hosted customer UI and real-service clean-Mac proof remain open.
+
+## September 30 metadata-first replacement-Mac recovery — draft source
+
+The prior receiver downloaded the complete encrypted snapshot before discovering
+that a replacement Mac lacked its recovery key. The new authenticated
+`hosted-prepare-recovery` primitive downloads only the selected receipt's Vault
+metadata into a private, isolated recovery folder. It validates its receipt
+checksum and metadata structure, retains the interrupted-recovery marker and
+reports `awaiting_recovery_key`; it does not import a key, mark `latest`,
+decrypt conversations, install into Codex, or claim successful recovery.
+The normal receiver resumes the same receipt after explicit key import.
+
+Twenty-four focused tests passed, including metadata-only reads, private/retryable
+destination, corrupt/missing metadata refusal, byte-limit refusal, the shared
+authenticated authority binding and explicit-apply guard, and truthful CLI
+preparation output. These include five native-helper tests with disposable
+data: metadata-first/key-import/full-download/verify/exact-restore; missing and
+wrong-key refusal before bulk transfer; interrupted reads and corruption;
+unsafe receipt/destination refusal; and a link-swapped partial folder. The
+receiver now authenticates the exact encrypted manifest with the saved key
+before fetching conversation chunks. Neither a missing/wrong key nor a
+malformed native confirmation can trigger the bulk download or mark recovery
+complete. The original source authentication
+sentinel remained unchanged. This is source plus signed-helper evidence using
+an in-memory object store, not real-R2 or clean-Mac acceptance. Customer UI
+guidance and real service enrollment remain incomplete; no public hosted route
+or billing was enabled.
+
+The broader native-backup and hosted recovery/schedule/client regression run
+completed with 160 tests, one intentional skip, and no failures. It used the
+signed native helper with disposable fixtures, not customers' Codex state.
+
+The clean committed source `32eed56e069b199e9299dd9ef7f4769f2358071e`
+was rebuilt into `build/desktop-uzoby1dn/Codex Migrate.app`. Its build-info
+records that exact revision and `source_dirty: false`. Strict deep signature
+verification passed. Its local-only archive SHA-256 is
+`42d58ad2a17188f60ef6b818b52f558c28e0b3668d9a33fce9472e2a7754e84a`.
+This is Developer ID signed but **not notarized or distributed**. All eleven
+packaged compression/history/LaunchAgent, interruption, and updater/restore
+contention checks passed on this exact package. A fresh packaged producer and
+receiver also passed byte-exact synthetic restoration and attachment search,
+removing both disposable Keychain keys. That last drill was on one host, not
+an independent Mac. The exact package and synthetic bundle are staged under
+`/tmp/codex-backup-packaged-drill.jkKk6a` for the clean VM; only disposable
+fixture data is shared, never the Founder's home or credentials.
+
+CI run [36794649072](https://github.com/jsegeren/codex-migrate/actions/runs/36794649072)
+passed its separate-runner hosted and local Vault portability pairs, business
+portability pair, and disposable PostgreSQL checks. Both full Python matrix
+jobs were still running at this checkpoint. The source portability pairs do
+not establish a signed customer-app clean-Mac or live-R2 service proof. The
+Tart clone remains live with transient network retries; 32% observed, no
+replacement clone started. Clean-VM acceptance remains pending.
+
+## September 30 unattended loss-evidence gate — source only
+
+The hosted scheduler previously accepted a missing risk count on a complete
+publication and Python values such as `false` or `0.0` as zero. A regression
+demonstrated that this could advance the last-good receipt without explicit
+loss evidence. Both new and unchanged runs now require complete coverage and
+an actual integer zero risk count before reporting clean protection. Unknown
+or malformed counts retain the prior receipt and report `needs_attention`.
+
+When the service published a snapshot but its reply was lost, the retry path
+now opens that exact encrypted manifest and derives risk from its catalog
+before finishing. An unavailable or mismatched catalog preserves the pending
+run; missing/flagged catalog risk cannot become a zero-risk claim. This adds a
+read only to publication reconciliation, not every ordinary upload. Stale
+checks, unloaded schedules, failed/running checks, and attention states are
+also covered by health-state tests that preserve the prior receipt.
+
+The focused scheduler/live-run/no-change/drill suite passed 63 tests. These
+use synthetic clients and disposable paths; they do not prove production
+credential renewal, real hosted background execution, or clean-Mac recovery.
+Clean pushed source `82cc77c6bbb00b30911dbfd957e0d72b80cdf233` has now
+been rebuilt as Developer ID signed, provisioned local-test build 20. Strict
+signature validation passed. The archive SHA-256 is
+`41033d50e99c27b85336ff8db734d31e8eca86c055de6395013260392dc3f273`.
+All 11 exact-package Vault/interruption/updater-contention tests passed,
+including the real disposable local LaunchAgent check. Those packaged tests
+exercise local protection; the hosted credential/publication cases above
+remain source tests, not real hosted scheduled acceptance. This new candidate
+supersedes the earlier test package below. It is not notarized or released;
+clean-Mac and real-service hosted recovery remain unproven.
+The stdlib-only packaged producer/receiver drill also passed on this same Mac
+with this exact candidate, and a signature-checked copy plus only synthetic
+data and its disposable recovery key are staged for the guest. This is harness
+validation, not independent-Mac acceptance.
+
+## September 30 packaged recovery drill — harness validated, VM pending
+
+`tests/packaged_vault_portability.py` now provides a stdlib-only producer and
+receiver for the clean-Mac acceptance guest. It runs the actual signed app's
+engine and native helper, checks its signature and clean source revision,
+creates only synthetic active/archived history and a pasted-text attachment,
+and saves a disposable recovery key outside the source home. The producer
+removes its test Keychain item. The receiver refuses an already-present key,
+imports the saved key, verifies and restores the snapshot into a separate
+temporary folder, checks exact fixture bytes and the restore receipt, and
+requires attachment text to be searchable. Both sides remove their test keys;
+command output and recovery keys are never printed. Six focused safety tests
+pass, covering isolation, package mismatch, ambiguous import cleanup, and
+restored-byte mismatch.
+
+The producer and receiver both passed on the current Mac using the signed,
+not-notarized source-`d26aa7efc4dc95b908ab1e7546ed947bfa274560` candidate
+identified below. This is **same-host harness validation**, not a clean-Mac,
+real-R2 download, customer UI, or disaster-recovery acceptance result. The
+dedicated guest download remains in progress. No real Codex files were read or
+changed by this drill. The exact source-fix CI and subsequent receipt-only CI
+runs both completed successfully.
+
+For the guest, transfer only the signed candidate, this script, and its
+generated synthetic bundle. Run the receiver with explicit absolute paths:
+
+```bash
+python3 packaged_vault_portability.py --confirm-disposable-test consume \
+  '/absolute/path/Codex Migrate.app' '/absolute/path/synthetic-bundle'
+```
+
+## September 30 structural-corruption rejection — draft only
+
+A new regression reproduced an invalid-source acceptance defect in the prior
+signed candidate: non-object JSONL records such as `null`, arrays, strings,
+numbers, and booleans were ignored during identity inspection, allowing a new
+backup reference to advance despite invalid conversation structure. The shared
+local/hosted scanner now refuses these records. Concurrent source changes
+remain retryable; unknown object-shaped records remain readable without an
+allowlist of Codex event types. This is structural validation, not proof that
+every syntactically valid conversation edit is semantically correct.
+
+The broader native-helper/source test run passed 112 tests with one explicit
+environment-specific skip. New local tests prove that malformed/non-object
+records leave the previous reference unchanged and that its restored bytes
+match the original. Hosted tests prove invalid records reach neither object
+staging nor snapshot-tail publication and leave source bytes untouched.
+
+Exact clean, pushed source `d26aa7efc4dc95b908ab1e7546ed947bfa274560`
+produced a Developer ID signed, **not notarized** local-test build 20. Strict
+signature validation passed. Its ZIP SHA-256 is
+`e086de339242c5386f3754806b5b7e527eed8e1006c2890c936f2b554f9ca673`.
+All nine packaged Vault tests passed, including corrupted-source refusal,
+exact previous-version recovery, scheduled database appends, attachments,
+and legacy build-16 reading. Separate packaged interruption and updater/restore
+contention tests passed. These used disposable data and test keys only.
+This candidate supersedes the earlier test package for acceptance work; it is
+not installed for customers, notarized, released, or a real-R2 clean-Mac
+disaster-recovery receipt. The clean acceptance VM download remains active.
+
+## September 30 backup-first hosted integration — draft only
+
+The hosted branch now includes the latest local application's Codex Backup
+branding and browser-title changes from the integration branch. Merge resolution
+preserves the hosted branch's database-backed history description, non-additive
+summary counts, prompt-title bounds, and physical-copy safeguards. Twelve focused
+dashboard JavaScript tests and 73 setup tests pass locally. This is source
+integration evidence, not a signed release or hosted recovery certification.
+
+A dedicated macOS Tahoe acceptance VM is being provisioned under a separate,
+owner-only Tart data directory. Its public base image download is still in
+progress; no guest restore test has run. It will use disposable data and guest
+credentials, not the Founder's OpenAI login or source home. The existing
+physical-Mac and source portability receipts remain separate evidence and are
+not relabelled as clean signed-app acceptance.
+
+Exact clean source `39afe98bdbbbe64c254013407142a9e55ac492cb` produced a
+Developer ID signed, provisioned, **not notarized** local-test build 20.
+The ZIP has SHA-256
+`a2811e437574d99ca9aa86045c0566488d2e3df3929fb72cf461ec08ce505b04`.
+Strict app-signature validation passed. All eight packaged Vault tests passed
+with the daily LaunchAgent and archived public build-16 compatibility checks
+enabled: synthetic transcript/database/attachment recovery, live search,
+search-cache behavior, scheduled database append, and legacy backup reading.
+Separate opt-in packaged tests passed killed-backup preservation/retry and
+128 MiB restore/updater contention with exact restored-byte comparisons.
+Only disposable history, test Keychain items, and a temporary schedule were
+used; those tests clean their keys, processes, and schedule on exit. Neither
+real Codex home was backed up or modified.
+
+The independent macOS source-format local, hosted, and business export/import
+pairs also passed for this exact commit in
+[CI run 36788553625](https://github.com/jsegeren/codex-migrate/actions/runs/36788553625).
+The PostgreSQL hosted-authority job passed; the full Python jobs were still
+running when this receipt was written. These source-format jobs do not run
+the signed package or a deployed R2 customer service. The signed package has
+not run in the clean acceptance VM and is not approved for distribution.
+
+## September 30 structured-token-count recovery regression — draft only
+
+An upstream [Codex history-projection report](https://github.com/openai/codex/issues/42025)
+describes intact rollout JSONL whose later turns disappear from Codex's UI
+after a structured `token_count` event. A sanitized fixture now verifies that
+Vault independently finds and exports a later message without indexing that
+telemetry as conversation text. A second fixture makes an encrypted snapshot,
+verifies it, restores the exact rollout bytes into a separate home, and finds
+the later message there. Both are synthetic Mac tests; they do not repair
+Codex's own projection, prove that every affected real thread is readable, or
+certify a hosted clean-Mac restore.
+
+## September 30 large-history search cache — draft, not released
+
+A copy-only, read-only recovery set from one Mac contained 2,328 JSONL files,
+1,866 database-backed thread IDs, and about 93 GB of transcript files. The
+optional positional search cache completed against that copy in 1,343.8 seconds
+and occupied 24,689,582,080 bytes. With the cache complete, three bounded
+five-result searches took 5.12 seconds for a miss, 15.62 seconds for one
+multi-word hit, and 5.06 seconds for another hit. Earlier unpositioned-cache
+searches could exceed 45 seconds or a minute on this same copy. Query and
+conversation content were not recorded in the receipt; no live Codex source or
+hosted object was changed.
+
+This is a meaningful speed improvement but a **large disk and initial-build
+cost**, not a universal fast-search guarantee. The cache remains opt-in,
+unencrypted, owner-only, rebuildable, and separate from encrypted backups. The
+UI now warns that its text terms and positions may reveal content. Synthetic
+tests additionally prevent the cache from hiding matches stored only in pasted
+text attachments. This copy-only measurement does not certify the signed app,
+ongoing live-history refresh, complete search recall, or hosted recovery.
+
+## September 29 physical two-Mac synthetic restore — narrow pass
+
+The second physical Mac successfully ran the corrected one-file receiver
+against a disposable Vault bundle outside the real Codex home. It imported
+the synthetic recovery key, verified the encrypted snapshot contained one
+transcript, restored it into a separate empty temporary home, and compared
+the restored conversation byte-for-byte with the fixture. The receiver reported
+`Physical cross-Mac synthetic recovery: PASS` on September 29 at about
+22:36 UTC. Its cleanup path deleted the disposable imported Keychain key;
+the successful exit confirms that cleanup did not fail. The real Codex home
+and installed application data were not changed.
+
+The earlier receiver failure was a mismatched **test fixture**: it ran the
+nine-file portability assertion against this one-file bundle. The corrected
+wrapper invoked `physical_onefile_receiver.py` instead. This pass proves
+recovery-key import and one synthetic local Vault restore using the second
+Mac's installed helper; it does **not** prove hosted R2 recovery, a clean-account
+business recovery route, attachment/database coverage on that Mac, or recovery
+of the Founder's real history. Those release gates remain open.
+
+## September 29 ambiguous-fork retrieval — draft only
+
+When a fork names a parent rollout ID with multiple physical candidates, the
+draft Vault still refuses to infer a complete lineage. It now searches the
+child's own JSONL bytes separately and labels any match as an **incomplete
+physical copy**. The browser can open and export that exact file with a warning
+that inherited history is absent; it does not offer selected copy-back into
+Codex. The server also refuses selected copy-back if the recovered child's
+parent lineage is ambiguous. Synthetic local and opened-backup API checks cover
+search, matched read, Markdown export, and copy-back refusal. Ambiguous
+database-only inheritance remains excluded with an incomplete-results warning.
+This work is not in the public notarized build and does not establish complete
+search recall or clean-Mac recovery.
+
+## September 29 current-source portability proof — draft only
+
+At source commit `578b4d6`, [CI run 36633107207](https://github.com/jsegeren/codex-migrate/actions/runs/36633107207)
+passed both synthetic Mac-to-Mac pairs: `vault-portability-export` / `vault-portability-import`
+and `hosted-portability-export` / `hosted-portability-import`. Each importer ran
+on an independent fresh macOS runner, imported the saved test recovery key,
+and checked decrypted/restored content. The helper was compiled from that
+source in test-only Keychain mode. The temporary branch push trigger was
+removed after the proof; routine CI policy is unchanged.
+
+This validates current-source format portability, including the hosted
+encrypted-object fixture. It does **not** certify the installed signed app,
+production R2, customer enrollment, a business recovery key, or recovery of
+either Founder's real Codex history. Those release gates remain open.
+
+The same clean source at `bf9e06b40d00cc415a089754049ab6591001ffd0`
+produced a disposable, ad-hoc-signed **local-test build 20** on this Mac. Its
+ZIP SHA-256 is `6404b331f4394edc6b0e436008f9ce09056f4b14e84d7ac8cba6b1442ba268ef`.
+The packaged engine/helper passed six opt-in synthetic tests covering exact
+restore bytes, database-only history, pasted-prompt attachments, and search
+index behavior; two unrelated optional cases were skipped. A separate opt-in
+real LaunchAgent test added a database item, produced a second encrypted
+snapshot marked `needs_attention`, and restored both versions. It removed its
+disposable agent and Keychain key afterward. The package is **not Developer ID signed or notarized**,
+was not installed for a buyer, and did not back up either real Codex home.
+
+A separate **Developer ID signed but not notarized** local-test build 20 from
+clean source `a587f4ced42bb86ba3f142adc97387961aca2e5f` has ZIP SHA-256
+`fdd088a2f6b11cb9b4ba400aee080a186714832e8e28fbd33732960600589243`.
+Strict app-signature validation passed; the bundled Vault helper carried its
+provisioned Keychain access group. Six packaged synthetic Vault tests and the
+disposable real LaunchAgent/database-append test passed with that signed
+helper. The test harness initially selected the separately bundled *legacy*
+helper for one scheduled run and failed; it now selects the current helper
+when both are present, then the same signed package passed. The test removed
+its LaunchAgent and disposable Keychain key. This is not Apple-notarized,
+buyer-installed, or real-history backup evidence.
+The same signed test package performed one read-only search of this Mac's live
+Codex history in 3.75 seconds, returning the requested cap of 20 matches:
+19 database-backed and one active transcript. The engine emitted a warning,
+so this is not a complete-recall claim. No result text was logged, and no
+backup or search index was created.
+
 The Founder authorized a **self-service paid beta** on September 7 while the
 remaining acceptance checks continue. This is not full release certification.
 The [paid-beta launch record](paid-beta-launch-2026-09-07.md) controls the current
 distribution decision; the dated entries below preserve their original status.
+
+## September 29 attachment coverage — draft, not released
+
+Some Codex pasted prompts are stored only in `~/.codex/attachments` while the
+conversation JSONL retains a path reference. A transcript-only backup can
+therefore miss user-authored text. Draft snapshot format 4 now encrypts the
+owned attachment files alongside the history; local and hosted synthetic
+roundtrips recover them after key import, and restored-history search/export
+resolves the old-Mac path by attachment ID. Missing referenced pasted text is
+marked at risk rather than called protected. Whole-history write-back to Codex
+is refused for attachment-bearing snapshots until reference repair is proven;
+read-only restore to a separate folder remains available. Older snapshots
+cannot recover an attachment they never captured. This work has not passed
+real R2 clean-Mac recovery or shipped in a signed customer build.
+
+On September 29, exact committed source `2fccfd3f9a8ed49fe68bf0a61982d6c6c90aa2ca`
+produced an unsigned local-test arm64 build 20 (ZIP SHA-256
+`ad61e9651d6c9d5485570d43e80d35adf52b6706fecc6664cb5aae09d922b512`).
+The bundled engine captured a disposable pasted-prompt attachment, verified
+and restored the encrypted snapshot, and found the attachment-only marker by
+searching the restored history. The complete opt-in packaged Vault test file
+passed six tests with two optional tests skipped. This establishes package
+inclusion for the attachment path, not a signed buyer release, real-history
+backup, or clean-account/real-R2 disaster recovery.
+
+The same unsigned bundle was copied to a temporary folder on the second Mac
+and started successfully from SSH, but its synthetic attachment-backup test
+stopped when the authenticated helper returned failure before any snapshot was
+published. The SSH login also could not query that user's login Keychain; an
+attempt to enter the GUI bootstrap from SSH was denied by macOS. This is **not**
+a successful second-Mac backup test or proof of a product failure in the
+normal interactive session. No installed app or Codex history was touched;
+the temporary test copy was moved to Trash. Repeat this gate in a genuine
+signed-in GUI session or another appropriately authenticated test context.
+
+## September 28 paginated-history coverage hold
+
+On September 29, exact draft source `66ed54b59e7da4cf7ead58250c4e482fcfa049e5`
+produced an unsigned local-test arm64 build 20 (ZIP SHA-256
+`c26a20baaa0d62b731d98562dc1b73290a6aa779a388e853fad1d10d46446742`).
+Its bundled engine passed five synthetic Vault package tests, including
+database-only search, encrypted backup, restore, and stale-index fallback;
+two optional tests were skipped. The separately opted-in real macOS
+LaunchAgent test captured an appended database item in a second verified
+snapshot, then removed its temporary service, plist, and test Keychain key.
+The package and build environment were moved to Trash after verification.
+An opt-in test of the same packaged engine then killed a disposable backup
+after it stored a new encrypted chunk. The previous snapshot still verified;
+retry published and verified a new snapshot, and its restored transcript
+matched the synthetic source bytes. Its test Keychain key was removed.
+Another opt-in test of that packaged engine restored a disposable 128 MiB
+transcript through the loopback dashboard. While restore was active, both the
+updater idle check and shutdown request refused the update; after restore
+completed, the recovered bytes matched the source and shutdown succeeded.
+The test removed its temporary Vault key and dashboard process.
+This is current-source packaging evidence, not a signed buyer release,
+natural daily wake, physical power/network interruption, clean-account
+recovery, a signed updater installation, or real-history protection proof.
+
+A read-only search with that exact packaged engine against this Mac's installed
+Codex history returned the requested 20 capped thread matches in 12.95 seconds:
+19 database-backed and one active transcript. The engine reported that
+ambiguous history copies were skipped, so the result is explicitly incomplete.
+The query and match text were not recorded. The check created no backup or
+search index and did not alter Codex state. It is one real-history packaged
+search observation, not a complete-recall or acceptable worst-case-latency
+proof.
+
+A low-priority, read-only Vault title search on the second Mac found a real
+thread by a former title in 0.17 seconds and displayed its different current
+title from Codex state. A synthetic regression now preserves that behavior
+without storing the private title or thread ID in the repository. The probe
+did not read conversation bodies, create a backup, or change Codex state; its
+temporary code copy was removed. This establishes one renamed-title retrieval
+case, not complete history coverage, packaged-app behavior, or a recovery
+receipt.
+
+A read-only dogfood search on this Mac returned ten capped results in 2.34 s:
+nine from the paginated-history source and one from an active transcript. No
+conversation text was included in the receipt and no backup was created. A
+second search exposed that Codex sometimes stores an entire opening prompt as
+the thread title; the draft Vault results and version list now display a
+bounded, whitespace-normalized excerpt while keeping the full title available
+to the search engine. The second search also warned about ambiguous history
+copies, so neither result is proof of complete recall. This is local source
+behavior, not a released-buyer or large-history performance guarantee.
+
+The draft local Vault search now keeps intact matches visible when a JSONL
+conversation header or record is unreadable. Browser and CLI searches identify
+the result set as incomplete; the browser opens its separate read-only damaged-
+file inspection panel. Direct callers without a warnings channel still fail
+closed. Synthetic corrupt-header and corrupt-record tests, a browser warning
+test, and an API partial-results test pass. This does not repair the file,
+guarantee recovery of the missing record, or clear the release hold. The
+public build 16 has not received this change.
+
+A synthetic 1,001-snapshot regression found and removed a separate long-term
+history failure: the local Vault browser previously refused all history once
+the folder held more than 1,000 references. Bounded CLI/browser requests remain
+bounded, but internal title and timeline traversal can now read all retained
+versions, yielding entries instead of building a second version list. This does
+not prove fast browsing at realistic multi-year history size or clear the
+paginated-history release hold.
+
+An opt-in source-interpreter search benchmark used only a disposable SQLite
+history with 200 threads, 100,000 items, and 1 KiB of deterministic,
+high-trigram-variety base64 text per item. The 142,303,232-byte source database
+took 0.547 s for one exact hit and 0.549 s for a miss without an index. The
+optional index built in 19.205 s, occupied 41,885,696 bytes, and then took
+0.210 s for the same hit and 0.116 s for the miss. Exact results matched the
+direct scan. This is a synthetic sensitivity check, not customer prose, a
+packaged-app benchmark, a full-size history, or a performance promise. Cache
+size and speed vary markedly with text diversity, which is why indexing
+remains opt-in and reports its disk/privacy cost.
+
+Exact pushed source `fff67ffb9758ec25d7d3c2377116935cb8997d77` produced an
+arm64 local-test-only build 20 with ZIP SHA-256
+`0710d30e686009ac8765d5b1520be97ca112bea352271580638022e9386497f0`.
+Its bundled engine passed two opt-in synthetic search-index checks: one for
+JSONL transcripts and one for a database-only thread. The latter found the
+thread before and after indexing, found a newly appended database item while
+the index was stale, and still found it after refresh. The fixture used only a
+disposable source home and created no Vault Keychain key or backup schedule.
+This checks packaged database search and stale-index fallback; it does **not**
+measure large-history latency, prove clean-account recovery, sign or notarize
+this build, or clear the public build-20 release hold.
+
+Exact committed source `ffb096b` produced an ad-hoc-signed local-test build 20
+with ZIP SHA-256
+`5cf44ff9a58455544ffe1a32240fa29c081a718ce464983231fc2c592c1577d1`.
+An opt-in test used only a disposable synthetic Codex home: it made a first
+encrypted snapshot with one database-only item, installed a temporary macOS
+LaunchAgent, added a second item, made the schedule due, and invoked the real
+service with `launchctl kickstart`. The agent published a second snapshot with
+a `needs_attention` receipt. Both versions independently restored with their
+expected one and two items, and the source database stayed byte-for-byte
+unchanged by the scheduled capture. The test unloaded the LaunchAgent and
+deleted its test Keychain key; a follow-up check found neither the service nor
+the account-level plist. This proves the packaged engine can run that capture
+under this logged-in account after a forced wake. It does **not** prove a
+natural 24-hour wake, clean-account key import, production signing, a paid
+update, two-Mac recovery, or complete installed-Codex coverage. No personal
+Codex history or backup schedule was used. The public release hold remains.
+
+Exact committed source `8db1976` was built as a clean, ad-hoc-signed local-test
+build 20. Its ZIP SHA-256 is
+`5fa80d7f480e7b7b17b62e2e51b8c6e63bd84371d803e7d536f8b945ac15ce14`.
+The packaged engine captured a synthetic database-only message, then a second
+database-only message through its `scheduled-run` path using an owner-only,
+disposable schedule configuration. Both the original one-item snapshot and the
+new two-item snapshot verified and restored separately; the Codex-owned source
+database remained byte-for-byte unchanged by each capture. Four of five
+packaged Vault tests passed, with one optional legacy-package test skipped.
+This manually invoked scheduled runner did **not** install or wake a LaunchAgent,
+use a clean macOS account, exercise a production-signed buyer app, or prove
+full installed-Codex coverage. The scheduled receipt correctly remained
+`needs_attention` while paginated protection is not release-certified. The
+public release hold remains in force.
+
+An exact-source local-test build-20 package from `7408317` passed strict local
+code-signature verification and four packaged-engine checks (one optional
+legacy-package check skipped). A new packaged regression created a disposable
+paginated database containing a message absent from its JSONL rollout; the
+bundled engine found the message, encrypted and verified a snapshot, and
+restored the database-derived record with that text intact. The source
+paginated/history suites separately passed 24 tests. This proves a narrow
+database-only recovery path in an ad-hoc local package; it does **not** prove
+clean-account key import, production signing, a scheduled second capture,
+realistic-scale performance, or complete installed-Codex coverage. The public
+release hold remains in force.
+
+The installed Codex runtime uses a paginated thread-history database in
+addition to JSONL rollouts. A read-only check found cases where the database
+projection offset is beyond the current rollout length and its user/agent
+message counts materially exceed the current file's counts. Vault's current encrypted snapshot
+contains JSONL transcript trees, not that database. This does not establish
+which items are unique, but it prevents us from claiming full paginated-thread
+coverage from a green JSONL verification alone. The next public release is
+held until the [paginated-history coverage gate](vault-thread-history-contract.md#paginated-history-coverage-gate-september-28)
+is resolved and independently reviewed. Build 16 remains the public beta under
+its existing testing disclosure; no customer data was changed by this check.
+
+The draft next-build source now marks a JSONL snapshot `needs_attention`
+whenever Codex's separate paginated-history database exists. Scheduled status
+stays unhealthy, and the browser says that message coverage is unverified. This
+check never opens the database and does **not** capture its content or clear the
+release hold. It is an interim guard against a misleading green status, not a
+new backup guarantee. Per-thread loss flags remain reserved for thread-specific
+loss or identity evidence; this source-level warning is not silently inherited
+by every future thread version.
+
+A private read-only source adapter checks the installed paginated schema and
+pins a SQLite read transaction. Draft v3 snapshots now stream each thread's
+provenance-labelled item records directly to the encryption helper, verify the
+sealed chunks, and stage recovery in a separate `paginated_history` folder.
+Synthetic concurrency, unknown-schema, malformed-item, linked-source, and
+encrypted recovery tests exercise this foundation. The draft browser can now
+search, read, and export separately restored items. One-thread copy-back and
+whole-history installation are refused for this source. Clean-account recovery,
+installed-runtime scale, and independent review are still missing. These snapshots deliberately remain
+`needs attention`. This work is **not released** and does not clear the
+paginated-history or next-build hold.
+
+The draft compares database-derived versions separately from JSONL versions.
+A synthetic two-item paginated thread, followed by a one-item shrink, sets a
+per-thread `at_risk` flag that persists on later captures; the earlier two-item
+snapshot remains decryptable and readable. An unchanged second capture adds no
+new encrypted object. This is a conservative loss signal, not proof that every
+possible database rewrite or missing thread will be detected.
+
+On source `4d6be8a`, [independent macOS CI runners](https://github.com/jsegeren/codex-migrate/actions/runs/36441418314)
+successfully exported and imported a synthetic encrypted Vault with
+database-only and inherited fork items, then searched, read, and exported the
+restored content. Both Python jobs passed. The CI helper uses a disposable
+test Keychain configuration, not the final signed buyer app; a clean-account
+release-app recovery test and installed-runtime scale proof remain open.
+
+A September 28 low-priority, read-only pass over this Mac's installed Codex
+paginated database validated the known schema and all 799,860 item records
+across 1,615 thread IDs in 15.5 seconds. It reported only aggregate counts
+and bytes; it did not log message content, create a snapshot, or alter Codex.
+This is one installed-version source-read scale check, **not** an encrypted
+full-size backup, scheduled run, clean-account restore, or second-Mac proof.
+
+The opt-in, disposable `tests/bench_vault_paginated.py` exercised the draft
+encrypted backup path without reading customer data. A 1,615-thread,
+801,040-item synthetic SQLite source occupied 371,687,424 bytes; its first
+backup and verification took 26.5 seconds, the unchanged second backup and
+verification took 25.1 seconds, and all 1,615 encrypted objects were reused.
+`/usr/bin/time -l` measured about 215 MB peak resident memory. Those short,
+identical payloads compressed to only 9.7 MB of Vault files, so they are a
+record-count test, **not** a realistic storage-size or cost estimate.
+Separately, 100,000 varied 8 KiB synthetic items across 200 threads occupied
+875,958,272 SQLite bytes. First backup and verification took 22.1 seconds;
+the unchanged second backup and verification took 21.3 seconds with all 400
+objects reused. The Vault occupied 469,896,622 bytes and peak resident memory
+was about 503 MB. The benchmark deletes its disposable key and data on exit.
+With one additional 8 KiB database item before the second capture, the same
+fixture retained all 400 previous ciphertext objects and added one 39,962-byte
+object. Total Vault storage grew by 154,766 bytes including the new manifest,
+reference, and metadata. This measures one synthetic append pattern, not the
+retained-byte growth of a real customer's daily history or a hosted-tier price.
+None of these runs used the installed scheduler or the real 6.6 GB item
+payload volume, proved off-device recovery, or clears the public-release hold.
+
+## September 28 hosted/Vault integration checkpoint — not released
+
+On September 28, the sandbox Worker ran locally under Wrangler 4.141.0 and
+Node 26.7.0 with an emulated R2 bucket. Both opt-in probe routes passed all
+their flags (9/9 object checks and 8/8 capability-transport checks), and the
+separate native Python client completed upload, immutable reuse, exact-byte
+download, and deletion through the same loopback Worker. The probes used
+random synthetic objects and removed them afterward. This is a local runtime
+transport receipt only: it did not connect to Cloudflare R2, publish an
+encrypted snapshot, exercise billing or enrollment, or prove clean-account
+recovery. At this local-only checkpoint, the real-R2 sandbox and customer
+release gates remained open.
+
+A follow-up opt-in local test joined the real encrypted snapshot staging path
+to that loopback Worker, including one synthetic JSONL transcript and one
+database-only message. After removing its disposable Keychain key, the test
+imported the recovery key, downloaded the exact encrypted objects, verified
+and restored both sources, checked that remote bytes did not expose either
+synthetic message, and confirmed its scoped objects were deleted. The seven
+fixture unit tests also passed. Grants came from a test-only local issuer;
+this still does not prove an authenticated hosted service, actual Cloudflare
+R2, independent publication, scheduled backup, or clean-account recovery.
+
+The subsequent real-R2 sandbox run passed both Worker probes (9/9 primitive
+and 8/8 capability-route flags), the separate native Python transport check,
+and a full synthetic encrypted snapshot/recovery roundtrip through the
+locally running Worker with a remote R2 binding. The test deleted its scoped
+objects; the Cloudflare dashboard then showed zero objects and bytes in the
+named sandbox bucket. The same-day Workers Scripts token was revoked. This
+proves the sandbox transport and encryption/recovery path, **not** customer
+authentication, subscription entitlement, provider-backed publication at real
+scale, a deployed service, or clean-Mac disaster recovery. No public build or
+checkout changed.
+
+An opt-in whole-run scale probe on the hosted branch passed in 53.454 s with
+2,048 additional synthetic transcript files and a roughly 72 MiB synthetic
+long thread. It exercised hosted-only staging, a second snapshot, remote-object
+reuse through an **in-memory** store, exact publication checks, removal of the
+test Keychain key, recovery-key import, and byte-for-byte restore into an empty
+synthetic home. It did not use R2, a separate macOS login, customer data, a
+scheduled wake, or a signed buyer build; those gates remain open.
+
+The hosted draft includes the paginated-history Vault integration at merge
+`2bc4b4a`. That merge first made the transcript-only stage refuse a source with
+Codex's paginated-history database, rather than falsely claiming complete
+protection. The subsequent draft now streams the database's validated items in
+bounded memory windows directly to the native encryption helper. It stages a
+version-3 manifest when those items exist and requires exact remote ciphertext
+receipts before discarding scratch chunks. A synthetic database-only snapshot
+was staged, retried without new uploads, downloaded, verified, and restored
+without a plaintext history file on disk. This remains dark source work: real
+R2 publication, independent clean-account/key-import recovery, installed-app
+wiring, and realistic-scale hosted transport tests are still release gates.
+The dark live-runner test also stages and publishes a mixed transcript/database
+snapshot through its synthetic in-memory service, reuses unchanged database
+ciphertext on a second run, and restores the database item after recovery-key
+import. It does not exercise deployed customer authority or real R2.
+
+The combined source before the streaming addition passed 1,083 Python tests
+(27 expected skips), 495 JavaScript tests (one expected skip), and the native
+crypto-helper typecheck locally. Those checks are not a signed customer build
+or real-R2 disaster-recovery receipt.
+
+## September 27 integrated-source local package — not released
+
+Committed source `e644570` packaged as an arm64 **local-test-only** build-20 app.
+The actual bundled engine passed 23 desktop and Vault-compression checks with
+two expected environment skips. An opt-in packaged restore-contention test
+created only disposable synthetic Codex history, verified its encrypted restore,
+and proved that both updater idle and shutdown were refused while restoration
+ran; shutdown succeeded after the restore completed. The disposable Vault key
+was removed by the test. The full source suite separately passed 942 Python
+tests (27 skipped) and 341 JavaScript tests (one skipped). This local package
+is ad-hoc signed, not notarized or distributable. It does not satisfy paid
+buyer installation, automatic update/relaunch, clean-account recovery, or
+hosted-backup acceptance. Build 16 remains public.
+
+## September 26 private build-20 candidate — not released
+
+Clean, pushed source `d65cb7f0c46b56eb43e83a6dd36940808482aa3b` produced a
+Developer ID signed, Apple-notarized build-20 app. Apple's app submission
+`c54daf95-ccd3-4954-8946-760a195cc6fa` is Accepted; stapling and Gatekeeper
+assessment passed. The intermediate ZIP is 10,429,416 bytes with SHA-256
+`96c4e09fffa1798e1e3fdac17166d7fa6ae1642f756570cf582fdd5c85c590c1`.
+Its bundled engine passed 18 of 19 focused desktop tests, with the one
+case-sensitive-filesystem fixture skipped.
+
+The same app was packaged into the required one-time Sparkle key-rotation DMG.
+Apple accepted the separately signed disk-image submission
+`347833ad-2cf5-46ec-8797-6d2db55c25a3`; stapling and Gatekeeper assessment
+passed. The final DMG is 11,227,700 bytes with SHA-256
+`3f98ae4edbb479e1429e5c309c78eeda3448e4c4b6a01613a49041d1faf78a1a`.
+Sparkle's new-key signer produced signature
+`OMAFR0uulGy2nMZq0fli6hzZmZkCO3ThZnfnZN60Gj5lwMSU406bbyMydgpMr4/kAtJTiSlaGzE09F9hkMfrDQ==`
+and its verifier accepted that signature against the exact final bytes. The
+embedded public key is the approved rotated key. No private signing key is in
+this repository or artifact.
+
+The home-screen backup-health regression in this source passed 11 targeted
+browser-script tests and 63 setup tests locally. The exact source commit passed
+the GitHub Actions Python 3.9 and 3.12 jobs. The operator-only upload placed
+the exact DMG under a private **sandbox** pathname and read back all 11,227,700
+bytes with the same SHA-256. Its catalog entry is `testingOnly: true` and
+`accepted: false`; 114 focused commerce/update tests passed with that entry.
+This is an **artifact and private-storage receipt, not release acceptance**:
+the DMG has not been offered to a paid buyer, installed through the production
+appcast, or exercised for clean-account Vault recovery. It does not prove
+hosted backup or two-Mac sync. Keep build 16 public and both integration and
+hosted PRs on hold until their stated acceptance gates pass.
+
+A separate [cross-runner portability run](https://github.com/jsegeren/codex-migrate/actions/runs/36300816262)
+on source `ce23883d029d972aaec5fc2696ecbbd6d47064ad` passed its synthetic
+Vault export and import jobs: the producer verified an encrypted snapshot,
+removed its test Keychain key, and the independent macOS runner refused to
+read the snapshot until it imported the recovery key, then restored the exact
+synthetic transcript. Both Python 3.9 and 3.12 jobs also passed. This tests the
+source recovery-key path across independent CI machines; it is not a clean
+customer-account or packaged-build-20 recovery test.
 
 ## September 23 build 16 in-app update beta release
 

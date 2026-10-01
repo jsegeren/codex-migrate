@@ -1,4 +1,20 @@
 {
+  "codex-migrate-build20-vault-integrated-arm64": {
+    "id": "codex-migrate-build20-vault-integrated-arm64",
+    "kind": "signed-notarized",
+    "testingOnly": true,
+    "accepted": false,
+    "source": "d65cb7f0c46b56eb43e83a6dd36940808482aa3b",
+    "sha256": "3f98ae4edbb479e1429e5c309c78eeda3448e4c4b6a01613a49041d1faf78a1a",
+    "filename": "Codex-Migrate-0.1.0-build20-arm64.dmg",
+    "size": 11227700,
+    "pathname": "sandbox/3f98ae4edbb479e1429e5c309c78eeda3448e4c4b6a01613a49041d1faf78a1a/Codex-Migrate-0.1.0-build20-arm64.dmg",
+    "diskImageNotarization": {
+      "status": "Accepted",
+      "id": "347833ad-2cf5-46ec-8797-6d2db55c25a3"
+    },
+    "sparkleSignature": "OMAFR0uulGy2nMZq0fli6hzZmZkCO3ThZnfnZN60Gj5lwMSU406bbyMydgpMr4/kAtJTiSlaGzE09F9hkMfrDQ=="
+  },
   "codex-migrate-build19-vault-integrated-arm64": {
     "id": "codex-migrate-build19-vault-integrated-arm64",
     "kind": "signed-notarized",
@@ -68,16 +84,16 @@
     "kind": "signed-notarized",
     "testingOnly": true,
     "accepted": false,
-    "source": "1fdf64094096d60554e3986c24131ca9b1d887b7",
-    "sha256": "e365674834112941ce1085ec92b78f030f883a0223491e829b51c6c73b03cbf3",
+    "source": "3d990b96fda666ceee9ae548a5e5349a14767a10",
+    "sha256": "3697889980f5fcb0a3717752cb0c46068efe0d207b181f6266980f87ae218401",
     "filename": "Codex-Migrate-0.1.0-build17-arm64.dmg",
-    "size": 10513015,
-    "pathname": "sandbox/e365674834112941ce1085ec92b78f030f883a0223491e829b51c6c73b03cbf3/Codex-Migrate-0.1.0-build17-arm64.dmg",
+    "size": 10512566,
+    "pathname": "sandbox/3697889980f5fcb0a3717752cb0c46068efe0d207b181f6266980f87ae218401/Codex-Migrate-0.1.0-build17-arm64.dmg",
     "diskImageNotarization": {
       "status": "Accepted",
-      "id": "572cffeb-c372-4338-88fc-739767058399"
+      "id": "a7580574-c429-4f53-a1a3-000cba3f7e50"
     },
-    "sparkleSignature": "A/2LGcZEsydVI2lY2LcPpbNLcAQgqgYfE0Rfou/pqrZOmOlVxVAUpBxpRC+V6KBStf005IMbSV3yLrLxqZC9CA=="
+    "sparkleSignature": "Ohxtz0yaBy1dUItBlS/LIlbG6NprSVf2azKPzrXAL65fOuWhv72yKCH0JKNjBLbXmf7zJaZ8bKki/ftMzvYSAA=="
   },
   "codex-migrate-build17-bed7cba-arm64": {
     "id": "codex-migrate-build17-bed7cba-arm64",

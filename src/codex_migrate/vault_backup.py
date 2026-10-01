@@ -18,22 +18,34 @@ from pathlib import Path
 import stat
 import subprocess
 import sys
+import threading
 from typing import BinaryIO, Callable, Dict, Iterator, List, Optional, Tuple
 import uuid
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.source_availability import check_info, require_local
-from codex_migrate.vault import _transcripts
+from codex_migrate.vault import _transcripts, inspect as inspect_vault
+from codex_migrate.vault_attachments import attachment_files, pasted_references
 from codex_migrate.vault_identity import (
-    loss_warnings, mark_simultaneous_conflicts, scan_transcript, title_index,
+    TranscriptChanged, loss_warnings, mark_simultaneous_conflicts,
+    scan_transcript, title_index,
 )
 from codex_migrate.vault_local_lock import local_history_lock
 
 
 FORMAT_VERSION = 1
-SNAPSHOT_FORMAT_VERSION = 2
+SNAPSHOT_FORMAT_VERSION = 4
 DEFAULT_CHUNK_SIZE = 4 * 1024 * 1024
 METADATA_NAME = "vault.json"
+STORAGE_CODEC = "lzfse-v1"
+MAX_CHANGED_TRANSCRIPT_ATTEMPTS = 3
+_KEYCHAIN_APPROVAL_MESSAGE = (
+    "Vault could not access its key without interactive Keychain approval. "
+    "No backup was published. Contact support if this persists"
+)
+_KEYCHAIN_APPROVAL_STDERR = (
+    "Codex Vault crypto: " + _KEYCHAIN_APPROVAL_MESSAGE + "\n"
+).encode("utf-8")
 
 
 @dataclass(frozen=True)
@@ -41,6 +53,10 @@ class BackupPlan:
     destination: str
     transcript_files: int
     transcript_bytes: int
+    paginated_threads: int = 0
+    paginated_database_bytes: int = 0
+    attachment_files: int = 0
+    attachment_bytes: int = 0
     encrypted: bool = True
     applied: bool = False
 
@@ -60,10 +76,22 @@ class BackupResult:
     needs_attention: bool = False
     at_risk_threads: int = 0
     paginated_history_unprotected: bool = False
+    title_index_unavailable: bool = False
+    attachment_files: int = 0
+    attachment_bytes: int = 0
     applied: bool = True
 
     def as_dict(self) -> Dict[str, object]:
         return asdict(self)
+
+
+@dataclass(frozen=True)
+class BusinessRecoverySetup:
+    """One-time credentials; the caller must deliver each kit to its custodian."""
+
+    key_id: str
+    worker_credential: Dict[str, object]
+    company_credential: Dict[str, object]
 
 
 def _canonical_macos_path(path: Path) -> Path:
@@ -121,7 +149,8 @@ def _helper_path(explicit: Optional[str]) -> Path:
         candidate = Path(explicit).expanduser()
     else:
         executable = Path(sys.executable)
-        candidate = executable.parents[1] / "CodexVaultCrypto"
+        bundled = (executable.parents[2] / "Helpers/CodexVaultCrypto.app/Contents/MacOS/CodexVaultCrypto")
+        candidate = bundled if bundled.is_file() else executable.parents[1] / "CodexVaultCrypto"
     if not candidate.is_absolute():
         raise ValueError("crypto helper path must be absolute")
     try:
@@ -159,6 +188,10 @@ def _run_helper(
     except OSError as error:
         raise MigrationError("The authenticated backup helper could not start.") from error
     if result.returncode:
+        # Never relay arbitrary helper stderr: it may contain paths or private
+        # data. This one exact, static helper error is safe and actionable.
+        if result.stderr == _KEYCHAIN_APPROVAL_STDERR:
+            raise MigrationError(_KEYCHAIN_APPROVAL_MESSAGE)
         raise MigrationError(
             "Authenticated backup failed; no new snapshot was published."
         )
@@ -169,6 +202,52 @@ def _run_helper(
     if not isinstance(payload, dict):
         raise MigrationError("The authenticated backup helper returned an invalid result.")
     return payload
+
+
+def _store_paginated_thread(helper: Path, objects: Path, chunk_size: int,
+                            key_id: str, source: object, thread_id: str,
+                            attachment_paths: set
+                            ) -> Tuple[Dict[str, object], int, int, int, bool]:
+    """Encrypt a SQLite thread through a pipe, without plaintext staging files."""
+    from codex_migrate.vault_paginated import encoded_item
+
+    read_fd, write_fd = os.pipe()
+    failure: List[BaseException] = []
+    counts = [0, 0, 0]
+    missing_attachment = [False]
+
+    def produce() -> None:
+        try:
+            with os.fdopen(write_fd, "wb") as output:
+                for item in source.items(thread_id):
+                    if any(attachment_id + "/pasted-text.txt" not in attachment_paths
+                           for attachment_id in pasted_references(item.item_json)):
+                        missing_attachment[0] = True
+                    output.write(encoded_item(item))
+                    counts[0] += 1
+                    counts[1] += item.item_type == "userMessage"
+                    counts[2] += item.item_type == "agentMessage"
+        except BaseException as error:
+            failure.append(error)
+
+    producer = threading.Thread(target=produce, name="vault-paginated-encryption")
+    producer.start()
+    try:
+        with os.fdopen(read_fd, "rb") as input_file:
+            stored = _run_helper(
+                helper,
+                ["store-chunks", "--key-id", key_id,
+                 "--object-dir", str(objects), "--chunk-size", str(chunk_size)],
+                input_file=input_file,
+            )
+    finally:
+        producer.join()
+    if failure:
+        error = failure[0]
+        if isinstance(error, MigrationError):
+            raise error
+        raise MigrationError("Codex paginated history changed or could not be encrypted safely.") from error
+    return stored, *counts, missing_attachment[0]
 
 
 def _json_bytes(value: object) -> bytes:
@@ -224,10 +303,17 @@ def _read_json(path: Path) -> Dict[str, object]:
 
 
 def _metadata(value: Dict[str, object]) -> str:
-    if set(value) != {"format", "version", "key_id", "created_at"}:
+    required = {"format", "version", "key_id", "created_at"}
+    if set(value) not in (
+            required, required | {"storage_codec"},
+            required | {"storage_codec", "recovery_mode"}):
         raise MigrationError("Vault metadata has an unsupported shape.")
     if value.get("format") != "codex-vault" or value.get("version") != FORMAT_VERSION:
         raise MigrationError("Vault metadata has an unsupported format version.")
+    if "storage_codec" in value and value["storage_codec"] != STORAGE_CODEC:
+        raise MigrationError("Vault metadata has an unsupported storage codec.")
+    if "recovery_mode" in value and value["recovery_mode"] != "business-v1":
+        raise MigrationError("Vault metadata has an unsupported recovery mode.")
     key_id = value.get("key_id")
     try:
         canonical = str(uuid.UUID(str(key_id))).lower()
@@ -276,6 +362,7 @@ def _prepare_repository(root: Path, helper: Path) -> Tuple[str, Optional[str]]:
     metadata = {
         "format": "codex-vault",
         "version": FORMAT_VERSION,
+        "storage_codec": STORAGE_CODEC,
         "key_id": canonical,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -283,8 +370,64 @@ def _prepare_repository(root: Path, helper: Path) -> Tuple[str, Optional[str]]:
     return canonical, recovery_key
 
 
+def initialize_business_vault(
+    source_home: str,
+    destination: str,
+    *,
+    crypto_helper: Optional[str] = None,
+) -> BusinessRecoverySetup:
+    """Create an empty business Vault; never persist recovery kits in it.
+
+    This is an internal primitive, not organization enrollment or proof that
+    the worker and company have independently retained their credentials.
+    """
+    root = _validate_destination(source_home, destination)
+    if not root.exists():
+        root.mkdir(mode=0o700)
+        _fsync_directory(root.parent)
+    _require_unlinked_path(root)
+    info = root.lstat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
+        raise MigrationError("The business Vault folder must be private and owned by this user.")
+    helper = _helper_path(crypto_helper)
+    with _repository_lock(root):
+        if any(item.name != "backup.lock" for item in root.iterdir()):
+            raise MigrationError("Business Vault setup requires an empty destination.")
+        created = _run_helper(helper, ["business-key-create"])
+        key_id = created.get("key_id")
+        try:
+            canonical = str(uuid.UUID(str(key_id))).lower()
+        except (ValueError, TypeError, AttributeError):
+            raise MigrationError("The business key helper returned an invalid identifier.") from None
+        if canonical != key_id:
+            raise MigrationError("The business key helper returned an invalid identifier.")
+        credentials = []
+        for role in ("worker", "company"):
+            secret = created.get(role + "_recovery_key")
+            envelope = created.get(role + "_envelope")
+            if (not isinstance(secret, str) or not secret.startswith("CVB1-")
+                    or not isinstance(envelope, dict)
+                    or envelope.get("version") != 1
+                    or envelope.get("key_id") != canonical
+                    or envelope.get("role") != role
+                    or not isinstance(envelope.get("wrapped_key"), str)):
+                raise MigrationError("The business key helper returned invalid recovery material.")
+            credentials.append({"recovery_key": secret, "envelope": envelope})
+        if credentials[0]["recovery_key"] == credentials[1]["recovery_key"]:
+            raise MigrationError("The business recovery custodians were not independent.")
+        _atomic_json(root / METADATA_NAME, {
+            "format": "codex-vault",
+            "version": FORMAT_VERSION,
+            "storage_codec": STORAGE_CODEC,
+            "recovery_mode": "business-v1",
+            "key_id": canonical,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        return BusinessRecoverySetup(canonical, credentials[0], credentials[1])
+
+
 def _source_files(source_home: str) -> List[Tuple[str, Path, str]]:
-    files = list(_transcripts(source_home))
+    files = list(_transcripts(source_home)) + attachment_files(source_home)
     files.sort(key=lambda item: (item[0], item[2]))
     return files
 
@@ -320,9 +463,11 @@ def _previous_catalog(root: Path, key_id: str, helper: Path) -> List[Dict[str, o
 
 def plan(source_home: str, destination: str) -> BackupPlan:
     root = _validate_destination(source_home, destination)
-    files = _source_files(source_home)
-    total = sum(check_info(path.lstat()).st_size for _, path, _ in files)
-    return BackupPlan(str(root), len(files), total)
+    summary = inspect_vault(source_home)
+    return BackupPlan(str(root), summary.active_transcripts + summary.archived_transcripts,
+                      summary.transcript_bytes, summary.paginated_threads,
+                      summary.paginated_database_bytes, summary.attachment_files,
+                      summary.attachment_bytes)
 
 
 def _paginated_history_unprotected(source_home: str) -> bool:
@@ -361,11 +506,13 @@ def backup(
     crypto_helper: Optional[str] = None,
     chunk_size: int = DEFAULT_CHUNK_SIZE,
     progress: Optional[Callable[[int, int, int, int], None]] = None,
+    require_existing_key_id: Optional[str] = None,
 ) -> BackupResult:
     with local_history_lock(source_home):
         return _backup_unlocked(
             source_home, destination, crypto_helper=crypto_helper,
-            chunk_size=chunk_size, progress=progress)
+            chunk_size=chunk_size, progress=progress,
+            require_existing_key_id=require_existing_key_id)
 
 
 def _backup_unlocked(
@@ -375,10 +522,14 @@ def _backup_unlocked(
     crypto_helper: Optional[str] = None,
     chunk_size: int = DEFAULT_CHUNK_SIZE,
     progress: Optional[Callable[[int, int, int, int], None]] = None,
+    require_existing_key_id: Optional[str] = None,
 ) -> BackupResult:
     if chunk_size < 64 * 1024 or chunk_size > 64 * 1024 * 1024:
         raise ValueError("chunk size must be between 64 KiB and 64 MiB")
     root = _validate_destination(source_home, destination)
+    if require_existing_key_id is not None:
+        if not root.is_dir() or _metadata(_read_json(root / METADATA_NAME)) != require_existing_key_id:
+            raise MigrationError("The scheduled Vault destination is missing or has changed. No new Vault was created.")
     if not root.exists():
         root.mkdir(mode=0o700)
         _fsync_directory(root.parent)
@@ -388,11 +539,34 @@ def _backup_unlocked(
     helper = _helper_path(crypto_helper)
     paginated_history_unprotected = _paginated_history_unprotected(source_home)
     files = _source_files(source_home)
-    titles = title_index(source_home)
+    attachment_paths = {relative for folder, _, relative in files
+                        if folder == "attachments"}
+    missing_attachments = set()
+    try:
+        titles = title_index(source_home)
+        title_index_unavailable = False
+    except MigrationError:
+        # The optional Codex title index must not prevent a verified backup of
+        # intact transcripts. Search by transcript text remains available.
+        titles = {}
+        title_index_unavailable = True
     expected_bytes = sum(check_info(path.lstat()).st_size for _, path, _ in files)
+    progress_total_files = len(files)
+    progress_total_bytes = expected_bytes
+    if progress is not None and paginated_history_unprotected:
+        from codex_migrate.vault_paginated import source_footprint
+
+        paginated_count, _, _ = source_footprint(source_home)
+        progress_total_files += paginated_count
+        # SQLite page bytes are not the encoded source length. Do not show a
+        # false percentage for this phase or imply that 100% means verified.
+        progress_total_bytes = 0
     if progress is not None:
-        progress(0, len(files), 0, expected_bytes)
+        progress(0, progress_total_files, 0, progress_total_bytes)
     with _repository_lock(root):
+        if require_existing_key_id is not None and \
+                _metadata(_read_json(root / METADATA_NAME)) != require_existing_key_id:
+            raise MigrationError("The scheduled Vault destination changed during backup setup.")
         key_id, recovery_key = _prepare_repository(root, helper)
         objects = root / "objects"
         manifests = root / "manifests"
@@ -403,48 +577,88 @@ def _backup_unlocked(
             if not directory.is_dir():
                 raise MigrationError("A Vault storage path is not a folder.")
         previous_files = _previous_catalog(root, key_id, helper)
+        if any(item.get("collection") == "paginated" for item in previous_files):
+            if not paginated_history_unprotected:
+                raise MigrationError(
+                    "Codex paginated history disappeared since the prior "
+                    "backup. The previous Vault version is unchanged.")
+            from codex_migrate.vault_paginated import source_footprint
+            count, _, available = source_footprint(source_home)
+            if not available or count == 0:
+                raise MigrationError(
+                    "Codex paginated history emptied since the prior "
+                    "backup. The previous Vault version is unchanged.")
 
         snapshot_id = str(uuid.uuid4()).lower()
         created_at = datetime.now(timezone.utc).isoformat()
         manifest_files = []
         total_chunks = 0
         total_bytes = 0
+        attachment_count = 0
+        attachment_bytes = 0
+        captured_sources = {}
         for folder, path, relative in files:
             require_local(path)
-            scanned = check_info(path.lstat())
-            signals = scan_transcript(path, relative, titles)
-            descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-            try:
-                before = os.fstat(descriptor)
-                if not stat.S_ISREG(before.st_mode):
-                    raise MigrationError("A conversation transcript changed before backup.")
-                with os.fdopen(descriptor, "rb", closefd=False) as handle:
-                    stored = _run_helper(
-                        helper,
-                        ["store-chunks", "--key-id", key_id,
-                         "--object-dir", str(objects), "--chunk-size", str(chunk_size)],
-                        input_file=handle,
-                    )
-                after = os.fstat(descriptor)
-            finally:
-                os.close(descriptor)
-            stable = (
-                scanned.st_dev == before.st_dev
-                and scanned.st_ino == before.st_ino
-                and scanned.st_size == before.st_size
-                and scanned.st_mtime_ns == before.st_mtime_ns
-                and scanned.st_ctime_ns == before.st_ctime_ns
-                and
-                before.st_dev == after.st_dev
-                and before.st_ino == after.st_ino
-                and before.st_size == after.st_size
-                and before.st_mtime_ns == after.st_mtime_ns
-                and before.st_ctime_ns == after.st_ctime_ns
-            )
-            if not stable:
-                raise MigrationError(
-                    "A conversation changed during backup. Run backup again; no snapshot was published."
+            for attempt in range(MAX_CHANGED_TRANSCRIPT_ATTEMPTS):
+                scanned = check_info(path.lstat())
+                if folder == "attachments":
+                    signals_fields = {
+                        "thread_id": None, "identity_state": "unverified",
+                        "titles": [], "records": 0,
+                        "assistant_messages": 0, "user_messages": 0,
+                    }
+                else:
+                    try:
+                        signals = scan_transcript(path, relative, titles)
+                    except TranscriptChanged:
+                        if attempt + 1 == MAX_CHANGED_TRANSCRIPT_ATTEMPTS:
+                            raise MigrationError(
+                                "A conversation changed during backup. Run backup again; no snapshot was published."
+                            ) from None
+                        continue
+                    signals_fields = signals.manifest_fields()
+                    if any(attachment_id + "/pasted-text.txt" not in attachment_paths
+                           for attachment_id in signals.pasted_attachment_ids):
+                        missing_attachments.add(
+                            signals.thread_id or
+                            ("active" if folder == "sessions" else "archived") +
+                            "/" + relative)
+                descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+                try:
+                    before = os.fstat(descriptor)
+                    if not stat.S_ISREG(before.st_mode):
+                        raise MigrationError("A conversation transcript changed before backup.")
+                    with os.fdopen(descriptor, "rb", closefd=False) as handle:
+                        stored = _run_helper(
+                            helper,
+                            ["store-chunks", "--key-id", key_id,
+                             "--object-dir", str(objects), "--chunk-size", str(chunk_size)],
+                            input_file=handle,
+                        )
+                    after = os.fstat(descriptor)
+                finally:
+                    os.close(descriptor)
+                stable = (
+                    scanned.st_dev == before.st_dev
+                    and scanned.st_ino == before.st_ino
+                    and scanned.st_size == before.st_size
+                    and scanned.st_mtime_ns == before.st_mtime_ns
+                    and scanned.st_ctime_ns == before.st_ctime_ns
+                    and before.st_dev == after.st_dev
+                    and before.st_ino == after.st_ino
+                    and before.st_size == after.st_size
+                    and before.st_mtime_ns == after.st_mtime_ns
+                    and before.st_ctime_ns == after.st_ctime_ns
                 )
+                if stable:
+                    captured_sources[(folder, relative)] = (
+                        after.st_dev, after.st_ino, after.st_size,
+                        after.st_mtime_ns, after.st_ctime_ns)
+                    break
+                if attempt + 1 == MAX_CHANGED_TRANSCRIPT_ATTEMPTS:
+                    raise MigrationError(
+                        "A conversation changed during backup. Run backup again; no snapshot was published."
+                    )
             stored_size = stored.get("size")
             digest = stored.get("sha256")
             chunks = stored.get("chunks")
@@ -454,39 +668,132 @@ def _backup_unlocked(
                     or not isinstance(chunks, list)):
                 raise MigrationError("The backup helper returned invalid file verification data.")
             for chunk in chunks:
-                if (not isinstance(chunk, dict) or set(chunk) != {"id", "size"}
+                if (not isinstance(chunk, dict)
+                        or set(chunk) not in ({"id", "size"}, {"id", "size", "encoding"})
                         or not isinstance(chunk.get("id"), str)
                         or len(chunk["id"]) != 64
                         or any(character not in "0123456789abcdef" for character in chunk["id"])
                         or not isinstance(chunk.get("size"), int)
-                        or chunk["size"] < 0 or chunk["size"] > chunk_size):
+                        or chunk["size"] < 0 or chunk["size"] > chunk_size
+                        or ("encoding" in chunk and chunk["encoding"] != "lzfse")):
                     raise MigrationError("The backup helper returned invalid chunk metadata.")
             manifest_files.append({
-                "collection": "active" if folder == "sessions" else "archived",
+                "collection": ("active" if folder == "sessions" else
+                               "archived" if folder == "archived_sessions" else "attachments"),
                 "path": relative,
                 "size": stored_size,
                 "mtime_ns": before.st_mtime_ns,
                 "sha256": digest,
                 "chunks": chunks,
-                **signals.manifest_fields(),
+                **signals_fields,
             })
             total_bytes += stored_size
             total_chunks += len(chunks)
+            if folder == "attachments":
+                attachment_count += 1
+                attachment_bytes += stored_size
             if progress is not None:
-                progress(len(manifest_files), len(files), total_bytes, expected_bytes)
+                progress(len(manifest_files), progress_total_files,
+                         total_bytes, progress_total_bytes)
 
         mark_simultaneous_conflicts(manifest_files)
-        at_risk = set(loss_warnings(previous_files, manifest_files))
+        at_risk = set(loss_warnings(
+            (item for item in previous_files
+             if item.get("collection") in ("active", "archived")),
+            manifest_files,
+        ))
+        at_risk.update(missing_attachments)
+        # Keep the database projection separate from the JSONL rollout. Equal
+        # thread IDs across these two sources are not a simultaneous-file
+        # conflict and are never treated as proof that their bodies agree.
+        missing_paginated_attachments = set()
+        if paginated_history_unprotected:
+            from codex_migrate.vault_paginated import open_paginated_source
+            with open_paginated_source(source_home) as source:
+                thread_ids = source.thread_ids()
+                progress_total_files = len(files) + len(thread_ids)
+                if progress is not None:
+                    progress(len(files), progress_total_files, total_bytes, 0)
+                for thread_id in thread_ids:
+                    stored, records, users, assistants, missing_attachment = _store_paginated_thread(
+                        helper, objects, chunk_size, key_id, source, thread_id,
+                        attachment_paths)
+                    if missing_attachment:
+                        missing_paginated_attachments.add(thread_id)
+                    size = stored.get("size")
+                    digest = stored.get("sha256")
+                    chunks = stored.get("chunks")
+                    if (not isinstance(size, int) or size <= 0
+                            or not isinstance(digest, str) or len(digest) != 64
+                            or any(character not in "0123456789abcdef" for character in digest)
+                            or not isinstance(chunks, list) or records <= 0):
+                        raise MigrationError("The paginated history helper returned invalid verification data.")
+                    for chunk in chunks:
+                        if (not isinstance(chunk, dict)
+                                or set(chunk) not in ({"id", "size"}, {"id", "size", "encoding"})
+                                or not isinstance(chunk.get("id"), str)
+                                or len(chunk["id"]) != 64
+                                or any(character not in "0123456789abcdef" for character in chunk["id"])
+                                or not isinstance(chunk.get("size"), int)
+                                or chunk["size"] < 0 or chunk["size"] > chunk_size
+                                or ("encoding" in chunk and chunk["encoding"] != "lzfse")):
+                            raise MigrationError("The paginated history helper returned invalid chunk metadata.")
+                    manifest_files.append({
+                        "collection": "paginated",
+                        "path": thread_id + ".jsonl",
+                        "size": size,
+                        "mtime_ns": 0,
+                        "sha256": digest,
+                        "chunks": chunks,
+                        "thread_id": thread_id,
+                        "identity_state": "verified",
+                        "titles": list(titles.get(thread_id, [])),
+                        "records": records,
+                        "assistant_messages": assistants,
+                        "user_messages": users,
+                        "at_risk": False,
+                    })
+                    total_bytes += size
+                    total_chunks += len(chunks)
+                    if progress is not None:
+                        progress(len(manifest_files), progress_total_files,
+                                 total_bytes, 0)
+        paginated_at_risk = set(loss_warnings(
+            (item for item in previous_files if item.get("collection") == "paginated"),
+            (item for item in manifest_files if item.get("collection") == "paginated"),
+        ))
+        paginated_at_risk.update(missing_paginated_attachments)
+        for item in manifest_files:
+            if item["collection"] == "paginated":
+                item["at_risk"] = item["thread_id"] in paginated_at_risk
         paginated_history_unprotected |= _paginated_history_unprotected(source_home)
         for item in manifest_files:
+            if item["collection"] == "paginated":
+                continue
             if item["identity_state"] == "needs_review":
                 at_risk.add(item["collection"] + "/" + item["path"])
         for item in manifest_files:
+            if item["collection"] == "paginated":
+                continue
             item["at_risk"] = (item.get("thread_id") in at_risk or
                                item["collection"] + "/" + item["path"] in at_risk)
+        # Codex can create a new transcript or attachment while an earlier
+        # file is being encrypted. A stable read of each old file alone does
+        # not prove that the captured source set is complete.
+        current_files = _source_files(source_home)
+        if {(folder, relative) for folder, _, relative in current_files} != set(captured_sources):
+            raise MigrationError("Codex history changed during backup. Run backup again; no snapshot was published.")
+        for folder, path, relative in current_files:
+            info = check_info(path.lstat())
+            if ((info.st_dev, info.st_ino, info.st_size,
+                 info.st_mtime_ns, info.st_ctime_ns) !=
+                    captured_sources[(folder, relative)]):
+                raise MigrationError("Codex history changed during backup. Run backup again; no snapshot was published.")
         manifest = {
             "format": "codex-vault-snapshot",
-            "version": SNAPSHOT_FORMAT_VERSION,
+            "version": (SNAPSHOT_FORMAT_VERSION if attachment_count else
+                        3 if any(item["collection"] == "paginated"
+                                 for item in manifest_files) else 2),
             "snapshot_id": snapshot_id,
             "created_at": created_at,
             "files": manifest_files,
@@ -508,6 +815,14 @@ def _backup_unlocked(
                 or verified.get("chunks") != total_chunks
                 or verified.get("bytes") != total_bytes):
             raise MigrationError("The completed Vault snapshot did not verify exactly.")
+        metadata_path = root / METADATA_NAME
+        metadata = _read_json(metadata_path)
+        _metadata(metadata)
+        if "storage_codec" not in metadata:
+            # Older helpers refuse the additional field, so no legacy build can
+            # publish over a snapshot containing compressed objects.
+            _atomic_json(metadata_path, {**metadata, "storage_codec": STORAGE_CODEC},
+                         replace=True)
         reference = {
             "format": "codex-vault-reference",
             "version": FORMAT_VERSION,
@@ -520,12 +835,15 @@ def _backup_unlocked(
         return BackupResult(
             destination=str(root),
             snapshot_id=snapshot_id,
-            transcript_files=len(manifest_files),
-            transcript_bytes=total_bytes,
+            transcript_files=len(manifest_files) - attachment_count,
+            transcript_bytes=total_bytes - attachment_bytes,
             chunks=total_chunks,
             key_id=key_id,
             recovery_key=recovery_key,
-            needs_attention=bool(at_risk) or paginated_history_unprotected,
-            at_risk_threads=len(at_risk),
+            needs_attention=bool(at_risk or paginated_at_risk) or paginated_history_unprotected,
+            at_risk_threads=len(at_risk | paginated_at_risk),
             paginated_history_unprotected=paginated_history_unprotected,
+            title_index_unavailable=title_index_unavailable,
+            attachment_files=attachment_count,
+            attachment_bytes=attachment_bytes,
         )

@@ -413,6 +413,26 @@ class TransportTests(unittest.TestCase):
         with self.assertRaises(TransportError):
             process.start()
 
+    def test_staging_phases_preserve_same_ssh_scope_exclusions_and_link_policy(self):
+        transport = SSHTransport(MigrationConfig(target='user@host.local',
+                                                  target_home='/Users/user').validate())
+        with patch.object(transport, 'rsync_bridge_command', return_value='guarded-fixture-bridge'):
+            for phase in ('data', 'metadata', 'modes'):
+                command = transport.rsync_process('/Users/source/project', '/Users/user/staging/project',
+                                                  excludes=('/auth.json', '/installation_id'),
+                                                  copy_links=True, phase=phase).command
+                self.assertIn('--partial', command)
+                self.assertIn('--delete-after', command)
+                self.assertIn('--timeout=120', command)
+                self.assertIn('--copy-links', command)
+                self.assertIn('/auth.json', command)
+                self.assertIn('/installation_id', command)
+                self.assertEqual(command[command.index('-e') + 1], 'guarded-fixture-bridge')
+                self.assertEqual(command[-2:], ['/Users/source/project/',
+                                               'user@host.local:/Users/user/staging/project/'])
+                self.assertEqual('--no-perms' in command, phase == 'metadata')
+                self.assertEqual('-aE' in command, phase == 'metadata')
+
     def test_safe_links_option_is_available_for_non_dereferenced_transfers(self):
         config = MigrationConfig(
             target="user@host.local",

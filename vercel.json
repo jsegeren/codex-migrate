@@ -1,5 +1,5 @@
 {
-  "buildCommand": "node ops/commerce-preflight.js && node ops/commerce-sandbox-invite.js",
+  "buildCommand": "node ops/commerce-preflight.js && node ops/commerce-sandbox-invite.js && node ops/hosted-sandbox-bootstrap.js && node ops/hosted-preflight.js",
   "outputDirectory": "site",
   "cleanUrls": true,
   "trailingSlash": false,

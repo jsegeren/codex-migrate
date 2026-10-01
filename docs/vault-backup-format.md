@@ -6,6 +6,33 @@ any operated storage service. A Vault folder may live on a local disk or in a
 customer-owned sync folder once that provider keeps all files locally while a
 backup runs.
 
+## Draft paginated-history snapshot v3 (not a customer release)
+
+The integration branch can now read the known
+`~/.codex/thread_history_1.sqlite` projection in one read-only SQLite
+transaction. It writes one provenance-labelled JSONL stream per validated
+thread directly into the authenticated chunk helper through a pipe; it never
+stages the database or its plaintext items in a Vault file. Each stream is a
+separate `paginated` collection entry at `<thread UUID>.jsonl`, with its own
+digest, message counts, and encrypted chunk list. It is **not** a fabricated
+Codex rollout, and matching thread IDs in the `active`/`archived` and
+`paginated` collections are not silently merged. Verification reads back every
+chunk before advancing `latest.json`. Recovery stages these entries under
+`paginated_history/`, never into Codex's live database.
+
+Readers accept v1/v2 snapshots unchanged. Unknown SQLite schemas, malformed
+items, or incomplete streams abort before reference publication. The draft
+browser can search, read, and export a separately restored paginated source;
+one-thread copy-back and whole-history installation into Codex are refused for
+v3 snapshots containing it. A disposable synthetic version-3 snapshot with a
+database-only turn was encrypted on one macOS CI runner and decrypted,
+searched, read, and exported after recovery-key import on a separate runner
+([CI receipt](https://github.com/jsegeren/codex-migrate/actions/runs/36416344496)).
+The packaged device-only Keychain helper, a clean customer account, and real
+installed-runtime backup scale are still unproved. The
+snapshot and schedule therefore remain `needs attention` when this source
+exists; no complete-history claim is authorized by v3 ciphertext alone.
+
 ## Security boundary
 
 Version 1 enumerates only regular `.jsonl` files below:
@@ -26,11 +53,24 @@ paths.
 ## Key derivation and storage
 
 The macOS helper creates a random 256-bit master key with CryptoKit and stores
-it as a generic-password item in the login Keychain:
+it as a generic-password item in macOS Keychain:
 
 - service: `com.segeren.codex-vault`
 - account: the random Vault key UUID
-- accessibility: `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`
+- release accessibility: `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` in the
+  Data Protection Keychain, under the provisioned Vault helper access group
+
+The previously notarized build-17 candidate used the legacy login Keychain;
+its requested accessibility class was not a verified device-only property.
+New release builds of this source require a separately provisioned helper app
+and use `kSecUseDataProtectionKeychain` for all new keys. On first use of an
+existing legacy key, the helper must write and read back the Data Protection
+copy, remove the matching legacy item, and fail closed on conflicts or failed
+removal. An interrupted transition is retried; an unreadable old item requires
+recovery-key import or support. The local-test helper without a profile still
+uses the legacy Keychain and is not distributable. Device-only custody remains
+an **unverified release claim** until the provisioned helper, legacy-key
+transition, and independent-Mac recovery tests physically pass.
 
 The master key is not written into the Vault folder. Its one-time recovery
 encoding is `CV1-` followed by unpadded base64url of the 32 key bytes. Users
@@ -68,6 +108,14 @@ Codex Vault/
 }
 ```
 
+New repositories add `"storage_codec": "lzfse-v1"`. An existing repository
+without this field remains readable. Its metadata gains the field only after a
+compressed-capable snapshot passes complete verification and before that
+snapshot becomes latest. Older app builds reject the extra field rather than
+writing an incompatible snapshot. If backup fails before publication, the
+last verified reference stays unchanged. Updating this metadata does not
+rewrite or remove any older encrypted objects or snapshots.
+
 Every `refs/<snapshot-uuid>.json` is an immutable public reference containing
 the snapshot UUID, creation time, format/version and relative encrypted
 manifest path. `latest.json` is the only replaced file and is advanced only
@@ -90,6 +138,28 @@ helper reports success. A source file whose device, inode, size, modification
 time, or change time moves during reading aborts the snapshot before publish.
 Unreferenced encrypted objects from an interruption are harmless and may be
 garbage-collected by a later maintenance operation.
+
+## Lossless chunk compression
+
+New writers try Apple's LZFSE codec on each plaintext chunk before encryption.
+They use it only when it saves more than 64 bytes; otherwise they retain the
+raw v1 chunk. An unchanged raw v1 object is reused rather than rewritten.
+Compression is per chunk so appending a transcript does not force an entire
+file to be recompressed. The private object identifier of a compressed chunk
+is HMAC-SHA256 of the original plaintext under a distinct HKDF-derived key
+(salt `codex-vault-lzfse-v1`, info `private-compressed-object-identifiers`,
+derived from the v1 identifier key). This domain separation prevents a
+compressed object from colliding with its raw v1 counterpart. Its
+authenticated data is
+`codex-vault:chunk:lzfse:v1:<id>:<uncompressed-byte-count>`; the encrypted
+manifest's chunk record adds `"encoding": "lzfse"`. Raw records omit that field.
+
+Readers authenticate, decompress to the exact declared byte count, and verify
+the domain-separated identifier and whole-file SHA-256 before accepting or
+restoring a snapshot. Unknown encodings fail closed. Existing raw v1 snapshots
+remain readable. Compression changes storage size, not the transcript content,
+search scope, or restore semantics. The visible snapshot still reports source
+plaintext bytes; it is not a promise of a fixed compression ratio.
 
 ## Encrypted manifest
 

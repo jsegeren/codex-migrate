@@ -15,6 +15,11 @@ from codex_migrate.state import StateStore
 
 
 class DashboardTests(unittest.TestCase):
+    def test_standalone_dashboard_has_no_links_to_unserved_product_routes(self):
+        self.assertIn('href="/"', HTML)
+        for route in ('href="/vault', 'href="/migration', 'href="/?view=overview'):
+            self.assertNotIn(route, HTML)
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         state_root = self.temporary.name + "/state"

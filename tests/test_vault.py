@@ -1,15 +1,54 @@
 import json
 import os
 from pathlib import Path
+import sqlite3
 import tempfile
+import time
 import unittest
+from unittest.mock import patch
 
 from codex_migrate.errors import MigrationError
-from codex_migrate.vault import inspect, markdown, markdown_chunks, read_thread, read_thread_page, search
+from codex_migrate.vault import AmbiguousLineage, inspect, markdown, markdown_chunks, read_thread, read_thread_page, search
 from codex_migrate.vault_identity import scan_transcript
 
 
 class VaultTests(unittest.TestCase):
+    def test_damaged_transcript_does_not_hide_healthy_search_matches(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            folder = root / ".codex/sessions"
+            folder.mkdir(parents=True)
+            damaged = folder / "damaged.jsonl"
+            damaged.write_bytes(
+                json.dumps({"type": "session_meta", "payload": {
+                    "id": "11111111-1111-4111-8111-111111111111"}}).encode() +
+                b"\n\x00broken\n")
+            healthy = folder / "healthy.jsonl"
+            healthy.write_text(json.dumps({"payload": {"message": {
+                "content": "Healthy needle"}}}) + "\n")
+            before = damaged.read_bytes()
+            warnings = []
+            matches = search(str(root), "needle", warnings=warnings)
+            self.assertEqual([item.transcript for item in matches], ["healthy.jsonl"])
+            self.assertEqual(warnings, ["damaged_transcript"])
+            self.assertEqual(damaged.read_bytes(), before)
+            with self.assertRaisesRegex(MigrationError, "unreadable JSON"):
+                search(str(root), "needle")
+
+    def test_damaged_header_does_not_hide_healthy_search_matches(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            folder = root / ".codex/sessions"
+            folder.mkdir(parents=True)
+            (folder / "damaged.jsonl").write_bytes(b"\x00broken header\n")
+            (folder / "healthy.jsonl").write_text(
+                json.dumps({"payload": {"message": {
+                    "content": "A healthy needle"}}}) + "\n")
+            warnings = []
+            matches = search(str(root), "needle", warnings=warnings)
+            self.assertEqual([item.transcript for item in matches], ["healthy.jsonl"])
+            self.assertEqual(warnings, ["damaged_transcript"])
+
     def fixture(self, root: Path) -> None:
         active = root / ".codex/sessions/2026/09/17/active.jsonl"
         archived = root / ".codex/archived_sessions/archived.jsonl"
@@ -50,6 +89,105 @@ class VaultTests(unittest.TestCase):
             self.assertEqual(search(str(root), "private/customer", limit=10), [])
             self.assertEqual(search(str(root), "secret-id", limit=10), [])
 
+    def test_token_count_shape_cannot_hide_later_conversation_text(self):
+        """A Codex projection failure must not truncate independent Vault reads."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            folder = root / ".codex/sessions"
+            folder.mkdir(parents=True)
+            transcript = folder / "rollout-11111111-1111-4111-8111-111111111111.jsonl"
+            records = [
+                {"type": "session_meta", "payload": {
+                    "id": "11111111-1111-4111-8111-111111111111"}},
+                {"type": "event_msg", "payload": {"type": "token_count", "info": {
+                    "last_token_usage": {"input_tokens": 32},
+                    "rate_limits": {"credits": {"balance": 12.5}},
+                }}},
+                {"type": "response_item", "payload": {"type": "message",
+                    "role": "assistant", "content": [{"type": "output_text",
+                        "text": "A later recovery marker remains readable."}]}},
+            ]
+            transcript.write_text("\n".join(json.dumps(row) for row in records) + "\n")
+
+            matches = search(str(root), "later recovery marker")
+            self.assertEqual(len(matches), 1)
+            self.assertEqual(matches[0].transcript, transcript.name)
+            self.assertEqual(search(str(root), "balance"), [])
+            exported = markdown(read_thread(str(root), "active", transcript.name))
+            self.assertIn("later recovery marker", exported)
+            self.assertNotIn("balance", exported)
+
+    def test_ambiguous_fork_parent_keeps_other_transcripts_searchable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            active = root / ".codex/sessions"
+            archived = root / ".codex/archived_sessions"
+            active.mkdir(parents=True)
+            archived.mkdir()
+            parent_id = "11111111-1111-4111-8111-111111111111"
+            child_id = "22222222-2222-4222-8222-222222222222"
+            for folder in (active, archived):
+                (folder / ("rollout-" + parent_id + ".jsonl")).write_text(
+                    json.dumps({"type": "session_meta", "payload": {
+                        "id": parent_id, "source": folder.name}}) + "\n")
+            child = active / ("rollout-" + child_id + ".jsonl")
+            child.write_text(json.dumps({"type": "session_meta", "payload": {
+                "id": child_id, "history_base": {"thread_id": parent_id,
+                    "end_ordinal_exclusive": 1,
+                    "end_byte_offset": 0}}}) + "\n")
+            (active / "good.jsonl").write_text(
+                json.dumps({"payload": {"message": {"content": "Find this needle"}}}) + "\n")
+            warnings = []
+            matches = search(str(root), "needle", warnings=warnings)
+            self.assertEqual([item.transcript for item in matches], ["good.jsonl"])
+            self.assertEqual(warnings, ["ambiguous_lineage"])
+            with self.assertRaisesRegex(MigrationError, "ambiguous"):
+                read_thread(str(root), "active", child.name)
+
+    def test_ambiguous_fork_exposes_only_own_physical_text_as_incomplete(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            active = root / ".codex/sessions"
+            archived = root / ".codex/archived_sessions"
+            active.mkdir(parents=True)
+            archived.mkdir()
+            parent_id = "11111111-1111-4111-8111-111111111111"
+            child_id = "22222222-2222-4222-8222-222222222222"
+            parent_record = json.dumps({"type": "session_meta", "payload": {
+                "id": parent_id, "message": "parent-only secret"}}) + "\n"
+            for folder in (active, archived):
+                (folder / ("rollout-" + parent_id + ".jsonl")).write_text(parent_record)
+            child = active / ("rollout-" + child_id + ".jsonl")
+            child.write_text(
+                json.dumps({"type": "session_meta", "payload": {
+                    "id": child_id, "history_base": {"thread_id": parent_id,
+                        "end_ordinal_exclusive": 0, "end_byte_offset": 0}}}) + "\n"
+                + json.dumps({"payload": {"message": {
+                    "content": "child-only recovery needle"}}}) + "\n")
+            warnings = []
+            matches = search(str(root), "recovery needle", warnings=warnings)
+            self.assertEqual(len(matches), 1)
+            self.assertEqual(matches[0].transcript, child.name)
+            self.assertTrue(matches[0].physical_only)
+            self.assertEqual(warnings, ["ambiguous_lineage"])
+            with self.assertRaises(AmbiguousLineage):
+                read_thread(str(root), "active", child.name)
+            page, next_cursor = read_thread_page(
+                str(root), "active", child.name, matches[0].cursor,
+                expected_query="recovery needle", physical_only=True)
+            self.assertTrue(page.physical_only)
+            self.assertIsNone(next_cursor)
+            self.assertEqual([entry.text for entry in page.entries],
+                             ["child-only recovery needle"])
+            exported = b"".join(markdown_chunks(
+                str(root), "active", child.name, physical_only=True))
+            self.assertIn(b"INCOMPLETE Codex physical file", exported)
+            self.assertIn(b"child-only recovery needle", exported)
+            self.assertNotIn(b"parent-only secret", exported)
+            (archived / ("rollout-" + parent_id + ".jsonl")).unlink()
+            with self.assertRaisesRegex(MigrationError, "changed"):
+                read_thread(str(root), "active", child.name, physical_only=True)
+
     def test_common_word_returns_recent_distinct_threads_not_old_message_hits(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -78,6 +216,39 @@ class VaultTests(unittest.TestCase):
             self.assertFalse({match.transcript for match in matches}
                              & {match.transcript for match in older})
 
+    @unittest.skipUnless(
+        os.environ.get("CODEX_MIGRATE_LARGE_HISTORY_PROBE") == "1",
+        "opt-in physical large-history probe",
+    )
+    def test_large_history_search_finds_old_and_new_message_text(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            folder = root / ".codex/sessions/2026/09/24"
+            folder.mkdir(parents=True)
+            for index in range(2048):
+                text = f"Synthetic conversation {index:04d}"
+                if index == 7:
+                    text += " buried-unification-foundation"
+                if index == 2047:
+                    text += " recent-unification-foundation"
+                transcript = folder / f"thread-{index:04d}.jsonl"
+                transcript.write_text(
+                    json.dumps({"payload": {"message": {"content": text}}}) + "\n",
+                    encoding="utf-8",
+                )
+                timestamp = 1_000_000_000 + index
+                os.utime(transcript, (timestamp, timestamp))
+
+            started = time.monotonic()
+            matches = search(str(root), "unification-foundation", limit=25)
+            elapsed = time.monotonic() - started
+            self.assertEqual(
+                [match.transcript for match in matches],
+                ["2026/09/24/thread-2047.jsonl", "2026/09/24/thread-0007.jsonl"],
+            )
+            self.assertTrue(all(match.line == 1 for match in matches))
+            self.assertLess(elapsed, 10, f"2,048-thread synthetic search took {elapsed:.2f}s")
+
     def test_search_result_includes_current_title_when_indexed(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -101,6 +272,143 @@ class VaultTests(unittest.TestCase):
             self.assertEqual(len(old_name), 1)
             self.assertEqual(old_name[0].title, "Current sign-in title")
             self.assertEqual(search(str(root), "clerk", limit=10, titles_only=True), [])
+
+    def test_search_finds_state_database_title_absent_from_session_index(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            codex = root / ".codex"
+            folder = codex / "sessions"
+            folder.mkdir(parents=True)
+            thread_id = "11111111-1111-4111-8111-111111111111"
+            (folder / ("rollout-" + thread_id + ".jsonl")).write_text(
+                json.dumps({"type": "session_meta", "payload": {"id": thread_id}}) + "\n",
+                encoding="utf-8",
+            )
+            database = codex / "state_5.sqlite"
+            with sqlite3.connect(database) as connection:
+                connection.execute("CREATE TABLE threads (id TEXT, title TEXT, name TEXT)")
+                connection.execute("INSERT INTO threads VALUES (?, ?, ?)",
+                                   (thread_id, "Original project title", "Current renamed project"))
+            old = search(str(root), "Original project", titles_only=True)
+            current = search(str(root), "Current renamed", titles_only=True)
+            self.assertEqual(len(old), 1)
+            self.assertEqual(len(current), 1)
+            self.assertEqual(old[0].title, "Current renamed project")
+            self.assertEqual(current[0].title, "Current renamed project")
+
+    def test_search_old_session_title_shows_current_renamed_state_title(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            codex = root / ".codex"
+            folder = codex / "sessions"
+            folder.mkdir(parents=True)
+            thread_id = "11111111-1111-4111-8111-111111111111"
+            (folder / ("rollout-" + thread_id + ".jsonl")).write_text(
+                json.dumps({"type": "session_meta", "payload": {"id": thread_id}}) + "\n",
+                encoding="utf-8",
+            )
+            (codex / "session_index.jsonl").write_text(
+                json.dumps({"id": thread_id, "thread_name": "Old planning title"}) + "\n",
+                encoding="utf-8",
+            )
+            with sqlite3.connect(codex / "state_5.sqlite") as connection:
+                connection.execute("CREATE TABLE threads (id TEXT, title TEXT, name TEXT)")
+                connection.execute("INSERT INTO threads VALUES (?, ?, ?)",
+                                   (thread_id, "Release work", "Current release title"))
+            old = search(str(root), "Old planning title", titles_only=True)
+            self.assertEqual(len(old), 1)
+            self.assertEqual(old[0].transcript, "rollout-" + thread_id + ".jsonl")
+            self.assertEqual(old[0].title, "Current release title")
+            self.assertIn("Old planning title", old[0].snippet)
+            self.assertEqual(len(search(str(root), "Current release title",
+                                        titles_only=True)), 1)
+
+    def test_state_title_prefix_is_bounded_when_codex_saved_a_long_prompt(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            codex = root / ".codex"
+            folder = codex / "sessions"
+            folder.mkdir(parents=True)
+            thread_id = "11111111-1111-4111-8111-111111111111"
+            (folder / ("rollout-" + thread_id + ".jsonl")).write_text(
+                json.dumps({"type": "session_meta", "payload": {"id": thread_id}}) + "\n",
+                encoding="utf-8",
+            )
+            with sqlite3.connect(codex / "state_5.sqlite") as connection:
+                connection.execute("CREATE TABLE threads (id TEXT, title TEXT, name TEXT)")
+                connection.execute("INSERT INTO threads VALUES (?, ?, NULL)",
+                                   (thread_id, "Find this launch note " + "x" * 2000))
+            matches = search(str(root), "Find this launch", titles_only=True)
+            self.assertEqual(len(matches), 1)
+            self.assertEqual(len(matches[0].title), 500)
+
+    def test_state_title_source_rejects_linked_database_and_sidecar(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            codex = root / ".codex"
+            codex.mkdir()
+            outside = root / "outside.sqlite"
+            with sqlite3.connect(outside) as connection:
+                connection.execute("CREATE TABLE threads (id TEXT, title TEXT, name TEXT)")
+            database = codex / "state_5.sqlite"
+            database.symlink_to(outside)
+            with self.assertRaises(MigrationError):
+                search(str(root), "title", titles_only=True)
+            database.unlink()
+            with sqlite3.connect(database) as connection:
+                connection.execute("CREATE TABLE threads (id TEXT, title TEXT, name TEXT)")
+            sidecar = Path(str(database) + "-wal")
+            sidecar.symlink_to(outside)
+            with self.assertRaises(MigrationError):
+                search(str(root), "title", titles_only=True)
+
+    def test_unsupported_state_title_schema_keeps_body_search_available(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            codex = root / ".codex"
+            codex.mkdir()
+            with sqlite3.connect(codex / "state_5.sqlite") as connection:
+                connection.execute("CREATE TABLE threads (id TEXT, title TEXT)")
+            thread = codex / "sessions/one.jsonl"
+            thread.parent.mkdir()
+            thread.write_text(json.dumps({"payload": {"message": {
+                "content": "Synthetic launch note"}}}) + "\n")
+            with self.assertRaisesRegex(MigrationError, "unsupported schema"):
+                search(str(root), "launch", titles_only=True)
+            self.assertEqual(len(search(str(root), "launch")), 1)
+
+    def test_old_title_surfaces_before_newer_body_without_scanning_it(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            codex = root / ".codex"
+            folder = codex / "sessions"
+            folder.mkdir(parents=True)
+            thread_id = "11111111-1111-4111-8111-111111111111"
+            older = folder / ("rollout-" + thread_id + ".jsonl")
+            newer = folder / "newer.jsonl"
+            older.write_text(json.dumps({"payload": {"message": {
+                "content": "Earlier work"}}}) + "\n", encoding="utf-8")
+            newer.write_text(json.dumps({"payload": {"message": {
+                "content": "Discuss Unification Foundation today"}}}) + "\n",
+                encoding="utf-8")
+            os.utime(older, (1_000_000_000, 1_000_000_000))
+            os.utime(newer, (2_000_000_000, 2_000_000_000))
+            (codex / "session_index.jsonl").write_text(
+                json.dumps({"id": thread_id,
+                            "thread_name": "Unification Foundation"}) + "\n"
+                + json.dumps({"id": thread_id,
+                              "thread_name": "Current program"}) + "\n",
+                encoding="utf-8")
+            with patch("codex_migrate.vault._lineage_records",
+                       side_effect=AssertionError("body was scanned")):
+                first = search(str(root), "Unification Foundation", limit=1)
+            self.assertEqual(first[0].transcript, older.name)
+            self.assertEqual(first[0].title, "Current program")
+            self.assertIn("Unification Foundation", first[0].snippet)
+            full = search(str(root), "Unification Foundation", limit=2)
+            self.assertEqual([hit.transcript for hit in full], [older.name, newer.name])
+            self.assertEqual(search(str(root), "Unification Foundation",
+                                    limit=1, offset=1)[0].transcript, newer.name)
 
     def test_search_finds_text_appended_to_an_active_thread(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -147,8 +455,10 @@ class VaultTests(unittest.TestCase):
             self.assertTrue(page.entries[0].excerpted)
             self.assertIn("Clerk marker", page.entries[0].text)
             self.assertLess(len(page.entries[0].text), 2000)
-            with self.assertRaisesRegex(MigrationError, "too large to preview"):
-                read_thread_page(str(root), "active", "large.jsonl", match.cursor)
+            from_start, _ = read_thread_page(str(root), "active", "large.jsonl", match.cursor)
+            self.assertTrue(from_start.entries[0].excerpted)
+            self.assertTrue(from_start.entries[0].text.startswith("A"))
+            self.assertLess(len(from_start.entries[0].text), 2000)
             transcript.write_text(json.dumps({"payload": {"message": {"content": body}}}) + "\n",
                                   encoding="utf-8")
             first_match = search(str(root), "clerk", limit=1)[0]
@@ -158,6 +468,41 @@ class VaultTests(unittest.TestCase):
                 expected_query="clerk")
             self.assertTrue(first_page.entries[0].excerpted)
             self.assertIn("Clerk marker", first_page.entries[0].text)
+
+    def test_large_record_preview_can_continue_to_later_work(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            transcript = root / ".codex/sessions/large.jsonl"
+            transcript.parent.mkdir(parents=True)
+            transcript.write_text(
+                json.dumps({"payload": {"text": "A" * (1024 * 1024 + 1)}}) + "\n"
+                + json.dumps({"payload": {"text": "Later important work"}}) + "\n",
+                encoding="utf-8",
+            )
+            first, cursor = read_thread_page(
+                str(root), "active", "large.jsonl", max_entries=1)
+            self.assertEqual(len(first.entries), 1)
+            self.assertTrue(first.entries[0].excerpted)
+            self.assertIsNotNone(cursor)
+            later, end = read_thread_page(
+                str(root), "active", "large.jsonl", cursor, max_entries=1)
+            self.assertEqual([entry.text for entry in later.entries],
+                             ["Later important work"])
+            self.assertIsNone(end)
+            self.assertIn(b"A" * 1024, b"".join(markdown_chunks(
+                str(root), "active", "large.jsonl")))
+
+    def test_large_record_excerpt_respects_utf8_byte_budget(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            transcript = root / ".codex/sessions/large.jsonl"
+            transcript.parent.mkdir(parents=True)
+            transcript.write_text(json.dumps({"payload": {"text": "é" * 100}}) + "\n")
+            page, end = read_thread_page(
+                str(root), "active", "large.jsonl", max_text_bytes=5)
+            self.assertIsNone(end)
+            self.assertTrue(page.entries[0].excerpted)
+            self.assertLessEqual(len(page.entries[0].text.encode("utf-8")), 5)
 
     def test_search_rejects_linked_transcript(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -204,6 +549,20 @@ class VaultTests(unittest.TestCase):
             self.assertIn("Design the launch checklist.", document)
             self.assertNotIn("/private/customer/path", document)
             self.assertNotIn("secret-id", document)
+
+    def test_search_and_export_survive_missing_codex_thread_store_table(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.fixture(root)
+            database = root / ".codex/state_5.sqlite"
+            with sqlite3.connect(str(database)) as connection:
+                connection.execute("CREATE TABLE unrelated (id INTEGER PRIMARY KEY)")
+            original = database.read_bytes()
+
+            match = search(str(root), "launch checklist", limit=1)[0]
+            thread = read_thread(str(root), match.collection, match.transcript)
+            self.assertIn("Design the launch checklist.", markdown(thread))
+            self.assertEqual(database.read_bytes(), original)
 
     def test_thread_identifier_cannot_escape_discovered_transcripts(self):
         with tempfile.TemporaryDirectory() as temporary:

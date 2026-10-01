@@ -1,0 +1,577 @@
+import hashlib
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import json
+import os
+from pathlib import Path
+import platform
+import subprocess
+import tempfile
+import threading
+import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
+
+from codex_migrate.errors import MigrationError
+from codex_migrate.vault_hosted_disaster_recovery import recover_hosted_snapshot
+from codex_migrate.vault_hosted_recovery_client import HostedRecoveryClient
+from codex_migrate.vault_backup import backup
+from codex_migrate.vault_recovery import import_recovery_key, restore_snapshot
+from codex_migrate.vault_remote_recovery import RecoveryStopped, download_encrypted_snapshot
+from codex_migrate.vault_remote_transfer import stage_encrypted_snapshot
+from tests.portable_vault_roundtrip import delete_test_key
+
+
+ACCOUNT = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+VAULT = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+DEVICE = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+SNAPSHOT = "11111111-1111-4111-8111-111111111111"
+OLDER = "22222222-2222-4222-8222-222222222222"
+TOKEN = "hv1_" + "a" * 43
+PREFIX = f"accounts/{ACCOUNT}/vaults/{VAULT}/"
+
+
+def inventory(chunk_count=0, snapshot_id=SNAPSHOT):
+    values = {f"metadata/{snapshot_id}.json": b"metadata",
+              f"manifests/{snapshot_id}.cvmanifest": b"manifest",
+              f"refs/{snapshot_id}.json": b"reference"}
+    for index in range(chunk_count):
+        digest = format(index, "064x")
+        values[f"objects/{digest[:2]}/{digest[2:]}.cvchunk"] = b"chunk" + str(index).encode()
+    return values
+
+
+class _Handler(BaseHTTPRequestHandler):
+    def log_message(self, *_args):
+        pass
+
+    def _reply(self, status, payload):
+        body = json.dumps(payload).encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_POST(self):
+        if self.path != "/api/hosted-recovery" or self.headers.get(
+                "Authorization") != "Bearer " + TOKEN:
+            return self._reply(403, {"error": "access_denied"})
+        claim = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        self.server.requests.append(claim)
+        snapshot_id = claim.get("snapshotId", self.server.snapshot_id)
+        snapshot_objects = self.server.versions.get(snapshot_id, self.server.objects)
+        rows = [{"key": key, "bytes": len(value),
+                 "sha256": hashlib.sha256(value).hexdigest()}
+                for key, value in sorted(snapshot_objects.items())]
+        total = sum(item["bytes"] for item in rows)
+        if claim["action"] == "latest":
+            snapshot_id = (self.server.latest_sequence.pop(0)
+                           if self.server.latest_sequence else self.server.snapshot_id)
+            return self._reply(200, {"accountId": ACCOUNT,
+                "workerOrigin": self.server.origin,
+                "latest": None if snapshot_id is None else
+                {"snapshotId": snapshot_id,
+                 "totalObjects": len(rows), "totalBytes": total,
+                 "sourceCoverage": "complete"}})
+        if claim["action"] == "latest_complete":
+            return self._reply(200, {"accountId": ACCOUNT,
+                "workerOrigin": self.server.origin,
+                "latestComplete": self.server.latest_complete})
+        if claim["action"] == "usage":
+            return self._reply(200, {"accountId": ACCOUNT,
+                "retainedBytes": self.server.retained_bytes,
+                "reservedBytes": self.server.reserved_bytes})
+        if claim["action"] == "history":
+            entries = self.server.history
+            if "beforeAt" in claim:
+                before = (claim["beforeAt"], claim["beforeSnapshotId"])
+                entries = [item for item in entries if
+                           (item["publishedAt"], item["snapshotId"]) < before]
+            page = entries[:50]
+            last = page[-1] if page else None
+            return self._reply(200, {"accountId": ACCOUNT,
+                "workerOrigin": self.server.origin, "snapshots": page,
+                "nextCursor": {"publishedAt": last["publishedAt"],
+                               "snapshotId": last["snapshotId"]}
+                if len(entries) > 50 else None})
+        if claim["action"] == "snapshot":
+            if snapshot_id not in self.server.versions:
+                return self._reply(403, {"error": "access_denied"})
+            return self._reply(200, {"accountId": ACCOUNT,
+                "workerOrigin": self.server.origin,
+                "snapshot": {"snapshotId": snapshot_id,
+                             "totalObjects": len(rows), "totalBytes": total,
+                             "sourceCoverage": "unknown"}})
+        if claim["action"] == "objects":
+            after = claim.get("afterKey", "")
+            page = [item for item in rows if PREFIX + item["key"] > after][:257]
+            more = len(page) > 256
+            page = page[:256]
+            result = {"snapshotId": snapshot_id, "totalObjects": len(rows),
+                      "totalBytes": total, "objects": page,
+                      "nextCursor": PREFIX + page[-1]["key"] if more else None}
+            if self.server.mutate_page:
+                self.server.mutate_page(result)
+            return self._reply(200, result)
+        if claim["action"] == "manifest":
+            snapshot_id = (self.server.latest_sequence.pop(0)
+                           if self.server.latest_sequence else self.server.snapshot_id)
+            if claim["snapshotId"] != snapshot_id:
+                return self._reply(503, {"error": "unavailable"})
+            key = f"manifests/{snapshot_id}.cvmanifest"
+            value = self.server.objects.get(key)
+            if value is None:
+                return self._reply(503, {"error": "unavailable"})
+            result = {"accountId": ACCOUNT, "workerOrigin": self.server.origin,
+                      "snapshotId": snapshot_id, "bytes": len(value),
+                      "sha256": hashlib.sha256(value).hexdigest(),
+                      "grant": "synthetic.valid"}
+            if self.server.mutate_manifest:
+                self.server.mutate_manifest(result)
+            return self._reply(200, result)
+        if claim["action"] == "get":
+            return self._reply(200, {"workerOrigin": self.server.origin,
+                                     "grant": "synthetic.valid"})
+        return self._reply(400, {"error": "invalid_request"})
+
+    def do_GET(self):
+        key = self.path.removeprefix("/v1/object/")
+        self.server.get_requests.append(key)
+        if (not self.path.startswith("/v1/object/") or
+                self.headers.get("Authorization") != "Bearer synthetic.valid" or
+                not key.startswith(PREFIX) or key[len(PREFIX):] not in self.server.objects):
+            self.send_response(403)
+            self.end_headers()
+            return
+        body = self.server.objects[key[len(PREFIX):]]
+        if self.server.mutate_get:
+            body = self.server.mutate_get(key[len(PREFIX):], body)
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+
+class HostedRecoveryClientTests(unittest.TestCase):
+    def setUp(self):
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+        self.server.origin = f"http://127.0.0.1:{self.server.server_port}"
+        self.server.snapshot_id = SNAPSHOT
+        self.server.objects = inventory()
+        self.server.versions = {}
+        self.server.history = []
+        self.server.requests = []
+        self.server.get_requests = []
+        self.server.mutate_page = None
+        self.server.mutate_manifest = None
+        self.server.mutate_get = None
+        self.server.latest_sequence = []
+        self.server.latest_complete = None
+        self.server.retained_bytes = 75_000_000_000
+        self.server.reserved_bytes = 0
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+
+    def tearDown(self):
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join(timeout=2)
+
+    def client(self):
+        return HostedRecoveryClient(self.server.origin, TOKEN, VAULT,
+                                    allow_loopback_http=True)
+
+    def test_latest_snapshot_is_read_only_and_account_bound(self):
+        self.assertEqual(self.client().latest_snapshot(expected_account_id=ACCOUNT), {
+            "snapshotId": SNAPSHOT, "totalObjects": 3,
+            "totalBytes": sum(map(len, self.server.objects.values())),
+            "sourceCoverage": "complete"})
+        self.assertEqual([item["action"] for item in self.server.requests], ["latest"])
+        with self.assertRaises(MigrationError):
+            self.client().latest_snapshot(expected_account_id=VAULT)
+        self.server.snapshot_id = None
+        self.assertIsNone(self.client().latest_snapshot(expected_account_id=ACCOUNT))
+
+    def test_stop_during_inventory_prevents_the_next_page_and_any_object_grant(self):
+        self.server.objects = inventory(chunk_count=300)
+        stopped = threading.Event()
+        self.server.mutate_page = lambda _page: stopped.set()
+        with self.assertRaises(RecoveryStopped):
+            self.client().prepare(max_bytes=100000, cancelled=stopped.is_set)
+        self.assertEqual([item["action"] for item in self.server.requests], ["latest", "objects"])
+        self.assertEqual(self.server.get_requests, [])
+        self.server.requests.clear()
+        with self.assertRaises(RecoveryStopped):
+            self.client().prepare(max_bytes=100000, cancelled=lambda: True)
+        self.assertEqual(self.server.requests, [])
+
+    def test_recovery_rejects_unrecognized_source_coverage(self):
+        self.server.history = [{"snapshotId": SNAPSHOT, "totalObjects": 3,
+            "totalBytes": 25, "sourceCoverage": "verified",
+            "publishedAt": "2026-09-28T20:00:00.123456Z"}]
+        with self.assertRaises(MigrationError):
+            self.client().history_page()
+
+    def test_latest_source_complete_can_be_older_or_absent(self):
+        self.assertIsNone(self.client().latest_source_complete_snapshot(
+            expected_account_id=ACCOUNT,
+            expected_worker_origin=self.server.origin))
+        self.server.latest_complete = {"snapshotId": OLDER,
+            "totalObjects": 3, "totalBytes": 25,
+            "sourceCoverage": "complete"}
+        self.assertEqual(self.client().latest_source_complete_snapshot(
+            expected_account_id=ACCOUNT,
+            expected_worker_origin=self.server.origin)["snapshotId"], OLDER)
+        with self.assertRaises(MigrationError):
+            self.client().latest_source_complete_snapshot(
+                expected_account_id=VAULT,
+                expected_worker_origin=self.server.origin)
+        self.server.latest_complete["sourceCoverage"] = "unknown"
+        with self.assertRaises(MigrationError):
+            self.client().latest_source_complete_snapshot(
+                expected_account_id=ACCOUNT,
+                expected_worker_origin=self.server.origin)
+
+    def test_account_storage_usage_is_account_bound_and_strict(self):
+        self.assertEqual(self.client().account_storage_usage(
+            expected_account_id=ACCOUNT),
+            {"retainedBytes": 75_000_000_000, "reservedBytes": 0})
+        with self.assertRaises(MigrationError):
+            self.client().account_storage_usage(expected_account_id=VAULT)
+        self.server.retained_bytes = -1
+        with self.assertRaises(MigrationError):
+            self.client().account_storage_usage(expected_account_id=ACCOUNT)
+
+    def test_prepares_validated_receipt_and_exact_get_grant(self):
+        receipt, store = self.client().prepare(max_bytes=1_000_000)
+        self.assertEqual(receipt["snapshot_id"], SNAPSHOT)
+        self.assertEqual([item["key"] for item in receipt["objects"]],
+                         [f"metadata/{SNAPSHOT}.json",
+                          f"manifests/{SNAPSHOT}.cvmanifest", f"refs/{SNAPSHOT}.json"])
+        with store.open_read(f"metadata/{SNAPSHOT}.json") as stream:
+            self.assertEqual(stream.read(), b"metadata")
+        self.assertEqual([item["action"] for item in self.server.requests],
+                         ["latest", "objects", "get"])
+
+    def test_discovers_and_prepares_an_older_published_version(self):
+        old = inventory(snapshot_id=OLDER)
+        self.server.versions = {SNAPSHOT: inventory(), OLDER: old}
+        self.server.objects = {**self.server.versions[SNAPSHOT], **old}
+        self.server.history = [{"snapshotId": SNAPSHOT, "totalObjects": 3,
+            "totalBytes": 25, "sourceCoverage": "complete",
+            "publishedAt": "2026-09-28T20:00:00.123456Z"},
+            {"snapshotId": OLDER, "totalObjects": 3,
+             "totalBytes": 25, "sourceCoverage": "unknown",
+             "publishedAt": "2026-09-27T20:00:00.123456Z"}]
+        entries, cursor = self.client().history_page()
+        self.assertEqual([item["snapshotId"] for item in entries], [SNAPSHOT, OLDER])
+        self.assertEqual([item["sourceCoverage"] for item in entries],
+                         ["complete", "unknown"])
+        self.assertIsNone(cursor)
+        self.assertEqual(self.client().published_snapshot(OLDER,
+            expected_account_id=ACCOUNT,
+            expected_worker_origin=self.server.origin)["sourceCoverage"],
+            "unknown")
+        receipt, store = self.client().prepare(max_bytes=100,
+            selected_snapshot_id=OLDER)
+        self.assertEqual(receipt["snapshot_id"], OLDER)
+        self.assertEqual(receipt["remote_bytes_checked"],
+                         sum(map(len, old.values())))
+        with store.open_read(f"metadata/{OLDER}.json") as stream:
+            self.assertEqual(stream.read(), b"metadata")
+        self.assertEqual([request["action"] for request in self.server.requests],
+                         ["latest", "history", "snapshot", "latest", "snapshot",
+                          "objects", "get"])
+
+    def test_refuses_unpublished_selection_and_bad_history(self):
+        with self.assertRaises(MigrationError):
+            self.client().prepare(max_bytes=100, selected_snapshot_id=OLDER)
+        self.assertNotIn("get", [item["action"] for item in self.server.requests])
+        self.server.requests.clear()
+        self.server.history = [{"snapshotId": SNAPSHOT, "totalObjects": 3,
+            "totalBytes": 25, "sourceCoverage": "complete",
+            "publishedAt": "invalid"}]
+        with self.assertRaises(MigrationError):
+            self.client().history_page()
+
+    def test_history_pages_all_equal_timestamp_versions_without_skipping(self):
+        at = "2026-09-28T20:00:00.123456Z"
+        self.server.history = [{"snapshotId": f"11111111-1111-4111-8111-{index:012x}",
+            "totalObjects": 3, "totalBytes": 25,
+            "sourceCoverage": "complete", "publishedAt": at}
+            for index in range(51, 0, -1)]
+        first, cursor = self.client().history_page()
+        self.assertEqual(len(first), 50)
+        self.assertEqual(cursor, (at, first[-1]["snapshotId"]))
+        second, next_cursor = self.client().history_page(cursor)
+        self.assertEqual(len(second), 1)
+        self.assertEqual(second[0]["snapshotId"], self.server.history[-1]["snapshotId"])
+        self.assertIsNone(next_cursor)
+
+    def test_large_inventory_pages_and_reorders_only_after_complete_validation(self):
+        self.server.objects = inventory(254)
+        receipt, _store = self.client().prepare(max_bytes=1_000_000)
+        self.assertEqual(len(receipt["objects"]), 257)
+        self.assertTrue(receipt["objects"][1]["key"].startswith("objects/"))
+        self.assertEqual([item["action"] for item in self.server.requests],
+                         ["latest", "objects", "objects"])
+        self.assertEqual(self.server.requests[-1]["afterKey"],
+                         PREFIX + sorted(self.server.objects)[255])
+
+    def test_incomplete_or_changed_pages_fail_before_any_get(self):
+        for mutate in [
+            lambda page: page["objects"].pop(),
+            lambda page: page["objects"][0].update(sha256="bad"),
+            lambda page: page.update(nextCursor=PREFIX + "objects/aa/" + "a" * 62 + ".cvchunk"),
+            lambda page: page.update(totalBytes=page["totalBytes"] + 1),
+        ]:
+            with self.subTest(mutate=mutate):
+                self.server.requests.clear()
+                self.server.mutate_page = mutate
+                with self.assertRaises(MigrationError):
+                    self.client().prepare(max_bytes=1_000_000)
+                self.assertNotIn("get", [item["action"] for item in self.server.requests])
+
+    def test_refuses_insecure_service_and_bad_bearer(self):
+        with self.assertRaises(MigrationError):
+            HostedRecoveryClient(self.server.origin, TOKEN, VAULT)
+        with self.assertRaises(MigrationError):
+            HostedRecoveryClient("https://user:pass@example.com", TOKEN, VAULT)
+        with self.assertRaises(MigrationError):
+            HostedRecoveryClient(self.server.origin, "bad", VAULT,
+                                 allow_loopback_http=True)
+
+    def test_authenticated_empty_vault_is_not_a_catalog_error(self):
+        self.server.snapshot_id = None
+        snapshot_id, files = self.client().prior_catalog(
+            key_id="unused", crypto_helper="/missing-helper", max_bytes=1_000_000,
+            expected_snapshot_id=None)
+        self.assertIsNone(snapshot_id)
+        self.assertEqual(files, [])
+        self.assertEqual([item["action"] for item in self.server.requests], ["latest"])
+
+    def test_reserved_base_must_match_latest_before_any_manifest_download(self):
+        other = "22222222-2222-4222-8222-222222222222"
+        with self.assertRaisesRegex(MigrationError, "changed after reservation"):
+            self.client().prior_catalog(key_id="unused",
+                crypto_helper="/missing-helper", max_bytes=1_000_000,
+                expected_snapshot_id=None)
+        with self.assertRaisesRegex(MigrationError, "changed after reservation"):
+            self.client().prior_catalog(key_id="unused",
+                crypto_helper="/missing-helper", max_bytes=1_000_000,
+                expected_snapshot_id=other)
+        self.assertEqual([item["action"] for item in self.server.requests],
+                         ["latest", "latest"])
+
+    def test_reserved_account_must_match_before_any_manifest_download(self):
+        other_account = "22222222-2222-4222-8222-222222222222"
+        with self.assertRaisesRegex(MigrationError, "account changed"):
+            self.client().prior_catalog(
+                key_id="unused", crypto_helper="/missing-helper",
+                max_bytes=1_000_000, expected_snapshot_id=SNAPSHOT,
+                expected_account_id=other_account)
+        self.assertEqual([item["action"] for item in self.server.requests],
+                         ["latest"])
+
+    def test_latest_change_refuses_prior_manifest_grant(self):
+        self.server.latest_sequence = [SNAPSHOT, "22222222-2222-4222-8222-222222222222"]
+        with tempfile.TemporaryDirectory() as temporary:
+            helper = Path(temporary) / "helper"
+            helper.write_text("#!/bin/sh\nexit 0\n")
+            helper.chmod(0o700)
+            with self.assertRaises(MigrationError):
+                self.client().prior_catalog(key_id=SNAPSHOT,
+                    crypto_helper=str(helper), max_bytes=1_000_000)
+        self.assertEqual([item["action"] for item in self.server.requests],
+                         ["latest", "manifest"])
+        self.assertEqual(self.server.get_requests, [])
+
+    def test_prior_manifest_grant_refuses_changed_authority_and_size(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            helper = Path(temporary) / "helper"
+            helper.write_text("#!/bin/sh\nexit 0\n")
+            helper.chmod(0o700)
+            for mutate in [
+                lambda manifest: manifest.update(accountId="cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
+                lambda manifest: manifest.update(workerOrigin="https://other.example"),
+                lambda manifest: manifest.update(snapshotId="22222222-2222-4222-8222-222222222222"),
+                lambda manifest: manifest.update(sha256="bad"),
+                lambda manifest: manifest.update(bytes=100_000_001),
+                lambda manifest: manifest.update(grant="bad"),
+            ]:
+                with self.subTest(mutate=mutate):
+                    self.server.requests.clear()
+                    self.server.get_requests.clear()
+                    self.server.mutate_manifest = mutate
+                    with self.assertRaises(MigrationError):
+                        self.client().prior_catalog(key_id=SNAPSHOT,
+                            crypto_helper=str(helper), max_bytes=200_000_000)
+                    self.assertEqual([request["action"] for request in self.server.requests],
+                                     ["latest", "manifest"])
+                    self.assertEqual(self.server.get_requests, [])
+            self.server.mutate_manifest = None
+
+    @unittest.skipUnless(platform.system() == "Darwin", "CryptoKit helper requires macOS")
+    def test_synthetic_encrypted_backup_recovers_through_service_pages(self):
+        class MemoryStore:
+            def __init__(self):
+                self.objects = {}
+
+            def open_read(self, key):
+                import io
+                value = self.objects.get(key)
+                return io.BytesIO(value) if value is not None else None
+
+            def put_if_absent(self, key, source, length):
+                if key in self.objects:
+                    raise AssertionError("synthetic object overwrite")
+                self.objects[key] = source.read(length)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            helper = root / "CodexVaultCrypto"
+            subprocess.run(["xcrun", "swiftc", "-parse-as-library", "-O", "-D",
+                "CODEX_VAULT_TEST_LEGACY_KEYCHAIN", "-target",
+                platform.machine() + "-apple-macos13.0",
+                "desktop/CodexVaultCrypto.swift", "-o", str(helper)],
+                check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                timeout=120)
+            source = root / "source"
+            transcript = source / ".codex/sessions/2026/09/27/fixture.jsonl"
+            transcript.parent.mkdir(parents=True)
+            content = b'{"type":"response_item","payload":{"content":"recovery fixture"}}\n'
+            transcript.write_bytes(content)
+            vault = root / "vault"
+            saved = backup(str(source), str(vault), crypto_helper=str(helper))
+            key_id = saved.key_id
+            try:
+                staged_store = MemoryStore()
+                staged = stage_encrypted_snapshot(str(vault), staged_store,
+                                                  crypto_helper=str(helper))
+                self.server.objects = staged_store.objects
+                self.server.snapshot_id = staged.snapshot_id
+                receipt, read_store = self.client().prepare(max_bytes=5_000_000)
+                self.assertEqual(receipt["snapshot_id"], staged.snapshot_id)
+                manifest_key = f"manifests/{staged.snapshot_id}.cvmanifest"
+                manifest_bytes = len(staged_store.objects[manifest_key])
+                self.assertGreater(sum(map(len, staged_store.objects.values())),
+                                   manifest_bytes)
+                # Full restore remains bounded by total snapshot bytes, while
+                # an incremental backup needs only the prior sealed manifest.
+                with self.assertRaisesRegex(MigrationError, "exceeds its limit"):
+                    self.client().prepare(max_bytes=manifest_bytes)
+                self.server.requests.clear()
+                with self.assertRaisesRegex(MigrationError, "prior hosted manifest exceeds"):
+                    self.client().prior_catalog(key_id=key_id,
+                        crypto_helper=str(helper), max_bytes=manifest_bytes - 1)
+                self.assertEqual([request["action"] for request in self.server.requests],
+                                 ["latest", "manifest"])
+                self.assertEqual(self.server.get_requests, [])
+                self.server.requests.clear()
+                self.server.get_requests.clear()
+                prior_id, files = self.client().prior_catalog(
+                    key_id=key_id, crypto_helper=str(helper), max_bytes=manifest_bytes)
+                self.assertEqual(prior_id, staged.snapshot_id)
+                self.assertEqual(len(files), 1)
+                self.assertEqual(files[0]["path"], "2026/09/27/fixture.jsonl")
+                prior_id, staging_files = self.client().prior_catalog(
+                    key_id=key_id, crypto_helper=str(helper),
+                    max_bytes=manifest_bytes, include_chunks=True)
+                self.assertEqual(prior_id, staged.snapshot_id)
+                self.assertEqual(staging_files[0]["sha256"], files[0]["sha256"])
+                self.assertEqual(staging_files[0]["mtime_ns"],
+                                 transcript.stat().st_mtime_ns)
+                self.assertTrue(staging_files[0]["chunks"])
+                self.assertEqual([request["action"] for request in self.server.requests],
+                                 ["latest", "manifest", "latest", "manifest"])
+                self.assertEqual(self.server.get_requests,
+                                 [PREFIX + f"manifests/{staged.snapshot_id}.cvmanifest"] * 2)
+                self.server.mutate_get = lambda key, body: (
+                    bytes([body[0] ^ 1]) + body[1:]
+                    if key.startswith("manifests/") else body)
+                with self.assertRaises(MigrationError):
+                    self.client().prior_catalog(key_id=key_id,
+                        crypto_helper=str(helper), max_bytes=5_000_000)
+                self.server.mutate_get = None
+                older_objects = {item.key: staged_store.objects[item.key]
+                                 for item in staged.objects}
+                transcript.write_bytes(b'{"type":"response_item","payload":'
+                                       b'{"content":"newer fixture"}}\n')
+                backup(str(source), str(vault), crypto_helper=str(helper))
+                newer = stage_encrypted_snapshot(str(vault), staged_store,
+                                                  crypto_helper=str(helper))
+                self.assertNotEqual(newer.snapshot_id, staged.snapshot_id)
+                self.server.snapshot_id = newer.snapshot_id
+                self.server.versions = {
+                    staged.snapshot_id: older_objects,
+                    newer.snapshot_id: {item.key: staged_store.objects[item.key]
+                                        for item in newer.objects},
+                }
+                self.server.objects = staged_store.objects
+                self.server.history = [
+                    {"snapshotId": newer.snapshot_id,
+                     "totalObjects": len(newer.objects),
+                     "totalBytes": newer.remote_bytes_checked,
+                     "sourceCoverage": "complete",
+                     "publishedAt": "2026-09-28T20:00:00.123456Z"},
+                    {"snapshotId": staged.snapshot_id,
+                     "totalObjects": len(staged.objects),
+                     "totalBytes": staged.remote_bytes_checked,
+                     "sourceCoverage": "unknown",
+                     "publishedAt": "2026-09-27T20:00:00.123456Z"},
+                ]
+                entries, cursor = self.client().history_page()
+                self.assertEqual([item["snapshotId"] for item in entries],
+                                 [newer.snapshot_id, staged.snapshot_id])
+                self.assertIsNone(cursor)
+                receipt, read_store = self.client().prepare(
+                    max_bytes=5_000_000,
+                    selected_snapshot_id=staged.snapshot_id)
+                empty_home = root / "empty-home"
+                empty_home.mkdir(mode=0o700)
+                recovered = root / "recovered-vault"
+                delete_test_key(helper, key_id)
+                key_id = None
+                with self.assertRaises(MigrationError):
+                    download_encrypted_snapshot(str(empty_home), str(recovered),
+                                                read_store, receipt, max_bytes=5_000_000,
+                                                crypto_helper=str(helper))
+                key_id = import_recovery_key(str(recovered), saved.recovery_key,
+                                             crypto_helper=str(helper))
+                stop = threading.Event()
+                def progress(value):
+                    if value["checked_objects"] == 2 and value["processed_bytes"] > value["checked_bytes"]:
+                        stop.set()
+                with self.assertRaises(RecoveryStopped):
+                    download_encrypted_snapshot(str(empty_home), str(recovered),
+                        read_store, receipt, max_bytes=5_000_000,
+                        crypto_helper=str(helper), cancelled=stop.is_set, progress=progress)
+                self.assertTrue(stop.is_set())
+                self.assertFalse((recovered / "latest.json").exists())
+                self.assertEqual(list(recovered.rglob("*.cvdownload")), [])
+                self.assertTrue((recovered / ".hosted-recovery.json").exists())
+                enrollment = SimpleNamespace(backup_clients=lambda *_args, **_kwargs: (
+                    SimpleNamespace(_account_id=ACCOUNT,
+                                    _worker_origin=self.server.origin), self.client()))
+                with patch("codex_migrate.vault_hosted_disaster_recovery."
+                           "HostedEnrollmentClient", return_value=enrollment):
+                    result = recover_hosted_snapshot(
+                        str(empty_home), str(recovered), DEVICE,
+                        max_bytes=5_000_000, snapshot_id=staged.snapshot_id,
+                        crypto_helper=str(helper), apply=True)
+                restored = root / "restored"
+                restore_snapshot(str(empty_home), str(recovered), str(restored),
+                                 crypto_helper=str(helper))
+                self.assertEqual(result["snapshot_id"], saved.snapshot_id)
+                # The failed pre-import attempt may have left exact ciphertext
+                # in staging; the retry must verify and reuse it safely.
+                self.assertGreater(result["reused_files"], 0)
+                self.assertEqual((restored / "sessions/2026/09/27/fixture.jsonl").read_bytes(),
+                                 content)
+            finally:
+                if key_id is not None:
+                    delete_test_key(helper, key_id)
+
+
+if __name__ == "__main__":
+    unittest.main()

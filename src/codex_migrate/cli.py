@@ -41,6 +41,7 @@ def parser() -> argparse.ArgumentParser:
     launch.add_argument("--state-dir", default=str(Path.home() / ".local/state/codex-migrate-browser"))
     launch.add_argument("--port", type=_port, default=0)
     launch.add_argument("--no-open", action="store_true")
+    launch.add_argument("--resume-after-update-build", type=int, help=argparse.SUPPRESS)
 
     inventory = commands.add_parser("inventory", help="Inspect local data without changing it")
     inventory.add_argument("--source-home", default=str(Path.home()))
@@ -86,6 +87,21 @@ def parser() -> argparse.ArgumentParser:
     vault_search.add_argument("query")
     vault_search.add_argument("--limit", type=int, default=25)
     vault_search.add_argument("--json", action="store_true")
+    vault_salvage = vault_commands.add_parser(
+        "salvage-preview",
+        help="Read-only, incomplete preview of intact records in one damaged transcript")
+    vault_salvage.add_argument("collection", choices=("active", "archived"))
+    vault_salvage.add_argument("transcript", help="Path relative to the selected conversation collection")
+    vault_salvage.add_argument("--json", action="store_true")
+    vault_search_index = vault_commands.add_parser(
+        "search-index", help="Build or refresh an optional local fast-search cache")
+    vault_search_index.add_argument("--apply", action="store_true",
+                                    help="Create or refresh the owner-only local cache")
+    vault_search_index.add_argument("--json", action="store_true")
+    vault_index_remove = vault_commands.add_parser(
+        "search-index-remove", help="Remove the rebuildable local search cache")
+    vault_index_remove.add_argument("--apply", action="store_true")
+    vault_index_remove.add_argument("--json", action="store_true")
     vault_backup = vault_commands.add_parser(
         "backup", help="Create a verified, client-side encrypted conversation backup")
     vault_backup.add_argument("--destination", required=True,
@@ -151,6 +167,12 @@ def parser() -> argparse.ArgumentParser:
         "key-export", help="Display the Vault recovery key for password-manager storage")
     vault_export.add_argument("--vault", required=True)
     vault_export.add_argument("--crypto-helper")
+    business_import = vault_commands.add_parser(
+        "business-key-import", help=argparse.SUPPRESS)
+    business_import.add_argument("--vault", required=True)
+    business_import.add_argument("--kit", required=True)
+    business_import.add_argument("--crypto-helper")
+    business_import.add_argument("--apply", action="store_true")
     vault_schedule = vault_commands.add_parser(
         "schedule", help="Create a recurring verified Vault backup on this Mac")
     vault_schedule.add_argument("--vault", required=True)
@@ -169,6 +191,29 @@ def parser() -> argparse.ArgumentParser:
     vault_scheduled_run = vault_commands.add_parser(
         "scheduled-run", help=argparse.SUPPRESS)
     vault_scheduled_run.add_argument("--config", required=True)
+    vault_hosted_scheduled_run = vault_commands.add_parser(
+        "hosted-scheduled-run", help=argparse.SUPPRESS)
+    vault_hosted_scheduled_run.add_argument("--config", required=True)
+    vault_hosted_backup = vault_commands.add_parser("hosted-backup", help=argparse.SUPPRESS)
+    vault_hosted_backup.add_argument("--device-id", required=True)
+    vault_hosted_backup.add_argument("--key-metadata", required=True)
+    vault_hosted_backup.add_argument("--crypto-helper")
+    vault_hosted_backup.add_argument("--apply", action="store_true")
+    vault_hosted_backup.add_argument("--json", action="store_true")
+    vault_hosted_backups = vault_commands.add_parser(
+        "hosted-backups", help=argparse.SUPPRESS)
+    vault_hosted_backups.add_argument("--device-id", required=True)
+    vault_hosted_backups.add_argument("--crypto-helper")
+    vault_hosted_backups.add_argument("--json", action="store_true")
+    for name in ("hosted-prepare-recovery", "hosted-import-recovery-key", "hosted-recover"):
+        vault_hosted_recover = vault_commands.add_parser(name, help=argparse.SUPPRESS)
+        vault_hosted_recover.add_argument("--device-id", required=True)
+        vault_hosted_recover.add_argument("--output", required=True)
+        vault_hosted_recover.add_argument("--snapshot")
+        vault_hosted_recover.add_argument("--max-bytes", type=int, required=True)
+        vault_hosted_recover.add_argument("--crypto-helper")
+        vault_hosted_recover.add_argument("--apply", action="store_true")
+        vault_hosted_recover.add_argument("--json", action="store_true")
 
     return root
 
@@ -243,7 +288,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     try:
         if args.command == "launch":
             from codex_migrate.setup import SetupDashboard
-            SetupDashboard(args.source_home, args.state_dir, args.port).serve(open_browser=not args.no_open)
+            dashboard = SetupDashboard(args.source_home, args.state_dir, args.port)
+            if args.resume_after_update_build is not None:
+                from codex_migrate.vault_schedule import resume_after_update
+                resume_after_update(args.source_home, args.resume_after_update_build)
+            dashboard.serve(open_browser=not args.no_open)
             return 0
         if args.command == "inventory":
             result = collect(args.source_home, args.workspace)
@@ -260,6 +309,101 @@ def main(argv: Optional[List[str]] = None) -> int:
             return 0
         if args.command == "vault":
             from codex_migrate.vault import inspect as inspect_vault, search as search_vault
+            if args.vault_command == "business-key-import":
+                if not args.apply:
+                    print("Planning mode only; add --apply to import a private business recovery kit.")
+                    return 0
+                from codex_migrate.vault_business_kits import load_business_recovery_kit
+                from codex_migrate.vault_recovery import import_business_recovery_credential
+                key_id = import_business_recovery_credential(
+                    args.vault, load_business_recovery_kit(args.kit),
+                    crypto_helper=args.crypto_helper)
+                print("Business recovery key imported into this Mac's Keychain: %s" % key_id)
+                print("Verify and restore the selected snapshot before claiming recovery.")
+                return 0
+            if args.vault_command == "hosted-scheduled-run":
+                from codex_migrate.vault_hosted_schedule import run_hosted_scheduled_backup
+                return run_hosted_scheduled_backup(args.config)
+            if args.vault_command == "hosted-backup":
+                if not args.apply:
+                    print("Planning mode only; add --apply to upload encrypted history "
+                          "using an already enrolled device, existing Keychain-held "
+                          "Vault key and metadata.")
+                    return 0
+                from codex_migrate.vault_hosted_manual import back_up_hosted_history
+                result = back_up_hosted_history(
+                    args.source_home, args.device_id, args.key_metadata,
+                    crypto_helper=args.crypto_helper, apply=True)
+                if args.json:
+                    print(json.dumps(result, indent=2, sort_keys=True))
+                else:
+                    print("Hosted backup result: %s (%s)" % (
+                        result["status"], result["snapshot_id"]))
+                    print("This command does not enable automatic backups or prove "
+                          "clean-Mac recovery. Verify those separately.")
+                return 0
+            if args.vault_command == "hosted-backups":
+                from codex_migrate.vault_hosted_disaster_recovery import hosted_recovery_options
+                options = hosted_recovery_options(
+                    args.device_id, crypto_helper=args.crypto_helper)
+                if args.json:
+                    print(json.dumps(options, indent=2, sort_keys=True))
+                elif options["latest"] is None:
+                    print("No published hosted backup is available.")
+                else:
+                    print("Newest published backup: %s (%s)" % (
+                        options["latest"]["snapshotId"],
+                        options["latest"]["sourceCoverage"]))
+                    if options["coverage_gap"]:
+                        prior = options["latest_source_complete"]
+                        print("Newest source-reported complete backup: %s" % (
+                            prior["snapshotId"] if prior else "none available"))
+                return 0
+            if args.vault_command in (
+                    "hosted-prepare-recovery", "hosted-import-recovery-key", "hosted-recover"):
+                from codex_migrate.vault_hosted_disaster_recovery import (
+                    import_hosted_recovery_key, prepare_hosted_recovery, recover_hosted_snapshot,
+                )
+                preparing = args.vault_command == "hosted-prepare-recovery"
+                importing = args.vault_command == "hosted-import-recovery-key"
+                operation = (import_hosted_recovery_key if importing else
+                             prepare_hosted_recovery if preparing else recover_hosted_snapshot)
+                secret = {}
+                if importing:
+                    if args.apply is not True:
+                        raise ValueError("Hosted recovery key import requires explicit confirmation.")
+                    secret["recovery_key"] = getpass.getpass(
+                        "Saved recovery key (input hidden): ").strip()
+                try:
+                    result = operation(
+                        args.source_home, args.output, args.device_id,
+                        max_bytes=args.max_bytes, snapshot_id=args.snapshot,
+                        crypto_helper=args.crypto_helper, apply=args.apply, **secret)
+                finally:
+                    secret.clear()
+                if args.json:
+                    print(json.dumps(result, indent=2, sort_keys=True))
+                elif importing:
+                    print("Recovery key checked and saved. Download and verify the "
+                          "complete backup next; your Codex data has not changed.")
+                elif preparing:
+                    print("Recovery metadata prepared in: %s" % result["vault"])
+                    print("Import your separately saved recovery key before downloading "
+                          "the backup. No conversations have been decrypted or verified.")
+                else:
+                    print("Encrypted hosted snapshot verified in: %s" % result["vault"])
+                    if result["needs_attention"]:
+                        if result["at_risk_sources"]:
+                            print("Warning: %d conversation source(s) have missing or "
+                                  "changed content. Review this version and earlier "
+                                  "published versions before calling the history complete."
+                                  % result["at_risk_sources"], file=sys.stderr)
+                        else:
+                            print("Warning: this version's source coverage is %s. "
+                                  "Review earlier published versions before calling the "
+                                  "history complete." % result["source_coverage"],
+                                  file=sys.stderr)
+                return 0
             if args.vault_command in (
                     "schedule", "schedule-status", "schedule-remove", "scheduled-run"):
                 from codex_migrate.vault_schedule import (
@@ -315,6 +459,64 @@ def main(argv: Optional[List[str]] = None) -> int:
                     print("Active conversations: %d" % result.active_transcripts)
                     print("Archived conversations: %d" % result.archived_transcripts)
                     print("Transcript bytes: %d" % result.transcript_bytes)
+                    if result.paginated_database_present:
+                        print("Database-backed threads: %d" % result.paginated_threads)
+                        print("Paginated database storage bytes: %d" %
+                              result.paginated_database_bytes)
+                return 0
+            if args.vault_command == "salvage-preview":
+                from codex_migrate.vault_salvage import preview_damaged_thread
+                result = preview_damaged_thread(
+                    args.source_home, args.collection, args.transcript)
+                if args.json:
+                    print(json.dumps(result.as_dict(), indent=2, sort_keys=True))
+                else:
+                    print("INCOMPLETE READ-ONLY PREVIEW · physical file only; fork ancestry not included")
+                    print("Parsed records: %d · parseable after NUL removal: %d · skipped: %d" % (
+                        result.parsed_records, result.nul_repaired_records,
+                        result.skipped_records))
+                    if result.nul_repaired_records:
+                        print("NUL removal may leave missing text; overwritten bytes cannot be recovered.")
+                    if result.preview_truncated or result.scan_truncated:
+                        print("Preview limited; additional content may be omitted.")
+                    for entry in result.entries:
+                        print("\n%s%s\n%s" % (
+                            entry.role or "Entry", " (%s)" % entry.timestamp
+                            if entry.timestamp else "", entry.text))
+                return 0
+            if args.vault_command == "search-index":
+                from codex_migrate.vault_search_index import build
+                result = build(args.source_home, apply=args.apply)
+                if args.json:
+                    print(json.dumps(result, indent=2, sort_keys=True))
+                else:
+                    print("Conversation files: %d" % result["transcripts"])
+                    if result["applied"]:
+                        print("Indexed or refreshed: %d" % result["indexed"])
+                        if result.get("paginated_threads") is not None:
+                            print("Database-backed threads: %d (%s)" % (
+                                result["paginated_threads"],
+                                "indexed" if result.get("paginated_indexed") else
+                                "changed during indexing; searched directly"))
+                        if result["skipped"]:
+                            print("Changing conversations left for direct search: %d"
+                                  % result["skipped"])
+                        print("Cache bytes: %d" % result["index_bytes"])
+                        print("Local cache: %s" % result["index"])
+                    else:
+                        print("Planning mode only; add --apply to build the local search cache.")
+                return 0
+            if args.vault_command == "search-index-remove":
+                from codex_migrate.vault_search_index import remove
+                result = remove(args.source_home, apply=args.apply)
+                if args.json:
+                    print(json.dumps(result, indent=2, sort_keys=True))
+                elif result["applied"]:
+                    print("Local search cache removed. Conversations and Vault backups are unchanged.")
+                elif not result["present"]:
+                    print("No local search cache is present.")
+                else:
+                    print("Planning mode only; add --apply to remove the local search cache.")
                 return 0
             if args.vault_command == "backup":
                 from codex_migrate.vault_backup import backup as backup_vault, plan as plan_vault
@@ -328,7 +530,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                     if result.applied:
                         print("Verified snapshot: %s" % result.snapshot_id)
                         print("Conversation files: %d" % result.transcript_files)
-                        print("Plaintext bytes protected: %d" % result.transcript_bytes)
+                        print("Attachment files: %d" % result.attachment_files)
+                        print("Plaintext bytes protected: %d" % (
+                            result.transcript_bytes + result.attachment_bytes))
                         print("Encrypted chunks: %d" % result.chunks)
                         print("Vault: %s" % result.destination)
                         if result.recovery_key:
@@ -337,6 +541,14 @@ def main(argv: Optional[List[str]] = None) -> int:
                     else:
                         print("Would back up %d conversation file(s), %d byte(s)." % (
                             result.transcript_files, result.transcript_bytes))
+                        if result.attachment_files:
+                            print("Also found %d attachment file(s), %d byte(s)." % (
+                                result.attachment_files, result.attachment_bytes))
+                        if result.paginated_database_bytes:
+                            print("Also found %d database-backed thread(s), %d byte(s) of SQLite storage. "
+                                  "Snapshot bytes may differ." % (
+                                      result.paginated_threads,
+                                      result.paginated_database_bytes))
                         print("Destination: %s" % result.destination)
                         print("Client-side authenticated encryption: required")
                         print("Planning mode only; add --apply to create a verified snapshot.")
@@ -448,7 +660,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                     print(json.dumps(result.as_dict(), indent=2, sort_keys=True))
                 else:
                     print("Verified snapshot: %s" % result.snapshot_id)
-                    print("Conversation files: %d" % result.transcript_files)
+                    print("Protected files: %d" % result.transcript_files)
                     print("Plaintext bytes protected: %d" % result.transcript_bytes)
                     if result.applied:
                         print("Restored to staging folder: %s" % result.output)
@@ -459,17 +671,28 @@ def main(argv: Optional[List[str]] = None) -> int:
                     else:
                         print("Encrypted chunks: %d" % result.chunks)
                 return 0
-            results = search_vault(args.source_home, args.query, args.limit)
+            warnings = []
+            results = search_vault(args.source_home, args.query, args.limit,
+                                   warnings=warnings)
             if args.json:
                 print(json.dumps([item.as_dict() for item in results], indent=2, sort_keys=True))
             else:
                 for item in results:
                     when = " (%s)" % item.timestamp if item.timestamp else ""
-                    print("%s · %s:%d%s" % (
-                        item.collection, item.transcript, item.line, when))
+                    print("%s · %s:%d%s%s" % (
+                        item.collection, item.transcript, item.line, when,
+                        " · INCOMPLETE physical copy" if item.physical_only else ""))
                     print("  %s" % item.snippet)
                 if not results:
                     print("No matching conversation text found.")
+            if warnings:
+                if "ambiguous_lineage" in warnings:
+                    print("Some conversations have ambiguous history copies. Own-file matches "
+                          "are marked incomplete; inherited text was not searched.", file=sys.stderr)
+                if "damaged_transcript" in warnings:
+                    print("A damaged conversation file was skipped. Results may be incomplete; "
+                          "use salvage-preview on a copy for an incomplete read-only export.",
+                          file=sys.stderr)
             return 0
 
         config = _config(args)

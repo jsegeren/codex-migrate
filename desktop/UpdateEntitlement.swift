@@ -1,4 +1,5 @@
 import Foundation
+import LocalAuthentication
 import Security
 
 enum UpdateEntitlement {
@@ -23,9 +24,13 @@ enum UpdateEntitlement {
     }
 
     static func savedToken() -> String? {
+        let context = LAContext()
+        context.interactionNotAllowed = true
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service, kSecAttrAccount as String: account,
-            kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
+            kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne,
+            // Automatic checks must never block AppKit behind a Keychain dialog.
+            kSecUseAuthenticationContext as String: context]
         var result: CFTypeRef?
         guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
               let data = result as? Data, let value = String(data: data, encoding: .utf8) else { return nil }

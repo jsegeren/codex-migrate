@@ -9,6 +9,7 @@
   const archiveVersion = document.getElementById('purchase-archive-version');
   const original = document.getElementById('purchase-original');
   const retry = document.getElementById('purchase-retry');
+  const install = document.getElementById('purchase-install');
   const checksum = document.getElementById('purchase-checksum');
   const integrity = document.getElementById('purchase-integrity');
   // Strip private fragments from history. A short-lived, tab-scoped recovery
@@ -68,7 +69,7 @@
       if (url.protocol !== 'https:' || !/^[a-z0-9]{8,64}\.private\.blob\.vercel-storage\.com$/.test(url.hostname) ||
           url.port || url.username || url.password || url.hash || !url.search ||
           !/^[a-f0-9]{64}$/.test(result.sha256) ||
-          !/^[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.zip$/.test(result.filename) ||
+          !/^[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.(?:zip|dmg)$/.test(result.filename) ||
           !['live', 'sandbox'].some(mode => url.pathname === `/${mode}/${result.sha256}/${result.filename}`) ||
           !Number.isSafeInteger(result.expiresAt) || result.expiresAt <= 0 ||
           !Number.isSafeInteger(result.expiresInMs) || result.expiresInMs <= 0 || result.expiresInMs > 300000) {
@@ -79,6 +80,10 @@
       download.setAttribute('href', '/api/purchase-archive'); download.removeAttribute('aria-disabled');
       direct.setAttribute('href', result.url); directHelp.hidden = false;
       download.hidden = false; retry.hidden = true;
+      install.textContent = result.filename.endsWith('.dmg')
+        ? 'Open the downloaded disk image, move Codex Migrate.app to Applications, eject the disk image, then open the app from Applications. In-app updates may not work while the app runs from the disk image.'
+        : 'Unzip the download, move Codex Migrate.app to Applications, then open it from Applications. In-app updates may not work while the app runs from Downloads.';
+      install.hidden = false;
   }
   async function check(action = 'download_latest') {
     if (busy) return;
@@ -121,6 +126,7 @@
       download.removeAttribute('href'); download.setAttribute('aria-disabled', 'true');
       selectedVersion = null;
       download.hidden = true; retry.hidden = false; integrity.hidden = true;
+      install.hidden = true;
       original.hidden = true;
       retry.textContent = 'Check again';
     } finally {

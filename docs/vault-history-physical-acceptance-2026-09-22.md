@@ -55,6 +55,12 @@ ephemeral GUI test jobs were unloaded. The signed-in GUI context was necessary
 for Keychain use on the larger Mac; plain SSH returned “User interaction is not
 allowed.” No user workflow was interrupted.
 
+September 24 custody clarification: item 6 proves successful cross-Mac import
+and decryption, not enforcement of the requested `ThisDeviceOnly` class. The
+packaged helper uses the legacy macOS login Keychain without Data Protection
+Keychain access-group entitlements. That distinction is recorded in the
+[backup format](vault-backup-format.md) and [bug-bash ledger](mac-updater-vault-bugbash-2026-09-23.md).
+
 ## Packaged-browser check on the original Mac
 
 A freshly built, local-test-only app at source `5e70ad0` opened its bundled

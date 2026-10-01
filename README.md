@@ -78,8 +78,42 @@ depends on data size and the connection between the Macs.
 This repository now includes the first open-source Codex Vault primitives for
 local conversation history: read-only inspection, streaming search, a local
 browser, Markdown/PDF/share exports, and versioned client-side encrypted
-backup. Vault backs up only active and archived transcript trees. It does not
+backup. The current paid build backs up only active and archived transcript
+trees; the draft next build also searches, reads, and exports current paginated
+Codex history, then encrypts its items as a separately labelled source for
+saved search, reading, and export. Live reads do not create a backup. These
+additions are not released or independently certified yet.
+Vault does not
 copy `auth.json`, `installation_id`, SSH keys, logs, caches, or runtime locks.
+If Codex's optional title index is damaged, Vault still encrypts and verifies
+intact transcripts. It warns that saved title search may be incomplete; text
+search and the verified backup remain available.
+
+For large local histories, the source CLI has an optional fast-search cache:
+
+```bash
+codex-migrate vault search-index          # plan only
+codex-migrate vault search-index --apply  # build or refresh
+codex-migrate vault search-index-remove --apply
+```
+
+The cache is not a Vault backup and is never required for search or recovery.
+It is an owner-only, rebuildable SQLite file under
+`~/Library/Caches/Codex Migrate`. It stores searchable text terms and their
+positions, not full conversation bodies. Those terms can reveal conversation
+content to someone who can read the Mac account; **the cache itself is not
+encrypted**.
+It is not included in encrypted Vault snapshots. On a very large history,
+building it can take tens of minutes and tens of gigabytes of disk; one roughly
+93 GB test history took 22 minutes and produced a 25 GB cache. Once built, Vault
+still verifies candidate matches against the original conversations. It covers
+both transcript files and supported database-backed threads. New or changed
+transcripts, and database history changed since its last complete index, are
+searched directly so a stale cache cannot silently hide a matching thread.
+Short or unsupported queries use the normal full scan. Removing the cache does not change Codex or
+any Vault snapshot. This development branch also adds an opt-in setup, progress,
+stop, and delete flow to the local Vault browser. The current signed paid build
+does not yet include indexed search; release acceptance is still required.
 
 Planning is read-only:
 
@@ -98,6 +132,8 @@ through saving the recovery key. During that first backup, daily automatic
 backup is selected by default and manual-only remains available. After the first
 snapshot verifies, the daily option installs a private macOS LaunchAgent that
 adds a verified encrypted snapshot every 24 hours, even when the app is closed.
+If a run fails, it retries at the next six-hour check without replacing the
+last good snapshot; successful runs keep the selected backup cadence.
 Turning automatic backup off removes only the local schedule; existing Vault
 snapshots remain. The local Vault page can also show
 the published backup history and recover a chosen verified snapshot into a
@@ -472,6 +508,23 @@ or installation identity files.
 ./codex-migrate vault inspect
 ./codex-migrate vault search "launch checklist" --limit 25
 ```
+
+If one exact `.jsonl` transcript is damaged, the source CLI has an opt-in,
+read-only salvage preview:
+
+```bash
+./codex-migrate vault salvage-preview active 2026/09/22/rollout-example.jsonl
+```
+
+Use the path relative to `.codex/sessions` (`active`) or
+`.codex/archived_sessions` (`archived`). The preview skips malformed records,
+tries removing NUL bytes from an in-memory copy of records up to 16 MiB, and reports
+omissions. It does not alter the original, reconstruct fork ancestry, restore
+the thread into Codex, or promise a complete transcript. Normal search remains
+strict. The desktop history browser has a separate opt-in "Inspect a damaged
+conversation file" panel that can find physical files by recent date, filename,
+or known current/old title, then show the same incomplete preview and download
+an explicitly incomplete Markdown extraction. It is not a Codex write-back.
 
 The packaged local helper exposes a history browser with
 per-thread Markdown download, print-to-PDF and the browser's native share sheet

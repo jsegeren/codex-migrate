@@ -33,6 +33,7 @@ from codex_migrate.security import redact
 from codex_migrate.processes import codex_running, process_state_script, require_codex_closed_script
 from codex_migrate.state import StateStore, public_state
 from codex_migrate.transport import SSHTransport, TransferProcess
+from codex_migrate.staging_permissions import transfer_staged
 from codex_migrate.workspaces import (WORKSPACE_TIMEOUT, check_local_tools, freeze_tree,
                                       remote_tool_check, remote_tree_function, tree_check,
                                       validate_codex_identity_names)
@@ -651,6 +652,7 @@ class MigrationEngine:
         )
 
     def _copy_all(self) -> None:
+        self.state.update(staging_complete=False)
         transfers = self._transfers()
         for index, (source, destination, excludes, label, copy_links) in enumerate(transfers, 1):
             if self._cancel_requested:
@@ -665,12 +667,6 @@ class MigrationEngine:
             )
             if copy_links:
                 self._skill_plan()  # Revalidate aliases before dereferencing them.
-            process = self.transport.rsync_process(source, destination, excludes,
-                                                   copy_links=copy_links)
-            self._process = process
-            if self._pause_requested or self._cancel_requested:
-                self._process = None
-                return
             monitor_stop = threading.Event()
             monitor = threading.Thread(
                 target=self._monitor_staging,
@@ -679,12 +675,25 @@ class MigrationEngine:
             )
             monitor.start()
             try:
-                process.start(self._handle_rsync_output)
+                transfer_staged(self.transport, self.config.target_home,
+                                self.config.target_staging, destination,
+                                self.state.read().get('migration_id'), source, excludes,
+                                copy_links=copy_links, on_output=self._handle_rsync_output,
+                                checkpoint=self._staging_checkpoint,
+                                on_process=self._set_staging_process,
+                                cancelled=lambda: self._pause_requested or self._cancel_requested)
             finally:
                 monitor_stop.set()
                 monitor.join(timeout=3)
                 self._process = None
         self._update_staged_bytes()
+
+    def _staging_checkpoint(self):
+        if self._pause_requested or self._cancel_requested:
+            raise MigrationError('Staging stopped')
+
+    def _set_staging_process(self, process):
+        self._process = process
 
     def _handle_rsync_output(self, line: str) -> None:
         if "to-check=" in line or "to-chk=" in line:
@@ -714,6 +723,7 @@ class MigrationEngine:
             self._pause_requested = True
             if self._process:
                 self._process.cancel()
+            self.transport.cancel_all()
             self.state.update(
                 status="paused",
                 phase="staging",
@@ -750,8 +760,7 @@ class MigrationEngine:
             self._pause_requested = False
             if self._process:
                 self._process.cancel()
-            if current.get("phase") == "inspecting":
-                self.transport.cancel_all()
+            self.transport.cancel_all()
             self.state.update(
                 status="cancelled",
                 phase="staging",
@@ -804,17 +813,28 @@ class MigrationEngine:
                 message="Close Codex app and CLI sessions in the destination account, then choose Finalize again.",
             )
             return
+        self._prepare_staging()
+        # Freeze before the first transfer phase. A file added/rewritten during
+        # metadata/mode copying must not inherit a new post-copy baseline.
+        prepared_workspaces = self._prepare_install()
+        frozen_skills = self._frozen_skill_checks()
+        if self._restore_requested_stop():
+            return
         self.state.update(
             status="running",
             phase="final_delta",
             message="Refreshing the final delta with Codex closed in both migration accounts.",
             error=None,
         )
-        self._prepare_staging()
         self._copy_all()
         if self._restore_requested_stop():
             return
-        prepared_workspaces = self._prepare_install()
+        if (prepared_workspaces is not None
+                and self._freeze_source_content() != {key: prepared_workspaces[key]
+                                                      for key in ('workspaces', 'codex_state')}):
+            raise MigrationError('Source files changed during staging. Close writing apps and Resume before finalizing; no destination files were replaced.')
+        if self._frozen_skill_checks() != frozen_skills:
+            raise MigrationError('Source skills changed during staging. Close writing apps and Resume before finalizing; no destination files were replaced.')
         if self._restore_requested_stop():
             return
         if codex_running(self.config.source_home):
@@ -842,7 +862,7 @@ class MigrationEngine:
                 message="Verifying destination contents, backing up, installing and checking again. This protected phase can take time; keep both Macs connected.",
                 current_item="Destination verification and installation",
             )
-        receipt = self._install_and_verify(prepared_workspaces)
+        receipt = self._install_and_verify(prepared_workspaces, frozen_skills=frozen_skills)
         self._complete_installation(receipt)
 
     def _complete_installation(self, receipt) -> None:
@@ -991,7 +1011,15 @@ class MigrationEngine:
                 + storage_scope_script(self.config.target_home).rstrip() + " || exit $?\n"
                 + retained_ancestor_storage_script(self.config.target_home, roots))
 
-    def _prepare_install(self):
+    def _frozen_skill_checks(self):
+        checks = []
+        for skill in self._skill_plan():
+            self._inspection_checkpoint()
+            checks.append(skill_verification_script(skill, self.config.source_home))
+        self._inspection_checkpoint()
+        return checks
+
+    def _freeze_source_content(self):
         require_source_storage(self.config.source_home, self._inspection_checkpoint)
         require_project_storage(self.config.source_home, self.config.workspace_roots, self._inspection_checkpoint)
         roots = [(root, self.config.target_staging + "/home-relative/" + str(Path(root).relative_to(self.config.source_home)),
@@ -1020,8 +1048,11 @@ class MigrationEngine:
             self.state.update(status="running", phase="verifying_sources",
                               message="Reading retained Codex state. Safe to stop; a stopped check restarts on Finalize.",
                               current_item="Source Codex state verification")
-        result = {"workspaces": prepared,
-                  "codex_state": freeze_tree(self.config.source_codex, self._inspection_checkpoint, codex=True)}
+        return {"workspaces": prepared,
+                "codex_state": freeze_tree(self.config.source_codex, self._inspection_checkpoint, codex=True)}
+
+    def _prepare_install(self):
+        result = self._freeze_source_content()
         self.state.update(message="Saving a source Git baseline. Safe to stop; no source files are changed.",
                           current_item="Source Git verification")
         baseline = freeze_baseline(self.config, self.state.read().get("migration_id"), result, self._inspection_checkpoint)
@@ -1031,7 +1062,7 @@ class MigrationEngine:
         result["git_baseline_id"] = fingerprint(baseline)
         return result
 
-    def _install_and_verify(self, prepared_workspaces=None) -> Dict[str, object]:
+    def _install_and_verify(self, prepared_workspaces=None, *, frozen_skills=None) -> Dict[str, object]:
         if prepared_workspaces is None:
             prepared_workspaces = self._prepare_install()
         baseline_id = prepared_workspaces.get("git_baseline_id")
@@ -1073,13 +1104,16 @@ class MigrationEngine:
         rollback_workspaces = []
         mappings = [(self.config.target_codex, backup + "/.codex")]
         skills = self._skill_plan()
+        if frozen_skills is not None and len(frozen_skills) != len(skills):
+            raise MigrationError('Frozen skill scope does not match the installation')
         skill_stage_checks = []
         skill_installed_checks = []
         for index, skill in enumerate(skills):
             stage_skill = self.config.target_staging + "/personal-skills/" + skill.name
             # Hash once: install verification must use the exact same snapshot
             # as staging, even if source files change while SSH is running.
-            checks = skill_verification_script(skill, self.config.source_home)
+            checks = (skill_verification_script(skill, self.config.source_home)
+                      if frozen_skills is None else frozen_skills[index])
             function = "verify_personal_skill_%d" % index
             failure = " || { echo 'Personal skill verification failed. Keep staging and any backup, then Resume to retry.' >&2; exit 74; }"
             skill_stage_checks.append("%s() {\n%s\n}\n%s %s%s" % (

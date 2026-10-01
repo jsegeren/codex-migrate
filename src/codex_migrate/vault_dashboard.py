@@ -11,11 +11,18 @@ VAULT_HTML = r'''<!doctype html>
 :root{color-scheme:dark;--bg:#080b10;--panel:#111722;--line:#344057;--text:#f7f8fa;--muted:#bdc7d8;--purple:#6042a6;--light:#d9cdff}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 20% 0,#172038 0,transparent 36%),var(--bg);color:var(--text);font:500 16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--light)}header{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:28px}h1{font-size:clamp(34px,7vw,58px);letter-spacing:-.045em;line-height:1;margin:10px 0}.lede,.muted{color:var(--muted)}.lede{font-size:18px;max-width:680px;margin:0}.panel{background:color-mix(in srgb,var(--panel) 95%,transparent);border:1px solid var(--line);border-radius:18px;padding:22px;margin:18px 0}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.metric{border:1px solid var(--line);border-radius:13px;padding:14px}.metric span{display:block;color:var(--muted);font-size:14px}.metric strong{font-size:22px}form,.actions{display:flex;gap:10px;flex-wrap:wrap}input,select,textarea,button,a.button{font:inherit;border-radius:10px;border:1px solid #8996ad;padding:11px 14px}input,select,textarea{background:#080b10;color:var(--text);flex:1;min-width:220px}textarea{display:block;width:100%;resize:none}button,a.button{background:var(--purple);color:white;font-weight:750;cursor:pointer;text-decoration:none}button.secondary,a.secondary{background:transparent}button:disabled,select:disabled{opacity:.55;cursor:wait}.result{width:100%;text-align:left;background:#151d2a;margin:10px 0;padding:15px;line-height:1.45}.result small{display:block;color:var(--muted);margin-bottom:5px}.entry{border-top:1px solid var(--line);padding:20px 0}.entry:first-child{border-top:0}.entry h3{margin:0 0 4px;font-size:17px}.entry time{display:block;color:var(--muted);font-size:14px;margin-bottom:10px}.entry p{white-space:pre-wrap;overflow-wrap:anywhere;margin:0}#error,#backup-error,#schedule-error,#restore-error,#install-error{color:#ffc3c8}#status,#backup-status,#schedule-status,#restore-status,#install-status{color:var(--muted)}#recovery{border-left:4px solid var(--light);padding-left:16px;margin-top:18px}.subsection{border-top:1px solid var(--line);margin-top:22px;padding-top:18px}[hidden]{display:none!important}fieldset{margin:18px 0;padding:0;border:0}legend{margin-bottom:10px;font-weight:750}fieldset label{display:flex;gap:11px;padding:13px 14px;margin:8px 0;border:1px solid var(--line);border-radius:11px;cursor:pointer}fieldset input{flex:0 0 auto;min-width:0;width:19px;height:19px;margin:3px 0 0;accent-color:var(--purple)}fieldset label span,fieldset label small{display:block}fieldset label small{margin-top:3px;color:var(--muted);font-size:14px}.retention-note{font-size:14px;margin-top:10px}
-.result strong{display:block;margin-bottom:4px}#browse-error,#thread-restore-error{color:#ffc3c8}#browse-status,#thread-restore-status{color:var(--muted)}
+.result strong{display:block;margin-bottom:4px;overflow-wrap:anywhere}#browse-error,#thread-restore-error{color:#ffc3c8}#browse-status,#thread-restore-status{color:var(--muted)}
+#index-error{color:#ffc3c8}#index-status{color:var(--muted)}
+#salvage-error{color:#ffc3c8}#salvage-status{color:var(--muted)}#salvage-search{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end}#salvage-search label{grid-column:1/-1}#salvage-search input{min-width:0}
 .app{min-height:100vh;display:grid;grid-template-columns:238px 1fr}.sidebar{position:sticky;top:0;height:100vh;padding:28px 18px 24px;border-right:1px solid var(--line);background:#0c1018;display:flex;flex-direction:column}.brand{display:flex;gap:12px;align-items:center;padding:0 8px 26px}.brand-mark{width:36px;height:36px;display:grid;place-items:center;border-radius:11px;background:linear-gradient(145deg,#9475ff,#5735d6);font-size:14px;font-weight:850;box-shadow:0 10px 30px #6f4cff44}.brand strong,.brand small{display:block}.brand small{color:var(--muted);font-size:12px}.nav{display:grid;gap:8px}.nav a{display:flex;align-items:center;gap:12px;padding:12px 14px;color:#aeb8ca;border-radius:11px;text-decoration:none;font-weight:700}.nav a:hover,.nav a.active{color:white;background:#1d2434}.nav-icon{width:18px;text-align:center;color:#a991ff}.protection{margin-top:auto;border-top:1px solid var(--line);padding:18px 8px 0;font-size:13px;color:var(--muted)}.protection strong{color:var(--text)}.dot{display:inline-block;width:9px;height:9px;margin-right:8px;border-radius:50%;background:#45dfa0;box-shadow:0 0 0 5px #45dfa014}.content{min-width:0}.topline{font-size:14px;color:var(--muted);font-weight:750}.view-head h1{font-size:clamp(38px,5vw,58px)}.view-head{align-items:center;margin-bottom:26px}.panel h2{margin-top:0}.storage-assessment{border:1px solid var(--line);border-radius:13px;padding:14px 16px;margin:14px 0;background:#0c121d}.storage-assessment strong,.storage-assessment span{display:block}.storage-assessment span{color:var(--muted);font-size:14px;margin-top:3px}.storage-assessment.cloud_sync{border-color:#25654d;background:#0d251c}.storage-assessment.cloud_sync strong{color:#5ee5aa}.storage-assessment.local{border-color:#7a5824;background:#2c210f}.storage-assessment.local strong{color:#ffd58a}.storage-assessment.external_or_network{border-color:#4c5a74}.view-backup .summary,.view-recovery .summary,.view-backup #restore-panel,.view-backup #search-panel,.view-backup #results-panel,.view-backup #thread,.view-conversations #backup-panel,.view-conversations #restore-panel,.view-recovery #backup-panel,.view-recovery #search-panel,.view-recovery #results-panel,.view-recovery #thread{display:none!important}.view-conversations main{width:min(1120px,calc(100% - 48px))}.view-conversations #search-panel{margin-bottom:12px}.view-conversations #results-panel{width:36%;float:left;margin-right:14px}.view-conversations #thread{overflow:hidden;min-height:420px}.view-conversations #status,.view-conversations #error{clear:both}.view-recovery main{width:min(980px,calc(100% - 48px))}
 @media(max-width:820px){.app{display:block}.sidebar{position:static;width:auto;height:auto;padding:16px}.brand{padding-bottom:12px}.nav{display:flex;overflow-x:auto}.nav a{white-space:nowrap}.protection{display:none}.view-conversations #results-panel{float:none;width:auto;margin-right:0}.view-conversations #thread{min-height:0}}
-@media(max-width:620px){header{display:block}.summary{grid-template-columns:1fr}.panel{padding:16px}main,.view-conversations main,.view-recovery main{width:min(100% - 24px,960px);margin-top:22px}.nav a{padding:10px}.nav-icon{display:none}}
+@media(min-width:821px){.summary{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(min-width:621px) and (max-width:820px){.summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.summary-note{grid-column:1/-1;color:var(--muted);font-size:15px;margin:0 2px 2px}
+@media(max-width:620px){header{display:block}.view-head a.button{display:inline-block;margin-top:16px}.summary{grid-template-columns:1fr}.panel{padding:16px}main,.view-conversations main,.view-recovery main{width:min(100% - 24px,960px);margin-top:22px}.nav a{padding:10px}.nav-icon{display:none}}
+@media(max-width:620px){#salvage-search{grid-template-columns:1fr}#salvage-search button{width:100%}}
 @media print{body{background:white;color:black}header,.summary,#backup-panel,#restore-panel,#search-panel,#results-panel,.actions,#error,#status{display:none!important}main{width:auto;margin:0}.panel{border:0;padding:0;background:white}.entry{break-inside:avoid;border-color:#bbb}.entry time{color:#444}}
+.hosted-step label{display:block;margin:14px 0 8px;font-weight:700}.hosted-step input,.hosted-step select{max-width:100%;width:100%;margin-bottom:14px}.hosted-step button{margin:8px 0}.hosted-step .actions input{width:auto}.view-backup #hosted-recovery-panel,.view-conversations #hosted-recovery-panel{display:none!important}#hosted-recovery-error{color:#ffc3c8}#hosted-recovery-status{color:var(--muted)}
 </style>
 </head>
 <body>
@@ -50,7 +57,7 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 <div>
 <div class="topline" id="view-kicker">Conversations</div>
 <h1 id="view-title">Find any conversation.</h1>
-<p class="lede" id="view-lede">Search active and archived Codex threads stored on this Mac.</p>
+<p class="lede" id="view-lede">Search local Codex transcripts and database-backed history.</p>
 </div>
 <a class="button secondary" href="#migration-help">Help</a>
 </header>
@@ -64,13 +71,19 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 <strong id="archived">—</strong>
 </div>
   <div class="metric">
+<span>Database-backed threads</span>
+<strong id="paginated">—</strong>
+</div>
+  <div class="metric">
 <span>Transcript data</span>
 <strong id="bytes">—</strong>
 </div>
+<p class="summary-note" id="paginated-note" hidden>Database-backed threads may also have transcript files; these counts are not additive.</p>
 </section>
 <section class="panel" id="backup-panel">
 <h2>Backup settings</h2>
 <p class="muted">Choose an empty local or cloud-sync folder, or an existing backup folder. Conversation content is encrypted before it is written there.</p>
+<p class="muted" id="backup-footprint" role="status">Checking the size of your conversation history…</p>
 <div class="actions">
 <input id="vault-folder" readonly placeholder="Choose a backup folder">
 <button id="choose-vault" class="secondary">Choose folder…</button>
@@ -100,6 +113,7 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 <button id="backup" disabled>Create backup + turn on daily backup</button>
 </div>
 <p class="muted retention-note">Existing snapshots are kept. Daily backup is not real-time sync.</p>
+<p class="muted" id="vault-usage" role="status" aria-live="polite" hidden></p>
 <p id="backup-status" role="status" aria-live="polite">
 </p>
 <p id="backup-error" role="alert">
@@ -126,6 +140,71 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 <p id="schedule-error" role="alert">
 </p>
 </div>
+</section>
+<section class="panel" id="hosted-recovery-panel" hidden>
+<h2>Recover your hosted backup</h2>
+<p class="muted">Acceptance preview. Recover an encrypted copy into a separate folder. This never replaces your live Codex history.</p>
+<p id="hosted-recovery-status" role="status" aria-live="polite" tabindex="-1"></p>
+<p id="hosted-recovery-error" role="alert"></p>
+<div class="hosted-step" data-hosted-phase="start">
+<label for="hosted-purchase">Private purchase link</label>
+<input id="hosted-purchase" type="password" autocomplete="off" spellcheck="false" placeholder="Paste the link from your receipt">
+<button id="hosted-send-code">Email me a recovery code</button>
+</div>
+<div class="hosted-step" data-hosted-phase="email" hidden>
+<label for="hosted-code">Recovery code from your email</label>
+<input id="hosted-code" type="password" autocomplete="off" spellcheck="false">
+<button id="hosted-list-vaults">Find my backups</button>
+</div>
+<div class="hosted-step" data-hosted-phase="vaults" hidden>
+<label for="hosted-vault">Backup to recover</label>
+<select id="hosted-vault"></select>
+<button id="hosted-pair">Connect this Mac for recovery</button>
+</div>
+<div class="hosted-step" data-hosted-phase="pairing_checkpoint" hidden>
+<p>This Mac’s recovery connection has not been safely saved yet. No connection request has been sent. Retry saving the same connection before continuing.</p>
+<button id="hosted-retry-save">Retry saving connection</button>
+</div>
+<div class="hosted-step" data-hosted-phase="pairing_uncertain" hidden>
+<p>Check the saved connection before continuing. We will reuse the same device credential, not create a replacement.</p>
+<button id="hosted-resolve">Check saved connection</button>
+<p class="muted">If it remains unconfirmed after checking your connection, verify your purchase email again. We still reuse this Mac’s saved credential.</p>
+<button id="hosted-reauthorize" class="secondary">Verify purchase email again</button>
+</div>
+<div class="hosted-step" data-hosted-phase="paired" hidden>
+<button id="hosted-versions">Show available backup versions</button>
+</div>
+<div class="hosted-step" data-hosted-phase="versions" hidden>
+<label for="hosted-snapshot">Backup version</label>
+<select id="hosted-snapshot"></select>
+<p class="muted">“Complete source coverage” describes what the source Mac captured. This Mac still needs your recovery key and a full verification.</p>
+<label for="hosted-output">Separate empty recovery folder</label>
+<div class="actions"><input id="hosted-output" readonly placeholder="Choose an empty folder"><button id="hosted-choose-output" class="secondary">Choose folder…</button></div>
+<button id="hosted-prepare">Prepare this version</button>
+</div>
+<div class="hosted-step" data-hosted-phase="prepared" hidden>
+<label for="hosted-key">Your separately saved recovery key</label>
+<input id="hosted-key" type="password" autocomplete="off" spellcheck="false" placeholder="CV1-…">
+<p class="muted">We check that this key opens the selected backup before saving it in this Mac’s Keychain. The key is not sent to our servers.</p>
+<button id="hosted-import-key">Verify and save key</button>
+</div>
+<div class="hosted-step" data-hosted-phase="key_verified" hidden>
+<p>The key opens this backup’s manifest. Recovery is not complete until all conversation data has been downloaded and verified.</p>
+<button id="hosted-download">Download and verify backup</button>
+<div id="hosted-download-progress" hidden>
+<label for="hosted-progress">Encrypted data read</label>
+<progress id="hosted-progress" max="1" value="0" style="width:100%"></progress>
+<p id="hosted-progress-detail" class="muted"></p>
+</div>
+<button id="hosted-stop" class="secondary" hidden>Stop download safely</button>
+<p class="muted">Stop keeps completed files for retry. It may wait for the current network request or integrity check to finish. Your live Codex data stays unchanged.</p>
+</div>
+<div class="hosted-step" data-hosted-phase="verified" hidden>
+<p id="hosted-coverage"></p>
+<button id="hosted-open">Open recovered backup</button>
+<a class="button secondary" id="hosted-conversations" hidden>Search and read conversations</a>
+</div>
+<p class="muted">Need help? <a href="mailto:joshua@segeren.com">Email Joshua</a>. Never email your recovery key.</p>
 </section>
 <section class="panel" id="restore-panel">
 <h2>Recover a backup</h2>
@@ -188,7 +267,37 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 <input id="query" required autocomplete="off">
 <button type="submit">Search</button>
 </form>
-<p class="muted">Remember an old name? Search this Mac's titles first. Full-text search reads local conversations and may take longer for large histories. All saved titles searches dated encrypted snapshots; open a version to search its full text.</p>
+<p class="muted">Search this Mac's text or titles. For older versions, search saved titles, then open a backup to search its full text.</p>
+<details class="subsection" id="salvage-controls">
+<summary>Inspect a physical conversation file</summary>
+<p class="muted">If a transcript is damaged or its fork history is ambiguous, find the physical file by title, filename, or date. This read-only preview never changes the original. It may be incomplete, excludes inherited fork history, and does not restore the thread in Codex.</p>
+<form id="salvage-search">
+<label for="salvage-query">Title or filename (optional)</label>
+<input id="salvage-query" maxlength="200" autocomplete="off" placeholder="Blank shows recent files">
+<button type="submit" class="secondary">Find files</button>
+</form>
+<p id="salvage-status" role="status" aria-live="polite"></p>
+<p id="salvage-error" role="alert"></p>
+<div id="salvage-results"></div>
+<button id="salvage-more" type="button" class="secondary" hidden>Show more files</button>
+<section id="salvage-preview" hidden aria-label="Incomplete salvage preview">
+<h3>Incomplete read-only preview</h3>
+<p id="salvage-meta" role="status"></p>
+<button id="salvage-download" type="button" class="secondary">Download incomplete Markdown</button>
+<div id="salvage-entries"></div>
+</section>
+</details>
+<div class="subsection" id="index-controls">
+<h3>Speed up search</h3>
+<p class="muted">For large histories, build a local cache instead of scanning every conversation. It may use several GB and stores <strong>unencrypted text fragments</strong> visible to your Mac account. Search and backups work without it; you can delete it anytime.</p>
+<div class="actions">
+<button id="index-build" type="button" class="secondary">Make search faster</button>
+<button id="index-stop" type="button" class="secondary" hidden>Stop indexing</button>
+<button id="index-remove" type="button" class="secondary" hidden>Delete search cache</button>
+</div>
+<p id="index-status" role="status" aria-live="polite">Checking fast search…</p>
+<p id="index-error" role="alert"></p>
+</div>
 </section>
 <section class="panel" id="results-panel" hidden>
 <h2>Results</h2>
@@ -235,13 +344,85 @@ history.replaceState(null,"",location.pathname+location.search);
 const requestedView=new URLSearchParams(location.search).get("view");
 const view=["backup","conversations","recovery"].includes(requestedView)?requestedView:"conversations";
 document.body.classList.add("view-"+view);
-const viewCopy={backup:["Backups / Set up","Protect this Mac.","Choose a local or cloud-sync folder for encrypted backups, then set a daily or manual schedule."],conversations:["Conversations","Find any conversation.","Search active and archived Codex threads stored on this Mac."],recovery:["Recovery","Recover what matters.","Open a verified backup, restore one missing conversation, or recover complete history safely."]}[view];
+const viewCopy={backup:["Backups / Set up","Protect this Mac.","Choose a local or cloud-sync folder for encrypted backups, then set a daily or manual schedule."],conversations:["Conversations","Find any conversation.","Search local Codex transcripts and database-backed history."],recovery:["Recovery","Recover what matters.","Open a verified backup, restore one missing conversation, or recover complete history safely."]}[view];
 document.title="Codex Backup — "+({backup:"Backups",conversations:"Conversations",recovery:"Recovery"}[view]);
 $("view-kicker").textContent=viewCopy[0];$("view-title").textContent=viewCopy[1];$("view-lede").textContent=viewCopy[2];
+if(view==="recovery")$("status").textContent="";
 for(const link of document.querySelectorAll("[data-route]")){link.classList.toggle("active",link.dataset.route===view);link.href=link.getAttribute("href")+"#token="+encodeURIComponent(token)}
 const fmt=n=>{const units=["B","KB","MB","GB","TB"];let i=0;while(n>=1000&&i<units.length-1){n/=1000;i++}return `${n.toFixed(n>=100?0:n>=10?1:2)} ${units[i]}`};
 async function api(path,data){const response=await fetch(path,{method:data===undefined?"GET":"POST",headers:{"X-Codex-Migrate-Token":token,"Content-Type":"application/json"},...(data===undefined?{}:{body:JSON.stringify(data)})});const type=response.headers.get("Content-Type")||"";const body=type.includes("application/json")?await response.json():await response.text();if(!response.ok)throw Error(body.error||"The local request failed");return body}
 function fail(error){$("error").textContent=error.message;$("status").textContent=""}
+let hostedRecoveryTimer=null,hostedRecoveryState=null,hostedRecoveryPhase=null;
+function hostedRecoveryView(data){
+  hostedRecoveryState=data;
+  const panel=$("hosted-recovery-panel"),focusOwned=panel.contains(document.activeElement),phaseChanged=data.phase!==hostedRecoveryPhase;
+  panel.hidden=!data.enabled;
+  if(!data.enabled){if(hostedRecoveryTimer){clearInterval(hostedRecoveryTimer);hostedRecoveryTimer=null}return}
+  const running=data.status==="running";
+  for(const block of document.querySelectorAll("[data-hosted-phase]"))block.hidden=block.dataset.hostedPhase!==data.phase;
+  for(const control of $("hosted-recovery-panel").querySelectorAll("button,input,select"))control.disabled=running;
+  const downloading=running&&data.step==="download",stopping=downloading&&data.stop_requested===true;
+  $("hosted-stop").hidden=!downloading;
+  $("hosted-stop").disabled=!downloading||stopping;
+  $("hosted-stop").textContent=stopping?"Stopping safely…":"Stop download safely";
+  $("hosted-download").textContent=data.status==="stopped"?"Resume and verify backup":"Download and verify backup";
+  const progress=data.progress;
+  $("hosted-download-progress").hidden=!(data.phase==="key_verified"&&progress?.total_bytes>0);
+  if(progress?.total_bytes>0){
+    $("hosted-progress").max=progress.total_bytes;
+    $("hosted-progress").value=progress.processed_bytes;
+    $("hosted-progress-detail").textContent=`${fmt(progress.processed_bytes)} of ${fmt(progress.total_bytes)} read · ${progress.checked_objects} of ${progress.total_objects} files checked against their receipts. ${running&&progress.stage==="verifying"?"Verifying the full encrypted backup…":"Full backup verification is still required."}`;
+  }
+  $("hosted-recovery-error").textContent=data.error||"";
+  const messages={start:"Connect using your purchase receipt.",email:"Check your email for the recovery code.",vaults:"Choose the backup you want to recover.",pairing_checkpoint:"Save this connection before pairing.",pairing_uncertain:"Saved pairing needs confirmation.",paired:"This Mac is connected for recovery.",versions:"Choose a published version and a separate folder.",prepared:"Metadata ready. Your recovery key is still needed.",key_verified:"Key verified. Full backup verification is still needed.",verified:"Encrypted backup downloaded and verified. Live Codex data is unchanged."};
+  const working={send_code:"Requesting your recovery email…",list_vaults:"Finding your backups…",pair:"Saving and connecting this Mac…",resolve:"Checking the saved connection…",versions:"Loading backup versions…",prepare:"Preparing the selected version’s metadata…",import_key:"Checking your key against the selected backup…",download:"Downloading and verifying the selected backup. Large backups can take a while. Keep the app open; if interrupted, retry this version to resume."};
+  $("hosted-recovery-status").textContent=running?working[data.step]||"Checking recovery…":messages[data.phase]||"Recovery needs attention.";
+  if(stopping)$("hosted-recovery-status").textContent="Stopping after the current network request or integrity check. Completed files will be kept for retry.";
+  else if(data.status==="stopped")$("hosted-recovery-status").textContent="Stopped safely. Resume this version to reuse completed, verified files.";
+  if(data.phase!==hostedRecoveryPhase){
+    if(data.phase==="vaults")$("hosted-vault").replaceChildren(...data.vaults.map((item,index)=>new Option(`Backup ${index+1} · ${item.lastGoodAt?new Date(item.lastGoodAt).toLocaleString():"no verified backup date"} · ${item.vaultId.slice(0,8)}`,item.vaultId)));
+    if(data.phase==="versions")$("hosted-snapshot").replaceChildren(...data.versions.map((item,index)=>new Option(`${index===0?"Newest published":"Last complete source capture"} · ${fmt(item.totalBytes)} · ${item.sourceCoverage==="complete"?"complete source coverage":"needs attention"} · ${item.snapshotId.slice(0,8)}`,item.snapshotId)));
+    hostedRecoveryPhase=data.phase;
+  }
+  if(data.phase==="verified")$("hosted-coverage").textContent=data.needs_attention?"This backup is readable, but some source data may be missing or damaged. Keep earlier versions and review the affected conversations.":"The selected backup verified successfully. Open it to search, read, and export your conversations.";
+  if(focusOwned&&(phaseChanged||document.activeElement.disabled||document.activeElement.hidden||(!running&&document.activeElement===$("hosted-recovery-status")))){
+    const target=running?$("hosted-recovery-status"):panel.querySelector(`[data-hosted-phase="${data.phase}"] button:not(:disabled),[data-hosted-phase="${data.phase}"] input:not(:disabled),[data-hosted-phase="${data.phase}"] select:not(:disabled)`);
+    (target||$("hosted-recovery-status")).focus();
+  }
+  if(running&&!hostedRecoveryTimer)hostedRecoveryTimer=setInterval(refreshHostedRecovery,1500);
+  if(!running&&hostedRecoveryTimer){clearInterval(hostedRecoveryTimer);hostedRecoveryTimer=null}
+}
+async function refreshHostedRecovery(){
+  try{hostedRecoveryView(await api("/api/vault/hosted-recovery-status"))}
+  catch(error){$("hosted-recovery-error").textContent="Recovery status is unavailable. Do not repeat a pairing request; check the connection or contact support."}
+}
+async function hostedRecoveryStep(action,step={}){
+  if($("hosted-recovery-panel").contains(document.activeElement))$("hosted-recovery-status").focus();
+  for(const control of $("hosted-recovery-panel").querySelectorAll("button,input,select"))control.disabled=true;
+  if(!hostedRecoveryTimer)hostedRecoveryTimer=setInterval(refreshHostedRecovery,1500);
+  try{hostedRecoveryView(await api("/api/vault/hosted-recovery",{action,step:{...step,apply:true}}))}
+  catch(error){await refreshHostedRecovery();$("hosted-recovery-error").textContent=error.message}
+}
+$("hosted-send-code").onclick=()=>{const purchase_link=$("hosted-purchase").value.trim();$("hosted-purchase").value="";return hostedRecoveryStep("send_code",{purchase_link})};
+$("hosted-list-vaults").onclick=()=>{const code=$("hosted-code").value.trim();$("hosted-code").value="";return hostedRecoveryStep("list_vaults",{code})};
+$("hosted-pair").onclick=()=>hostedRecoveryStep("pair",{vault_id:$("hosted-vault").value});
+$("hosted-retry-save").onclick=()=>hostedRecoveryStep("pair",{vault_id:hostedRecoveryState.selected_vault_id});
+$("hosted-resolve").onclick=()=>hostedRecoveryStep("resolve");
+$("hosted-reauthorize").onclick=()=>hostedRecoveryStep("reauthorize");
+$("hosted-versions").onclick=()=>hostedRecoveryStep("versions");
+$("hosted-choose-output").onclick=async()=>{try{const result=await api("/api/vault/restore-folder",{});if(result.path)$("hosted-output").value=result.path}catch(error){$("hosted-recovery-error").textContent=error.message}};
+$("hosted-prepare").onclick=()=>hostedRecoveryStep("prepare",{snapshot_id:$("hosted-snapshot").value,output:$("hosted-output").value});
+$("hosted-import-key").onclick=()=>{const recovery_key=$("hosted-key").value.trim();$("hosted-key").value="";return hostedRecoveryStep("import_key",{recovery_key})};
+$("hosted-download").onclick=()=>hostedRecoveryStep("download");
+$("hosted-stop").onclick=()=>hostedRecoveryStep("stop_download");
+$("hosted-open").onclick=async()=>{
+  if(hostedRecoveryState?.phase!=="verified"||hostedRecoveryState.status!=="ready")return;
+  try{
+    browseView(await api("/api/vault/browse",{vault:hostedRecoveryState.vault,snapshot:hostedRecoveryState.snapshot_id,apply:true}));
+    $("hosted-conversations").href="/vault?view=conversations#token="+encodeURIComponent(token);
+    $("hosted-conversations").hidden=false;
+  }catch(error){$("hosted-recovery-error").textContent=error.message}
+};
 const chosenVault=()=>$("history-vault").value||$("restore-vault").value;
 $("search-source").onchange=()=>{$("history-location").hidden=$("search-source").value!=="history"};
 $("choose-history-vault").onclick=async()=>{
@@ -252,7 +433,24 @@ $("choose-history-vault").onclick=async()=>{
 };
 let selected=null;
 let threadExcerpted=false;
-function params(item){return new URLSearchParams({collection:item.collection,transcript:item.transcript,source:item.source||"local"})}
+function displayTitle(value,query=""){
+  const title=String(value||"").replace(/\s+/g," ").trim();
+  const chars=Array.from(title);
+  if(chars.length<=120)return title;
+  const match=query?title.toLocaleLowerCase().indexOf(query.toLocaleLowerCase()):-1;
+  const matchOffset=match<0?-1:Array.from(title.slice(0,match)).length;
+  const start=matchOffset>90?Math.max(0,matchOffset-30):0;
+  return `${start?"…":""}${chars.slice(start,start+120).join("").trimEnd()}${start+120<chars.length?"…":""}`;
+}
+function params(item){
+  const query=new URLSearchParams({collection:item.collection,transcript:item.transcript,source:item.source||"local"});
+  if(item.physical_only)query.set("physical","1");
+  return query;
+}
+function completeVisibleConversation(item,excerpted,nextCursor){
+  return !(Number.isSafeInteger(item.cursor)&&item.cursor>0&&item.line>0)&&
+    !excerpted&&(nextCursor===null||nextCursor===undefined||nextCursor==="");
+}
 function appendEntries(entries){$("entries").append(...entries.map((entry,index)=>{
   const article=document.createElement("article");article.className="entry";
   const h=document.createElement("h3");h.textContent=entry.role||`Entry ${$("entries").children.length+index+1}`;article.append(h);
@@ -268,17 +466,19 @@ async function openThread(item){
     if(fromMatch){query.set("cursor",String(item.cursor));query.set("match",item.match_query||"")}
     const thread=await api("/api/vault/thread?"+query);selected=item;
     const fromBackup=item.source==="backup";
-    $("restore-thread").hidden=!fromBackup;
-    $("thread-restore-note").hidden=!fromBackup;
-    $("thread-restore-status").textContent="";$("thread-restore-error").textContent="";
+    $("restore-thread").hidden=!fromBackup||item.collection==="paginated"||thread.physical_only;
+    $("thread-restore-note").hidden=!fromBackup||item.collection==="paginated"||thread.physical_only;
+    $("thread-restore-status").textContent=item.collection==="paginated"
+      ?"Paginated history can be read and exported here. Copying it into Codex is not supported.":"";
+    $("thread-restore-error").textContent="";
     threadExcerpted=thread.entries.some(entry=>entry.excerpted);
-    $("thread-meta").textContent=`${fromBackup?"Opened backup":"This Mac"} · ${thread.collection} · ${fromMatch?"Starting at the search match · ":""}${thread.entries.length} readable entries${threadExcerpted?". A long message is excerpted here; Download Markdown for full text.":thread.next_cursor!==null&&thread.next_cursor!==undefined?" so far. Download Markdown includes the full conversation.":""}`;
+    $("thread-meta").textContent=`${fromBackup?"Opened backup":"This Mac"} · ${thread.collection} · ${fromMatch?"Starting at the search match · ":""}${thread.entries.length} readable entries${thread.physical_only?" · Incomplete physical copy: inherited fork history is not included; do not restore this into Codex.":threadExcerpted?". A long message is excerpted here; Download Markdown for full text.":thread.next_cursor!==null&&thread.next_cursor!==undefined?" so far. Download Markdown includes the full conversation.":""}`;
     $("read-from-start").hidden=!fromMatch||item.cursor===0;
     $("entries").replaceChildren();appendEntries(thread.entries);
     $("load-more").dataset.cursor=thread.next_cursor===null||thread.next_cursor===undefined?"":String(thread.next_cursor);
     $("load-more").hidden=!$("load-more").dataset.cursor;
-    $("print").hidden=threadExcerpted||Boolean($("load-more").dataset.cursor);
-    $("share").hidden=threadExcerpted||Boolean($("load-more").dataset.cursor);
+    $("print").hidden=!completeVisibleConversation(item,threadExcerpted,thread.next_cursor);
+    $("share").hidden=$("print").hidden;
     $("thread-timeline").hidden=true;$("versions").replaceChildren();
     if(fromBackup&&item.key&&chosenVault()){
       const data=await api("/api/vault/thread-history?"+new URLSearchParams({vault:chosenVault(),key:item.key}));
@@ -286,7 +486,7 @@ async function openThread(item){
         const button=document.createElement("button");button.type="button";button.className="result";
         const when=new Date(version.created_at);
         const label=Number.isNaN(when.getTime())?version.created_at:when.toLocaleString();
-        button.textContent=`${label} · ${version.titles.at(-1)||"Untitled"} · ${fmt(version.size)}${version.at_risk?" · Needs review":""}`;
+        button.textContent=`${label} · ${displayTitle(version.titles.at(-1)||"Untitled")} · ${fmt(version.size)}${version.at_risk?" · Needs review":""}`;
         button.onclick=()=>openSavedResult({matching_snapshot:version.snapshot_id,
           matching_collection:version.collection,matching_transcript:version.transcript,key:item.key});
         return button;
@@ -300,8 +500,10 @@ async function openThread(item){
   }catch(error){
     if(item.source==="backup"||item.source==="local"){
       selected=item;$("entries").replaceChildren();$("load-more").hidden=true;
-      $("print").hidden=true;$("share").hidden=true;$("read-from-start").hidden=true;$("restore-thread").hidden=item.source!=="backup";
-      $("thread-meta").textContent="This conversation cannot be previewed here. Try its Markdown export or another saved version.";
+      $("print").hidden=true;$("share").hidden=true;$("read-from-start").hidden=true;$("restore-thread").hidden=item.source!=="backup"||item.collection==="paginated"||item.physical_only;
+      $("thread-meta").textContent=item.source==="local"?
+        "This conversation could not be read normally. Try a saved version, or inspect its physical file above. Markdown export may fail too.":
+        "This saved conversation could not be read normally. Try another verified backup version.";
       $("thread").hidden=false;
     }
     fail(error)
@@ -318,9 +520,9 @@ $("load-more").onclick=async()=>{
     $("load-more").dataset.cursor=page.next_cursor===null?"":String(page.next_cursor);
     $("load-more").hidden=!$("load-more").dataset.cursor;
     const fromMatch=Number.isSafeInteger(selected.cursor)&&selected.cursor>=0&&selected.line>0;
-    $("thread-meta").textContent=`${selected.source==="backup"?"Opened backup":"This Mac"} · ${page.collection} · ${fromMatch?"Starting at the search match · ":""}${$("entries").children.length} readable entries${threadExcerpted?". A long message is excerpted here; Download Markdown for full text.":page.next_cursor!==null?" so far. Download Markdown includes the full conversation.":""}`;
-    $("print").hidden=threadExcerpted||Boolean($("load-more").dataset.cursor);
-    $("share").hidden=threadExcerpted||Boolean($("load-more").dataset.cursor);
+    $("thread-meta").textContent=`${selected.source==="backup"?"Opened backup":"This Mac"} · ${page.collection} · ${fromMatch?"Starting at the search match · ":""}${$("entries").children.length} readable entries${page.physical_only?" · Incomplete physical copy: inherited fork history is not included; do not restore this into Codex.":threadExcerpted?". A long message is excerpted here; Download Markdown for full text.":page.next_cursor!==null?" so far. Download Markdown includes the full conversation.":""}`;
+    $("print").hidden=!completeVisibleConversation(selected,threadExcerpted,page.next_cursor);
+    $("share").hidden=$("print").hidden;
   }catch(error){fail(error)}finally{$("load-more").disabled=false}
 };
 async function openSavedResult(item){
@@ -355,38 +557,68 @@ let searchRequest=0;
 async function runSearch(append=false){
   const source=$("search-source").value,query=$("query").value.trim();
   if(append&&(!searchPage||searchPage.source!==source||searchPage.query!==query))append=false;
-  if(!append){searchRequest++;$("error").textContent="";$("thread").hidden=true;$("more-results").hidden=true;searchPage={source,query,offset:0}}
+  if(!append){
+    searchRequest++;$("error").textContent="";$("thread").hidden=true;
+    $("more-results").hidden=true;$("results-panel").hidden=true;$("results").replaceChildren();
+    searchPage={source,query,offset:0,shownKeys:new Set()};
+  }
   const request=searchRequest;
   const offset=append?searchPage.offset:0;
+  function buttonsFor(items){return items.map(item=>{
+    const button=document.createElement("button");button.type="button";button.className="result";
+    const small=document.createElement("small"),text=document.createElement("span"),title=document.createElement("strong");
+    if(source==="history"){
+      small.textContent=`${item.version_count} saved ${item.version_count===1?"version":"versions"} · ${item.identity_state}${item.at_risk?" · Needs review":""}`;
+      text.textContent=displayTitle(item.matching_title,query);
+      button.onclick=()=>openSavedResult(item);
+    }else{
+      item.source=source==="local_titles"?"local":source;
+      item.match_query=query;
+      small.textContent=`${item.collection}${item.timestamp?" · "+item.timestamp:""}${item.physical_only?" · Incomplete physical copy":""}`;
+      if(item.title)title.textContent=displayTitle(item.title,query);
+      text.textContent=item.snippet;button.onclick=()=>openThread(item);
+    }
+    button.append(small);if(title.textContent)button.append(title);button.append(text);return button;
+  })}
   $("more-results").disabled=true;
   $("status").textContent=source==="history"?"Searching saved titles…":
     source==="backup"?"Searching the opened backup…":
     source==="local_titles"?"Searching current and old titles…":"Searching this Mac…";
+  const slowNotice=source==="local"?setTimeout(()=>{
+    if(request===searchRequest){
+      const titles=$("results").children.length;
+      $("status").textContent=(titles?`${titles} matching ${titles===1?"title":"titles"} found. `:"")+
+        "Still searching conversation text. Large histories or recently changed conversations can take time."+
+        ($("index-build").disabled?"":" The optional search cache below speeds later searches.");
+    }
+  },4000):null;
   try{
+    if(!append&&source==="local"){
+      try{
+        const quick=await api("/api/vault/search?"+new URLSearchParams({q:query,limit:"10",offset:"0",source:"local_titles"}));
+        if(request!==searchRequest)return;
+        const titles=quick.results||[];
+        for(const item of titles)searchPage.shownKeys.add(item.collection+"/"+item.transcript);
+        if(titles.length){
+          $("results").append(...buttonsFor(titles));$("results-panel").hidden=false;
+          $("status").textContent=`${titles.length} matching ${titles.length===1?"title":"titles"} found. Searching conversation text…`;
+        }
+      }catch(_error){/* A damaged title index must not block transcript search. */}
+    }
     let data;
     if(source==="history"){
       const vault=chosenVault();
       if(!vault)throw Error("Choose a backup folder before searching saved titles.");
       data=await api("/api/vault/history-search?"+new URLSearchParams({vault,q:query}));
-    }else data=await api("/api/vault/search?"+new URLSearchParams({q:query,limit:"50",offset:String(offset),source}));
+    }else data=await api("/api/vault/search?"+new URLSearchParams({q:query,limit:"20",offset:String(offset),source}));
     if(request!==searchRequest)return;
-    const buttons=data.results.map(item=>{
-      const button=document.createElement("button");button.type="button";button.className="result";
-      const small=document.createElement("small"),text=document.createElement("span"),title=document.createElement("strong");
-      if(source==="history"){
-        small.textContent=`${item.version_count} saved ${item.version_count===1?"version":"versions"} · ${item.identity_state}${item.at_risk?" · Needs review":""}`;
-        text.textContent=item.matching_title;
-        button.onclick=()=>openSavedResult(item);
-      }else{
-        item.source=source==="local_titles"?"local":source;
-        item.match_query=query;
-        small.textContent=`${item.collection}${item.timestamp?" · "+item.timestamp:""}`;
-        if(item.title)title.textContent=item.title;
-        text.textContent=item.snippet;button.onclick=()=>openThread(item);
-      }
-      button.append(small);if(title.textContent)button.append(title);button.append(text);return button;
-    });
-    if(append)$("results").append(...buttons);else $("results").replaceChildren(...buttons);
+    const fresh=source==="local"?data.results.filter(item=>{
+      const key=item.collection+"/"+item.transcript;
+      if(searchPage.shownKeys.has(key))return false;
+      searchPage.shownKeys.add(key);return true;
+    }):data.results;
+    if(source==="local"||append)$("results").append(...buttonsFor(fresh));
+    else $("results").replaceChildren(...buttonsFor(fresh));
     searchPage.offset=offset+data.results.length;
     $("more-results").hidden=source==="history"||!data.has_more;
     $("results-panel").hidden=false;
@@ -397,23 +629,159 @@ async function runSearch(append=false){
       source==="history"?"No matching saved title found. Choose one dated backup to search its full text.":
       source==="local_titles"?"No matching local title found. Try searching conversation text.":
       "No matching conversation text found.";
-  }catch(error){if(request===searchRequest)fail(error)}finally{if(request===searchRequest)$("more-results").disabled=false}
+    if(data.partial_results){
+      const reasons=Array.isArray(data.partial_reasons)?data.partial_reasons:[];
+      if(reasons.includes("damaged_transcript")){
+        $("status").textContent+=" A damaged conversation file was skipped. Results may be incomplete; inspect its physical file below.";
+        $("salvage-controls").open=true;
+      }
+      if(reasons.includes("ambiguous_lineage")){
+        $("status").textContent+=source==="local"?
+          " Some conversations have ambiguous history copies. Their own-file matches are labeled incomplete; inherited text was not searched. Inspect the physical files below by title or date.":
+          " Some saved conversations have ambiguous history copies. Own-file matches are labeled incomplete; inherited text was not searched. Try another verified backup version.";
+        if(source==="local")$("salvage-controls").open=true;
+      }else if(!reasons.length){
+        $("status").textContent+=" Some conversation text could not be searched. Results may be incomplete.";
+      }
+    }
+  }catch(error){
+    if(request===searchRequest){
+      fail(error);
+      if(source==="local"){
+        if($("results").children.length)$("status").textContent="Title matches remain available; conversation-text search stopped.";
+        $("salvage-controls").open=true;
+        $("salvage-status").textContent="If one file is damaged, find it by title or date here. Other read errors still need review.";
+      }
+    }
+  }finally{if(slowNotice!==null)clearTimeout(slowNotice);if(request===searchRequest)$("more-results").disabled=false}
 }
 $("search").onsubmit=event=>{event.preventDefault();void runSearch()};
 $("more-results").onclick=()=>void runSearch(true);
-async function markdownFile(){if(!selected)throw Error("Open a conversation first");const text=await api("/api/vault/export?"+params(selected));return new File([text],"codex-conversation.md",{type:"text/markdown"})}
+let salvageOffset=0;
+let salvageSelected=null;
+async function findSalvageFiles(append=false){
+  const q=$("salvage-query").value.trim();
+  if(!append){salvageOffset=0;salvageSelected=null;$("salvage-results").replaceChildren();$("salvage-preview").hidden=true}
+  $("salvage-error").textContent="";$("salvage-status").textContent="Finding conversation files…";
+  $("salvage-more").disabled=true;
+  try{
+    const data=await api("/api/vault/salvage-candidates?"+new URLSearchParams({q,offset:String(salvageOffset)}));
+    for(const item of data.results){
+      const button=document.createElement("button");button.type="button";button.className="result";
+      const small=document.createElement("small");
+      const when=new Date(item.modified_ms);
+      small.textContent=`${item.collection} · ${Number.isNaN(when.getTime())?"date unavailable":when.toLocaleString()}`;
+      const title=document.createElement("strong");title.textContent=item.title||"Untitled conversation file";
+      const path=document.createElement("span");path.textContent=item.transcript;
+      button.append(small,title,path);button.onclick=()=>void previewSalvageFile(item);
+      $("salvage-results").append(button);
+    }
+    salvageOffset += data.results.length;
+    $("salvage-more").hidden=!data.has_more;
+    $("salvage-status").textContent=$("salvage-results").children.length?
+      `${$("salvage-results").children.length} file${$("salvage-results").children.length===1?"":"s"} shown. Select one to inspect it without changing the original.${data.titles_available?"":" Title lookup is unavailable; filename lookup still works."}`:
+      "No matching file found. Try another title or leave the field blank to browse by date.";
+  }catch(error){$("salvage-error").textContent=error.message;$("salvage-status").textContent=""}
+  finally{$("salvage-more").disabled=false}
+}
+async function previewSalvageFile(item){
+  $("salvage-error").textContent="";$("salvage-status").textContent="Inspecting the selected file without changing it…";
+  try{
+    const data=await api("/api/vault/salvage-preview?"+new URLSearchParams({collection:item.collection,transcript:item.transcript}));
+    $("salvage-entries").replaceChildren(...data.entries.map((entry,index)=>{
+      const article=document.createElement("article");article.className="entry";
+      const h=document.createElement("h4");h.textContent=entry.role||`Entry ${index+1}`;article.append(h);
+      if(entry.timestamp){const time=document.createElement("time");time.textContent=entry.timestamp;article.append(time)}
+      const p=document.createElement("p");p.textContent=entry.text;article.append(p);return article;
+    }));
+    $("salvage-meta").textContent=`${item.transcript} · ${data.parsed_records} readable records, ${data.nul_repaired_records} parseable after NUL removal, ${data.skipped_records} skipped.${data.nul_repaired_records?" NUL-stripped text may still be incomplete; overwritten bytes cannot be recovered.":""} Physical file only; fork ancestry is not included.${data.preview_truncated||data.scan_truncated?" Preview limited; additional content may be omitted.":""}`;
+    salvageSelected=item;
+    $("salvage-preview").hidden=false;$("salvage-status").textContent="";
+    $("salvage-preview").scrollIntoView({behavior:"smooth"});
+  }catch(error){$("salvage-error").textContent=error.message;$("salvage-status").textContent=""}
+}
+$("salvage-search").onsubmit=event=>{event.preventDefault();void findSalvageFiles()};
+$("salvage-more").onclick=()=>void findSalvageFiles(true);
+$("salvage-download").onclick=async()=>{
+  if(!salvageSelected)return;
+  $("salvage-error").textContent="";$("salvage-download").disabled=true;
+  try{
+    const markdown=await api("/api/vault/salvage-export?"+new URLSearchParams({collection:salvageSelected.collection,transcript:salvageSelected.transcript}));
+    const url=URL.createObjectURL(new Blob([markdown],{type:"text/markdown"}));
+    const link=document.createElement("a");link.href=url;link.download="codex-salvage-incomplete.md";link.click();
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }catch(error){$("salvage-error").textContent=error.message}
+  finally{$("salvage-download").disabled=false}
+};
+let indexTimer=null;
+function indexView(data){
+  const running=data.status==="running"||data.status==="stopping";
+  $("index-build").disabled=running||!data.available;
+  $("index-build").textContent=data.present?"Refresh search cache":"Make search faster";
+  $("index-stop").hidden=!running;
+  $("index-stop").disabled=data.status==="stopping";
+  $("index-remove").hidden=!data.present||running;
+  $("index-error").textContent=data.status==="failed"&&data.available?(data.error||"Fast search needs attention."):"";
+  if(!data.available)$("index-status").textContent="Fast search is unavailable on this Mac. Regular conversation search still works.";
+  else if(data.status==="running")$("index-status").textContent=data.total?
+    `Indexing ${data.completed||0} of ${data.total} conversation sources. Search remains available.`:
+    "Preparing local conversation index…";
+  else if(data.status==="stopping")$("index-status").textContent="Stopping safely after the current record…";
+  else if(data.status==="ready")$("index-status").textContent=
+    `Fast search cache ready · ${data.total} conversation sources · ${fmt(data.index_bytes)} on this Mac.`+
+    (data.skipped?` ${data.skipped} transcripts changed during indexing and will be searched directly; refresh later.`:"")+
+    (data.paginated_skipped?" Database history changed during indexing and will be searched directly; refresh when idle.":"");
+  else if(data.status==="stopped")$("index-status").textContent="Indexing stopped. Search still works; refresh to continue.";
+  else if(data.status==="failed")$("index-status").textContent="Search still works without this cache.";
+  else $("index-status").textContent=data.present?
+    "A local search cache is present. Refresh it to include recent conversations faster.":
+    "Fast search is off. Search still reads your original conversations.";
+  if(running&&!indexTimer)indexTimer=setInterval(refreshIndex,1000);
+  if(!running&&indexTimer){clearInterval(indexTimer);indexTimer=null}
+}
+async function refreshIndex(){try{indexView(await api("/api/vault/search-index-status"))}catch(error){$("index-error").textContent=error.message}}
+$("index-build").onclick=async()=>{
+  if(!confirm("Build a local search cache for transcripts and database-backed history? It stores unencrypted text terms and positions that may reveal conversation content, may use substantial disk space, and is not a backup. You can delete it later."))return;
+  try{$("index-error").textContent="";indexView(await api("/api/vault/search-index",{apply:true}))}
+  catch(error){$("index-error").textContent=error.message;await refreshIndex()}
+};
+$("index-stop").onclick=async()=>{
+  try{indexView(await api("/api/vault/search-index-stop",{apply:true}))}
+  catch(error){$("index-error").textContent=error.message}
+};
+$("index-remove").onclick=async()=>{
+  if(!confirm("Delete only the local search cache? Your Codex conversations and Vault backups will remain unchanged."))return;
+  try{indexView(await api("/api/vault/search-index-remove",{apply:true}))}
+  catch(error){$("index-error").textContent=error.message}
+};
+async function markdownFile(){
+  if(!selected)throw Error("Open a conversation first");
+  const grant=await api("/api/vault/export-ticket",{collection:selected.collection,transcript:selected.transcript,source:selected.source||"local",physical_only:!!selected.physical_only});
+  const response=await fetch(grant.url,{cache:"no-store"});
+  if(!response.ok)throw Error("This conversation changed before sharing. Open it again and retry.");
+  const size=Number(response.headers.get("Content-Length"));
+  if(!Number.isSafeInteger(size)||size<0||size>20*1024*1024){
+    await response.body?.cancel();
+    throw Error("This conversation is too large for the browser share sheet. Download Markdown, then share the saved file.");
+  }
+  const body=await response.blob();
+  if(body.size!==size)throw Error("The conversation changed while preparing it to share. Download Markdown instead.");
+  return new File([body],"codex-conversation.md",{type:"text/markdown"});
+}
 $("download").onclick=async()=>{try{
   if(!selected)throw Error("Open a conversation first");
   const link=document.createElement("a");link.download="codex-conversation.md";
-  const grant=await api("/api/vault/export-ticket",{collection:selected.collection,transcript:selected.transcript,source:selected.source||"local"});
-  link.href=grant.url;link.click();$("status").textContent="Downloading the full conversation…";
+  const grant=await api("/api/vault/export-ticket",{collection:selected.collection,transcript:selected.transcript,source:selected.source||"local",physical_only:!!selected.physical_only});
+  link.href=grant.url;link.click();$("status").textContent=selected.physical_only?
+    "Downloading an incomplete physical-copy export…":"Downloading the full conversation…";
 }catch(error){fail(error)}};
 $("print").onclick=()=>window.print();
-$("share").onclick=async()=>{try{const file=await markdownFile();if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}))){await navigator.share({title:"Codex conversation",files:[file]});$("status").textContent="Share sheet opened."}else{$("status").textContent="This browser cannot open the share sheet. Use Download Markdown, then share or email the file."}}catch(error){if(error.name!=="AbortError")fail(error)}};
+$("share").onclick=async()=>{try{if(!navigator.share){$("status").textContent="This browser cannot open the share sheet. Use Download Markdown, then share or email the file.";return}const file=await markdownFile();if(!navigator.canShare||navigator.canShare({files:[file]})){await navigator.share({title:"Codex conversation",files:[file]});$("status").textContent="Share sheet opened."}else{$("status").textContent="This browser cannot share files. Use Download Markdown, then share or email the file."}}catch(error){if(error.name!=="AbortError")fail(error)}};
 let backupTimer=null;
 let installRunning=false;
 let verifiedBackup=false;
 let pendingAutomaticBackup=false;
+let lastSizedSnapshot="";
 function storageView(storage){const panel=$("storage-assessment");if(!storage){panel.hidden=true;return}panel.hidden=false;panel.className="storage-assessment "+storage.kind;$("storage-heading").textContent=storage.heading;$("storage-detail").textContent=storage.detail}
 async function refreshStorage(path){if(!path){storageView(null);return}try{storageView(await api("/api/vault/storage?path="+encodeURIComponent(path)))}catch(error){storageView({kind:"external_or_network",heading:"Storage protection unverified",detail:"This location could not be classified. Confirm how it is backed up before relying on it after loss of the Mac."})}}
 function backupFrequencyView(){const daily=$("backup-frequency-daily").checked;$("backup").textContent=daily?"Create backup + turn on daily backup":"Create encrypted backup"}
@@ -433,11 +801,14 @@ function backupView(data){
     const bytes=data.total_bytes?` · ${Math.round(100*(data.completed_bytes||0)/data.total_bytes)}% of ${fmt(data.total_bytes)}`:"";
     $("backup-status").textContent="Encrypting and verifying… "+files+bytes;
   }else if(data.status==="completed"){
-    $("backup-status").textContent=`Verified snapshot complete · ${data.transcript_files.toLocaleString()} files · ${fmt(data.transcript_bytes)}`;
+    const attachments=data.attachment_files||0;
+    const attachmentNote=attachments?` · ${attachments.toLocaleString()} attachment ${attachments===1?"file":"files"} saved`:"";
+    $("backup-status").textContent=`Verified snapshot complete · ${data.transcript_files.toLocaleString()} conversation files${attachmentNote} · ${fmt(data.transcript_bytes+(data.attachment_bytes||0))}`+(data.title_index_unavailable?" Codex’s title index could not be read, so saved title search may be incomplete.":"");
   }else if(data.status==="needs_attention"){
-    $("backup-status").textContent=data.paginated_history_unprotected
-      ?"Codex's paginated history is not included. This verified snapshot may be missing messages; keep an independent full backup."
+    const risk=data.paginated_history_unprotected
+      ?"Codex's paginated history is not yet fully recoverable in Vault. This verified snapshot may be missing messages; keep an independent full backup."
       :`Verified snapshot saved, but ${data.at_risk_threads} conversation${data.at_risk_threads===1?"":"s"} may have lost content. Open an earlier saved version for review.`;
+    $("backup-status").textContent=risk+(data.title_index_unavailable?" Codex’s title index could not be read, so saved title search may be incomplete.":"");
   }else if(data.status==="failed"){
     $("backup-status").textContent="";
   }else{
@@ -447,6 +818,7 @@ function backupView(data){
   else{$("recovery-key").value="";$("recovery").hidden=true}
   if(running&&!backupTimer)backupTimer=setInterval(refreshBackup,1500);
   if(!running&&backupTimer){clearInterval(backupTimer);backupTimer=null}
+  if(data.snapshot_id&&["completed","needs_attention"].includes(data.status)&&data.snapshot_id!==lastSizedSnapshot){lastSizedSnapshot=data.snapshot_id;if(data.destination){$("restore-vault").value=data.destination;void refreshSnapshots()}}
   refreshScheduleButton();refreshRestoreButton();
   const onlyCoverageWarning=data.paginated_history_unprotected&&data.at_risk_threads===0;
   if(verifiedBackup&&(data.status!=="needs_attention"||onlyCoverageWarning)
@@ -458,7 +830,7 @@ $("backup-frequency-daily").onchange=backupFrequencyView;
 $("backup-frequency-manual").onchange=backupFrequencyView;
 $("backup").onclick=async()=>{try{$("backup-error").textContent="";pendingAutomaticBackup=$("backup-frequency-daily").checked;backupView(await api("/api/vault/backup",{destination:$("vault-folder").value,apply:true}))}catch(error){pendingAutomaticBackup=false;$("backup-error").textContent=error.message}};
 $("copy-recovery").onclick=async()=>{try{await navigator.clipboard.writeText($("recovery-key").value);$("backup-status").textContent="Recovery key copied. Save it in your password manager."}catch(error){$("backup-error").textContent="Copy failed. Select the recovery key and copy it manually."}};
-$("saved-recovery").onclick=async()=>{try{const result=await api("/api/vault/recovery-saved",{});backupView(result);if(result.status==="completed")$("backup-status").textContent="Recovery key acknowledged. The verified backup is ready."}catch(error){$("backup-error").textContent=error.message}};
+$("saved-recovery").onclick=async()=>{try{const result=await api("/api/vault/recovery-saved",{});backupView(result);if(result.status==="completed")$("backup-status").textContent="Recovery key acknowledged. The verified backup is ready."+(result.title_index_unavailable?" Codex’s title index could not be read, so saved title search may be incomplete.":"");else if(result.status!=="needs_attention")$("backup-status").textContent="Recovery key acknowledged. Retry the encrypted backup."}catch(error){$("backup-error").textContent=error.message}};
 let scheduleEnabled=false;
 function refreshScheduleButton(){$("schedule-controls").hidden=!verifiedBackup&&!scheduleEnabled;$("enable-schedule").hidden=scheduleEnabled;$("disable-schedule").hidden=!scheduleEnabled;$("enable-schedule").disabled=installRunning||!verifiedBackup||!$("vault-folder").value;$("disable-schedule").disabled=installRunning}
 function scheduleView(data){
@@ -471,11 +843,15 @@ function scheduleView(data){
   if(!data.enabled){
     $("schedule-status").textContent="Automatic backup is off.";
   }else if(data.paginated_history_unprotected){
-    $("schedule-status").textContent="Daily backup is on, but Codex's paginated history is not included. This schedule is not complete protection.";
+    let detail="Daily backup is on, but Codex's paginated history is not yet fully recoverable in Vault. This schedule is not complete protection.";
+    if(data.last_run?.status==="failed")detail+=" The latest automatic backup failed. Check the Vault folder; do not assume new conversations are protected.";
+    $("schedule-status").textContent=detail;
   }else if(data.healthy){
     let detail="Daily encrypted backup is on.";
-    if(data.last_run?.status==="completed")detail+=" Last backup completed "+(data.last_run.completed_at||"")+".";
-    else if(data.last_run?.status==="failed")detail+=" The last automatic backup needs attention.";
+    if(data.last_run?.status==="completed"){
+      detail+=" Last backup completed "+(data.last_run.completed_at||"")+".";
+      if(data.last_run.title_index_unavailable)detail+=" Codex’s title index could not be read; saved title search may be incomplete.";
+    }else if(data.last_run?.status==="failed")detail+=" The last automatic backup needs attention.";
     $("schedule-status").textContent=detail;
   }else{
     $("schedule-status").textContent="Automatic backup needs attention.";
@@ -491,7 +867,41 @@ let restoreTimer=null;
 let browseRunning=false;
 let selectedRecoveryRunning=false;
 function refreshRestoreButton(){const chosen=$("restore-vault").value&&$("restore-snapshot").value;$("browse-backup").disabled=installRunning||browseRunning||selectedRecoveryRunning||!chosen;$("restore").disabled=installRunning||browseRunning||selectedRecoveryRunning||!chosen||!$("restore-output").value;$("install").disabled=installRunning||browseRunning||selectedRecoveryRunning||!chosen}
-async function refreshSnapshots(){const vault=$("restore-vault").value;const select=$("restore-snapshot");const selected=select.dataset.requested||select.value;select.dataset.ready="";select.disabled=true;select.replaceChildren(new Option(vault?"Loading backup history…":"Choose a backup folder to see versions",""));refreshRestoreButton();if(!vault)return;try{const data=await api("/api/vault/snapshots?vault="+encodeURIComponent(vault));if(!data.snapshots.length){select.replaceChildren(new Option("No published backups found",""));return}select.replaceChildren(...data.snapshots.map(item=>{const when=new Date(item.created_at);const label=(Number.isNaN(when.getTime())?item.created_at:when.toLocaleString())+(item.latest?" · Latest":"");return new Option(label,item.snapshot_id)}));if(selected&&[...select.options].some(option=>option.value===selected))select.value=selected;select.dataset.ready="true";select.disabled=false;$("restore-error").textContent=""}catch(error){select.replaceChildren(new Option("Backup history unavailable",""));$("restore-error").textContent=error.message}finally{refreshRestoreButton()}}
+async function refreshSnapshots(){
+  const vault=$("restore-vault").value;
+  const select=$("restore-snapshot");
+  const usage=$("vault-usage");
+  const selected=select.dataset.requested||select.value;
+  select.dataset.ready="";
+  select.disabled=true;
+  select.replaceChildren(new Option(vault?"Loading backup history…":"Choose a backup folder to see versions",""));
+  usage.hidden=!vault;
+  usage.textContent=vault?"Measuring saved Vault files…":"";
+  refreshRestoreButton();
+  if(!vault)return;
+  try{
+    const data=await api("/api/vault/snapshots?vault="+encodeURIComponent(vault));
+    if($("restore-vault").value!==vault)return;
+    usage.textContent=Number.isSafeInteger(data.storage_bytes)&&data.storage_bytes>=0
+      ?`Vault files: ${fmt(data.storage_bytes)} · ${data.snapshots.length>=1000?"at least ":""}${data.snapshots.length.toLocaleString()} saved ${data.snapshots.length===1?"version":"versions"}.`
+      :"Saved Vault size unavailable. Your backup versions remain accessible.";
+    if(!data.snapshots.length){select.replaceChildren(new Option("No published backups found",""));return}
+    select.replaceChildren(...data.snapshots.map(item=>{
+      const when=new Date(item.created_at);
+      const label=(Number.isNaN(when.getTime())?item.created_at:when.toLocaleString())+(item.latest?" · Latest":"");
+      return new Option(label,item.snapshot_id)
+    }));
+    if(selected&&[...select.options].some(option=>option.value===selected))select.value=selected;
+    select.dataset.ready="true";
+    select.disabled=false;
+    $("restore-error").textContent="";
+  }catch(error){
+    if($("restore-vault").value!==vault)return;
+    select.replaceChildren(new Option("Backup history unavailable",""));
+    usage.textContent="Saved Vault size unavailable. Existing backups were not changed.";
+    $("restore-error").textContent=error.message;
+  }finally{refreshRestoreButton()}
+}
 function restoreView(data){const running=data.status==="running";if(data.snapshot||data.snapshot_id)$("restore-snapshot").dataset.requested=data.snapshot||data.snapshot_id;if(data.vault&&!$("restore-vault").value){$("restore-vault").value=data.vault;refreshSnapshots()}if(data.output&&!$("restore-output").value)$("restore-output").value=data.output;$("choose-restore-vault").disabled=running||installRunning;$("choose-restore-output").disabled=running||installRunning;$("restore-snapshot").disabled=running||installRunning||$("restore-snapshot").dataset.ready!=="true";$("restore").disabled=running||installRunning||!$("restore-vault").value||!$("restore-snapshot").value||!$("restore-output").value;$("restore-error").textContent=data.status==="failed"?(data.error||"Recovery stopped safely."):"";if(running){$("restore-status").textContent="Verifying and recovering the selected backup…"}else if(data.status==="completed"){$("restore-status").textContent=`Recovered copy ready · ${data.transcript_files.toLocaleString()} files · ${fmt(data.transcript_bytes)}`}else if(data.status==="failed"){$("restore-status").textContent=""}else{$("restore-status").textContent="No recovery is running."}if(running&&!restoreTimer)restoreTimer=setInterval(refreshRestore,1500);if(!running&&restoreTimer){clearInterval(restoreTimer);restoreTimer=null}}
 async function refreshRestore(){try{restoreView(await api("/api/vault/restore-status"))}catch(error){$("restore-error").textContent=error.message}}
 $("choose-restore-vault").onclick=async()=>{try{$("restore-error").textContent="";const result=await api("/api/vault/folder",{});if(result.path){$("restore-vault").value=result.path;await refreshSnapshots()}}catch(error){$("restore-error").textContent=error.message}};
@@ -500,7 +910,7 @@ function invalidateOpenedChoice(){const option=$("search-source").querySelector(
 $("restore-snapshot").onchange=invalidateOpenedChoice;
 $("restore").onclick=async()=>{try{$("restore-error").textContent="";restoreView(await api("/api/vault/restore",{vault:$("restore-vault").value,output:$("restore-output").value,snapshot:$("restore-snapshot").value,apply:true}))}catch(error){$("restore-error").textContent=error.message}};
 let browseTimer=null;
-function browseView(data){browseRunning=data.status==="running";$("browse-error").textContent=data.status==="failed"?(data.error||"The backup could not be opened safely."):"";if(browseRunning){$("browse-status").textContent="Verifying, decrypting, and opening this backup privately…"}else if(data.status==="ready"){const option=$("search-source").querySelector('option[value="backup"]');option.disabled=false;$("search-source").value="backup";$("browse-status").textContent=`Backup ready to search · ${data.transcript_files.toLocaleString()} conversations · ${fmt(data.transcript_bytes)}`;$("results-panel").hidden=true;$("thread").hidden=true;$("status").textContent="Enter words from the conversation you want to recover."}else if(data.status==="failed"){const option=$("search-source").querySelector('option[value="backup"]');option.disabled=true;if($("search-source").value==="backup")$("search-source").value="local";$("browse-status").textContent=""}else{$("browse-status").textContent="No backup is open."}if(browseRunning&&!browseTimer)browseTimer=setInterval(refreshBrowse,1000);if(!browseRunning&&browseTimer){clearInterval(browseTimer);browseTimer=null}refreshRestoreButton()}
+function browseView(data){browseRunning=data.status==="running";$("browse-error").textContent=data.status==="failed"?(data.error||"The backup could not be opened safely."):"";if(browseRunning){$("browse-status").textContent="Verifying, decrypting, and opening this backup privately…"}else if(data.status==="ready"){const option=$("search-source").querySelector('option[value="backup"]');option.disabled=false;$("search-source").value="backup";const conversations=data.conversation_files??data.transcript_files;const attachments=data.attachment_files||0;$("browse-status").textContent=`Backup ready to search · ${conversations.toLocaleString()} conversations${attachments?` · ${attachments.toLocaleString()} attachment files saved`:""} · ${fmt(data.transcript_bytes)}`;$("results-panel").hidden=true;$("thread").hidden=true;$("status").textContent="Enter words from the conversation you want to recover."}else if(data.status==="failed"){const option=$("search-source").querySelector('option[value="backup"]');option.disabled=true;if($("search-source").value==="backup")$("search-source").value="local";$("browse-status").textContent=""}else{$("browse-status").textContent="No backup is open."}if(browseRunning&&!browseTimer)browseTimer=setInterval(refreshBrowse,1000);if(!browseRunning&&browseTimer){clearInterval(browseTimer);browseTimer=null}refreshRestoreButton()}
 async function refreshBrowse(){try{browseView(await api("/api/vault/browse-status"))}catch(error){$("browse-error").textContent=error.message}}
 $("browse-backup").onclick=async()=>{try{$("browse-error").textContent="";invalidateOpenedChoice();browseView(await api("/api/vault/browse",{vault:$("restore-vault").value,snapshot:$("restore-snapshot").value,apply:true}))}catch(error){$("browse-error").textContent=error.message}};
 let installTimer=null;
@@ -511,15 +921,36 @@ $("install-recover").onclick=async()=>{if(!confirm("Roll back the interrupted in
 let selectedRecoveryTimer=null;
 function selectedRecoveryView(data){selectedRecoveryRunning=data.status==="running";const attention=data.status==="needs_attention";$("restore-thread").disabled=selectedRecoveryRunning||installRunning||attention;$("thread-restore-error").textContent=(data.status==="failed"||attention)?(data.error||"Selected recovery stopped safely."):"";if(data.status==="running"){$("thread-restore-status").textContent="Verifying the backup again and recovering this conversation…"}else if(data.status==="installed"){$("thread-restore-status").textContent="Conversation restored and verified. Reopen Codex to use it."}else if(data.status==="already_present"){$("thread-restore-status").textContent="This exact conversation is already present. Nothing was changed."}else if(data.status==="failed"||attention){$("thread-restore-status").textContent=""}if(selectedRecoveryRunning&&!selectedRecoveryTimer)selectedRecoveryTimer=setInterval(refreshSelectedRecovery,1000);if(!selectedRecoveryRunning&&selectedRecoveryTimer){clearInterval(selectedRecoveryTimer);selectedRecoveryTimer=null}refreshRestoreButton()}
 async function refreshSelectedRecovery(){try{selectedRecoveryView(await api("/api/vault/thread-install-status"))}catch(error){$("thread-restore-error").textContent=error.message}}
-$("restore-thread").onclick=async()=>{if(!selected||selected.source!=="backup")return;if(!confirm("Restore only this verified conversation into Codex? Close Codex and its CLI sessions first. Existing conversations will not be overwritten or merged."))return;try{$("thread-restore-error").textContent="";selectedRecoveryView(await api("/api/vault/install-thread",{collection:selected.collection,transcript:selected.transcript,apply:true}))}catch(error){$("thread-restore-error").textContent=error.message}};
-api("/api/vault/summary").then(data=>{$("active").textContent=data.active_transcripts.toLocaleString();$("archived").textContent=data.archived_transcripts.toLocaleString();$("bytes").textContent=fmt(data.transcript_bytes);$("status").textContent="Ready."}).catch(fail);
+$("restore-thread").onclick=async()=>{if(!selected||selected.source!=="backup"||selected.physical_only)return;if(!confirm("Restore only this verified conversation into Codex? Close Codex and its CLI sessions first. Existing conversations will not be overwritten or merged."))return;try{$("thread-restore-error").textContent="";selectedRecoveryView(await api("/api/vault/install-thread",{collection:selected.collection,transcript:selected.transcript,apply:true}))}catch(error){$("thread-restore-error").textContent=error.message}};
+if(view!=="recovery")api("/api/vault/summary").then(data=>{
+  const files=data.active_transcripts+data.archived_transcripts;
+  const attachmentFiles=data.attachment_files||0;
+  const attachmentNote=attachmentFiles?` plus ${attachmentFiles.toLocaleString()} attachment ${attachmentFiles===1?"file":"files"} (${fmt(data.attachment_bytes||0)})`:"";
+  $("active").textContent=data.active_transcripts.toLocaleString();
+  $("archived").textContent=data.archived_transcripts.toLocaleString();
+  $("paginated").textContent=data.paginated_database_present?data.paginated_threads.toLocaleString():"None found";
+  $("paginated-note").hidden=!data.paginated_database_present;
+  $("bytes").textContent=fmt(data.transcript_bytes);
+  if(data.paginated_database_present){
+    $("backup-footprint").textContent=`History found: ${files.toLocaleString()} transcript ${files===1?"file":"files"} (${fmt(data.transcript_bytes)}) plus ${data.paginated_threads.toLocaleString()} database-backed ${data.paginated_threads===1?"thread":"threads"} (${fmt(data.paginated_database_bytes)} of SQLite storage)${attachmentNote}. These may be the same conversations. The encrypted backup size may differ; keep room for all sources plus overhead until verification finishes.`;
+  }else if(files){
+    $("backup-footprint").textContent=`History to protect: ${fmt(data.transcript_bytes)} in ${files.toLocaleString()} conversation ${files===1?"file":"files"}${attachmentNote}. Vault compresses new backup data when useful, so the saved size may be smaller. Keep space for the full source size plus overhead until the first backup verifies.`;
+  }else if(attachmentFiles){
+    $("backup-footprint").textContent=`Attachments to protect: ${attachmentFiles.toLocaleString()} ${attachmentFiles===1?"file":"files"} (${fmt(data.attachment_bytes||0)}). No local conversation transcripts were found.`;
+  }else{
+    $("backup-footprint").textContent="No local Codex conversation files were found on this Mac.";
+  }
+  $("status").textContent="Ready.";
+}).catch(error=>{$("backup-footprint").textContent="Could not measure conversation history. Check free space before starting a backup.";fail(error)});
 refreshBackup();
 refreshSchedule();
 refreshRestore();
 refreshInstall();
 refreshBrowse();
 refreshSelectedRecovery();
+refreshIndex();
 backupFrequencyView();
+if(view==="recovery")refreshHostedRecovery();
 </script>
 </body>
 </html>'''

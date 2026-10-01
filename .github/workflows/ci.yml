@@ -2,12 +2,122 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+    types: [opened, reopened, synchronize, labeled]
 
 permissions:
   contents: read
 
 jobs:
+  hosted-db:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: fixture-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGPASSWORD: fixture-only
+    steps:
+      - uses: actions/checkout@v7
+      - name: Exercise hosted publication in disposable PostgreSQL
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f commerce/migrations/0000_purchases.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0000_capacity.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0001_publication.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0002_device_sessions.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0003_purchase_enrollment.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0004_email_enrollment.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0005_initial_pairing.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0006_current_allowance.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0007_object_grants.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0008_receipt_pages.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0009_publish_staged.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0010_reservation_renewal.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0011_upload_probe.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0012_upload_decision.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0013_subscription_enrollment.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0014_elastic_object_reservation.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0015_declared_receipt.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0016_verified_receipt_pages.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0017_recovery_pairing.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0018_cleanup_claim.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0019_cleanup_object_claims.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0020_cleanup_release.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0021_cleanup_delete_grant.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0022_abandon_upload.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0023_published_chunk_lookup.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0024_publication_base.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0025_reservation_base_receipt.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0026_idempotent_reservation.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0027_reuse_recent_chunk_proofs.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-retained-usage-before-migration.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0028_retained_usage_events.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-retained-usage-events.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0029_retained_daily_peak.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-retained-daily-peak.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0030_device_rotation.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0031_source_coverage.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0032_business_account_boundary.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-business-account-boundary.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0033_business_seat_sessions.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-business-seat-sessions.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0034_business_admin_challenge.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-business-admin-challenge.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0035_business_seat_approval.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-business-seat-approval.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0036_business_first_device.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-business-first-device.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0037_business_backup_entitlement.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-business-backup-entitlement.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0038_business_recovery_device.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-business-recovery-device.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0039_business_worker_rotation.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-business-worker-rotation.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0040_business_backup_checks.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-business-backup-checks.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0041_business_backup_alerts.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-business-backup-alerts.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-device-rotation.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-quota.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-publication-base.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-publication.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-history.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-publication-scale.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-sessions.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-enrollment.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-enrollment-challenge.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-recovery-pairing.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-current-allowance.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-reservation-renewal.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-cleanup-claim.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-cleanup-object-claims.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-cleanup-release.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-cleanup-delete-grant.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-abandon-upload.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-upload-probe.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-upload-decision.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-subscription-enrollment.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-object-grants.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-elastic-object-reservation.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-published-chunks.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-receipt-pages.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-receipt-pages-scale.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-declared-receipt.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-verified-pages.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-reused-proofs.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-verified-pages-scale.sql
+
   test:
     runs-on: macos-latest
     strategy:
@@ -52,10 +162,16 @@ jobs:
           PY
       - name: Exercise Vault Keychain without interactive prompts
         run: |
-          xcrun swiftc -parse-as-library desktop/CodexVaultCrypto.swift -o "$RUNNER_TEMP/CodexVaultCryptoSmoke"
+          xcrun swiftc -parse-as-library -D CODEX_VAULT_TEST_LEGACY_KEYCHAIN desktop/CodexVaultCrypto.swift -o "$RUNNER_TEMP/CodexVaultCryptoSmoke"
           python tests/keychain_ci_smoke.py "$RUNNER_TEMP/CodexVaultCryptoSmoke"
       - name: Test
         run: PYTHONPATH=src python -m unittest discover -s tests -v
+      - name: Compare full-scope size estimate with encrypted Vault objects
+        if: matrix.python-version == '3.12'
+        run: |
+          CODEX_MIGRATE_TEST_VAULT_HELPER="$RUNNER_TEMP/CodexVaultCryptoSmoke" \
+            PYTHONPATH=src python -m unittest \
+            tests.test_vault_size_estimate.VaultSizeEstimateTests.test_compressed_object_bytes_match_packaged_helper -v
       - name: Check CLI
         run: PYTHONPATH=src python -m codex_migrate --version
       - name: Check native Mac shell
@@ -65,7 +181,7 @@ jobs:
           from desktop.build import sparkle_distribution
           sparkle_distribution(Path("build"))
           PY
-          xcrun swiftc -typecheck -parse-as-library -F build/sparkle-2.10.0 desktop/CodexMigrate.swift desktop/UpdateEntitlement.swift desktop/SavedSetup.swift
+          xcrun swiftc -typecheck -parse-as-library -F build/sparkle-2.10.0 desktop/CodexMigrate.swift desktop/UpdateEntitlement.swift desktop/InstallLocation.swift desktop/DuplicateLaunch.swift desktop/SavedSetup.swift
           xcrun swiftc -typecheck -parse-as-library desktop/CodexVaultCrypto.swift
       - uses: actions/setup-node@v7
         with:
@@ -74,3 +190,129 @@ jobs:
         run: |
           npm ci --ignore-scripts
           npm test
+          node --test tests/r2-live/worker.test.mjs
+
+  vault-portability-export:
+    if: >-
+      (github.event_name == 'push' && contains(github.event.head_commit.message, '[vault-portability]')) ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'portability-proof'))
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Create synthetic encrypted snapshot on producer Mac
+        run: |
+          xcrun swiftc -parse-as-library -D CODEX_VAULT_TEST_LEGACY_KEYCHAIN desktop/CodexVaultCrypto.swift -o "$RUNNER_TEMP/CodexVaultCrypto"
+          PYTHONPATH=src python tests/portable_vault_roundtrip.py produce "$RUNNER_TEMP/vault-portability" "$RUNNER_TEMP/CodexVaultCrypto"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vault-portability-synthetic
+          path: |
+            ${{ runner.temp }}/vault-portability/vault/
+            ${{ runner.temp }}/vault-portability/recovery-key.txt
+          retention-days: 1
+          if-no-files-found: error
+
+  business-portability-export:
+    if: >-
+      (github.event_name == 'push' && contains(github.event.head_commit.message, '[business-portability]')) ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'business-portability-proof'))
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Create synthetic business Vault on producer Mac
+        run: |
+          xcrun swiftc -parse-as-library -D CODEX_VAULT_TEST_LEGACY_KEYCHAIN desktop/CodexVaultCrypto.swift -o "$RUNNER_TEMP/CodexVaultCrypto"
+          PYTHONPATH=src python tests/portable_business_recovery.py produce "$RUNNER_TEMP/business-portability" "$RUNNER_TEMP/CodexVaultCrypto"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: business-portability-synthetic
+          path: |
+            ${{ runner.temp }}/business-portability/vault/
+            ${{ runner.temp }}/business-portability/worker-credential.json
+            ${{ runner.temp }}/business-portability/company-credential.json
+          retention-days: 1
+          if-no-files-found: error
+
+  business-portability-import:
+    needs: business-portability-export
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          name: business-portability-synthetic
+          path: ${{ runner.temp }}/business-portability
+      - name: Restore both roles on independent Mac
+        run: |
+          xcrun swiftc -parse-as-library -D CODEX_VAULT_TEST_LEGACY_KEYCHAIN desktop/CodexVaultCrypto.swift -o "$RUNNER_TEMP/CodexVaultCrypto"
+          PYTHONPATH=src python tests/portable_business_recovery.py consume "$RUNNER_TEMP/business-portability" "$RUNNER_TEMP/CodexVaultCrypto"
+
+  vault-portability-import:
+    needs: vault-portability-export
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          name: vault-portability-synthetic
+          path: ${{ runner.temp }}/vault-portability
+      - name: Import and restore on independent Mac
+        run: |
+          xcrun swiftc -parse-as-library -D CODEX_VAULT_TEST_LEGACY_KEYCHAIN desktop/CodexVaultCrypto.swift -o "$RUNNER_TEMP/CodexVaultCrypto"
+          PYTHONPATH=src python tests/portable_vault_roundtrip.py consume "$RUNNER_TEMP/vault-portability" "$RUNNER_TEMP/CodexVaultCrypto"
+
+  hosted-portability-export:
+    if: >-
+      (github.event_name == 'push' && contains(github.event.head_commit.message, '[hosted-portability]')) ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'portability-proof'))
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Stage synthetic encrypted objects on producer Mac
+        run: |
+          xcrun swiftc -parse-as-library -D CODEX_VAULT_TEST_LEGACY_KEYCHAIN desktop/CodexVaultCrypto.swift -o "$RUNNER_TEMP/CodexVaultCrypto"
+          PYTHONPATH=src python tests/portable_hosted_roundtrip.py produce "$RUNNER_TEMP/hosted-portability" "$RUNNER_TEMP/CodexVaultCrypto"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hosted-portability-synthetic
+          path: |
+            ${{ runner.temp }}/hosted-portability/encrypted-objects/
+            ${{ runner.temp }}/hosted-portability/staged-receipt.json
+            ${{ runner.temp }}/hosted-portability/newer-receipt.json
+            ${{ runner.temp }}/hosted-portability/recovery-key.txt
+            ${{ runner.temp }}/hosted-portability/live-receipt.json
+            ${{ runner.temp }}/hosted-portability/live-recovery-key.txt
+          retention-days: 1
+          if-no-files-found: error
+
+  hosted-portability-import:
+    needs: hosted-portability-export
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          name: hosted-portability-synthetic
+          path: ${{ runner.temp }}/hosted-portability
+      - name: Import key and recover ciphertext on independent Mac
+        run: |
+          xcrun swiftc -parse-as-library -D CODEX_VAULT_TEST_LEGACY_KEYCHAIN desktop/CodexVaultCrypto.swift -o "$RUNNER_TEMP/CodexVaultCrypto"
+          PYTHONPATH=src python tests/portable_hosted_roundtrip.py consume "$RUNNER_TEMP/hosted-portability" "$RUNNER_TEMP/CodexVaultCrypto"

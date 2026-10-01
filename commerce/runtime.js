@@ -25,7 +25,9 @@ async function deliveryMail({ to, link, release, live, sessionId, paymentIntent,
         release.testingOnly === true && release.kind === 'signed-notarized'
           ? 'Sandbox test only. No real payment was charged. This delivers the signed app candidate for operator testing, not a publicly released product.'
           : 'Sandbox test only. No real purchase or app is delivered.',
-      '%details%': `Open your download: ${link}`,
+      '%details%': `Open your download: ${link}\n\n${release.filename.endsWith('.dmg')
+        ? 'Open the disk image, move Codex Migrate.app to Applications, eject the disk image, then open the app from Applications.'
+        : 'Unzip the download, move Codex Migrate.app to Applications, then open it from Applications.'} In-app updates may not work if the app runs from Downloads or a mounted disk image.`,
       '%closing%': 'Keep this email to recover your download. Treat this link as private.\n\nNeed help? Reply to joshua@segeren.com. Please do not send credentials or workspace contents.\n\nThis is a purchase-delivery message, not a marketing subscription.',
     },
   };

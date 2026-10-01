@@ -12,7 +12,7 @@ from unittest.mock import patch
 from codex_migrate.cancellation import Cancellation
 from codex_migrate.cli import main
 from codex_migrate.config import MigrationConfig
-from codex_migrate.transport import SSHTransport, TransferProcess, _stop_process
+from codex_migrate.transport import SSHTransport, TransferProcess, _signal_group, _stop_process
 
 
 class CancellationTests(unittest.TestCase):
@@ -59,10 +59,9 @@ class CancellationTests(unittest.TestCase):
             # Inherited pipes must reach EOF; leader exit alone is insufficient.
             process.communicate(timeout=1)
         finally:
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+            # Darwin can report EPERM after this exact group leader is reaped.
+            # Use the same bounded cleanup semantics as the code under test.
+            _signal_group(process, signal.SIGKILL)
             process.communicate(timeout=5)
 
     def test_stop_interrupts_planning_and_restores_handlers(self):

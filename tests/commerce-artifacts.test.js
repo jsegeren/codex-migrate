@@ -71,6 +71,15 @@ test('build-17 DMG remains sandbox-only and requires its accepted disk-image not
   assert.equal(validRelease({ ...candidate, diskImageNotarization: undefined }, false), false);
   assert.equal(validRelease({ ...candidate, diskImageNotarization: { status: 'Invalid', id: candidate.diskImageNotarization.id } }, false), false);
 });
+test('build-20 signed candidate remains sandbox-only until release acceptance', () => {
+  const candidate = require('../commerce/releases.json')['codex-migrate-build20-vault-integrated-arm64'];
+  assert.equal(candidate.source, 'd65cb7f0c46b56eb43e83a6dd36940808482aa3b');
+  assert.equal(candidate.sha256, '3f98ae4edbb479e1429e5c309c78eeda3448e4c4b6a01613a49041d1faf78a1a');
+  assert.equal(candidate.sparkleSignature, 'OMAFR0uulGy2nMZq0fli6hzZmZkCO3ThZnfnZN60Gj5lwMSU406bbyMydgpMr4/kAtJTiSlaGzE09F9hkMfrDQ==');
+  assert.equal(validRelease(candidate, false), true);
+  assert.equal(validRelease(candidate, true), false);
+  assert.equal(validRelease({ ...candidate, testingOnly: false }, false), false);
+});
 for (const id of ['sandbox-build4-arm64', 'sandbox-build5-arm64']) {
 test(`${id} cannot be promoted by flipping live acceptance`, () => {
   const candidate = require('../commerce/releases.json')[id];

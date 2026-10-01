@@ -12,7 +12,7 @@ from process_fixtures import closed_codex_script, fixture_prefix
 from codex_migrate.config import MigrationConfig
 from codex_migrate.migration import MigrationEngine, MigrationError
 from codex_migrate.state import StateStore
-from codex_migrate.transport import TransferProcess
+from codex_migrate.transport import TransferProcess, rsync_phase_options
 
 
 class FullSkillTests(unittest.TestCase):
@@ -78,8 +78,8 @@ class FullSkillTests(unittest.TestCase):
                                        (result.returncode, result.stderr))
                 return result
 
-            def rsync_process(self, source, destination, excludes=(), copy_links=False):
-                options = ["/usr/bin/rsync", "-aE", "--delete-after"]
+            def rsync_process(self, source, destination, excludes=(), copy_links=False, phase='data'):
+                options = ["/usr/bin/rsync", *rsync_phase_options(phase), "--delete-after"]
                 if copy_links:
                     options.append("--copy-links")
                 for pattern in excludes:

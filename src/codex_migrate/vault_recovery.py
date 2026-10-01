@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from datetime import datetime
+import json
 import os
 from pathlib import Path
 import stat
@@ -163,7 +164,7 @@ def snapshot_catalog(
          "--object-dir", str(objects), "--manifest", str(manifest)],
     )
     files = catalog.get("files")
-    if catalog.get("snapshot_id") != snapshot_id or catalog.get("version") not in (1, 2) \
+    if catalog.get("snapshot_id") != snapshot_id or catalog.get("version") not in (1, 2, 3, 4) \
             or not isinstance(files, list) or len(files) > 100000:
         raise MigrationError("The Vault conversation catalog is invalid.")
     result: List[Dict[str, object]] = []
@@ -172,7 +173,7 @@ def snapshot_catalog(
         if not isinstance(file, dict):
             raise MigrationError("The Vault conversation catalog is invalid.")
         collection, path = file.get("collection"), file.get("path")
-        if (collection not in ("active", "archived") or not isinstance(path, str)
+        if (collection not in ("active", "archived", "paginated", "attachments") or not isinstance(path, str)
                 or not path or len(path) > 4096 or path.startswith("/") or "\\" in path
                 or any(part in ("", ".", "..") for part in path.split("/"))):
             raise MigrationError("The Vault conversation catalog has an unsafe path.")
@@ -188,6 +189,12 @@ def snapshot_catalog(
         thread_id = file.get("thread_id")
         if thread_id is not None and canonical_id(thread_id) != thread_id:
             raise MigrationError("The Vault conversation catalog has an invalid thread identity.")
+        if collection == "paginated" and (catalog["version"] < 3 or
+                                          thread_id is None or path != thread_id + ".jsonl"):
+            raise MigrationError("The Vault paginated catalog has an invalid source identity.")
+        if collection == "attachments" and (catalog["version"] < 4 or
+                                             thread_id is not None):
+            raise MigrationError("The Vault attachment catalog has an invalid source identity.")
         state = file.get("identity_state") or "unverified"
         titles = file.get("titles") or []
         if (state not in ("verified", "unverified", "needs_review")
@@ -209,8 +216,9 @@ def snapshot_catalog(
     return result
 
 
-def list_snapshots(vault: str, *, limit: int = 100) -> List[SnapshotInfo]:
-    if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 1000:
+def list_snapshots(vault: str, *, limit: Optional[int] = 100) -> List[SnapshotInfo]:
+    if limit is not None and (not isinstance(limit, int) or isinstance(limit, bool)
+                              or not 1 <= limit <= 1000):
         raise ValueError("snapshot limit must be between 1 and 1000")
     root, _, latest_id, _, _ = _snapshot(vault, "latest")
     references = root / "refs"
@@ -218,7 +226,10 @@ def list_snapshots(vault: str, *, limit: int = 100) -> List[SnapshotInfo]:
     if not references.is_dir():
         raise MigrationError("The Vault snapshot history is missing.")
     paths = sorted(references.glob("*.json"))
-    if len(paths) > 1000:
+    # The CLI/browser request may be capped, but retained history must not
+    # become unreadable after 1,001 daily backups. Keep a separate generous
+    # filesystem-abuse bound instead of treating ordinary retention as damage.
+    if len(paths) > 100000:
         raise MigrationError("The Vault snapshot history is unexpectedly large.")
     history = []
     for path in paths:
@@ -244,7 +255,50 @@ def list_snapshots(vault: str, *, limit: int = 100) -> List[SnapshotInfo]:
             latest=checked_id == latest_id,
         ))
     history.sort(key=lambda item: (item.created_at, item.snapshot_id), reverse=True)
-    return history[:limit]
+    return history if limit is None else history[:limit]
+
+
+def vault_storage_usage(vault: str) -> Dict[str, int]:
+    """Count logical file bytes without reading Vault content or following links.
+
+    This is a folder-size report, not an estimate of APFS allocation or of a
+    cloud provider's off-device usage. A backup may change the count mid-scan.
+    """
+    root = _vault_root(vault)
+    files = 0
+    total = 0
+
+    def count(directory_fd: int, depth: int) -> None:
+        nonlocal files, total
+        if depth > 16:
+            raise MigrationError("The Vault folder is too deeply nested to measure safely.")
+        with os.scandir(directory_fd) as entries:
+            for entry in entries:
+                info = os.stat(entry.name, dir_fd=directory_fd, follow_symlinks=False)
+                if stat.S_ISDIR(info.st_mode):
+                    child = os.open(entry.name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                                    dir_fd=directory_fd)
+                    try:
+                        count(child, depth + 1)
+                    finally:
+                        os.close(child)
+                elif stat.S_ISREG(info.st_mode):
+                    files += 1
+                    total += info.st_size
+                    if files > 200000:
+                        raise MigrationError("The Vault contains too many files to measure safely.")
+                else:
+                    raise MigrationError("The Vault contains an unsupported storage entry.")
+
+    try:
+        descriptor = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            count(descriptor, 0)
+        finally:
+            os.close(descriptor)
+    except OSError as error:
+        raise MigrationError("The Vault storage size could not be measured safely.") from error
+    return {"storage_bytes": total, "storage_files": files}
 
 
 def _restore_output(source_home: str, vault: Path, output: str) -> Path:
@@ -325,7 +379,10 @@ def import_recovery_key(
     crypto_helper: Optional[str] = None,
 ) -> str:
     root = _vault_root(vault)
-    key_id = _metadata(_read_json(root / "vault.json"))
+    metadata = _read_json(root / "vault.json")
+    key_id = _metadata(metadata)
+    if metadata.get("recovery_mode") == "business-v1":
+        raise ValueError("business Vaults require a role-bound recovery credential")
     if not recovery_key.startswith("CV1-") or len(recovery_key) > 256:
         raise ValueError("recovery key has an invalid format")
     helper = _helper_path(crypto_helper)
@@ -338,13 +395,51 @@ def import_recovery_key(
     return key_id
 
 
+def import_business_recovery_credential(
+    vault: str,
+    credential: Dict[str, object],
+    *,
+    crypto_helper: Optional[str] = None,
+) -> str:
+    """Import one role-bound business recovery kit without exposing it in argv."""
+    root = _vault_root(vault)
+    metadata = _read_json(root / "vault.json")
+    key_id = _metadata(metadata)
+    if metadata.get("recovery_mode") != "business-v1":
+        raise ValueError("the selected Vault is not a business Vault")
+    if not isinstance(credential, dict):
+        raise ValueError("business recovery credential has an invalid format")
+    secret = credential.get("recovery_key")
+    envelope = credential.get("envelope")
+    if (set(credential) != {"recovery_key", "envelope"}
+            or not isinstance(secret, str) or not secret.startswith("CVB1-")
+            or len(secret) > 256 or not isinstance(envelope, dict)
+            or set(envelope) != {"version", "key_id", "role", "wrapped_key"}
+            or envelope.get("version") != 1
+            or envelope.get("key_id") != key_id
+            or envelope.get("role") not in ("worker", "company")
+            or not isinstance(envelope.get("wrapped_key"), str)):
+        raise ValueError("business recovery credential has an invalid format")
+    helper = _helper_path(crypto_helper)
+    result = _run_helper(
+        helper, ["business-key-import", "--key-id", key_id],
+        input_data=json.dumps(credential, separators=(",", ":")).encode("utf-8"),
+    )
+    if result != {"key_id": key_id, "imported": True}:
+        raise MigrationError("The business recovery import result is invalid.")
+    return key_id
+
+
 def export_recovery_key(
     vault: str,
     *,
     crypto_helper: Optional[str] = None,
 ) -> str:
     root = _vault_root(vault)
-    key_id = _metadata(_read_json(root / "vault.json"))
+    metadata = _read_json(root / "vault.json")
+    key_id = _metadata(metadata)
+    if metadata.get("recovery_mode") == "business-v1":
+        raise ValueError("business Vault recovery credentials cannot be exported")
     helper = _helper_path(crypto_helper)
     result = _run_helper(helper, ["export-key", "--key-id", key_id])
     recovery_key = result.get("recovery_key")

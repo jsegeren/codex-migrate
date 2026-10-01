@@ -1,4 +1,4 @@
-const { configuration, CommerceError, SITE, validRelease } = require('../commerce/config');
+const { configuration, CommerceError, SITE, validRelease, releaseContentType } = require('../commerce/config');
 const { releaseVersion } = require('../commerce/service');
 
 function makeHandler(configure = configuration, env = process.env) {
@@ -26,7 +26,7 @@ function makeHandler(configure = configuration, env = process.env) {
         `<sparkle:minimumSystemVersion>13.0.0</sparkle:minimumSystemVersion>` +
         `<sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>` +
         `<enclosure url="${SITE}/api/update-archive" sparkle:edSignature="${release.sparkleSignature}" ` +
-        `length="${release.size}" type="application/zip"/></item></channel></rss>\n`;
+        `length="${release.size}" type="${releaseContentType(release)}"/></item></channel></rss>\n`;
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/rss+xml; charset=utf-8');
       res.setHeader('Cache-Control', 'no-store');

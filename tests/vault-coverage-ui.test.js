@@ -39,8 +39,8 @@ test('overview never presents current paginated history as protected', async () 
   await context.loadOverview();
   assert.equal(get('overview-health-icon').textContent, '!');
   assert.equal(get('overview-health-card').classes.has('attention'), true);
-  assert.match(get('overview-health').textContent, /not backed up/);
-  assert.match(get('overview-health-detail').textContent, /may still miss messages/);
+  assert.match(get('overview-health').textContent, /coverage needs review/);
+  assert.match(get('overview-health-detail').textContent, /may not contain every message/);
 });
 
 test('manual-only snapshot is not presented as fully protected when new history appears', async () => {
@@ -53,7 +53,7 @@ test('manual-only snapshot is not presented as fully protected when new history 
   const context = { $: get, api: async path => responses[path] };
   vm.runInNewContext(overviewScript, context);
   await context.loadOverview();
-  assert.match(get('overview-health').textContent, /not backed up/);
+  assert.match(get('overview-health').textContent, /coverage needs review/);
   assert.equal(get('overview-health-icon').textContent, '!');
 });
 
@@ -68,7 +68,7 @@ test('manual backup warning names the coverage gap without inventing lost conver
   context.backupView({ status: 'needs_attention', at_risk_threads: 0,
     paginated_history_unprotected: true });
   const message = get('backup-status').textContent;
-  assert.match(message, /paginated history is not included/);
+  assert.match(message, /paginated history is not yet fully recoverable/);
   assert.match(message, /may be missing messages/);
   assert.doesNotMatch(message, /0 conversations|earlier saved version/);
 });

@@ -209,7 +209,25 @@ function service({ config, stripe, store, sendMail, signDownload, signCanaryDown
     return { release: purchase.release.id, currentRelease: config.release.id,
       updateAvailable: newerCompatibleRelease(purchase.release, config.release, config.live) };
   }
-  return { fulfill, download, downloadLatest, downloadCanary, entitlement, status };
+  // Server-only input to hosted enrollment. This is not a route or a storage
+  // credential: the hosted flow must separately prove control of this email.
+  async function verifyForHostedEnrollment(token) {
+    const id = tokenSession(token, config);
+    const purchase = await verified(id);
+    await store.ensure(purchase);
+    return Object.freeze({ sessionId: purchase.sessionId, mode: purchase.mode,
+      email: purchase.email });
+  }
+  // Server-only current-payment proof for an already enrolled account. The
+  // caller must obtain the session ID and mode from the purchase-enrollment
+  // row bound to the authenticated device, never from an HTTP request.
+  async function verifyForHostedAuthorization(id, mode) {
+    if (mode !== config.mode) throw new CommerceError('purchase_not_verified', 403);
+    const purchase = await verified(id);
+    return Object.freeze({ sessionId: purchase.sessionId, mode: purchase.mode });
+  }
+  return { fulfill, download, downloadLatest, downloadCanary, entitlement,
+    status, verifyForHostedEnrollment, verifyForHostedAuthorization };
 }
 function checkoutRecovery({ config, stripe, store, sendMail }) {
   async function recover(id) {

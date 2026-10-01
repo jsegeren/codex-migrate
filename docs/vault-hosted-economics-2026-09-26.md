@@ -1,0 +1,431 @@
+# Hosted Vault unit economics — 2026-09-26
+
+Internal working evidence, not a published price or storage entitlement. The
+existing $49 app and its checkout are unchanged; hosted backup is not live.
+
+## Current pricing authority — September 30 amendment
+
+The Founder now targets **2× fully loaded COGS** for the individual hosted
+offer, as recorded in `vault-hosted-backup-contract.md`. Earlier 3×/80% targets
+and pricing tables below are historical sensitivities, not the current price
+policy or a customer offer. Company administration is deferred until the
+individual backup/recovery journey works.
+
+The multiplier includes retained-version storage and requests, service/API,
+database, email/monitoring, allocated support/recovery and fixed costs, and
+payment fees. If those non-percentage costs total `B` per billing period and
+the processor takes a fraction `f` of the customer charge `P`, then the target
+is `P = 2 × (B + f × P)`, or `P = 2B / (1 − 2f)`, for `0 ≤ f < 0.5`.
+Any fixed processor fee belongs in `B`. This is internal accounting algebra,
+not evidence for any fee rate, tax treatment, customer price, or forecast.
+Simply doubling the storage bill does not achieve the target. The internal
+markup is not public copy; customer-visible rates, usage units and renewal
+terms still require a measured offer before billing is enabled.
+
+## What is measured
+
+`ops/vault-size-estimate.py` reads only the active and archived transcript trees,
+using the same 4 MiB chunk boundaries and LZFSE compression decision as Vault.
+It reports aggregate numbers without paths, titles, content, or digests and
+does not create a backup. On the older Mac, excluding files modified in the
+last 60 seconds:
+
+This is now an **incomplete product-cost baseline**: draft snapshot format 4
+also protects Codex-owned attachments and paginated conversation items. A
+September 29 read-only inventory found 132 attachment files totaling 1,914,216
+bytes on the older Mac. The estimator now has a separate
+`--storage-only --extra-sources-only` mode that counts those sources using the
+same encoded paginated records and 4 MiB compression boundaries as the draft
+backup. It reports only aggregates and marks a live-changing SQLite source
+incomplete. An attempted full-scope scan on the active Mac stopped safely when
+source state changed; it produced no figure. A separate extra-sources-only scan
+read a pinned SQLite view and counted **1,615 paginated threads**, **7,003,946,701
+encoded record bytes**, and the **132 attachments / 1,914,216 raw bytes**. It
+estimated **3,228,869,786 encrypted chunk bytes across 3,234 unique chunks**
+for those extra sources in an empty Vault. Its `estimate_complete` flag is
+**false** because the live database changed during the scan. Relative to the
+older transcript-only estimate below, this is roughly another 11% of first-
+backup object bytes, not an exact combined snapshot measurement: the scans
+were at different times and cross-source duplicate chunks were not reconciled.
+On a synthetic v4 fixture containing transcripts, an attachment, and paginated
+history, the full-scope estimate matched the actual encrypted chunk bytes
+written by the native CryptoKit helper. This checks the estimator's format
+model, not the changing live-history figure or any future retention policy.
+Do not use either figure as a customer allowance or all-in gross-margin
+forecast. Neither first-backup estimate measures retained version growth or
+fully loaded COGS.
+
+| Measure | Result |
+| --- | ---: |
+| Stable transcripts | 2,052 |
+| Stable raw transcript bytes | 54,889,827,804 |
+| Estimated first-backup encrypted object bytes | 28,875,910,073 |
+| Unique 4 MiB-or-smaller objects | 14,449 |
+| Recently changing transcripts excluded | 1 (2,132,843,850 raw bytes) |
+
+The same storage-only estimator ran at low CPU priority on the newer Mac,
+without creating a backup or changing its Codex files:
+
+| Measure | Newer Mac | Both Macs combined |
+| --- | ---: | ---: |
+| Stable transcripts | 2,255 | 4,307 |
+| Stable raw transcript bytes | 85,681,714,716 | 140,571,542,520 |
+| Estimated first-backup encrypted object bytes | 43,313,575,043 | 72,189,485,116 |
+| Unique 4 MiB-or-smaller objects | 21,907 | 36,356 |
+| Recently changing transcripts excluded | 4 (1,984,877,091 raw bytes) | 5 (4,118,220,941 raw bytes) |
+
+The exact first-backup object total is not proven because five changing
+transcripts were omitted and manifests/references are excluded. Even if none
+of those five files compressed, the combined object bytes would be at most
+about 76.31 GB (plus small encryption/metadata overhead). Stable encrypted
+object bytes are 51.4% of stable raw bytes. The two Macs use distinct Vaults:
+do not assume cross-Vault deduplication or silently merge their histories.
+The sizing tool's new `--storage-only` mode produced the same 28,875,910,073
+object bytes as its original full mode on the older Mac, while avoiding the
+unneeded text-extraction work. Never extrapolate this user's compression ratio
+into a customer quota.
+
+File modification times give an *upper bound on current file sizes touched*,
+not bytes appended or new encrypted objects. On the older Mac, the files
+modified within one, seven, and thirty days currently total 2.63, 9.10, and
+21.51 GB raw respectively. On the newer Mac, those values are 16.35, 31.11,
+and 55.63 GB raw. The real daily upload rate requires consecutive snapshots
+or an equivalent chunk-inventory comparison; it is not established by mtime.
+
+## Operation pattern
+
+Each novel encrypted chunk is one PUT. The proposed R2 Worker adapter uses
+HEAD before each upload and HEAD after a successful conditional PUT, rather
+than a full read-back: the older Mac's 14,449 chunks imply roughly 14,449
+writes and 28,898 metadata reads; both Macs together imply about 36,356
+writes and 72,712 metadata reads. At published R2 Standard rates **before the
+account-wide free allowance and billable-unit rounding**, the metered amounts
+are about $0.164 for writes and $0.026 for HEADs. A full restore adds about
+36,356 GETs, or $0.013 in metered R2 read operations, with no direct egress
+fee. Cloudflare applies monthly account-wide free allowances and rounds
+billable operations up to the next million; these fractional amounts are
+cost-allocation estimates, not invoice predictions. Immutable manifests,
+per-snapshot metadata, and references add a small number of operations.
+Repeating an unchanged backup should reuse existing chunks; a
+rewritten or compacted transcript can create new chunks and must be measured.
+Do not count shared free allowances as a per-customer subsidy.
+
+The original dark client checked a novel object before uploading, requested
+its PUT grant, then checked it again after upload: three first-party requests
+per chunk, or roughly **109,068 requests** for the measured 36,356 novel
+chunks before manifests and retries. Each request also rechecked Stripe. The
+dark native path now uses a one-minute device/reservation-bound authorization
+lease, refreshed after at most 40 seconds, and prepares at most four exact
+objects in one service request. The batch performs classification and durable
+quota/grant checks for each object and returns short-lived PUT and HEAD grants;
+slow transfers fall back to fresh individual grants. In the ideal fast-upload
+case, that converts the 109,068 per-object service calls into about **9,089
+four-object batch calls**, plus lease refreshes and other snapshot requests.
+It does **not** remove per-object database checks, Worker PUT/HEAD requests,
+or the need for independent server publication verification. These counts are
+code-path projections, **not measured throughput**. New authorizations after
+cancellation or refund can continue only until the one-minute lease expires;
+Worker grants never outlive that lease, though an already accepted upload may
+finish later. Device revocation remains checked on every batch. A realistic large-history
+upload, slow-network fallback rate, request/DB latency, provider limits, and
+all-in service cost remain release gates.
+
+### Thirty-minute business cadence is an incremental-engine gate
+
+The working policy is a **30-minute check while the Mac is awake**, not a
+30-minute full upload. A quiet check should read only bounded local metadata,
+confirm the authenticated service pointer, and reuse the last verified
+snapshot. A changed check should publish a new recovery point using only novel
+encrypted chunks plus its manifest. A missed, failed, or overdue check must be
+visible; it must never silently extend the advertised protection window. This
+is a product target, not a certified recovery-point guarantee: sleep, offline
+time, a changing source, upload duration, and failed verification can make the
+last verified copy older than 30 minutes.
+
+Storage COGS depend on **unique retained ciphertext**, not the number of checks
+or nominal snapshots. Thirty days of twice-hourly checks is up to 1,440
+checks; the same schedule must not turn 100 GB of unchanged history into
+144 TB of uploads or 1,440 separately billable full copies. R2 Standard's
+published $0.015/GB-month means 100 GB retained for a full month is about
+$1.50 in storage, while 1 TB is about $15, before operation, Worker, database,
+support, and payment costs. A rewritten large transcript or a long retention
+window can increase unique retained bytes despite chunk reuse. Therefore both
+the customer's storage charge and our margin model must use measured retained
+encrypted GB-month, including version growth, with a disclosed included
+allowance and usage rate rather than an unlimited flat storage promise.
+
+Before setting the final business cadence or price, record per-check elapsed
+time, source bytes read, novel encrypted bytes and object writes, remote
+verification reads, retained bytes, last verified snapshot age, failures, and
+restore cost on both physical Macs for at least seven days. Model quiet,
+ordinary-change, large-rewrite, initial-upload, and full-restore cases. Do not
+claim a 30-minute recovery point or a fat *all-in* margin from storage rates
+alone; prove the end-to-end figures first. If a safety limit is required, show
+it to customers and preserve the last verified snapshot rather than silently
+stopping protection.
+
+The dark scheduler now writes elapsed milliseconds, attempted upload-service
+request counts, and attempted/confirmed Worker HEAD and PUT counts and bytes to
+its owner-only last-run receipt. A separate owner-only, content-free rolling
+history retains at most 1,024 terminal-run samples; an unsafe or corrupt
+history never blocks the backup, so a measurement review must check for gaps.
+For a successfully published changed snapshot, it now also records aggregate
+plaintext bytes **re-staged** for encryption versus bytes reused from the
+authenticated prior snapshot, plus the total ciphertext bytes claimed in the
+published object graph. Re-staged bytes are not a disk-I/O counter: identity
+inspection and encoding can read a source more than once. Claimed ciphertext
+includes reused objects and is not billable unique growth; confirmed Worker
+PUT bytes remain the closer network-cost observation. An unchanged check has
+no staged-source counters, and a failed pre-publication attempt may have read
+source data without producing those counters. Do not calculate gross margin
+from these fields alone.
+These are diagnostics, not a provider bill: a lost PUT acknowledgement can be
+billed even when the client cannot confirm it, and a confirmed immutable retry
+does not necessarily add retained bytes. The seven-day measurement still needs
+real scheduled runs and reconciliation with other service reads, database and
+R2 usage. Full source-read bytes, verified unique growth, retention cost, and
+restore/support cost remain unmeasured.
+
+The measured two-Mac baseline has 36,356 unique encrypted chunks and about
+140.57 GB of stable raw transcripts. A naive 30-minute run that HEAD-checks
+every retained chunk would make about **52.35 million Class B reads per
+30-day month** even if nothing changed: roughly **$18.85** at the published
+metered rate before account-wide free allowance and billable-unit rounding.
+Re-reading every raw transcript on that cadence would move about **202 TB
+through the two local machines per month**. These are extrapolations from one
+owner's measured baseline, not observed invoices or customer averages.
+They make the original whole-history staging loop unsuitable as a 30-minute
+default. The dark client now has a Keychain-authenticated, published-snapshot-
+bound source index that skips reading unchanged transcript bodies and obtains
+prior chunk facts from the service. Database-backed history can also reuse
+authenticated prior entries when the SQLite database, WAL, and journal have
+not changed. A read-only preflight now skips reservation and publication for
+an exact unchanged match against the sealed prior manifest and current
+service pointer. This eliminates the modeled per-snapshot HEAD cost on quiet
+checks; changed runs still need the incremental path, and neither path has a
+physical-Mac cadence measurement. The release path still needs a trustworthy changed-source inventory,
+reuse of published ciphertext, upload of only new encrypted chunks and the
+new manifest/reference, and periodic—not per-checkpoint—full remote scrubs.
+Record actual per-run bytes read, novel bytes uploaded, object operations,
+duration, and retained-version growth on both Macs before pricing or
+advertising a recovery-point window.
+
+## Published provider rates and a restore month
+
+Rates below are US-dollar public on-demand examples, not a provider invoice.
+Actual region, account plan, cache behavior, and ancillary service fees need
+verification in a sandbox.
+
+| Provider | Storage | Direct client upload | Direct first-time full restore |
+| --- | ---: | ---: | ---: |
+| Cloudflare R2 Standard | $0.015/GB-month | No per-GB ingress fee; Class A writes | No direct egress fee; Class B reads |
+| Vercel Blob | $0.023/GB-month | No transfer charge; advanced operations | About $0.11/GB when each chunk is a cache miss: $0.05 Blob Data Transfer + $0.06 Fast Origin Transfer, plus simple/edge operations |
+
+At the measured combined first-backup range of **72.19–76.31 GB** (not yet
+30-day retention), R2 Standard storage is about **$1.08–$1.14/month** and a
+direct full restore has no R2 byte-transfer charge. Vercel Blob storage is
+about **$1.66–$1.76/month**, with an approximately **$7.94–$8.39** first
+full-restore transfer charge if every object misses the cache. The R2
+initial PUT plus two metadata HEAD passes is about **$0.19** in
+operations before its account-wide free allowance. These are measured-size
+pricing calculations, not observed provider invoices or a retention forecast.
+
+Vercel's private signed URLs permit direct PUT/GET without app-server byte
+relay. Sending backup bytes *through* a Vercel Function adds transfer and
+compute charges and is excluded from the direct-transfer model. The backup
+objects are small enough for CDN caching, but the first complete disaster
+restore should be budgeted as cache misses. Both providers bill operations;
+"Backup and download" still generate requests, though byte storage and
+Vercel restore transfer dominate at observed object counts.
+
+R2's S3 presigned PUT URL is reusable until expiry and does not by itself
+provide the SHA-256 and immutable-write proof this product requires. The
+leading R2 path is a small authenticated Cloudflare Worker using the R2
+binding's `put(..., { sha256, onlyIf })`, followed by a metadata check. A
+64 KiB synthetic-object probe passed those primitives against real R2 on
+September 27, 2026. On September 28, both the primitive and capability-route
+probes, a separate Python transport check, and a complete synthetic encrypted
+snapshot/recovery roundtrip passed against the real R2 sandbox binding. The
+private sandbox bucket showed zero objects and bytes after cleanup, and the
+temporary Cloudflare token was revoked. This is not a customer-authenticated
+service, a realistic-scale proof, or a clean-Mac recovery test. The Worker can
+stream encrypted objects directly to R2 without
+relaying them through Vercel. Its inbound 100 MB limit on a Free Cloudflare
+account accommodates ordinary encrypted chunks, but an oversized manifest
+must fail safely or use a separately proven path.
+
+Workers Free allows 100,000 requests/day. One initial upload of this user's
+two Vaults entails about 36,356 object requests. A naive daily retry of every
+unchanged object through the upload route would create about 1.09 million
+Worker requests/month for this one customer; do not ship that behavior. The
+dark server now carries forward exact ciphertext proofs from the latest
+published same-Vault snapshot for at most 24 hours. The dark client also now
+reuses authenticated paginated-thread entries when the SQLite database, WAL,
+and rollback journal file identities have not changed; changed sources still
+take the full read path. On the older physical Mac, the required sandboxed
+SQLite schema/thread-count preflight took **0.60 seconds** against a 7.3 GB
+database on September 29; this is one warm local observation, not a 30-minute
+end-to-end runtime or a customer-cost measurement. At the measured 36,356-chunk size,
+a 30-minute run with changes needs about 18 bounded database/API reuse pages
+instead of 72 Worker batches and 36,356 R2 HEADs. When the oldest proof ages
+out, a complete remote check still needs about 29 + 43 = **72 Worker batch
+requests** and 36,356 R2 HEAD subrequests. Thirty daily checks would be about
+2,160 Worker requests and 1.09 million R2 Class B HEADs (about $0.39 at the
+unrounded metered rate, before the account-wide allowance). This is a model,
+not a measured customer bill: the database/API page cost and unchanged-run
+skip remain to be measured on physical Macs. On the older Mac, one warm
+read-only source pass over 2,053 transcript paths took 0.125 seconds,
+database/WAL fingerprinting took under 0.001 seconds, title lookup over
+2,000 thread IDs took 0.06 seconds, and a paginated thread-ID query over
+1,615 IDs took 0.064 seconds. These are isolated local passes, not an
+end-to-end hosted check or a recovery-point guarantee. New or changed chunks
+still need individual upload requests. A few initial uploads on one day can exceed
+the Free daily request ceiling; do not build the offer around it. The batch
+network endpoint and actual provider behavior remain unproved. Workers Paid has a **$5/month account
+minimum**, including 10 million monthly requests and 30 million CPU-ms, then
+$0.30/million requests and $0.02/million CPU-ms. This $5 is shared fixed
+overhead, not a per-customer charge. R2 read/write operations are separate.
+The $5 minimum is shared across the account, but one subscriber could bear
+all of it. Do not report a storage-and-card-fee calculation as an all-in
+business margin: database/API, support, verification, retries, refunds, and
+taxes remain unmeasured. Earlier $10-tier contribution examples are obsolete
+after the September 29 business-market pricing direction.
+
+Sources: [R2 pricing](https://developers.cloudflare.com/r2/pricing/),
+[Vercel Blob pricing](https://vercel.com/docs/vercel-blob/usage-and-pricing/),
+[Vercel signed URLs](https://vercel.com/docs/vercel-blob/vercel-signed-urls),
+[R2 Workers API](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/),
+[Workers pricing](https://developers.cloudflare.com/workers/platform/pricing/),
+[Workers limits](https://developers.cloudflare.com/workers/platform/limits/).
+
+## Subscription contribution before support
+
+For an illustrative $10 US domestic-card subscription, published Stripe
+Payments (2.9% + $0.30) and pay-as-you-go Billing (0.7%) total approximately
+$0.66, leaving $9.34 before storage, API/DB, observability, support, refunds,
+taxes, and retained-version growth. A $20 charge similarly leaves about
+$18.98. These are not promises about this account's contracted Stripe rates.
+The $49 one-time app purchase funds the first included hosted month only if
+the customer opts in; a later subscription must work on its own economics.
+
+`cost + 50%` is not a fat-margin plan: a 50% markup on cost creates only a
+33.3% margin *before* Stripe and all non-storage costs. A single unlimited
+price also makes light histories subsidize very large ones. On September 29,
+the Founder rejected the $10/month plus $0.08/GB-month proposal as too low,
+rejected a customer-set spending cap, and directed us toward businesses that
+need durable Codex work records. Doubling that proposal to $20/month including
+50 GB plus $0.16 per additional GB-month is only a **modeling floor**, not an
+approved price or a business offer. At 75 GB, that floor would bill $24/month
+and leave approximately $21.71 (90%) after published domestic-card Stripe
+Payments/Billing fees and R2 Standard storage, **before** Workers, operations,
+database/API, support, refunds, and taxes. The business price must reflect
+verified recovery, service obligations, and buyer evidence rather than merely
+marking up object storage. Neither this example nor the old consumer proposal
+is a live subscription or checkout entitlement.
+
+The earlier storage-led business example was **$49/month including 100 GB of
+retained encrypted objects, plus $0.15 per additional GB-month**. It is **not
+the current managed-business price hypothesis**, Founder-approved pricing, or
+a live entitlement. With
+published US domestic-card Stripe Payments and pay-as-you-go Billing rates,
+and R2 Standard storage at $0.015/GB-month, a steady 75 GB account would
+leave about $45.81 of a $49 charge (93.5%), and a steady 1,000 GB account
+would leave about $162.08 of a $184 charge (88.1%), **before** Workers,
+requests, database/API, support, refunds, taxes, and retention growth. These
+are storage-plus-payment contribution examples, not product gross margins.
+The first included hosted month needs a separately approved capacity policy;
+an unbounded free month is not implied by this price hypothesis.
+
+### Managed-service labor sensitivity — not a price decision
+
+The $49/month storage-plus-card example above is **not** a defensible managed
+business gross-margin claim. As a conservative first-customer stress test,
+assume 100 GB retained for the full month ($1.50 R2 Standard), assign the
+entire $5 Workers Paid minimum to that one account, reserve an **unmeasured
+$5** for database/API/verification, and value support and recovery labor at
+an **assumed $100 per hour**. Domestic-card Payments plus pay-as-you-go Billing
+are modeled as 3.6% of revenue plus $0.30. These are sensitivity assumptions,
+not observed COGS, contracted rates, or an approved customer price.
+
+| Monthly account revenue | Margin with no support | Margin with one support hour | Maximum support hours for 80% margin |
+| ---: | ---: | ---: | ---: |
+| $49 | 72% | negative | none |
+| $199 | 90% | 40% | 0.21 |
+| $499 | 94% | 74% | 0.70 |
+| $699 | 95% | 80% | 1.03 |
+
+Even before labor, a lone $49 business account misses an 80% all-in margin
+under this allocation. With 3.6% modeled payment/Billing fees, a $0.30 fixed
+charge, and the $11.50 non-labor cost above, the 80% margin floor is
+`($11.50 + $0.30 + $100 × monthly support hours) / (0.20 - 0.036)`:
+about **$682/month with one support hour** or **$1,292/month with two**.
+The calculation excludes onboarding, incident spikes, taxes, refunds, and
+unmeasured service costs; it is a sensitivity threshold, not a price quote.
+
+The next buyer-discovery hypothesis is therefore a **scoped, assisted business
+pilot in the $699–$1,299/month range**, with an explicit organization, seat,
+retained-byte, retention, and support scope agreed before any charge. $699
+barely clears the modeled 80% target at one support hour and is unsuitable
+if the pilot needs two. Test willingness to pay and measure actual setup,
+monitoring, incident, and recovery labor before selecting a tier. A separately
+disclosed onboarding or exceptional recovery fee may be necessary; do not
+bury unlimited hands-on help in a storage-only subscription. This is not an
+approved public offer, a service-level promise, or a live entitlement. The
+Founder's first-free-hosted-month direction for individual $49 app buyers does
+not automatically create a free managed-business pilot.
+
+The proposed billing unit is retained **encrypted object bytes**, not raw
+Codex-folder size, upload volume, thread count, snapshot count, or number of
+Macs. A reused object is counted once within its Vault; separate Vaults are
+counted together at the account level, with no unproved cross-Vault dedupe.
+If usage-based billing is selected, use average daily retained bytes for the
+monthly GB-month charge, matching R2's published daily-peak averaging
+convention. Show the current retained size and estimated next bill before and
+after the first upload; do not invent a customer-set spending ceiling.
+
+Internal SQL now records transactional retained-byte changes and calculates a
+UTC daily peak from the opening balance plus that day's changes. It returns
+unknown, not zero, for a day before its first recorded event. This is a cost
+model input only: the event history starts at its migration baseline, and the
+SQL ledger does not prove that R2 holds every object or account for orphaned
+objects. No invoice should use it until provider reconciliation, billing-period
+coverage, and an approved customer entitlement are proven.
+
+Any server-side safety limit needed to prevent abusive or accidental unbounded
+resource use is a separate, disclosed product decision. Do not silently pause
+protection, delete the last verified snapshot, or add unapproved charges.
+Self-managed backups remain available without hosting fees.
+
+The promised first hosted month included with a $49 app purchase needs a
+published maximum capacity. **1 TB is a candidate ceiling, not an approved
+entitlement**: at R2 Standard's published rate, a full month of 1 TB storage
+costs about $15 before requests, Worker, database, and support. Larger Vaults
+would need a separate explicit quote rather than an unlimited free trial.
+Cancellation, proration, taxes, retention, and the exact first-month limit
+must be approved before any customer-facing checkout or invoice changes.
+
+The current SQL prototype enforces a byte allowance, **not metered billing**.
+The dark recovery route can now return its exact account-ledger retained and
+reserved byte counters to an authenticated device, but that is only a
+point-in-time server figure. A separate transactional event ledger now records
+each change to retained encrypted bytes, including an explicit baseline for
+accounts that predate the meter. It can support a daily-peak GB-month
+calculation after a full billing period, but has not been reconciled against
+provider storage or wired to an invoice. Old baselines cannot establish
+earlier usage. No subscription, rate, or allowance is
+approved or live. Before charging,
+prove the billing meter and its reconciliation against real provider storage,
+measure incremental growth, and recheck verification, support, and restore
+costs. For a business offer, price discovery must also test the buyer's
+recovery requirements and willingness to pay for a managed service.
+
+## Still to prove
+
+- Measure 24-hour and seven-day *unique encrypted object growth* with retained
+  versions. Existing mtime observations cannot do this.
+- Extend the synthetic real-R2 immutable PUT and checksum proof to an
+  authenticated, quota-enforced customer flow with signed direct restore and
+  clean-Mac recovery. Neither an ETag nor a client receipt alone proves the
+  server has the intended bytes.
+- Set an explicit retention policy and capacity behavior, and record provider
+  spend and per-account retained bytes before offering a paid tier.

@@ -20,6 +20,7 @@ from codex_migrate.backup import (
 from codex_migrate.migration import MigrationEngine, MigrationError, _value
 from codex_migrate.processes import require_codex_closed_script
 from codex_migrate.transport import SSHTransport
+from codex_migrate.staging_permissions import transfer_staged
 from codex_migrate.skills import (
     SkillExport, discover_personal_skills, discover_workspace_skills, skill_verification_script,
 )
@@ -148,24 +149,23 @@ class ComponentExporter:
             )
         )
         self.transport.run_remote(locked_destination_script(self.config.target_home, staging_script))
+        frozen_checks = [skill_verification_script(item, self.config.source_home) for item in exports]
         for index, item in enumerate(exports):
             staged_item = str(Path(staging) / "items" / str(index))
             self.transport.run_remote(
                 locked_destination_script(self.config.target_home,
                     MigrationEngine._safe_directory_script(staging, staged_item))
             )
-            process = self.transport.rsync_process(
-                item.source,
-                staged_item,
-                copy_links=True,
-            )
-            process.start()
+            transfer_staged(self.transport, self.config.target_home, staging,
+                            staged_item, migration_id, item.source, copy_links=True)
+        if [skill_verification_script(item, self.config.source_home) for item in exports] != frozen_checks:
+            raise MigrationError('Source skills changed during staging. Close writing apps and retry; no destination files were replaced.')
         # A stop request must not kill SSH while destination paths are being
         # replaced. Complete this transaction (or its rollback) and then exit.
         with self.cancellation.replacement():
             print("Backing up, installing and verifying skills. Stop requests will "
                   "wait for this phase to finish.", file=sys.stderr, flush=True)
-            receipt = self._install(exports, staging, migration_id)
+            receipt = self._install(exports, staging, migration_id, frozen_checks=frozen_checks)
         result.update(receipt)
         result["applied"] = True
         return result
@@ -176,7 +176,10 @@ class ComponentExporter:
         staging: str,
         migration_id: str,
         backup: str = "",
+        *, frozen_checks=None,
     ) -> Dict[str, object]:
+        if frozen_checks is not None and len(frozen_checks) != len(exports):
+            raise MigrationError('Frozen skill scope does not match the installation')
         backup = backup or new_backup_path(self.config.target_home, "Codex-Migrate-Component-Backup")
         preconditions = []
         backups = []
@@ -261,7 +264,8 @@ class ComponentExporter:
             # Freeze once and verify both staging and installation against the
             # same source bytes. Explicit top-level exit preserves zsh rollback.
             function = "verify_component_%d" % index
-            checks = skill_verification_script(item, self.config.source_home)
+            checks = (skill_verification_script(item, self.config.source_home)
+                      if frozen_checks is None else frozen_checks[index])
             failure = " || { echo 'Skill verification failed. Keep staging and backups; review and retry.' >&2; exit 74; }"
             stage_verifications.append("%s() {\n%s\n}\n%s %s%s" % (
                 function, checks, function, shlex.quote(staged_item), failure))

@@ -2,6 +2,7 @@ import json
 import os
 from http.client import HTTPConnection
 from pathlib import Path
+import sqlite3
 import subprocess
 import tempfile
 import threading
@@ -12,13 +13,31 @@ from urllib.parse import quote
 from codex_migrate.dashboard import HTML as MIGRATION_HTML, LoopbackHTTPServer
 from codex_migrate.errors import MigrationError
 from codex_migrate.setup import SetupDashboard, SETUP_HTML
+from codex_migrate.state import StateStore
 from codex_migrate.vault_backup import BackupPlan, BackupResult
+from codex_migrate.vault import read_thread
 from codex_migrate.vault_install import InstallResult, ThreadInstallResult
+from codex_migrate.vault_paginated import PaginatedItem, encoded_item
 from codex_migrate.vault_recovery import RestoreResult, SnapshotInfo
 from codex_migrate.vault_schedule import SchedulePlan
+from codex_migrate.vault_dashboard import VAULT_HTML
+from codex_migrate.vault_search_index import IndexCancelled, supported as search_index_supported
+from codex_migrate.vault_hosted_recovery_flow import HostedRecoveryFlow
 
 
 class SetupTests(unittest.TestCase):
+    def test_backup_preflight_shows_source_size_and_conservative_compression_guidance(self):
+        self.assertIn('id="backup-footprint"', VAULT_HTML)
+        self.assertIn('id="vault-usage"', VAULT_HTML)
+        self.assertIn('Vault files:', VAULT_HTML)
+        self.assertIn('data.snapshots.length>=1000?"at least ":""', VAULT_HTML)
+        self.assertIn('saved ${data.snapshots.length===1?', VAULT_HTML)
+        self.assertIn('fmt(data.transcript_bytes)', VAULT_HTML)
+        self.assertIn('database-backed ${data.paginated_threads===1?', VAULT_HTML)
+        self.assertIn('The encrypted backup size may differ', VAULT_HTML)
+        self.assertIn('Vault compresses new backup data when useful', VAULT_HTML)
+        self.assertIn('Keep space for the full source size plus overhead', VAULT_HTML)
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.home = Path(self.temporary.name).resolve()
@@ -85,6 +104,8 @@ class SetupTests(unittest.TestCase):
         self.assertIn("Print / Save PDF", shell)
         self.assertIn("Share thread", shell)
         self.assertIn("Create encrypted backup", shell)
+        self.assertIn("Speed up search", shell)
+        self.assertIn("unencrypted text fragments", shell)
         self.assertIn("Save this recovery key", shell)
         self.assertIn("Automatic backup", shell)
         self.assertIn("Turn on daily backup", shell)
@@ -106,6 +127,7 @@ class SetupTests(unittest.TestCase):
                      "/api/vault/thread?collection=active&transcript=2026/09/thread.jsonl",
                      "/api/vault/export?collection=active&transcript=2026/09/thread.jsonl",
                      "/api/vault/backup-status", "/api/vault/schedule",
+                     "/api/vault/search-index-status",
                      "/api/vault/storage?path=/private/tmp/vault",
                      "/api/vault/restore-status",
                      "/api/vault/install-status",
@@ -119,6 +141,9 @@ class SetupTests(unittest.TestCase):
                      "/api/vault/restore", "/api/vault/install",
                      "/api/vault/install-recover", "/api/vault/browse",
                      "/api/vault/install-thread"):
+            self.assertEqual(self.request(path, {}, authorized=False)[0], 403)
+        for path in ("/api/vault/search-index", "/api/vault/search-index-stop",
+                     "/api/vault/search-index-remove"):
             self.assertEqual(self.request(path, {}, authorized=False)[0], 403)
         code, page = self.request(
             "/api/vault/thread?collection=active&transcript=2026%2F09%2Fthread.jsonl")
@@ -139,6 +164,118 @@ class SetupTests(unittest.TestCase):
         self.assertIn("Move Macs", shell)
         self.assertNotIn("Vault + Migration", shell)
 
+    def test_hosted_recovery_is_dark_by_default_and_requires_local_authority(self):
+        self.assertEqual(self.request("/api/vault/hosted-recovery-status")[1], {"enabled": False})
+        self.assertEqual(self.request("/api/vault/hosted-recovery-status", authorized=False)[0], 403)
+        payload = {"action": "send_code", "step": {"purchase_link": "private", "apply": True}}
+        self.assertEqual(self.request("/api/vault/hosted-recovery", payload, authorized=False)[0], 403)
+        self.assertEqual(self.request("/api/vault/hosted-recovery", payload,
+            extra_headers={"Origin": "https://attacker.test"})[0], 403)
+        self.assertEqual(self.request("/api/vault/hosted-recovery", payload)[0], 400)
+
+    def test_hosted_recovery_step_is_async_private_and_blocks_quit_and_local_restore(self):
+        self.helper._hosted_recovery = HostedRecoveryFlow(self.helper.source_home, self.helper.registry)
+        entered, release = threading.Event(), threading.Event()
+        secret = "cs_test_synthetic." + "a" * 64
+        def wait_for_email(_token, *, apply):
+            entered.set()
+            release.wait(3)
+        try:
+            with patch("codex_migrate.vault_hosted_recovery_flow.HostedEnrollmentClient") as client:
+                client.return_value.begin_recovery.side_effect = wait_for_email
+                code, body = self.request("/api/vault/hosted-recovery", {
+                    "action": "send_code", "step": {"purchase_link": secret, "apply": True}})
+                self.assertEqual(code, 202)
+                self.assertTrue(entered.wait(1))
+                self.assertEqual(body["status"], "running")
+                self.assertNotIn(secret, json.dumps(body))
+                self.assertEqual(self.request("/api/vault/hosted-recovery-status")[1]["status"], "running")
+                self.assertFalse(self.helper.can_shutdown())
+                self.assertEqual(self.request("/api/shutdown", {})[0], 409)
+                self.assertEqual(self.request("/api/vault/restore", {
+                    "vault": str(self.home / "vault"), "output": str(self.home / "out"),
+                    "snapshot": "latest", "apply": True})[0], 400)
+                release.set()
+                self.helper._restore_thread.join(3)
+                status = self.request("/api/vault/hosted-recovery-status")[1]
+                self.assertEqual(status["phase"], "email")
+                self.assertNotIn(secret, json.dumps(status))
+                self.assertNotIn(secret, self.helper.registry.path.read_text())
+        finally:
+            release.set()
+            if self.helper._restore_thread:
+                self.helper._restore_thread.join(3)
+
+    def test_hosted_recovery_rejects_secret_extra_fields_without_echoing(self):
+        self.helper._hosted_recovery = HostedRecoveryFlow(self.helper.source_home, self.helper.registry)
+        secret = "CV1-" + "Z" * 43
+        for step in ({"apply": False}, {"apply": True, "secret": secret}, []):
+            code, body = self.request("/api/vault/hosted-recovery", {"action": "resolve", "step": step})
+            self.assertEqual(code, 400)
+            self.assertNotIn(secret, json.dumps(body))
+        self.assertIsNone(self.helper._restore_thread)
+
+    def test_hosted_stop_signals_same_worker_and_keeps_shutdown_guard_until_exit(self):
+        flow = HostedRecoveryFlow(self.helper.source_home, self.helper.registry)
+        self.helper._hosted_recovery = flow
+        flow._update(phase="key_verified")
+        flow._device = {"deviceId": "11111111-1111-4111-8111-111111111111"}
+        flow._plan = {"output": str(self.home / "out"), "snapshot_id": "synthetic", "max_bytes": 10}
+        entered, release = threading.Event(), threading.Event()
+        def download(*args, **kwargs):
+            entered.set()
+            release.wait(3)
+            from codex_migrate.vault_remote_recovery import _check_stop
+            _check_stop(kwargs["cancelled"])
+        stop = {"action": "stop_download", "step": {"apply": True}}
+        try:
+            with patch("codex_migrate.vault_hosted_recovery_flow.recover_hosted_snapshot",
+                       side_effect=download):
+                self.assertEqual(self.request("/api/vault/hosted-recovery", {
+                    "action": "download", "step": {"apply": True}})[0], 202)
+                self.assertTrue(entered.wait(1))
+                worker = self.helper._restore_thread
+                self.assertEqual(self.request("/api/vault/hosted-recovery", stop,
+                    authorized=False)[0], 403)
+                self.assertEqual(self.request("/api/vault/hosted-recovery", stop,
+                    extra_headers={"Origin": "https://attacker.test"})[0], 403)
+                for step in ({"apply": False}, {"apply": 1}, {"apply": True, "extra": 1}):
+                    self.assertEqual(self.request("/api/vault/hosted-recovery", {
+                        "action": "stop_download", "step": step})[0], 400)
+                code, state = self.request("/api/vault/hosted-recovery", stop)
+                self.assertEqual(code, 202)
+                self.assertTrue(state["stop_requested"])
+                self.assertEqual(state["status"], "running")
+                self.assertIs(self.helper._restore_thread, worker)
+                self.assertFalse(self.helper.can_shutdown())
+                self.assertEqual(self.request("/api/shutdown", {})[0], 409)
+                release.set()
+                worker.join(3)
+                self.assertFalse(worker.is_alive())
+                self.assertEqual(flow.snapshot()["status"], "stopped")
+                self.assertEqual(self.request("/api/vault/hosted-recovery", stop)[0], 400)
+                # Reading the HTTP response does not imply the handler's
+                # finally block has released its request lock yet. Wait for
+                # that exact boundary; do not loosen the app's quit guard.
+                self.assertTrue(self.helper._request_lock.acquire(timeout=3))
+                self.helper._request_lock.release()
+                self.assertTrue(self.helper.can_shutdown())
+        finally:
+            release.set()
+            if self.helper._restore_thread:
+                self.helper._restore_thread.join(3)
+
+    def test_invalid_hosted_recovery_binding_releases_startup_lock(self):
+        state_dir = str(self.home / "invalid-recovery-state")
+        state = StateStore(state_dir)
+        state.update(hosted_recovery_device={"deviceId": "bad", "vaultId": "bad"})
+        with patch.dict(os.environ, {"CODEX_BACKUP_HOSTED_RECOVERY_UI": "yes"}):
+            with self.assertRaises(MigrationError):
+                SetupDashboard(str(self.home), state_dir)
+        retry = StateStore(state_dir)
+        retry.acquire_process_lock()
+        retry.release_process_lock()
+
     def test_vault_search_opens_active_conversation_at_matching_message(self):
         transcript = self.home / ".codex/sessions/2026/09/active.jsonl"
         transcript.parent.mkdir(parents=True)
@@ -158,6 +295,250 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertEqual([entry["text"] for entry in page["entries"]], ["Set up Clerk now"])
         self.assertEqual(self.request(path.replace("match=clerk", "match=missing"))[0], 400)
+
+    def test_opened_paginated_backup_search_read_export_never_offers_local_copyback(self):
+        thread_id = "44444444-4444-4444-8444-444444444444"
+        browse = self.home / "browse"
+        folder = browse / ".codex/paginated_history"
+        folder.mkdir(parents=True)
+        item = PaginatedItem(
+            thread_id, "turn-1", "item-1", 1, 100, "userMessage",
+            json.dumps({"id": "item-1", "type": "userMessage",
+                        "content": [{"type": "text", "text": "Saved Clerk setup"}]}))
+        (folder / (thread_id + ".jsonl")).write_bytes(encoded_item(item))
+        with self.helper._browse_data_lock:
+            self.helper._browse_home = browse
+            self.helper._browse_catalog = [{
+                "collection": "paginated", "path": thread_id + ".jsonl",
+                "thread_id": thread_id, "titles": ["Old setup title"],
+            }]
+        code, results = self.request("/api/vault/search?q=clerk&source=backup")
+        self.assertEqual(code, 200)
+        self.assertEqual(results["results"][0]["collection"], "paginated")
+        transcript = quote(thread_id + ".jsonl")
+        path = ("/api/vault/thread?collection=paginated&transcript=" + transcript
+                + "&source=backup&cursor=0&match=Clerk")
+        code, page = self.request(path)
+        self.assertEqual(code, 200)
+        self.assertEqual(page["entries"][0]["text"], "Saved Clerk setup")
+        self.assertEqual(self.request(path.replace("source=backup", "source=local"))[0], 400)
+        code, grant = self.request("/api/vault/export-ticket", {
+            "collection": "paginated", "transcript": thread_id + ".jsonl",
+            "source": "backup",
+        })
+        self.assertEqual(code, 200)
+        code, exported = self.request(grant["url"], authorized=False)
+        self.assertEqual(code, 200)
+        self.assertIn("Saved Clerk setup", exported)
+        self.assertIn("saved paginated source", exported)
+        self.assertEqual(self.request("/api/vault/export-ticket", {
+            "collection": "paginated", "transcript": thread_id + ".jsonl",
+            "source": "local",
+        })[0], 400)
+
+    def test_opened_fork_exports_when_ancestor_has_no_saved_database_rows(self):
+        parent_id = "11111111-1111-4111-8111-111111111111"
+        child_id = "22222222-2222-4222-8222-222222222222"
+        browse = self.home / "browse"
+        archived = browse / ".codex/archived_sessions"
+        active = browse / ".codex/sessions"
+        saved = browse / ".codex/paginated_history"
+        for folder in (archived, active, saved):
+            folder.mkdir(parents=True)
+
+        def record(ordinal, kind, payload):
+            return json.dumps({"ordinal": ordinal, "type": kind,
+                               "payload": payload}) + "\n"
+
+        prefix = (record(0, "session_meta", {"id": parent_id})
+                  + record(1, "event_msg", {"event": "parent metadata"}))
+        (archived / ("rollout-" + parent_id + ".jsonl")).write_text(prefix)
+        (active / ("rollout-" + child_id + ".jsonl")).write_text(
+            record(2, "session_meta", {"id": child_id, "history_base": {
+                "thread_id": parent_id, "end_ordinal_exclusive": 2,
+                "end_byte_offset": len(prefix.encode("utf-8")),
+            }}) + record(3, "event_msg", {"event": "child metadata"}))
+        item = PaginatedItem(child_id, "turn-1", "item-1", 3, 100,
+                             "userMessage", json.dumps({
+                                 "id": "item-1", "type": "userMessage",
+                                 "text": "Saved child-only result"}))
+        (saved / (child_id + ".jsonl")).write_bytes(encoded_item(item))
+        with self.helper._browse_data_lock:
+            self.helper._browse_home = browse
+            self.helper._browse_catalog = [{
+                "collection": "paginated", "path": child_id + ".jsonl",
+                "thread_id": child_id, "titles": [],
+            }]
+        code, results = self.request("/api/vault/search?q=child-only&source=backup")
+        self.assertEqual(code, 200)
+        self.assertEqual([(match["collection"], match["transcript"])
+                          for match in results["results"] if match["collection"] == "paginated"],
+                         [("paginated", child_id + ".jsonl")])
+        code, page = self.request(
+            "/api/vault/thread?collection=paginated&transcript="
+            + quote(child_id + ".jsonl") + "&source=backup&cursor=0")
+        self.assertEqual(code, 200)
+        self.assertEqual(page["entries"][0]["text"], "Saved child-only result")
+        code, grant = self.request("/api/vault/export-ticket", {
+            "collection": "paginated", "transcript": child_id + ".jsonl",
+            "source": "backup",
+        })
+        self.assertEqual(code, 200)
+        code, exported = self.request(grant["url"], authorized=False)
+        self.assertEqual(code, 200)
+        self.assertIn("Saved child-only result", exported)
+
+    def test_live_paginated_history_search_and_open_without_a_backup(self):
+        thread_id = "55555555-5555-4555-8555-555555555555"
+        codex = self.home / ".codex"
+        codex.mkdir()
+        database = codex / "thread_history_1.sqlite"
+        with sqlite3.connect(database) as connection:
+            connection.execute("CREATE TABLE thread_items (thread_id TEXT, turn_id TEXT, "
+                               "item_id TEXT, rollout_ordinal INTEGER, created_at_ms INTEGER, "
+                               "item_json TEXT, item_type TEXT, updated_at_ordinal INTEGER)")
+            connection.execute("CREATE TABLE thread_history_projection_state ("
+                               "thread_id TEXT, next_rollout_byte_offset INTEGER, "
+                               "next_rollout_ordinal INTEGER)")
+            for ordinal, body in ((1, "Earlier synthetic work"),
+                                  (2, "Configure Clerk for the fixture")):
+                connection.execute("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                   (thread_id, "turn-1", "item-%d" % ordinal, ordinal,
+                                    100 + ordinal,
+                                    json.dumps({"id": "item-%d" % ordinal,
+                                                "type": "userMessage", "text": body}),
+                                    "userMessage", ordinal))
+        original = database.read_bytes()
+        code, summary = self.request("/api/vault/summary")
+        self.assertEqual(code, 200)
+        self.assertTrue(summary["paginated_database_present"])
+        self.assertEqual(summary["paginated_threads"], 1)
+        self.assertGreaterEqual(summary["paginated_database_bytes"], len(original))
+        code, results = self.request("/api/vault/search?q=clerk")
+        self.assertEqual(code, 200)
+        self.assertEqual(len(results["results"]), 1)
+        match = results["results"][0]
+        self.assertEqual(match["collection"], "paginated")
+        self.assertEqual(match["cursor"], 1)
+        transcript = quote(thread_id + ".jsonl")
+        path = ("/api/vault/thread?collection=paginated&transcript=" + transcript
+                + "&source=local&cursor=1&match=clerk")
+        code, page = self.request(path)
+        self.assertEqual(code, 200)
+        self.assertEqual([entry["text"] for entry in page["entries"]],
+                         ["Configure Clerk for the fixture"])
+        self.assertEqual(self.request(path.replace("match=clerk", "match=missing"))[0], 400)
+        self.assertEqual(self.request(path.replace(thread_id, "66666666-6666-4666-8666-666666666666"))[0], 400)
+        code, grant = self.request("/api/vault/export-ticket", {
+            "collection": "paginated", "transcript": thread_id + ".jsonl",
+            "source": "local",
+        })
+        self.assertEqual(code, 200)
+        code, exported = self.request(grant["url"], authorized=False)
+        self.assertEqual(code, 200)
+        self.assertIn("Configure Clerk for the fixture", exported)
+        self.assertIn("live Codex paginated source", exported)
+        self.assertEqual(database.read_bytes(), original)
+        code, grant = self.request("/api/vault/export-ticket", {
+            "collection": "paginated", "transcript": thread_id + ".jsonl",
+            "source": "local",
+        })
+        self.assertEqual(code, 200)
+        with sqlite3.connect(database) as connection:
+            connection.execute("UPDATE thread_items SET item_json=? WHERE item_id='item-2'",
+                               (json.dumps({"id": "item-2", "type": "userMessage",
+                                            "text": "Changed after ticket"}),))
+        code, body = self.request(grant["url"], authorized=False)
+        self.assertEqual(code, 409)
+        self.assertNotIn("Changed after ticket", body)
+
+    def test_export_ticket_refuses_thread_changed_before_download(self):
+        transcript = self.home / ".codex/sessions/2026/09/changing.jsonl"
+        transcript.parent.mkdir(parents=True)
+        transcript.write_text(json.dumps({"payload": {"text": "original"}}) + "\n")
+        code, grant = self.request("/api/vault/export-ticket", {
+            "collection": "active", "transcript": "2026/09/changing.jsonl",
+            "source": "local",
+        })
+        self.assertEqual(code, 200)
+        with transcript.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps({"payload": {"text": "new work"}}) + "\n")
+        code, body = self.request(grant["url"], authorized=False)
+        self.assertEqual(code, 409)
+        self.assertNotIn("original", body)
+        self.assertNotIn("new work", body)
+        self.assertEqual(self.request(grant["url"], authorized=False)[0], 409)
+
+    def test_export_ticket_refuses_thread_changed_while_counting(self):
+        transcript = self.home / ".codex/sessions/changing.jsonl"
+        transcript.parent.mkdir(parents=True)
+        transcript.write_text(json.dumps({"payload": {"text": "original"}}) + "\n")
+
+        def changed_during_count(*args):
+            yield b"first pass"
+            with transcript.open("a", encoding="utf-8") as stream:
+                stream.write(json.dumps({"payload": {"text": "new work"}}) + "\n")
+
+        with patch("codex_migrate.setup.markdown_chunks", side_effect=changed_during_count):
+            code, body = self.request("/api/vault/export-ticket", {
+                "collection": "active", "transcript": "changing.jsonl", "source": "local",
+            })
+        self.assertEqual(code, 400)
+        self.assertNotIn("original", body)
+        self.assertNotIn("new work", body)
+
+    @unittest.skipUnless(search_index_supported(), "requires SQLite FTS5 contentless-delete")
+    def test_fast_search_requires_confirmation_and_can_be_deleted_without_source_changes(self):
+        transcript = self.home / ".codex/sessions/thread.jsonl"
+        transcript.parent.mkdir(parents=True)
+        transcript.write_text(json.dumps({"payload": {"message": {"content": "Clerk setup"}}})
+                              + "\n", encoding="utf-8")
+        self.assertFalse(self.request("/api/vault/search-index-status")[1]["present"])
+        self.assertEqual(self.request("/api/vault/search-index", {})[0], 400)
+        self.assertEqual(self.request("/api/vault/search-index", {"apply": False})[0], 400)
+        self.assertEqual(self.request("/api/vault/search-index-remove", {})[0], 400)
+        self.assertEqual(self.request("/api/vault/search-index", {"apply": True})[0], 202)
+        self.helper._search_index_thread.join(timeout=3)
+        status = self.request("/api/vault/search-index-status")[1]
+        self.assertEqual(status["status"], "ready")
+        self.assertTrue(status["present"])
+        self.assertEqual(self.request("/api/vault/search?q=clerk")[1]["results"][0]["transcript"],
+                         "thread.jsonl")
+        code, removed = self.request("/api/vault/search-index-remove", {"apply": True})
+        self.assertEqual(code, 200)
+        self.assertTrue(removed["removed"])
+        self.assertTrue(transcript.exists())
+        self.assertEqual(self.request("/api/vault/search?q=clerk")[1]["results"][0]["transcript"],
+                         "thread.jsonl")
+
+    @unittest.skipUnless(search_index_supported(), "requires SQLite FTS5 contentless-delete")
+    def test_fast_search_can_stop_and_prevents_quit_while_writing_cache(self):
+        entered = threading.Event()
+
+        def until_stopped(_home, *, apply, progress, cancelled):
+            entered.set()
+            cancelled.wait(3)
+            raise IndexCancelled()
+
+        with patch("codex_migrate.setup.build_vault_search_index", side_effect=until_stopped):
+            self.assertEqual(self.request("/api/vault/search-index", {"apply": True})[0], 202)
+            self.assertTrue(entered.wait(1))
+            self.assertEqual(self.request("/api/shutdown", {})[0], 409)
+            self.assertEqual(self.request("/api/vault/search-index-remove", {"apply": True})[0], 400)
+            self.assertEqual(self.request("/api/vault/search-index-stop", {"apply": True})[0], 200)
+            self.helper._search_index_thread.join(timeout=3)
+        self.assertEqual(self.request("/api/vault/search-index-status")[1]["status"], "stopped")
+
+    def test_fast_search_unavailable_is_not_an_error_for_normal_search(self):
+        transcript = self.home / ".codex/sessions/thread.jsonl"
+        transcript.parent.mkdir(parents=True)
+        transcript.write_text(json.dumps({"message": {"content": "Clerk note"}}) + "\n")
+        with patch("codex_migrate.setup.vault_search_index_supported", return_value=False):
+            self.assertFalse(self.request("/api/vault/search-index-status")[1]["available"])
+            code, error = self.request("/api/vault/search-index", {"apply": True})
+            self.assertEqual(code, 400)
+            self.assertIn("unavailable", error["error"])
+        self.assertEqual(len(self.request("/api/vault/search?q=Clerk")[1]["results"]), 1)
 
     def test_vault_backup_can_be_opened_searched_and_selected_thread_installed(self):
         (self.home / ".codex").mkdir()
@@ -447,13 +828,25 @@ class SetupTests(unittest.TestCase):
             created_at="2026-09-18T06:00:00+00:00", latest=True,
         )
         with patch("codex_migrate.setup.list_vault_snapshots",
-                   return_value=[snapshot]) as listed:
+                   return_value=[snapshot]) as listed, patch(
+                       "codex_migrate.setup.vault_storage_usage",
+                       return_value={"storage_bytes": 8192, "storage_files": 4}) as usage:
             code, body = self.request(
                 "/api/vault/snapshots?vault=" + vault)
         self.assertEqual(code, 200)
-        self.assertEqual(body, {"snapshots": [snapshot.as_dict()]})
+        self.assertEqual(body, {"snapshots": [snapshot.as_dict()],
+                                "storage_bytes": 8192, "storage_files": 4})
         listed.assert_called_once_with(vault, limit=1000)
+        usage.assert_called_once_with(vault)
         self.assertNotIn("content", json.dumps(body).lower())
+
+        with patch("codex_migrate.setup.list_vault_snapshots", return_value=[snapshot]), patch(
+                "codex_migrate.setup.vault_storage_usage",
+                side_effect=MigrationError("Storage size cannot be measured")):
+            code, body = self.request("/api/vault/snapshots?vault=" + vault)
+        self.assertEqual(code, 200)
+        self.assertEqual(body["snapshots"], [snapshot.as_dict()])
+        self.assertIsNone(body["storage_bytes"])
 
     def test_vault_backup_waits_for_active_restore(self):
         vault = str(self.home / "vault")
@@ -716,6 +1109,111 @@ class SetupTests(unittest.TestCase):
                          & {item["transcript"] for item in second["results"]})
         self.assertEqual(self.request("/api/vault/search?q=clerk&offset=-1")[0], 400)
 
+    def test_ambiguous_paginated_thread_does_not_hide_other_search_results(self):
+        codex = self.home / ".codex"
+        active = codex / "sessions"
+        archived = codex / "archived_sessions"
+        active.mkdir(parents=True)
+        archived.mkdir()
+        ambiguous = "11111111-1111-4111-8111-111111111111"
+        searchable = "22222222-2222-4222-8222-222222222222"
+        for folder in (active, archived):
+            (folder / ("rollout-" + ambiguous + ".jsonl")).write_text(
+                json.dumps({"type": "session_meta", "payload": {
+                    "id": ambiguous, "source": folder.name}}) + "\n",
+                encoding="utf-8")
+        with sqlite3.connect(codex / "thread_history_1.sqlite") as database:
+            database.execute("CREATE TABLE thread_items (thread_id TEXT, turn_id TEXT, "
+                             "item_id TEXT, rollout_ordinal INTEGER, created_at_ms INTEGER, "
+                             "item_json TEXT, item_type TEXT, updated_at_ordinal INTEGER)")
+            database.execute("CREATE TABLE thread_history_projection_state ("
+                             "thread_id TEXT, next_rollout_byte_offset INTEGER, "
+                             "next_rollout_ordinal INTEGER)")
+            for thread_id, text, timestamp in (
+                    (ambiguous, "Ambiguous history", 200),
+                    (searchable, "Recoverable history needle", 100)):
+                database.execute("INSERT INTO thread_items VALUES (?,?,?,?,?,?,?,?)", (
+                    thread_id, "turn-1", "item-1", 1, timestamp,
+                    json.dumps({"id": "item-1", "type": "userMessage", "text": text}),
+                    "userMessage", 1))
+        code, result = self.request("/api/vault/search?q=needle")
+        self.assertEqual(code, 200)
+        self.assertEqual([(item["collection"], item["transcript"])
+                          for item in result["results"]],
+                         [("paginated", searchable + ".jsonl")])
+        self.assertTrue(result["partial_results"])
+        self.assertFalse(result["has_more"])
+        with self.assertRaisesRegex(MigrationError, "ambiguous"):
+            read_thread(str(self.home), "paginated", ambiguous + ".jsonl",
+                        live_paginated=True)
+
+    def test_ambiguous_fork_opens_and_exports_only_labeled_physical_copy(self):
+        codex = self.home / ".codex"
+        active = codex / "sessions"
+        archived = codex / "archived_sessions"
+        active.mkdir(parents=True)
+        archived.mkdir()
+        parent_id = "11111111-1111-4111-8111-111111111111"
+        child_id = "22222222-2222-4222-8222-222222222222"
+        for folder in (active, archived):
+            (folder / ("rollout-" + parent_id + ".jsonl")).write_text(
+                json.dumps({"type": "session_meta", "payload": {"id": parent_id}}) + "\n")
+        child_name = "rollout-" + child_id + ".jsonl"
+        (active / child_name).write_text(
+            json.dumps({"type": "session_meta", "payload": {
+                "id": child_id, "history_base": {"thread_id": parent_id,
+                    "end_ordinal_exclusive": 0, "end_byte_offset": 0}}}) + "\n"
+            + json.dumps({"payload": {"message": {
+                "content": "physical-only buyer needle"}}}) + "\n")
+        code, result = self.request("/api/vault/search?q=buyer%20needle")
+        self.assertEqual(code, 200)
+        self.assertEqual(len(result["results"]), 1)
+        match = result["results"][0]
+        self.assertTrue(match["physical_only"])
+        self.assertEqual(result["partial_reasons"], ["ambiguous_lineage"])
+        path = "/api/vault/thread?collection=active&transcript=" + child_name
+        self.assertEqual(self.request(path)[0], 400)
+        code, page = self.request(path + "&physical=1&cursor=%d&match=buyer%%20needle" % match["cursor"])
+        self.assertEqual(code, 200)
+        self.assertTrue(page["physical_only"])
+        self.assertEqual([entry["text"] for entry in page["entries"]],
+                         ["physical-only buyer needle"])
+        self.assertEqual(self.request(path + "&physical=0")[0], 400)
+        code, grant = self.request("/api/vault/export-ticket", {
+            "collection": "active", "transcript": child_name,
+            "source": "local", "physical_only": True,
+        })
+        self.assertEqual(code, 200)
+        code, exported = self.request(grant["url"])
+        self.assertEqual(code, 200)
+        self.assertIn("INCOMPLETE Codex physical file", exported)
+        self.assertIn("physical-only buyer needle", exported)
+        self.assertNotIn("parent-only", exported)
+        browse = self.home / "opened-copy"
+        for folder in ("sessions", "archived_sessions"):
+            (browse / ".codex" / folder).mkdir(parents=True)
+        for folder, filename in ((active, child_name),
+                                 (active, "rollout-" + parent_id + ".jsonl"),
+                                 (archived, "rollout-" + parent_id + ".jsonl")):
+            target = browse / ".codex" / folder.name / filename
+            target.write_bytes((folder / filename).read_bytes())
+        with self.helper._browse_data_lock:
+            self.helper._browse_home = browse
+            self.helper._browse_catalog = []
+        code, saved = self.request("/api/vault/search?q=buyer%20needle&source=backup")
+        self.assertEqual(code, 200)
+        self.assertTrue(saved["results"][0]["physical_only"])
+        code, page = self.request(path + "&source=backup&physical=1")
+        self.assertEqual(code, 200)
+        self.assertTrue(page["physical_only"])
+        code, grant = self.request("/api/vault/export-ticket", {
+            "collection": "active", "transcript": child_name,
+            "source": "backup", "physical_only": True,
+        })
+        self.assertEqual(code, 200)
+        self.assertIn("INCOMPLETE Codex physical file",
+                      self.request(grant["url"])[1])
+
     def test_vault_search_local_titles_does_not_require_matching_content(self):
         codex = self.home / ".codex"
         folder = codex / "sessions"
@@ -743,6 +1241,44 @@ class SetupTests(unittest.TestCase):
         path = "/api/vault/thread?collection=active&transcript=../auth.json"
         self.assertEqual(self.request(path)[0], 400)
         self.assertEqual(self.request("/api/vault/summary", extra_headers={"Origin": "https://example.com"})[0], 403)
+
+    def test_damaged_transcript_discovery_and_preview_require_token_and_do_not_write(self):
+        path = self.home / ".codex/sessions/damaged.jsonl"
+        path.parent.mkdir(parents=True)
+        original = (json.dumps({"payload": {"message": {"content": "Surviving text"}}})
+                    + "\n").encode() + b"\x00bad\n"
+        path.write_bytes(original)
+        candidates = "/api/vault/salvage-candidates?q=damaged"
+        preview = "/api/vault/salvage-preview?collection=active&transcript=damaged.jsonl"
+        export = "/api/vault/salvage-export?collection=active&transcript=damaged.jsonl"
+        self.assertEqual(self.request(candidates, authorized=False)[0], 403)
+        self.assertEqual(self.request(preview, authorized=False)[0], 403)
+        self.assertEqual(self.request(export, authorized=False)[0], 403)
+        search_code, search_result = self.request("/api/vault/search?q=Nowhere")
+        self.assertEqual(search_code, 200)
+        self.assertEqual(search_result["results"], [])
+        self.assertEqual(search_result["partial_reasons"], ["damaged_transcript"])
+        self.assertIn('$("salvage-controls").open=true', VAULT_HTML)
+        self.assertIn("Inspect a physical conversation file", VAULT_HTML)
+        self.assertIn("inherited text was not searched", VAULT_HTML)
+        self.assertIn("excludes inherited fork history", VAULT_HTML)
+        self.assertIn("overwritten bytes cannot be recovered", VAULT_HTML)
+        self.assertEqual(self.request(candidates)[1]["results"][0]["transcript"],
+                         "damaged.jsonl")
+        code, result = self.request(preview)
+        self.assertEqual(code, 200)
+        self.assertEqual(result["entries"][0]["text"], "Surviving text")
+        self.assertEqual(result["skipped_records"], 1)
+        self.assertTrue(result["physical_file_only"])
+        code, markdown = self.request(export)
+        self.assertEqual(code, 200)
+        self.assertIn("# INCOMPLETE Codex transcript salvage", markdown)
+        self.assertIn("Skipped records: 1", markdown)
+        self.assertIn("Surviving text", markdown)
+        self.assertEqual(path.read_bytes(), original)
+        self.assertEqual(self.request(
+            "/api/vault/salvage-preview?collection=active&transcript=../auth.json")[0], 400)
+        self.assertEqual(self.request("/api/vault/salvage-candidates?q=" + "x" * 201)[0], 400)
 
     def test_private_setup_and_picker_require_token(self):
         for path, data in (("/api/setup", None), ("/api/setup", self.config()),
@@ -858,6 +1394,7 @@ class SetupTests(unittest.TestCase):
 
     def test_browser_shutdown_requires_local_token_and_stops_idle_server(self):
         self.assertEqual(self.request("/api/shutdown", {}, authorized=False)[0], 403)
+        self.assertEqual(self.request("/api/update-shutdown", {}, authorized=False)[0], 403)
         self.assertEqual(self.request("/api/shutdown", {}, extra_headers={"Origin": "https://example.com"})[0], 403)
         self.assertFalse(self.helper._closing)
         self.assertEqual(self.request("/api/shutdown", {})[0], 200)
@@ -879,15 +1416,35 @@ class SetupTests(unittest.TestCase):
         self.assertFalse(self.helper._closing)
 
     def test_scheduled_vault_backup_blocks_update_and_quit(self):
+        update_headers = {"X-Codex-Migrate-Target-Build": "17"}
         with patch("codex_migrate.setup.vault_schedule_status", return_value={
             "enabled": True, "last_run": {"status": "running"}}):
             self.assertEqual(self.request("/api/update-idle"), (409, {"idle": False}))
             self.assertEqual(self.request("/api/shutdown", {})[0], 409)
+            self.assertEqual(self.request("/api/update-shutdown", {}, extra_headers=update_headers)[0], 409)
         with patch("codex_migrate.setup.vault_schedule_status", side_effect=MigrationError("unsafe")):
             self.assertEqual(self.request("/api/update-idle"), (409, {"idle": False}))
             self.assertEqual(self.request("/api/shutdown", {})[0], 409)
         self.assertFalse(self.helper._closing)
         self.assertEqual(self.request("/api/update-idle"), (200, {"idle": True}))
+
+    def test_scheduled_backup_starting_after_idle_probe_cancels_update_quit(self):
+        # The updater probes first, then requests shutdown. The second check
+        # must catch a LaunchAgent backup that started between those requests.
+        schedule = {"enabled": True, "last_run": {"status": "completed"}}
+        update_headers = {"X-Codex-Migrate-Target-Build": "17"}
+        with patch("codex_migrate.setup.vault_schedule_status", side_effect=lambda _: schedule):
+            self.assertEqual(self.request("/api/update-idle"), (200, {"idle": True}))
+            schedule["last_run"] = {"status": "running"}
+            self.assertEqual(self.request("/api/update-shutdown", {}, extra_headers=update_headers)[0], 409)
+            self.assertFalse(self.helper._closing)
+            schedule["last_run"] = {"status": "completed"}
+            self.assertEqual(self.request("/api/update-shutdown", {})[0], 409)
+            self.assertEqual(self.request("/api/update-shutdown", {}, extra_headers=update_headers)[0], 200)
+        guard = self.home / "Library/Application Support/Codex Vault/update.json"
+        self.assertTrue(guard.exists())
+        self.thread.join(timeout=2)
+        self.assertFalse(self.thread.is_alive())
 
     def test_browser_shutdown_cannot_interrupt_running_paused_or_worker(self):
         self.helper.configure(self.config())
