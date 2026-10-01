@@ -1,5 +1,64 @@
 # Desktop release readiness
 
+## September 30 hosted recovery progress and Stop/Resume — accepted internally
+
+Runtime/test source `8359f19d7a34d8391df64c8e8c4f5413042d3d35` is pushed to
+`origin/codex/hosted-vault-service` in draft PR #48. The acceptance-gated
+recovery wizard now shows encrypted bytes read and receipt-checked file
+counts, distinctly from final whole-snapshot verification. A full progress
+bar does not mean recovery is complete. Download can be stopped cooperatively
+and retried against the same selected version and folder.
+
+Stop checks run before folder creation, between hosted planning requests and
+inventory pages, between network reads and reused-file checksum reads, and
+before final publication. HTTP reads use available-byte reads where supported,
+not a mandatory megabyte fill. Completed checksum-verified files are retained;
+owned partial `.cvdownload` files are removed. Retry rechecks reused bytes and
+never overwrites existing final files. The private interruption marker remains
+until the native helper authenticates the whole snapshot and `latest.json` is
+published. A Stop arriving after that commit boundary may lose to successful
+completion; the UI reports actual completion, not a fictional partial state.
+
+Cancellation does not kill native integrity checks or release the existing
+worker's operation exclusion early. The UI truthfully says Stop can wait for
+the current network request or native integrity check. The authenticated,
+origin-guarded Stop endpoint signals the same worker; backups, installs,
+updates and quit stay excluded until it exits. No live Codex history is changed.
+Progress exposes stages and counts, not object keys, hashes or credentials.
+
+Verification: 124 preparation/flow/disaster-recovery/setup tests passed;
+205 hosted tests passed; all 15 Node dashboard tests passed. These overlap and
+are not additive. The native CryptoKit plus synthetic loopback hosted-service
+test additionally stopped during an encrypted chunk, retained no published
+latest or partial temp file, resumed the selected older snapshot and decrypted
+the original conversation byte-for-byte. That test uses a disposable helper
+with test-only legacy Keychain mode; it is not clean-Mac or real-R2 proof.
+
+Independent reviewer `/root/public_release_review` accepted the safety diff
+and 1280px/320px rendered states. A stopped-but-still-verifying copy bug was
+fixed, regression-tested and independently re-rendered. Panel text remains
+16px, Stop is approximately 49px high, no horizontal overflow was observed,
+and keyboard focus moves to visible status/Resume without stealing outside
+focus. The preview used only synthetic provider/native mocks.
+
+The exact clean-source Developer ID signed/provisioned build-20 candidate is
+`build/desktop-pg387ot3/Codex Migrate.app`; strict deep signature verification
+passed. Its local-test archive SHA-256 is
+`c936e2910271f92495ff8d17c696f4c0003b70cc9786b616895da1da0fb8ca68`.
+All 11 exact-package compression/corruption/attachment/search/interruption,
+LaunchAgent/paginated, legacy-key and updater/restore-contention checks passed.
+Three verified-key-import tests passed against its provisioned native helper.
+Its engine HTTP smoke test passed with hosted recovery dark and acceptance-
+enabled. The package is **not notarized, distributed or customer-certified**.
+
+The prior VM image pull exited with network failure, rather than merely
+timing out during observation. A cache-reusing retry of the same image is live
+and has reached 55%; the VM has not booted. Remaining release gates are clean-
+Mac exact-package key import/read/export recovery, real hosted enrollment and
+upload/download/recovery, pricing/billing acceptance, and final reviewed
+notarized distribution. Public build 16 and checkout are unchanged. No real
+customer content was uploaded and no hosted subscription was enabled.
+
 ## September 30 guided hosted recovery — internal acceptance, release held
 
 Clean runtime source `85008ebfe39e9ead479e24669986f01c17b1e502` is pushed to
