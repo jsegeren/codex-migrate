@@ -1,5 +1,44 @@
 # Desktop release readiness
 
+## September 30 hosted provisioning — database gap verified
+
+Source `ea9eed4d9335bc4c6ce9e5717c72228ca431f56d` is pushed to draft PR #48.
+The new operator preflight runs only on this project's sandbox Preview with
+checkout closed. Ordinary builds skip without opening a provider. It reads only
+the environment identity, bounded migration receipts and required-table presence;
+it never reads customer rows or prints credentials, hashes or provider errors.
+Independent reviewer `/root/public_release_review` accepted the implementation
+and count-only diagnostic refinement; all 19 focused tests passed. The first
+revision also passed the full Node suite (598 passed, one skipped).
+
+Actual Vercel deployment `dpl_JDJVtKJ8mLN9kHAzFbPAcw6ZyMSx` reached the pinned
+sandbox database and passed its environment identity check. The ledger exists,
+but **zero of this branch's 42 hosted migration receipts match**. The opt-in
+build correctly failed at `migration-receipts`; this is not a runtime regression
+or proof that hosted tables are absent. Before applying migrations, inspect the
+existing hosted schema and refuse a blind replay over partial/untracked state.
+Neither diagnostic Preview changed schema, sent mail, created a payment or
+uploaded customer data. Hosted runtime and Preview checkout were explicitly
+closed. Production, public build 16 and the paid catalog are unchanged.
+
+The prior Stop/shutdown test fix at `610fa539fa6d6da4f1eb7c5be6296a1aa1cc16e5`
+passed all 78 setup tests, 30 repeated targeted runs, independent review and
+whole CI run `36814863816`. The exact runtime-8359 package additionally passed
+the self-contained PyInstaller recovery driver with developer tools excluded
+from PATH. Embedded driver libraries were signed with the same Developer ID;
+library validation was not weakened. Driver SHA-256 is
+`c1e2ec686992057ab105c979d5388c45950782a57e92eaca2f18abfbdf6641a9`.
+This remains same-host evidence, not an independent receiver receipt.
+
+The interrupted VM clone's tool handle was missing and process inventory
+confirmed no clone was running. A cached retry is now live; it has not booted.
+Its prepared read-only share contains only the exact app, self-contained driver
+and disposable synthetic encrypted fixture. No real home or credential is shared.
+Remaining gates are independent receiver recovery, authenticated hosted service
+publication/recovery, scheduled off-device protection, pricing/billing acceptance
+and final reviewed notarized distribution. Provisioning evidence does not close
+those functional gates.
+
 ## September 30 packaged recovery drill — independently reviewed preparation
 
 The disposable packaged drill now binds its version-2 artifact to the exact
