@@ -4,6 +4,7 @@ ops/*
 !ops/commerce-preflight.js
 !ops/commerce-sandbox-invite.js
 !ops/hosted-preflight.js
+!ops/hosted-sandbox-bootstrap.js
 .env*
 .venv/
 .git/
