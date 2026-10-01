@@ -23,14 +23,35 @@ before fetching conversation chunks. Neither a missing/wrong key nor a
 malformed native confirmation can trigger the bulk download or mark recovery
 complete. The original source authentication
 sentinel remained unchanged. This is source plus signed-helper evidence using
-an in-memory object store, not real-R2 or clean-Mac acceptance. The signed
-engine below predates this addition and will need rebuilding. Customer UI
+an in-memory object store, not real-R2 or clean-Mac acceptance. Customer UI
 guidance and real service enrollment remain incomplete; no public hosted route
 or billing was enabled.
 
 The broader native-backup and hosted recovery/schedule/client regression run
 completed with 160 tests, one intentional skip, and no failures. It used the
 signed native helper with disposable fixtures, not customers' Codex state.
+
+The clean committed source `32eed56e069b199e9299dd9ef7f4769f2358071e`
+was rebuilt into `build/desktop-uzoby1dn/Codex Migrate.app`. Its build-info
+records that exact revision and `source_dirty: false`. Strict deep signature
+verification passed. Its local-only archive SHA-256 is
+`42d58ad2a17188f60ef6b818b52f558c28e0b3668d9a33fce9472e2a7754e84a`.
+This is Developer ID signed but **not notarized or distributed**. All eleven
+packaged compression/history/LaunchAgent, interruption, and updater/restore
+contention checks passed on this exact package. A fresh packaged producer and
+receiver also passed byte-exact synthetic restoration and attachment search,
+removing both disposable Keychain keys. That last drill was on one host, not
+an independent Mac. The exact package and synthetic bundle are staged under
+`/tmp/codex-backup-packaged-drill.jkKk6a` for the clean VM; only disposable
+fixture data is shared, never the Founder's home or credentials.
+
+CI run [36794649072](https://github.com/jsegeren/codex-migrate/actions/runs/36794649072)
+passed its separate-runner hosted and local Vault portability pairs, business
+portability pair, and disposable PostgreSQL checks. Both full Python matrix
+jobs were still running at this checkpoint. The source portability pairs do
+not establish a signed customer-app clean-Mac or live-R2 service proof. The
+Tart clone remains live with transient network retries; 32% observed, no
+replacement clone started. Clean-VM acceptance remains pending.
 
 ## September 30 unattended loss-evidence gate — source only
 
