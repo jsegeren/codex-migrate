@@ -2,9 +2,9 @@
 
 Persist the Keychain device reference before claiming a purchase. A lost reply
 must resolve that same device; purchase links and email proofs stay in memory.
-Recovery-key preparation is explicit and account-bound. A separate backup
-step uses existing server-authorized storage; setup never creates a trial,
-subscription or schedule, or grants upload authorization.
+Recovery-key preparation is explicit and account-bound. Separate backup and
+schedule steps use existing server-authorized storage; setup never creates a
+trial/subscription or grants upload authorization.
 """
 
 from __future__ import annotations
@@ -21,8 +21,11 @@ from codex_migrate.vault_hosted_enrollment_client import (
 from codex_migrate.vault_hosted_recovery_flow import purchase_token
 from codex_migrate.vault_hosted_key_setup import HostedKeySetup
 from codex_migrate.vault_hosted_manual import back_up_hosted_history
-from codex_migrate.vault_hosted_schedule import SERVICE_ORIGIN
-from codex_migrate.vault_schedule import _timestamp
+from codex_migrate.vault_hosted_connection import active_binding
+from codex_migrate.vault_hosted_schedule import (
+    SERVICE_ORIGIN, hosted_schedule_status, install_hosted_schedule, remove_hosted_schedule,
+)
+from codex_migrate.vault_schedule import _timestamp, _update_lock, _pending_update, _safe_json
 
 
 def _backup_receipt(value):
@@ -86,6 +89,16 @@ class HostedSetupFlow:
             if self._last_backup is not None:
                 result["last_backup"] = copy.deepcopy(self._last_backup["receipt"])
                 result["last_backup_checked_at"] = self._last_backup["checked_at"]
+                if self.source_home is not None:
+                    try:
+                        anchor = self._keys.confirmed_binding(self._binding)
+                        if anchor is None:
+                            raise MigrationError("The saved recovery key is not confirmed.")
+                        result["background"] = hosted_schedule_status(self.source_home,
+                            expected_binding=anchor)
+                    except Exception:
+                        result["background"] = {"enabled": False, "healthy": False,
+                            "error": "Background backup status could not be confirmed. Contact Joshua."}
             if (result["phase"] == "key_save" and result["status"] != "running"
                     and self._recovery_key is not None):
                 result["recovery_key"] = self._recovery_key
@@ -99,14 +112,16 @@ class HostedSetupFlow:
         fields = {"send_code": {"purchase_link"}, "pair": {"code"},
                   "retry_save": set(), "resolve": set(), "reauthorize": set(),
                   "prepare_key": set(), "confirm_key": {"recovery_key"},
-                  "first_backup": set()}
+                  "first_backup": set(), "enable_schedule": set(), "disable_schedule": set()}
         phases = {"send_code": {"start", "email"}, "pair": {"email"},
                   "retry_save": {"pairing_checkpoint"},
                   "resolve": {"pairing_uncertain", "paired", "key_ready", "backup_ready"},
                   "reauthorize": {"pairing_uncertain"},
                   "prepare_key": {"paired", "key_save"},
                   "confirm_key": {"key_save"},
-                  "first_backup": {"key_ready", "backup_ready"}}
+                  "first_backup": {"key_ready", "backup_ready"},
+                  "enable_schedule": {"backup_ready"},
+                  "disable_schedule": {"backup_ready", "pairing_uncertain"}}
         with self._lock:
             if (action not in fields or not isinstance(payload, dict) or
                     set(payload) != fields[action] | {"apply"} or
@@ -115,6 +130,11 @@ class HostedSetupFlow:
             if (self._public["status"] == "running" or
                     self._public["phase"] not in phases[action]):
                 raise MigrationError("Finish the current backup setup step first.")
+            if action == "enable_schedule" and (
+                    self._last_backup is None or
+                    self._last_backup["receipt"]["source_coverage"] != "complete" or
+                    self._last_backup["receipt"]["at_risk_threads"] != 0):
+                raise MigrationError("Review incomplete backup coverage before enabling automatic backups.")
             values = {name: payload[name] for name in fields[action]}
             if action == "send_code":
                 values["purchase_link"] = purchase_token(values["purchase_link"])
@@ -138,8 +158,11 @@ class HostedSetupFlow:
                     "retry with this same connection and key. Previously verified snapshots "
                     "are kept. Automatic protection is not active; contact "
                     "joshua@segeren.com if needed." if action == "first_backup" else
-                    "Backup setup could not be confirmed. No backup or subscription "
-                    "was started. Check setup status before continuing, "
+                    "The schedule change could not be confirmed. Check background status "
+                    "before retrying. Existing backups are kept; contact joshua@segeren.com."
+                    if action in ("enable_schedule", "disable_schedule") else
+                    "Backup setup could not be confirmed. Existing backups are kept. "
+                    "No new subscription was started. Check setup status before continuing, "
                     "or contact joshua@segeren.com."))
             finally:
                 values.clear()
@@ -182,6 +205,21 @@ class HostedSetupFlow:
                                   self._binding["deviceId"], apply=True))
 
     def _perform(self, action, values):
+        if action in ("enable_schedule", "disable_schedule"):
+            if self.source_home is None:
+                raise MigrationError("The backup source has not been configured.")
+            anchor = self._keys.confirmed_binding(self._binding)
+            if anchor is None:
+                raise MigrationError("Confirm your saved recovery key before changing background backup.")
+            if action == "enable_schedule":
+                path, key_id = self._keys.backup_metadata(self._binding)
+                if key_id != anchor["keyId"]:
+                    raise MigrationError("The hosted backup key changed identity.")
+                install_hosted_schedule(self.source_home, self._binding["deviceId"],
+                    _safe_json(path), expected_binding=anchor, apply=True)
+            else:
+                remove_hosted_schedule(self.source_home, expected_binding=anchor, apply=True)
+            return
         if action == "first_backup":
             if self.source_home is None:
                 raise MigrationError("The backup source has not been configured.")
@@ -230,7 +268,22 @@ class HostedSetupFlow:
             self._claim(client)
         elif action == "resolve":
             self._update(phase="pairing_uncertain")
-            self._accept(client.resolve(self._binding["deviceId"]))
+            anchor = (self._keys.confirmed_binding(self._binding)
+                      if self.source_home is not None else None)
+            if anchor is None:
+                self._accept(client.resolve(self._binding["deviceId"]))
+            else:
+                with _update_lock(self.source_home, nonblocking=True) as marker:
+                    if _pending_update(marker) is not None:
+                        raise MigrationError("Wait for the app update before checking backup.")
+                    current = active_binding(self.source_home, anchor)
+                    identity = _identity(client.resolve(current["deviceId"]), current["deviceId"])
+                    if identity != {field: current[field] for field in self._binding}:
+                        raise MigrationError("The saved backup connection changed identity.")
+                # Keep original pairing/key/receipt provenance immutable. Only
+                # the shared non-secret journal follows credential renewal.
+                self._proof.clear()
+                self._update(phase="backup_ready" if self._last_backup else "key_ready")
         elif action == "reauthorize":
             # Retain the saved device. A new purchase proof must resolve it
             # before any one-off claim, never create a second credential.

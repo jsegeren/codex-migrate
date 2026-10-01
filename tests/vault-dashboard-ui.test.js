@@ -39,7 +39,7 @@ function setupFixture() {
     }, document, clearInterval: () => {}, setInterval: () => 1,
   };
   vm.createContext(context);
-  vm.runInContext('let hostedSetupTimer=null,hostedSetupPhase=null,hostedSetupEpoch=0; ' + hostedSetupView + '\n' + refreshHostedSetup + '\n' + hostedSetupStep, context);
+  vm.runInContext('let hostedSetupTimer=null,hostedSetupInterval=0,hostedSetupPhase=null,hostedSetupEpoch=0; ' + hostedSetupView + '\n' + refreshHostedSetup + '\n' + hostedSetupStep, context);
   return { context, panel, controls, elements, blocks, document };
 }
 
@@ -196,9 +196,76 @@ test('first hosted backup is an explicit action and never claims automatic prote
         /existing hosted snapshot was verified again/ : /encrypted conversation manifest/);
   }
   assert.match(source, /This does not back up your Git repositories or your whole Mac/);
-  assert.match(source, /recovery on a clean Mac still needs verification/);
+  assert.match(source, /Recovery on a clean Mac still needs verification/);
   assert.match(source, /A hosted backup has not yet been confirmed/);
   assert.match(source, /Create or resume hosted backup/);
+});
+
+test('background states separate enabled from verified and stop remains available after restart', () => {
+  const { context, elements } = setupFixture();
+  const intervals = [];
+  let clears = 0;
+  context.setInterval = (_fn, interval) => { intervals.push(interval); return intervals.length; };
+  context.clearInterval = () => { clears++; };
+  const ready = { enabled: true, status: 'ready', phase: 'backup_ready',
+    last_backup: { status: 'published', source_coverage: 'complete', at_risk_threads: 0 },
+    last_backup_checked_at: '2026-10-01T00:00:00+00:00' };
+  context.hostedSetupView(ready);
+  assert.equal(elements.get('setup-enable-schedule').disabled, false);
+  assert.equal(elements.get('setup-disable-schedule').disabled, true);
+  assert.equal(elements.get('setup-background').hidden, false);
+  for (const status of ['awaiting_check', 'running', 'failed', 'needs_attention', 'verified', 'unchanged']) {
+    context.hostedSetupView({ ...ready, background: { enabled: true, status,
+      last_checked_at: '2026-10-01T00:00:00+00:00' } });
+    assert.equal(elements.get('setup-enable-schedule').disabled, true);
+    assert.equal(elements.get('setup-disable-schedule').disabled, false);
+    assert.match(elements.get('hosted-setup-status').textContent, /Automatic protection is not active/);
+    if (status === 'failed') assert.match(elements.get('setup-background-status').textContent, /may not be backed up/);
+    if (status === 'awaiting_check') assert.match(elements.get('setup-background-status').textContent, /has not finished/);
+  }
+  assert.deepEqual(intervals, [15000]);
+  context.hostedSetupView({ ...ready, phase: 'pairing_uncertain', background: { enabled: true } });
+  assert.equal(elements.get('setup-disable-schedule').disabled, false);
+  context.hostedSetupView({ ...ready, background: { enabled: false, can_stop: true,
+    error: 'Hosted backup setup is incomplete.' } });
+  assert.equal(elements.get('setup-disable-schedule').disabled, false);
+  context.hostedSetupView({ ...ready, status: 'running', step: 'disable_schedule', background: { enabled: true } });
+  assert.deepEqual(intervals, [15000, 1500]);
+  context.hostedSetupView(ready);
+  assert.equal(clears, 2);
+  assert.match(source, /Stopping the schedule does not delete backups or cancel hosted storage/);
+});
+
+test('incomplete captures cannot enable background backups and controls send explicit actions', () => {
+  const { context, elements } = setupFixture();
+  context.hostedSetupView({ enabled: true, phase: 'backup_ready', status: 'ready',
+    last_backup: { source_coverage: 'needs_attention', at_risk_threads: 1 } });
+  assert.equal(elements.get('setup-enable-schedule').disabled, true);
+  const actions = [];
+  context.hostedSetupStep = action => { actions.push(action); };
+  for (const id of ['setup-enable-schedule', 'setup-disable-schedule']) {
+    vm.runInContext(source.match(new RegExp('\\$\\("' + id + '"\\)\\.onclick=.*?;\\n'))[0], context);
+    elements.get(id).onclick();
+  }
+  assert.deepEqual(actions, ['enable_schedule', 'disable_schedule']);
+});
+
+test('background action completion keeps owned focus on the relevant background control', () => {
+  const { context, elements, document } = setupFixture();
+  const ready = { enabled: true, status: 'ready', phase: 'backup_ready',
+    last_backup: { status: 'published', source_coverage: 'complete', at_risk_threads: 0 } };
+  context.hostedSetupView(ready);
+  document.activeElement = elements.get('setup-enable-schedule');
+  context.hostedSetupView({ ...ready, status: 'running', step: 'enable_schedule' });
+  assert.equal(document.activeElement.id, 'hosted-setup-status');
+  context.hostedSetupView({ ...ready, step: 'enable_schedule', background: { enabled: true } });
+  assert.equal(document.activeElement.id, 'setup-disable-schedule');
+  context.hostedSetupView({ ...ready, status: 'running', step: 'disable_schedule', background: { enabled: true } });
+  context.hostedSetupView({ ...ready, step: 'disable_schedule', background: { enabled: false } });
+  assert.equal(document.activeElement.id, 'setup-enable-schedule');
+  context.hostedSetupView({ ...ready, status: 'running', phase: 'pairing_uncertain', step: 'disable_schedule' });
+  context.hostedSetupView({ ...ready, phase: 'pairing_uncertain', step: 'disable_schedule' });
+  assert.equal(document.activeElement.id, 'setup-background-status');
 });
 
 test('hosted recovery stays hidden until enabled and key verification is not recovery', () => {

@@ -135,9 +135,17 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 <div class="hosted-step" data-setup-phase="backup_ready" hidden>
 <h3>Hosted backup check completed</h3>
 <p id="setup-backup-receipt"></p>
-<p class="muted">This is a completed backup check, not continuous protection. Automatic backups are not enabled, and recovery on a clean Mac still needs verification. Your existing Codex files and repositories have not been changed.</p>
+<p class="muted">This is a completed backup check, not continuous protection. Recovery on a clean Mac still needs verification. Your existing Codex files and repositories have not been changed.</p>
 <button id="setup-backup-again">Back up again</button>
 <button id="setup-check-backup-ready" class="secondary">Check saved connection</button>
+</div>
+<div id="setup-background" hidden>
+<h3>Background backups</h3>
+<p>Check for changes every 30 minutes while this Mac is awake and online. Backups run without a browser window. Only changed content is uploaded; previous verified versions are kept.</p>
+<p id="setup-background-status" role="status" aria-live="polite" tabindex="-1"></p>
+<button id="setup-enable-schedule">Enable or resume background backups</button>
+<button id="setup-disable-schedule" class="secondary">Stop background backups</button>
+<p class="muted">Stopping the schedule does not delete backups or cancel hosted storage. This acceptance preview does not start a subscription or certify clean-Mac recovery.</p>
 </div>
 <p class="muted">Need help? <a href="mailto:joshua@segeren.com">Email Joshua</a>. Never email your private purchase link, setup code or recovery key.</p>
 </section>
@@ -413,7 +421,7 @@ for(const link of document.querySelectorAll("[data-route]")){link.classList.togg
 const fmt=n=>{const units=["B","KB","MB","GB","TB"];let i=0;while(n>=1000&&i<units.length-1){n/=1000;i++}return `${n.toFixed(n>=100?0:n>=10?1:2)} ${units[i]}`};
 async function api(path,data){const response=await fetch(path,{method:data===undefined?"GET":"POST",headers:{"X-Codex-Migrate-Token":token,"Content-Type":"application/json"},...(data===undefined?{}:{body:JSON.stringify(data)})});const type=response.headers.get("Content-Type")||"";const body=type.includes("application/json")?await response.json():await response.text();if(!response.ok)throw Error(body.error||"The local request failed");return body}
 function fail(error){$("error").textContent=error.message;$("status").textContent=""}
-let hostedSetupTimer=null,hostedSetupPhase=null,hostedSetupEpoch=0;
+let hostedSetupTimer=null,hostedSetupInterval=0,hostedSetupPhase=null,hostedSetupEpoch=0;
 function hostedSetupView(data){
   const panel=$("hosted-setup-panel"),focusOwned=panel.contains(document.activeElement),phaseChanged=data.phase!==hostedSetupPhase;
   $("setup-recovery").value=data.enabled&&data.phase==="key_save"&&data.status!=="running"?data.recovery_key||"":"";
@@ -423,18 +431,28 @@ function hostedSetupView(data){
   const running=data.status==="running";
   for(const block of panel.querySelectorAll("[data-setup-phase]"))block.hidden=running||block.dataset.setupPhase!==data.phase;
   for(const control of panel.querySelectorAll("button,input,textarea"))control.disabled=running;
+  const background=data.background||{enabled:false};
+  $("setup-background").hidden=!data.last_backup;
+  $("setup-enable-schedule").disabled=running||background.enabled||data.phase!=="backup_ready"||data.last_backup?.source_coverage!=="complete"||data.last_backup?.at_risk_threads!==0;
+  $("setup-disable-schedule").disabled=running||!(background.enabled||background.can_stop);
+  const backgroundMessages={awaiting_check:"Enabled; the first scheduled check has not finished yet.",running:"A scheduled backup check is running.",failed:"The last scheduled check failed. New work may not be backed up; previous verified versions are kept.",needs_attention:"The last scheduled capture needs attention. Do not assume all new work is protected.",verified:"The last scheduled backup completed.",unchanged:"The last scheduled check found no changes."};
+  $("setup-background-status").textContent=background.enabled?`${backgroundMessages[background.status]||"Background status needs attention."}${background.last_checked_at?" Last check: "+new Date(background.last_checked_at).toLocaleString()+".":""}${background.error?" "+background.error:""}`:background.error||"Background backups are off. You can still back up manually.";
   const messages={start:"Verify your purchase email to connect this Mac.",email:"Check your purchase email for the setup code.",pairing_checkpoint:"The connection still needs to be saved.",pairing_uncertain:"The saved connection needs confirmation.",paired:"This Mac is connected. Automatic protection is not active.",key_save:"Save your recovery key outside this Mac, then confirm your saved copy.",key_ready:"Saved recovery key confirmed. Automatic protection is not active.",backup_ready:data.last_backup?.status==="needs_attention"?"Backup coverage needs attention. Automatic protection is not active.":"Hosted backup verified. Automatic protection is not active."};
   $("setup-backup-receipt").textContent=data.last_backup?`${data.last_backup.status==="needs_attention"?"The encrypted capture has incomplete or at-risk content. Keep previous good versions and contact Joshua if you need help.":data.last_backup.status==="unchanged"?"No changes were found; the existing hosted snapshot was verified again.":"The hosted snapshot and its encrypted conversation manifest were verified."} Last completed check: ${new Date(data.last_backup_checked_at).toLocaleString()}.`:"";
-  const working={send_code:"Requesting your setup email…",pair:"Saving and connecting this Mac…",retry_save:"Retrying the saved connection…",resolve:"Checking the saved connection…",reauthorize:"Preparing email verification…",prepare_key:"Preparing the same protected recovery key…",confirm_key:"Checking your saved recovery key…",first_backup:"Encrypting, uploading and verifying your Codex backup… Keep this Mac awake."};
+  const working={send_code:"Requesting your setup email…",pair:"Saving and connecting this Mac…",retry_save:"Retrying the saved connection…",resolve:"Checking the saved connection…",reauthorize:"Preparing email verification…",prepare_key:"Preparing the same protected recovery key…",confirm_key:"Checking your saved recovery key…",first_backup:"Encrypting, uploading and verifying your Codex backup… Keep this Mac awake.",enable_schedule:"Enabling background backups…",disable_schedule:"Stopping background backups…"};
   $("hosted-setup-status").textContent=running?working[data.step]||"Checking setup…":messages[data.phase]||"Setup needs attention.";
   $("hosted-setup-error").textContent=data.error||"";
   if(focusOwned&&(phaseChanged||document.activeElement.disabled||(!running&&document.activeElement===$("hosted-setup-status")))){
-    const target=running?$("hosted-setup-status"):panel.querySelector(`[data-setup-phase="${data.phase}"] input:not(:disabled),[data-setup-phase="${data.phase}"] button:not(:disabled)`);
+    const backgroundAction=["enable_schedule","disable_schedule"].includes(data.step);
+    const backgroundTarget=$(background.enabled||background.can_stop?"setup-disable-schedule":"setup-enable-schedule");
+    const target=running?$("hosted-setup-status"):backgroundAction?(backgroundTarget.disabled?$("setup-background-status"):backgroundTarget):panel.querySelector(`[data-setup-phase="${data.phase}"] input:not(:disabled),[data-setup-phase="${data.phase}"] button:not(:disabled)`);
     (target||$("hosted-setup-status")).focus();
   }
   hostedSetupPhase=data.phase;
-  if(running&&!hostedSetupTimer)hostedSetupTimer=setInterval(refreshHostedSetup,1500);
-  if(!running&&hostedSetupTimer){clearInterval(hostedSetupTimer);hostedSetupTimer=null}
+  const interval=running?1500:background.enabled?15000:0;
+  if(hostedSetupTimer&&interval!==hostedSetupInterval){clearInterval(hostedSetupTimer);hostedSetupTimer=null}
+  hostedSetupInterval=interval;
+  if(interval&&!hostedSetupTimer)hostedSetupTimer=setInterval(refreshHostedSetup,interval);
 }
 async function refreshHostedSetup(){
   const epoch=hostedSetupEpoch;
@@ -452,6 +470,8 @@ async function hostedSetupStep(action,step={}){
   $("setup-recovery").value="";$("setup-saved-key").value="";
   if($("hosted-setup-panel").contains(document.activeElement))$("hosted-setup-status").focus();
   for(const control of $("hosted-setup-panel").querySelectorAll("button,input,textarea"))control.disabled=true;
+  if(hostedSetupTimer&&hostedSetupInterval!==1500){clearInterval(hostedSetupTimer);hostedSetupTimer=null}
+  hostedSetupInterval=1500;
   if(!hostedSetupTimer)hostedSetupTimer=setInterval(refreshHostedSetup,1500);
   try{
     const data=await api("/api/vault/hosted-setup",{action,step:{...step,apply:true}});
@@ -476,6 +496,8 @@ $("setup-check-key-ready").onclick=()=>hostedSetupStep("resolve");
 $("setup-first-backup").onclick=()=>hostedSetupStep("first_backup");
 $("setup-backup-again").onclick=()=>hostedSetupStep("first_backup");
 $("setup-check-backup-ready").onclick=()=>hostedSetupStep("resolve");
+$("setup-enable-schedule").onclick=()=>hostedSetupStep("enable_schedule");
+$("setup-disable-schedule").onclick=()=>hostedSetupStep("disable_schedule");
 $("setup-copy-key").onclick=async()=>{try{await navigator.clipboard.writeText($("setup-recovery").value);$("hosted-setup-status").textContent="Key copied. Save it outside this Mac before confirming."}catch(error){$("hosted-setup-error").textContent="Copy failed. Select the recovery key and copy it manually."}};
 let hostedRecoveryTimer=null,hostedRecoveryState=null,hostedRecoveryPhase=null;
 function hostedRecoveryView(data){

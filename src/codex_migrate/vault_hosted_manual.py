@@ -12,6 +12,7 @@ from codex_migrate.errors import MigrationError
 from codex_migrate.vault_backup import _helper_path, _metadata
 from codex_migrate.vault_hosted_enrollment_client import HostedEnrollmentClient
 from codex_migrate.vault_hosted_live_run import HostedLiveBackupRun
+from codex_migrate.vault_hosted_connection import active_binding
 from codex_migrate.vault_hosted_schedule import MAX_PRIOR_BYTES, SERVICE_ORIGIN, _UUID
 from codex_migrate.vault_schedule import _home, _pending_update, _safe_json, _update_lock
 
@@ -49,6 +50,8 @@ def back_up_hosted_history(source_home: str, device_id: str, metadata_path: str,
     with _update_lock(home, nonblocking=True) as marker_path:
         if _pending_update(marker_path) is not None:
             raise MigrationError("Wait for the app update before starting hosted backup.")
+        if expected_binding is not None:
+            device_id = active_binding(home, expected_binding)["deviceId"]
         try:
             enrollment = HostedEnrollmentClient(SERVICE_ORIGIN)
             upload, recovery = enrollment.backup_clients(device_id, crypto_helper=str(helper))

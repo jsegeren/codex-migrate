@@ -178,6 +178,39 @@ not full clean-Mac reconstruction or proof of unattended protection. Real R2
 backup/recovery, scheduled operation, billing and the notarized release remain
 separate gates; neither Founder's Mac is enrolled or scheduled by this work.
 
+### Background schedule acceptance controls
+
+After a complete, zero-at-risk manual receipt, the same acceptance-gated setup
+view offers explicit enable/resume and stop controls for the 30-minute hosted
+LaunchAgent. Installation reopens the authenticated remote manifest and refuses
+unknown or at-risk thread coverage. Source capture and upload happen in the
+background without a browser window; a sleeping/offline Mac cannot meet a
+30-minute recovery target. The view distinguishes awaiting-check, running,
+failed, needs-attention, unchanged, and verified states, with last-good and
+overdue evidence. Installation alone is not a successful scheduled run or a
+clean-Mac restore certificate, and does not start billing.
+
+The original setup/key binding stays immutable as pairing provenance. A
+separate owner-only, non-secret `hosted-connection.json` records the current
+device reference for that same account, Vault, key and owner type. Authenticated
+credential rotation updates it under the shared app-update/backup lock. A
+crash between schedule replacement and reference publication retains the
+rotation journal; the next wake verifies the replacement credential and
+repairs the reference before cleanup. Manual backup and startup resolution use
+that reference without changing the encryption key or writing UI StateStore
+from a background process. Stopping keeps the reference and all backups, so
+resuming does not reuse a revoked credential. An unresolved rotation refuses
+manual upload, reinstall or schedule removal until the handoff is reconciled.
+It is a visible failed/attention state, never a fresh protection claim.
+Stop durably removes the launch-on-login plist before deleting configuration;
+if either removal fails, identity evidence remains and the bound Stop action
+is retryable. A config-only partial removal keeps Stop available in the UI.
+
+These controls remain dark and synthetic-testable. Real-service unattended
+operation, clean-Mac recovery, billing and packaged release acceptance still
+have to pass before customer availability. This implementation does not
+enable a personal backup schedule on either Founder's Mac.
+
 ## Customer choice
 
 The Mac app will offer two destinations for the *same* portable, encrypted

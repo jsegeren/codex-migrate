@@ -12,6 +12,7 @@ from unittest.mock import Mock, patch
 from codex_migrate.cli import main, parser
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_hosted_manual import back_up_hosted_history
+from codex_migrate.vault_hosted_connection import save_connection
 from codex_migrate.vault_hosted_schedule import MAX_PRIOR_BYTES, SERVICE_ORIGIN
 from codex_migrate.vault_schedule import UPDATE_GUARD_VERSION, _update_lock
 
@@ -98,6 +99,26 @@ class HostedManualTests(unittest.TestCase):
                 with self.assertRaises(MigrationError):
                     self.backup(expected_binding={**binding, field: SNAPSHOT})
                 self.live.assert_not_called()
+
+    def test_manual_backup_uses_rotated_device_but_same_account_vault_and_key(self):
+        binding = {"deviceId": DEVICE, "accountId": ACCOUNT,
+                   "vaultId": OTHER, "keyId": KEY}
+        save_connection(str(self.home), binding)
+        save_connection(str(self.home), {**binding, "deviceId": SNAPSHOT},
+                        previous_device=DEVICE)
+        self.assertEqual(self.backup(expected_binding=binding)["status"], "published")
+        self.client.backup_clients.assert_called_once_with(SNAPSHOT,
+            crypto_helper=str(self.helper))
+        self.assertEqual(json.loads(self.path.read_text()), self.metadata)
+
+    def test_changed_active_connection_refuses_network_or_upload(self):
+        binding = {"deviceId": DEVICE, "accountId": ACCOUNT,
+                   "vaultId": OTHER, "keyId": KEY}
+        save_connection(str(self.home), {**binding, "keyId": SNAPSHOT})
+        with self.assertRaises(MigrationError):
+            self.backup(expected_binding=binding)
+        self.enrollment.assert_not_called()
+        self.live.assert_not_called()
 
     def test_bad_setup_binding_stops_before_provider_or_helper_work(self):
         binding = {"deviceId": DEVICE, "accountId": ACCOUNT,

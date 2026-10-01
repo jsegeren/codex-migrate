@@ -16,6 +16,7 @@ from codex_migrate.vault_hosted_schedule import (
     run_hosted_scheduled_backup,
 )
 from codex_migrate.vault_hosted_upload_client import HostedUploadClient
+from codex_migrate.vault_hosted_connection import active_binding, connection_path
 from codex_migrate.vault_schedule import prepare_update, resume_after_update
 
 
@@ -224,6 +225,25 @@ class HostedScheduleTests(unittest.TestCase):
                     apply=True)
         self.assertFalse(_paths(self.home)[0].exists())
 
+    def test_unknown_thread_risk_refuses_scheduling_but_attachments_are_separate(self):
+        self.recovery.prior_catalog = lambda **_kw: (SNAPSHOT, [{"collection": "active"}])
+        a, b, c, d = self._patches()
+        with a, b, c, d:
+            with self.assertRaisesRegex(MigrationError, "at-risk threads"):
+                install_hosted_schedule(self.home, DEVICE, METADATA,
+                    engine_command=["/usr/bin/true"], apply=True)
+        self.recovery.prior_catalog = lambda **_kw: (SNAPSHOT, [{"collection": "attachments"}])
+        self._install()
+
+    def test_install_provider_reads_are_excluded_by_backup_and_update_locks(self):
+        from codex_migrate.vault_schedule import _update_lock
+        a, b, c, d = self._patches()
+        with a as client, b, c, d, _update_lock(self.home):
+            with self.assertRaises(MigrationError):
+                install_hosted_schedule(self.home, DEVICE, METADATA,
+                    engine_command=["/usr/bin/true"], apply=True)
+            client.assert_not_called()
+
     def test_partial_first_snapshot_refuses_protected_schedule(self):
         for coverage in ("needs_attention", "unknown"):
             with self.subTest(coverage=coverage):
@@ -249,6 +269,88 @@ class HostedScheduleTests(unittest.TestCase):
         self.assertFalse(config_path.exists())
         self.assertFalse(good_path.exists())
         self.assertFalse(plist_path.exists())
+        self.assertFalse(connection_path(self.home).exists())
+
+    def test_rotation_crash_repairs_active_reference_before_cleanup(self):
+        self._install()
+        config_path, _, good_path, _ = _paths(self.home)
+        before_good = good_path.read_bytes()
+        before_reference = connection_path(self.home).read_bytes()
+        fake_run = SimpleNamespace(back_up_live_history=lambda *_args, **_kw: {
+            "unchanged": True, "lastGoodSnapshotId": SNAPSHOT,
+            "atRiskThreads": 0, "sourceCoverage": "complete"})
+        a, b, _, _ = self._patches()
+        with a, b, patch("codex_migrate.vault_hosted_schedule._save_active_connection",
+                        side_effect=OSError("synthetic disk failure")):
+            self.assertEqual(run_hosted_scheduled_backup(str(config_path)), 1)
+        self.assertEqual(json.loads(config_path.read_text())["device_id"], NEW_DEVICE)
+        self.assertTrue(_rotation_path(self.home).exists())
+        self.assertEqual(connection_path(self.home).read_bytes(), before_reference)
+        self.assertEqual(good_path.read_bytes(), before_good)
+        with a, b, patch("codex_migrate.vault_hosted_schedule.HostedLiveBackupRun",
+                        return_value=fake_run):
+            self.assertEqual(run_hosted_scheduled_backup(str(config_path)), 0)
+        self.assertFalse(_rotation_path(self.home).exists())
+        anchor = {"deviceId": DEVICE, "accountId": ACCOUNT, "vaultId": VAULT, "keyId": KEY}
+        self.assertEqual(active_binding(self.home, anchor)["deviceId"], NEW_DEVICE)
+        self.assertEqual(len(self.rotation_calls), 1)
+
+    def test_stop_then_resume_keeps_rotated_device_and_original_key(self):
+        self._install()
+        config_path, _, _, _ = _paths(self.home)
+        fake_run = SimpleNamespace(back_up_live_history=lambda *_args, **_kw: {
+            "unchanged": True, "lastGoodSnapshotId": SNAPSHOT,
+            "atRiskThreads": 0, "sourceCoverage": "complete"})
+        a, b, c, d = self._patches()
+        anchor = {"deviceId": DEVICE, "accountId": ACCOUNT, "vaultId": VAULT, "keyId": KEY}
+        with a, b, c, d, patch("codex_migrate.vault_hosted_schedule.HostedLiveBackupRun",
+                              return_value=fake_run):
+            self.assertEqual(run_hosted_scheduled_backup(str(config_path)), 0)
+            remove_hosted_schedule(self.home, expected_binding=anchor, apply=True)
+            self.assertFalse(config_path.exists())
+            self.assertEqual(active_binding(self.home, anchor)["deviceId"], NEW_DEVICE)
+            install_hosted_schedule(self.home, DEVICE, METADATA,
+                expected_binding=anchor, engine_command=["/usr/bin/true"], apply=True)
+        configuration = json.loads(config_path.read_text())
+        self.assertEqual(configuration["device_id"], NEW_DEVICE)
+        self.assertEqual(configuration["key_metadata"], METADATA)
+
+    def test_stop_refuses_wrong_owner_and_unfinished_rotation(self):
+        self._install()
+        config_path, _, _, plist_path = _paths(self.home)
+        anchor = {"deviceId": DEVICE, "accountId": ACCOUNT, "vaultId": VAULT, "keyId": KEY}
+        with self.assertRaises(MigrationError):
+            remove_hosted_schedule(self.home, expected_binding={**anchor, "vaultId": NEXT}, apply=True)
+        _rotation_path(self.home).write_text("{}")
+        with self.assertRaises(MigrationError):
+            remove_hosted_schedule(self.home, expected_binding=anchor, apply=True)
+        self.assertTrue(config_path.exists())
+        self.assertTrue(plist_path.exists())
+
+    def test_stop_unlink_failures_preserve_identity_and_allow_retry(self):
+        anchor = {"deviceId": DEVICE, "accountId": ACCOUNT, "vaultId": VAULT, "keyId": KEY}
+        original_unlink = Path.unlink
+        for failing_file in ("plist", "config"):
+            with self.subTest(failing_file=failing_file):
+                self._install()
+                config_path, _, _, plist_path = _paths(self.home)
+                selected = plist_path if failing_file == "plist" else config_path
+                def fail_selected(path, *args, **kwargs):
+                    if path == selected:
+                        raise OSError("synthetic unlink failure")
+                    return original_unlink(path, *args, **kwargs)
+                with patch("pathlib.Path.unlink", new=fail_selected), patch(
+                        "codex_migrate.vault_hosted_schedule._loaded", return_value=False):
+                    with self.assertRaises(OSError):
+                        remove_hosted_schedule(self.home, expected_binding=anchor, apply=True)
+                self.assertTrue(config_path.exists())
+                self.assertTrue(connection_path(self.home).exists())
+                self.assertTrue(hosted_schedule_status(self.home, expected_binding=anchor)["can_stop"])
+                with patch("codex_migrate.vault_hosted_schedule._loaded", return_value=False):
+                    self.assertEqual(remove_hosted_schedule(self.home,
+                        expected_binding=anchor, apply=True), {"enabled": False})
+                self.assertFalse(config_path.exists())
+                self.assertFalse(plist_path.exists())
 
     def test_unchanged_check_records_check_but_not_new_publication(self):
         self._install()

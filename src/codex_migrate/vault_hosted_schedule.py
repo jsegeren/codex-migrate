@@ -28,6 +28,9 @@ from codex_migrate.vault_hosted_business_enrollment_client import (
     BusinessHostedEnrollmentClient,
 )
 from codex_migrate.vault_hosted_live_run import HostedLiveBackupRun
+from codex_migrate.vault_hosted_connection import (
+    active_binding, connection_path, save_connection, validate_binding,
+)
 from codex_migrate.vault_hosted_upload_client import HostedUploadClient
 from codex_migrate.vault_schedule import (
     _atomic_bytes, _engine_command, _ensure_owned_directory, _home,
@@ -156,6 +159,8 @@ def _rotate_if_due(config_path: Path, configuration: dict,
                    enrollment: object, helper: Path) -> dict:
     """Durably hand a scheduled run to a new bearer before the old one expires."""
     pending_path = _rotation_path(configuration["source_home"])
+    if pending_path.is_symlink():
+        raise MigrationError("The hosted device handoff cannot be linked.")
     pending = _safe_json(pending_path) if pending_path.exists() else None
     if pending is not None:
         if (set(pending) != {"old_device_id", "new_device_id"} or
@@ -165,19 +170,38 @@ def _rotate_if_due(config_path: Path, configuration: dict,
                 pending["old_device_id"] == pending["new_device_id"]):
             raise MigrationError("The hosted device handoff is invalid.")
         if pending["new_device_id"] == configuration["device_id"]:
-            # A crash after saving the new schedule but before cleanup.
+            # A crash after saving the new schedule but before publishing its
+            # UI reference. Verify the new credential before journal cleanup.
+            identity = enrollment.resolve(configuration["device_id"],
+                                          crypto_helper=str(helper))
+            expected = {"accountId": configuration["account_id"],
+                        "vaultId": configuration["vault_id"],
+                        "deviceId": configuration["device_id"]}
+            if configuration["version"] == 3:
+                expected.update(seatId=configuration["seat_id"], accessPurpose="worker")
+            if identity != expected:
+                raise MigrationError("The hosted device handoff changed identity.")
+            _save_active_connection(configuration, previous_device=pending["old_device_id"])
             pending_path.unlink()
             _fsync_directory(pending_path.parent)
             return configuration
         if pending["old_device_id"] != configuration["device_id"]:
             raise MigrationError("The hosted device handoff changed identity.")
     else:
+        current = active_binding(configuration["source_home"],
+            _schedule_binding(configuration),
+            owner_kind="business" if configuration["version"] == 3 else "individual")
+        if current["deviceId"] != configuration["device_id"]:
+            raise MigrationError("The hosted schedule and device reference disagree.")
         rotated_at = configuration.get("session_rotated_at")
         if rotated_at is not None:
             age = datetime.now(timezone.utc) - _timestamp(rotated_at)
             if timedelta(0) <= age < ROTATION_INTERVAL:
                 return configuration
         new_device_id = enrollment.create_device(crypto_helper=str(helper), apply=True)
+        if (not isinstance(new_device_id, str) or not _UUID.fullmatch(new_device_id) or
+                new_device_id == configuration["device_id"]):
+            raise MigrationError("The hosted device handoff is invalid.")
         pending = {"old_device_id": configuration["device_id"],
                    "new_device_id": new_device_id}
         _atomic_json(pending_path, pending, replace=False)
@@ -201,9 +225,23 @@ def _rotate_if_due(config_path: Path, configuration: dict,
                "device_id": pending["new_device_id"],
                "session_rotated_at": _now()}
     _atomic_json(config_path, updated, replace=True)
+    _save_active_connection(updated, previous_device=pending["old_device_id"])
     pending_path.unlink()
     _fsync_directory(pending_path.parent)
     return updated
+
+
+def _schedule_binding(configuration):
+    return {"deviceId": configuration["device_id"],
+            "accountId": configuration["account_id"],
+            "vaultId": configuration["vault_id"],
+            "keyId": _metadata(configuration["key_metadata"])}
+
+
+def _save_active_connection(configuration, *, previous_device=None):
+    save_connection(configuration["source_home"], _schedule_binding(configuration),
+                    owner_kind="business" if configuration["version"] == 3 else "individual",
+                    previous_device=previous_device)
 
 
 def _loaded() -> bool:
@@ -219,14 +257,26 @@ def install_hosted_schedule(source_home: str, device_id: str, metadata: dict, *,
                             crypto_helper: Optional[str] = None,
                             engine_command: Optional[list] = None,
                             business_seat_id: Optional[str] = None,
+                            expected_binding: Optional[dict] = None,
                             apply: bool = False) -> dict:
     """Install only after a remote snapshot decrypts with this Mac's key.
 
-    This is intentionally not exposed in the buyer UI until business identity,
-    recovery custody, subscription, and clean-Mac acceptance are certified.
+    Buyer exposure remains acceptance-gated. Provider checks and configuration
+    installation share the same lock as credential renewal and app replacement.
     """
     if apply is not True:
         raise MigrationError("Hosted scheduling requires explicit confirmation.")
+    home = str(_home(source_home))
+    with _update_lock(home, nonblocking=True) as marker_path:
+        return _install_hosted_schedule_locked(home, device_id, metadata,
+            crypto_helper=crypto_helper, engine_command=engine_command,
+            business_seat_id=business_seat_id, expected_binding=expected_binding,
+            marker_path=marker_path)
+
+
+def _install_hosted_schedule_locked(source_home, device_id, metadata, *,
+                                   crypto_helper, engine_command, business_seat_id,
+                                   expected_binding, marker_path):
     home = _home(source_home)
     if not isinstance(device_id, str) or not _UUID.fullmatch(device_id):
         raise MigrationError("The hosted backup device is invalid.")
@@ -236,10 +286,27 @@ def install_hosted_schedule(source_home: str, device_id: str, metadata: dict, *,
                       not _UUID.fullmatch(business_seat_id)) or
             business != (metadata.get("recovery_mode") == "business-v1")):
         raise MigrationError("The hosted backup owner and key type disagree.")
+    config_path, status_path, good_path, plist_path = _paths(str(home))
+    if business and (config_path.exists() or plist_path.exists()):
+        raise MigrationError("Remove the existing hosted schedule before business enrollment.")
+    if _pending_update(marker_path) is not None:
+        raise MigrationError("Wait for the app update before enabling hosted backup.")
+    if _rotation_path(str(home)).exists() or _rotation_path(str(home)).is_symlink():
+        raise MigrationError("Complete the pending hosted device handoff first.")
+    if expected_binding is not None:
+        anchor = validate_binding(expected_binding)
+        if anchor["deviceId"] != device_id or anchor["keyId"] != key_id:
+            raise MigrationError("The hosted backup connection and key disagree.")
+        device_id = active_binding(str(home), anchor,
+            owner_kind="business" if business else "individual")["deviceId"]
     helper = _helper_path(crypto_helper)
     enrollment = (BusinessHostedEnrollmentClient(SERVICE_ORIGIN) if business else
                   HostedEnrollmentClient(SERVICE_ORIGIN))
     upload, recovery = enrollment.backup_clients(device_id, crypto_helper=str(helper))
+    if expected_binding is not None and (
+            upload._account_id != expected_binding["accountId"] or
+            upload._vault_id != expected_binding["vaultId"]):
+        raise MigrationError("The hosted backup device changed identity.")
     latest = recovery.latest_snapshot(expected_account_id=upload._account_id)
     if latest is None:
         raise MigrationError("Make and verify the first hosted backup before scheduling.")
@@ -253,10 +320,10 @@ def install_hosted_schedule(source_home: str, device_id: str, metadata: dict, *,
         expected_account_id=upload._account_id)
     if observed != latest["snapshotId"]:
         raise MigrationError("The first hosted backup could not be opened safely.")
-    if any(item.get("at_risk") is True for item in catalog):
+    if any(item.get("collection") != "attachments" and item.get("at_risk") is not False
+           for item in catalog):
         raise MigrationError("Review the first hosted backup's at-risk threads before scheduling.")
 
-    config_path, status_path, good_path, plist_path = _paths(str(home))
     engine = list(engine_command or _engine_command())
     if not engine or not isinstance(engine[0], str) or not Path(engine[0]).is_absolute():
         raise MigrationError("The hosted backup engine is unavailable.")
@@ -282,54 +349,54 @@ def install_hosted_schedule(source_home: str, device_id: str, metadata: dict, *,
         "ThrottleInterval": 60, "EnvironmentVariables": {"HOME": account_home},
         "StandardOutPath": "/dev/null", "StandardErrorPath": "/dev/null",
     }, fmt=plistlib.FMT_XML, sort_keys=True)
-    with _update_lock(str(home), nonblocking=True) as marker_path:
-        if business and (config_path.exists() or plist_path.exists()):
-            raise MigrationError("Remove the existing hosted schedule before business enrollment.")
-        if _pending_update(marker_path) is not None:
-            raise MigrationError("Wait for the app update before enabling hosted backup.")
-        if _rotation_path(str(home)).exists():
-            raise MigrationError("Complete the pending hosted device handoff first.")
-        current = enrollment.resolve(device_id, crypto_helper=str(helper))
-        expected = {"accountId": upload._account_id,
-                    "vaultId": upload._vault_id, "deviceId": device_id}
-        if business:
-            expected["seatId"] = business_seat_id
-            expected["accessPurpose"] = "worker"
-        if current != expected:
-            raise MigrationError("The hosted backup device changed identity.")
-        previous_config = _safe_file(config_path)
-        previous_plist = _safe_file(plist_path)
-        previous_good = _safe_file(good_path)
-        previous_status = _safe_file(status_path)
-        was_loaded = _loaded()
-        _ensure_owned_directory(home, config_path.parent)
-        _ensure_owned_directory(home, plist_path.parent)
-        try:
-            _atomic_json(config_path, configuration, replace=True)
-            _atomic_bytes(plist_path, plist)
-            # Observed now, not first published now. Never invent a recovery time.
-            _atomic_json(good_path, {"snapshot_id": latest["snapshotId"],
-                                     "observed_at": _now()}, replace=True)
-            _atomic_json(status_path, {"status": "awaiting_check",
-                                       "checked_at": _now()}, replace=True)
-            if was_loaded:
-                _launchctl(["bootout", "gui/%d/%s" % (os.getuid(), LABEL)])
-            _launchctl(["bootstrap", "gui/%d" % os.getuid(), str(plist_path)])
-        except Exception:
-            for path, previous in ((config_path, previous_config),
-                                   (plist_path, previous_plist),
-                                   (good_path, previous_good),
-                                   (status_path, previous_status)):
-                if previous is None:
-                    path.unlink(missing_ok=True)
-                else:
-                    _atomic_bytes(path, previous)
-            if was_loaded:
-                try:
-                    _launchctl(["bootstrap", "gui/%d" % os.getuid(), str(plist_path)])
-                except Exception:
-                    pass
-            raise
+    current = enrollment.resolve(device_id, crypto_helper=str(helper))
+    expected = {"accountId": upload._account_id,
+                "vaultId": upload._vault_id, "deviceId": device_id}
+    if business:
+        expected["seatId"] = business_seat_id
+        expected["accessPurpose"] = "worker"
+    if current != expected:
+        raise MigrationError("The hosted backup device changed identity.")
+    previous_config = _safe_file(config_path)
+    previous_plist = _safe_file(plist_path)
+    previous_good = _safe_file(good_path)
+    previous_status = _safe_file(status_path)
+    reference_path = connection_path(str(home))
+    # Validate existing ownership before any replacement, including rollback.
+    active_binding(str(home), _schedule_binding(configuration),
+                   owner_kind="business" if business else "individual")
+    previous_reference = _safe_file(reference_path)
+    was_loaded = _loaded()
+    _ensure_owned_directory(home, config_path.parent)
+    _ensure_owned_directory(home, plist_path.parent)
+    try:
+        _save_active_connection(configuration)
+        _atomic_json(config_path, configuration, replace=True)
+        _atomic_bytes(plist_path, plist)
+        # Observed now, not first published now. Never invent a recovery time.
+        _atomic_json(good_path, {"snapshot_id": latest["snapshotId"],
+                                 "observed_at": _now()}, replace=True)
+        _atomic_json(status_path, {"status": "awaiting_check",
+                                   "checked_at": _now()}, replace=True)
+        if was_loaded:
+            _launchctl(["bootout", "gui/%d/%s" % (os.getuid(), LABEL)])
+        _launchctl(["bootstrap", "gui/%d" % os.getuid(), str(plist_path)])
+    except Exception:
+        for path, previous in ((config_path, previous_config),
+                               (plist_path, previous_plist),
+                               (good_path, previous_good),
+                               (status_path, previous_status),
+                               (reference_path, previous_reference)):
+            if previous is None:
+                path.unlink(missing_ok=True)
+            else:
+                _atomic_bytes(path, previous)
+        if was_loaded:
+            try:
+                _launchctl(["bootstrap", "gui/%d" % os.getuid(), str(plist_path)])
+            except Exception:
+                pass
+        raise
     return {"enabled": True, "interval_minutes": 30,
             "last_good_snapshot_id": latest["snapshotId"]}
 
@@ -348,6 +415,11 @@ def run_hosted_scheduled_backup(config_path: str) -> int:
         if path.resolve() != expected.resolve():
             raise MigrationError("The hosted backup schedule is outside its managed location.")
         with _update_lock(home) as marker_path:
+            # Installation/removal may have completed while this wake waited
+            # for the lock. Never rotate a stale pre-lock configuration.
+            configuration = _configuration(path)
+            if configuration["source_home"] != home:
+                raise MigrationError("The hosted backup schedule changed account.")
             marker = _pending_update(marker_path)
             if marker is not None:
                 _atomic_json(marker_path, {**marker, "deferred": True}, replace=True)
@@ -424,19 +496,27 @@ def run_hosted_scheduled_backup(config_path: str) -> int:
         return 1
 
 
-def hosted_schedule_status(source_home: str) -> dict:
+def hosted_schedule_status(source_home: str, *, expected_binding=None) -> dict:
     """Report local schedule health; never substitute it for a remote receipt."""
     config_path, status_path, good_path, plist_path = _paths(source_home)
     if not config_path.exists() and not plist_path.exists():
         return {"enabled": False}
     if not config_path.exists() or not plist_path.exists():
-        return {"enabled": False, "healthy": False,
+        can_stop = False
+        if config_path.exists():
+            configuration = _configuration(config_path)
+            if configuration["source_home"] != str(_home(source_home)):
+                raise MigrationError("The hosted backup schedule belongs to another account.")
+            _require_schedule_binding(configuration, expected_binding)
+            can_stop = True
+        return {"enabled": False, "healthy": False, "can_stop": can_stop,
                 "error": "Hosted backup setup is incomplete."}
     configuration = _configuration(config_path)
     if configuration["source_home"] != str(_home(source_home)):
         raise MigrationError("The hosted backup schedule belongs to another account.")
+    _require_schedule_binding(configuration, expected_binding)
     _safe_file(plist_path)
-    result = {"enabled": True, "healthy": False,
+    result = {"enabled": True, "healthy": False, "can_stop": True,
               "loaded": _loaded(), "interval_minutes": 30,
               "last_good_snapshot_id": None, "last_checked_at": None,
               "status": "awaiting_check"}
@@ -474,7 +554,17 @@ def hosted_schedule_status(source_home: str) -> dict:
     return result
 
 
-def remove_hosted_schedule(source_home: str, *, apply: bool = False) -> dict:
+def _require_schedule_binding(configuration, expected_binding):
+    if expected_binding is None:
+        return
+    anchor = validate_binding(expected_binding)
+    actual = _schedule_binding(configuration)
+    if (configuration["version"] == 3 or any(actual[field] != anchor[field]
+            for field in ("accountId", "vaultId", "keyId"))):
+        raise MigrationError("The hosted backup schedule belongs to another connection.")
+
+
+def remove_hosted_schedule(source_home: str, *, expected_binding=None, apply: bool = False) -> dict:
     """Turn off only this LaunchAgent; never delete remote or local snapshots."""
     if apply is not True:
         raise MigrationError("Disabling hosted backup requires explicit confirmation.")
@@ -483,11 +573,24 @@ def remove_hosted_schedule(source_home: str, *, apply: bool = False) -> dict:
     with _update_lock(home, nonblocking=True) as marker_path:
         if _pending_update(marker_path) is not None:
             raise MigrationError("Wait for the app update before changing hosted backup.")
+        if _rotation_path(home).exists() or _rotation_path(home).is_symlink():
+            raise MigrationError("Complete the pending hosted device handoff before stopping backup.")
+        if config_path.exists():
+            configuration = _configuration(config_path)
+            if configuration["source_home"] != home:
+                raise MigrationError("The hosted backup schedule belongs to another account.")
+            _require_schedule_binding(configuration, expected_binding)
+            _save_active_connection(configuration)
+        elif expected_binding is not None and plist_path.exists():
+            raise MigrationError("The hosted backup schedule cannot be identified safely.")
         if _loaded():
             _launchctl(["bootout", "gui/%d/%s" % (os.getuid(), LABEL)])
-        config_path.unlink(missing_ok=True)
+        # Keep identity evidence until the launch-on-login file is durably
+        # removed. A failed unlink must leave Stop safely retryable.
         plist_path.unlink(missing_ok=True)
-        for directory in (config_path.parent, plist_path.parent):
-            if directory.exists():
-                _fsync_directory(directory)
+        if plist_path.parent.exists():
+            _fsync_directory(plist_path.parent)
+        config_path.unlink(missing_ok=True)
+        if config_path.parent.exists():
+            _fsync_directory(config_path.parent)
     return {"enabled": False}
