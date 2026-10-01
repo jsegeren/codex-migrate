@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
@@ -31,6 +32,9 @@ class HostedSetupFlowTests(unittest.TestCase):
         self.factory = self.patch_client.start()
         self.addCleanup(self.patch_client.stop)
         self.flow = HostedSetupFlow(self.registry)
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.home = str(Path(temporary.name).resolve())
 
     def step(self, action, **values):
         run = self.flow.stage(action, {**values, "apply": True})
@@ -287,11 +291,12 @@ class HostedSetupFlowTests(unittest.TestCase):
             "binding": dict(IDENTITY), "saved_copy_confirmed": True,
             "metadata": {"format": "codex-vault", "version": 1, "key_id": key_id,
                          "created_at": "2026-10-01T00:00:00+00:00"}})
-        self.flow = HostedSetupFlow(self.registry, "/synthetic/home")
+        self.flow = HostedSetupFlow(self.registry, self.home)
         self.step("resolve")
         self.flow._keys = Mock()
         self.flow._keys.backup_metadata.return_value = (
             Path("/synthetic/state/hosted-key.json"), key_id)
+        self.flow._keys.confirmed_binding.return_value = {**IDENTITY, "keyId": key_id}
         self.receipt = {"applied": True, "snapshot_id": VAULT, "status": "published",
                         "source_coverage": "complete", "at_risk_threads": 0,
                         "automatic_protection_verified": False}
@@ -301,13 +306,69 @@ class HostedSetupFlowTests(unittest.TestCase):
         self.addCleanup(patcher.stop)
         return key_id
 
+    def test_restart_resolves_rotated_device_without_rebinding_the_key_or_receipt(self):
+        from codex_migrate.vault_hosted_connection import save_connection
+        key_id = self.ready_for_backup()
+        self.step("first_backup")
+        before = json.dumps(self.saved, sort_keys=True)
+        anchor = {**IDENTITY, "keyId": key_id}
+        new_device = "55555555-5555-4555-8555-555555555555"
+        save_connection(self.home, anchor)
+        save_connection(self.home, {**anchor, "deviceId": new_device}, previous_device=DEVICE)
+        self.flow = HostedSetupFlow(self.registry, self.home)
+        self.client.resolve.return_value = {**IDENTITY, "deviceId": new_device}
+        result = self.step("resolve")
+        self.assertEqual(result["phase"], "backup_ready")
+        self.client.resolve.assert_called_with(new_device)
+        self.assertEqual(json.dumps(self.saved, sort_keys=True), before)
+
+    def test_schedule_steps_require_good_receipt_and_keep_explicit_key_binding(self):
+        key_id = self.ready_for_backup()
+        with self.assertRaises(MigrationError):
+            self.flow.stage("enable_schedule", {"apply": True})
+        self.step("first_backup")
+        with patch("codex_migrate.vault_hosted_setup_flow._safe_json", return_value={"key_id": key_id}), patch(
+                "codex_migrate.vault_hosted_setup_flow.install_hosted_schedule") as install:
+            self.assertEqual(self.step("enable_schedule")["status"], "ready")
+            install.assert_called_once_with(self.home, DEVICE, {"key_id": key_id},
+                expected_binding={**IDENTITY, "keyId": key_id}, apply=True)
+        self.backup.return_value = {**self.receipt, "status": "needs_attention",
+                                   "at_risk_threads": 1}
+        self.step("first_backup")
+        with self.assertRaises(MigrationError):
+            self.flow.stage("enable_schedule", {"apply": True})
+
+    def test_stop_is_local_and_available_before_rechecking_network_after_restart(self):
+        key_id = self.ready_for_backup()
+        self.step("first_backup")
+        self.flow = HostedSetupFlow(self.registry, self.home)
+        self.client.reset_mock()
+        with patch("codex_migrate.vault_hosted_setup_flow.remove_hosted_schedule") as stop:
+            self.assertEqual(self.step("disable_schedule")["status"], "ready")
+            stop.assert_called_once_with(self.home,
+                expected_binding={**IDENTITY, "keyId": key_id}, apply=True)
+        self.client.resolve.assert_not_called()
+        self.assertEqual(self.flow.snapshot()["phase"], "pairing_uncertain")
+
+    def test_lost_schedule_reply_preserves_backup_receipt_and_reports_uncertainty(self):
+        self.ready_for_backup()
+        self.step("first_backup")
+        before = json.dumps(self.saved, sort_keys=True)
+        with patch("codex_migrate.vault_hosted_setup_flow.remove_hosted_schedule",
+                   side_effect=MigrationError("synthetic private bearer")):
+            result = self.step("disable_schedule")
+        self.assertEqual(result["status"], "failed")
+        self.assertIn("schedule change could not be confirmed", result["error"])
+        self.assertNotIn("private bearer", result["error"])
+        self.assertEqual(json.dumps(self.saved, sort_keys=True), before)
+
     def test_first_backup_requires_saved_key_and_explicit_separate_action(self):
         with self.assertRaises(MigrationError):
             self.flow.stage("first_backup", {"apply": True})
         key_id = self.ready_for_backup()
         self.backup.assert_not_called()
         result = self.step("first_backup")
-        self.backup.assert_called_once_with("/synthetic/home", DEVICE,
+        self.backup.assert_called_once_with(self.home, DEVICE,
             "/synthetic/state/hosted-key.json",
             expected_binding={**IDENTITY, "keyId": key_id}, apply=True)
         self.assertEqual(result["phase"], "backup_ready")
@@ -337,7 +398,7 @@ class HostedSetupFlowTests(unittest.TestCase):
     def test_setup_restart_preserves_receipt_but_still_requires_connection_check(self):
         self.ready_for_backup()
         self.step("first_backup")
-        self.flow = HostedSetupFlow(self.registry, "/synthetic/home")
+        self.flow = HostedSetupFlow(self.registry, self.home)
         self.assertEqual(self.flow.snapshot()["phase"], "pairing_uncertain")
         with self.assertRaises(MigrationError):
             self.flow.stage("first_backup", {"apply": True})

@@ -56,6 +56,13 @@ class HostedKeySetup:
         value = self._bound(binding)
         return value is not None and value["saved_copy_confirmed"] is True
 
+    def confirmed_binding(self, binding):
+        """Non-secret stable key identity, without file writes or Keychain reads."""
+        value = self._bound(binding)
+        if value is None or value["saved_copy_confirmed"] is not True:
+            return None
+        return {**binding, "keyId": value["metadata"]["key_id"]}
+
     def require_connection(self, binding):
         value = self._read()
         if value is not None and value["binding"] != binding:
