@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from contextlib import nullcontext
 from pathlib import Path
 import platform
@@ -37,6 +38,7 @@ from codex_migrate.vault_salvage import (
 from codex_migrate.vault_backup import backup as backup_vault
 from codex_migrate.vault_backup import plan as plan_vault_backup
 from codex_migrate.vault_dashboard import VAULT_HTML
+from codex_migrate.vault_hosted_recovery_flow import HostedRecoveryFlow
 from codex_migrate.vault_history import search_titles, thread_timeline
 from codex_migrate.vault_recovery import export_recovery_key
 from codex_migrate.vault_recovery import list_snapshots as list_vault_snapshots
@@ -469,6 +471,13 @@ class SetupDashboard(Dashboard):
         self._search_index_status = {"status": "idle"}
         self._restore_thread = None
         self._restore_status = {"status": "idle"}
+        try:
+            self._hosted_recovery = (HostedRecoveryFlow(self.source_home, self.registry)
+                                    if os.environ.get("CODEX_BACKUP_HOSTED_RECOVERY_UI") == "yes"
+                                    else None)
+        except Exception:
+            self.registry.release_process_lock()
+            raise
         self._install_thread = None
         self._install_status = {"status": "idle"}
         self._browse_thread = None
@@ -775,6 +784,24 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
     def vault_restore_status(self):
         with self._vault_lock:
             return dict(self._restore_status)
+
+    def hosted_recovery_status(self):
+        return (self._hosted_recovery.snapshot() if self._hosted_recovery is not None
+                else {"enabled": False})
+
+    def start_hosted_recovery(self, action, payload):
+        if self._hosted_recovery is None:
+            raise MigrationError("Hosted recovery is not enabled in this build session.")
+        # Reuse the restore worker slot: existing backup/install/browse/update
+        # gates then exclude hosted recovery too, without a second lock plane.
+        if not self._idle_for_shutdown():
+            raise MigrationError("Finish running work and save any displayed recovery key first.")
+        run = self._hosted_recovery.stage(action, payload)
+        worker = threading.Thread(target=run, daemon=True)
+        with self._vault_lock:
+            self._restore_thread = worker
+            worker.start()
+        return self.hosted_recovery_status()
 
     def vault_install_status(self):
         with self._vault_lock:
@@ -1368,6 +1395,9 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                         if parsed.path == "/api/vault/restore-status" and not query:
                             self._json(200, setup.vault_restore_status())
                             return
+                        if parsed.path == "/api/vault/hosted-recovery-status" and not query:
+                            self._json(200, setup.hosted_recovery_status())
+                            return
                         if parsed.path == "/api/vault/install-status" and not query:
                             self._json(200, setup.vault_install_status())
                             return
@@ -1574,6 +1604,26 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                     setup._closing = True
                     self._json(200, {"closing": True})
                     threading.Thread(target=self.server.shutdown, daemon=True).start()
+                    return
+                if self.path == "/api/vault/hosted-recovery":
+                    try:
+                        length = int(self.headers.get("Content-Length", "0"))
+                        if not 0 < length <= 8192:
+                            raise MigrationError("Invalid recovery request size")
+                        payload = json.loads(self.rfile.read(length))
+                        if (not isinstance(payload, dict) or
+                                set(payload) != {"action", "step"} or
+                                not isinstance(payload["action"], str)):
+                            raise MigrationError("Choose a valid recovery step.")
+                        self._json(202, setup.start_hosted_recovery(
+                            payload["action"], payload["step"]))
+                    except (MigrationError, ValueError, TypeError):
+                        # Never return untrusted payload/secret/provider text.
+                        self._json(400, {"error": "Recovery could not start. Finish running "
+                            "work, confirm the current step, and check its fields."})
+                    except Exception:
+                        self._json(409, {"error": "Recovery could not start safely. "
+                            "Contact joshua@segeren.com; live Codex data was not changed."})
                     return
                 if self.path == "/api/vault/export-ticket":
                     try:

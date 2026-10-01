@@ -13,6 +13,7 @@ from urllib.parse import quote
 from codex_migrate.dashboard import HTML as MIGRATION_HTML, LoopbackHTTPServer
 from codex_migrate.errors import MigrationError
 from codex_migrate.setup import SetupDashboard, SETUP_HTML
+from codex_migrate.state import StateStore
 from codex_migrate.vault_backup import BackupPlan, BackupResult
 from codex_migrate.vault import read_thread
 from codex_migrate.vault_install import InstallResult, ThreadInstallResult
@@ -21,6 +22,7 @@ from codex_migrate.vault_recovery import RestoreResult, SnapshotInfo
 from codex_migrate.vault_schedule import SchedulePlan
 from codex_migrate.vault_dashboard import VAULT_HTML
 from codex_migrate.vault_search_index import IndexCancelled, supported as search_index_supported
+from codex_migrate.vault_hosted_recovery_flow import HostedRecoveryFlow
 
 
 class SetupTests(unittest.TestCase):
@@ -161,6 +163,68 @@ class SetupTests(unittest.TestCase):
         self.assertIn("<strong>Codex Backup</strong>", shell)
         self.assertIn("Move Macs", shell)
         self.assertNotIn("Vault + Migration", shell)
+
+    def test_hosted_recovery_is_dark_by_default_and_requires_local_authority(self):
+        self.assertEqual(self.request("/api/vault/hosted-recovery-status")[1], {"enabled": False})
+        self.assertEqual(self.request("/api/vault/hosted-recovery-status", authorized=False)[0], 403)
+        payload = {"action": "send_code", "step": {"purchase_link": "private", "apply": True}}
+        self.assertEqual(self.request("/api/vault/hosted-recovery", payload, authorized=False)[0], 403)
+        self.assertEqual(self.request("/api/vault/hosted-recovery", payload,
+            extra_headers={"Origin": "https://attacker.test"})[0], 403)
+        self.assertEqual(self.request("/api/vault/hosted-recovery", payload)[0], 400)
+
+    def test_hosted_recovery_step_is_async_private_and_blocks_quit_and_local_restore(self):
+        self.helper._hosted_recovery = HostedRecoveryFlow(self.helper.source_home, self.helper.registry)
+        entered, release = threading.Event(), threading.Event()
+        secret = "cs_test_synthetic." + "a" * 64
+        def wait_for_email(_token, *, apply):
+            entered.set()
+            release.wait(3)
+        try:
+            with patch("codex_migrate.vault_hosted_recovery_flow.HostedEnrollmentClient") as client:
+                client.return_value.begin_recovery.side_effect = wait_for_email
+                code, body = self.request("/api/vault/hosted-recovery", {
+                    "action": "send_code", "step": {"purchase_link": secret, "apply": True}})
+                self.assertEqual(code, 202)
+                self.assertTrue(entered.wait(1))
+                self.assertEqual(body["status"], "running")
+                self.assertNotIn(secret, json.dumps(body))
+                self.assertEqual(self.request("/api/vault/hosted-recovery-status")[1]["status"], "running")
+                self.assertFalse(self.helper.can_shutdown())
+                self.assertEqual(self.request("/api/shutdown", {})[0], 409)
+                self.assertEqual(self.request("/api/vault/restore", {
+                    "vault": str(self.home / "vault"), "output": str(self.home / "out"),
+                    "snapshot": "latest", "apply": True})[0], 400)
+                release.set()
+                self.helper._restore_thread.join(3)
+                status = self.request("/api/vault/hosted-recovery-status")[1]
+                self.assertEqual(status["phase"], "email")
+                self.assertNotIn(secret, json.dumps(status))
+                self.assertNotIn(secret, self.helper.registry.path.read_text())
+        finally:
+            release.set()
+            if self.helper._restore_thread:
+                self.helper._restore_thread.join(3)
+
+    def test_hosted_recovery_rejects_secret_extra_fields_without_echoing(self):
+        self.helper._hosted_recovery = HostedRecoveryFlow(self.helper.source_home, self.helper.registry)
+        secret = "CV1-" + "Z" * 43
+        for step in ({"apply": False}, {"apply": True, "secret": secret}, []):
+            code, body = self.request("/api/vault/hosted-recovery", {"action": "resolve", "step": step})
+            self.assertEqual(code, 400)
+            self.assertNotIn(secret, json.dumps(body))
+        self.assertIsNone(self.helper._restore_thread)
+
+    def test_invalid_hosted_recovery_binding_releases_startup_lock(self):
+        state_dir = str(self.home / "invalid-recovery-state")
+        state = StateStore(state_dir)
+        state.update(hosted_recovery_device={"deviceId": "bad", "vaultId": "bad"})
+        with patch.dict(os.environ, {"CODEX_BACKUP_HOSTED_RECOVERY_UI": "yes"}):
+            with self.assertRaises(MigrationError):
+                SetupDashboard(str(self.home), state_dir)
+        retry = StateStore(state_dir)
+        retry.acquire_process_lock()
+        retry.release_process_lock()
 
     def test_vault_search_opens_active_conversation_at_matching_message(self):
         transcript = self.home / ".codex/sessions/2026/09/active.jsonl"

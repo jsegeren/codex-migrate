@@ -22,6 +22,7 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 @media(max-width:620px){header{display:block}.view-head a.button{display:inline-block;margin-top:16px}.summary{grid-template-columns:1fr}.panel{padding:16px}main,.view-conversations main,.view-recovery main{width:min(100% - 24px,960px);margin-top:22px}.nav a{padding:10px}.nav-icon{display:none}}
 @media(max-width:620px){#salvage-search{grid-template-columns:1fr}#salvage-search button{width:100%}}
 @media print{body{background:white;color:black}header,.summary,#backup-panel,#restore-panel,#search-panel,#results-panel,.actions,#error,#status{display:none!important}main{width:auto;margin:0}.panel{border:0;padding:0;background:white}.entry{break-inside:avoid;border-color:#bbb}.entry time{color:#444}}
+.hosted-step label{display:block;margin:14px 0 8px;font-weight:700}.hosted-step input,.hosted-step select{max-width:100%;width:100%;margin-bottom:14px}.hosted-step button{margin:8px 0}.hosted-step .actions input{width:auto}.view-backup #hosted-recovery-panel,.view-conversations #hosted-recovery-panel{display:none!important}#hosted-recovery-error{color:#ffc3c8}#hosted-recovery-status{color:var(--muted)}
 </style>
 </head>
 <body>
@@ -139,6 +140,64 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 <p id="schedule-error" role="alert">
 </p>
 </div>
+</section>
+<section class="panel" id="hosted-recovery-panel" hidden>
+<h2>Recover your hosted backup</h2>
+<p class="muted">Acceptance preview. Recover an encrypted copy into a separate folder. This never replaces your live Codex history.</p>
+<p id="hosted-recovery-status" role="status" aria-live="polite" tabindex="-1"></p>
+<p id="hosted-recovery-error" role="alert"></p>
+<div class="hosted-step" data-hosted-phase="start">
+<label for="hosted-purchase">Private purchase link</label>
+<input id="hosted-purchase" type="password" autocomplete="off" spellcheck="false" placeholder="Paste the link from your receipt">
+<button id="hosted-send-code">Email me a recovery code</button>
+</div>
+<div class="hosted-step" data-hosted-phase="email" hidden>
+<label for="hosted-code">Recovery code from your email</label>
+<input id="hosted-code" type="password" autocomplete="off" spellcheck="false">
+<button id="hosted-list-vaults">Find my backups</button>
+</div>
+<div class="hosted-step" data-hosted-phase="vaults" hidden>
+<label for="hosted-vault">Backup to recover</label>
+<select id="hosted-vault"></select>
+<button id="hosted-pair">Connect this Mac for recovery</button>
+</div>
+<div class="hosted-step" data-hosted-phase="pairing_checkpoint" hidden>
+<p>This Mac’s recovery connection has not been safely saved yet. No connection request has been sent. Retry saving the same connection before continuing.</p>
+<button id="hosted-retry-save">Retry saving connection</button>
+</div>
+<div class="hosted-step" data-hosted-phase="pairing_uncertain" hidden>
+<p>Check the saved connection before continuing. We will reuse the same device credential, not create a replacement.</p>
+<button id="hosted-resolve">Check saved connection</button>
+<p class="muted">If it remains unconfirmed after checking your connection, verify your purchase email again. We still reuse this Mac’s saved credential.</p>
+<button id="hosted-reauthorize" class="secondary">Verify purchase email again</button>
+</div>
+<div class="hosted-step" data-hosted-phase="paired" hidden>
+<button id="hosted-versions">Show available backup versions</button>
+</div>
+<div class="hosted-step" data-hosted-phase="versions" hidden>
+<label for="hosted-snapshot">Backup version</label>
+<select id="hosted-snapshot"></select>
+<p class="muted">“Complete source coverage” describes what the source Mac captured. This Mac still needs your recovery key and a full verification.</p>
+<label for="hosted-output">Separate empty recovery folder</label>
+<div class="actions"><input id="hosted-output" readonly placeholder="Choose an empty folder"><button id="hosted-choose-output" class="secondary">Choose folder…</button></div>
+<button id="hosted-prepare">Prepare this version</button>
+</div>
+<div class="hosted-step" data-hosted-phase="prepared" hidden>
+<label for="hosted-key">Your separately saved recovery key</label>
+<input id="hosted-key" type="password" autocomplete="off" spellcheck="false" placeholder="CV1-…">
+<p class="muted">We check that this key opens the selected backup before saving it in this Mac’s Keychain. The key is not sent to our servers.</p>
+<button id="hosted-import-key">Verify and save key</button>
+</div>
+<div class="hosted-step" data-hosted-phase="key_verified" hidden>
+<p>The key opens this backup’s manifest. Conversation data has not been downloaded or fully verified yet.</p>
+<button id="hosted-download">Download and verify backup</button>
+</div>
+<div class="hosted-step" data-hosted-phase="verified" hidden>
+<p id="hosted-coverage"></p>
+<button id="hosted-open">Open recovered backup</button>
+<a class="button secondary" id="hosted-conversations" hidden>Search and read conversations</a>
+</div>
+<p class="muted">Need help? <a href="mailto:joshua@segeren.com">Email Joshua</a>. Never email your recovery key.</p>
 </section>
 <section class="panel" id="restore-panel">
 <h2>Recover a backup</h2>
@@ -281,10 +340,67 @@ document.body.classList.add("view-"+view);
 const viewCopy={backup:["Backups / Set up","Protect this Mac.","Choose a local or cloud-sync folder for encrypted backups, then set a daily or manual schedule."],conversations:["Conversations","Find any conversation.","Search local Codex transcripts and database-backed history."],recovery:["Recovery","Recover what matters.","Open a verified backup, restore one missing conversation, or recover complete history safely."]}[view];
 document.title="Codex Backup — "+({backup:"Backups",conversations:"Conversations",recovery:"Recovery"}[view]);
 $("view-kicker").textContent=viewCopy[0];$("view-title").textContent=viewCopy[1];$("view-lede").textContent=viewCopy[2];
+if(view==="recovery")$("status").textContent="";
 for(const link of document.querySelectorAll("[data-route]")){link.classList.toggle("active",link.dataset.route===view);link.href=link.getAttribute("href")+"#token="+encodeURIComponent(token)}
 const fmt=n=>{const units=["B","KB","MB","GB","TB"];let i=0;while(n>=1000&&i<units.length-1){n/=1000;i++}return `${n.toFixed(n>=100?0:n>=10?1:2)} ${units[i]}`};
 async function api(path,data){const response=await fetch(path,{method:data===undefined?"GET":"POST",headers:{"X-Codex-Migrate-Token":token,"Content-Type":"application/json"},...(data===undefined?{}:{body:JSON.stringify(data)})});const type=response.headers.get("Content-Type")||"";const body=type.includes("application/json")?await response.json():await response.text();if(!response.ok)throw Error(body.error||"The local request failed");return body}
 function fail(error){$("error").textContent=error.message;$("status").textContent=""}
+let hostedRecoveryTimer=null,hostedRecoveryState=null,hostedRecoveryPhase=null;
+function hostedRecoveryView(data){
+  hostedRecoveryState=data;
+  const panel=$("hosted-recovery-panel"),focusOwned=panel.contains(document.activeElement),phaseChanged=data.phase!==hostedRecoveryPhase;
+  panel.hidden=!data.enabled;
+  if(!data.enabled){if(hostedRecoveryTimer){clearInterval(hostedRecoveryTimer);hostedRecoveryTimer=null}return}
+  const running=data.status==="running";
+  for(const block of document.querySelectorAll("[data-hosted-phase]"))block.hidden=block.dataset.hostedPhase!==data.phase;
+  for(const control of $("hosted-recovery-panel").querySelectorAll("button,input,select"))control.disabled=running;
+  $("hosted-recovery-error").textContent=data.error||"";
+  const messages={start:"Connect using your purchase receipt.",email:"Check your email for the recovery code.",vaults:"Choose the backup you want to recover.",pairing_checkpoint:"Save this connection before pairing.",pairing_uncertain:"Saved pairing needs confirmation.",paired:"This Mac is connected for recovery.",versions:"Choose a published version and a separate folder.",prepared:"Metadata ready. Your recovery key is still needed.",key_verified:"Key verified. Full backup verification is still needed.",verified:"Encrypted backup downloaded and verified. Live Codex data is unchanged."};
+  const working={send_code:"Requesting your recovery email…",list_vaults:"Finding your backups…",pair:"Saving and connecting this Mac…",resolve:"Checking the saved connection…",versions:"Loading backup versions…",prepare:"Preparing the selected version’s metadata…",import_key:"Checking your key against the selected backup…",download:"Downloading and verifying the selected backup. Large backups can take a while. Keep the app open; if interrupted, retry this version to resume."};
+  $("hosted-recovery-status").textContent=running?working[data.step]||"Checking recovery…":messages[data.phase]||"Recovery needs attention.";
+  if(data.phase!==hostedRecoveryPhase){
+    if(data.phase==="vaults")$("hosted-vault").replaceChildren(...data.vaults.map((item,index)=>new Option(`Backup ${index+1} · ${item.lastGoodAt?new Date(item.lastGoodAt).toLocaleString():"no verified backup date"} · ${item.vaultId.slice(0,8)}`,item.vaultId)));
+    if(data.phase==="versions")$("hosted-snapshot").replaceChildren(...data.versions.map((item,index)=>new Option(`${index===0?"Newest published":"Last complete source capture"} · ${fmt(item.totalBytes)} · ${item.sourceCoverage==="complete"?"complete source coverage":"needs attention"} · ${item.snapshotId.slice(0,8)}`,item.snapshotId)));
+    hostedRecoveryPhase=data.phase;
+  }
+  if(data.phase==="verified")$("hosted-coverage").textContent=data.needs_attention?"This backup is readable, but some source data may be missing or damaged. Keep earlier versions and review the affected conversations.":"The selected backup verified successfully. Open it to search, read, and export your conversations.";
+  if(focusOwned&&(phaseChanged||document.activeElement.disabled||(!running&&document.activeElement===$("hosted-recovery-status")))){
+    const target=running?$("hosted-recovery-status"):panel.querySelector(`[data-hosted-phase="${data.phase}"] button:not(:disabled),[data-hosted-phase="${data.phase}"] input:not(:disabled),[data-hosted-phase="${data.phase}"] select:not(:disabled)`);
+    (target||$("hosted-recovery-status")).focus();
+  }
+  if(running&&!hostedRecoveryTimer)hostedRecoveryTimer=setInterval(refreshHostedRecovery,1500);
+  if(!running&&hostedRecoveryTimer){clearInterval(hostedRecoveryTimer);hostedRecoveryTimer=null}
+}
+async function refreshHostedRecovery(){
+  try{hostedRecoveryView(await api("/api/vault/hosted-recovery-status"))}
+  catch(error){$("hosted-recovery-error").textContent="Recovery status is unavailable. Do not repeat a pairing request; check the connection or contact support."}
+}
+async function hostedRecoveryStep(action,step={}){
+  if($("hosted-recovery-panel").contains(document.activeElement))$("hosted-recovery-status").focus();
+  for(const control of $("hosted-recovery-panel").querySelectorAll("button,input,select"))control.disabled=true;
+  if(!hostedRecoveryTimer)hostedRecoveryTimer=setInterval(refreshHostedRecovery,1500);
+  try{hostedRecoveryView(await api("/api/vault/hosted-recovery",{action,step:{...step,apply:true}}))}
+  catch(error){await refreshHostedRecovery();$("hosted-recovery-error").textContent=error.message}
+}
+$("hosted-send-code").onclick=()=>{const purchase_link=$("hosted-purchase").value.trim();$("hosted-purchase").value="";return hostedRecoveryStep("send_code",{purchase_link})};
+$("hosted-list-vaults").onclick=()=>{const code=$("hosted-code").value.trim();$("hosted-code").value="";return hostedRecoveryStep("list_vaults",{code})};
+$("hosted-pair").onclick=()=>hostedRecoveryStep("pair",{vault_id:$("hosted-vault").value});
+$("hosted-retry-save").onclick=()=>hostedRecoveryStep("pair",{vault_id:hostedRecoveryState.selected_vault_id});
+$("hosted-resolve").onclick=()=>hostedRecoveryStep("resolve");
+$("hosted-reauthorize").onclick=()=>hostedRecoveryStep("reauthorize");
+$("hosted-versions").onclick=()=>hostedRecoveryStep("versions");
+$("hosted-choose-output").onclick=async()=>{try{const result=await api("/api/vault/restore-folder",{});if(result.path)$("hosted-output").value=result.path}catch(error){$("hosted-recovery-error").textContent=error.message}};
+$("hosted-prepare").onclick=()=>hostedRecoveryStep("prepare",{snapshot_id:$("hosted-snapshot").value,output:$("hosted-output").value});
+$("hosted-import-key").onclick=()=>{const recovery_key=$("hosted-key").value.trim();$("hosted-key").value="";return hostedRecoveryStep("import_key",{recovery_key})};
+$("hosted-download").onclick=()=>hostedRecoveryStep("download");
+$("hosted-open").onclick=async()=>{
+  if(hostedRecoveryState?.phase!=="verified"||hostedRecoveryState.status!=="ready")return;
+  try{
+    browseView(await api("/api/vault/browse",{vault:hostedRecoveryState.vault,snapshot:hostedRecoveryState.snapshot_id,apply:true}));
+    $("hosted-conversations").href="/vault?view=conversations#token="+encodeURIComponent(token);
+    $("hosted-conversations").hidden=false;
+  }catch(error){$("hosted-recovery-error").textContent=error.message}
+};
 const chosenVault=()=>$("history-vault").value||$("restore-vault").value;
 $("search-source").onchange=()=>{$("history-location").hidden=$("search-source").value!=="history"};
 $("choose-history-vault").onclick=async()=>{
@@ -784,7 +900,7 @@ let selectedRecoveryTimer=null;
 function selectedRecoveryView(data){selectedRecoveryRunning=data.status==="running";const attention=data.status==="needs_attention";$("restore-thread").disabled=selectedRecoveryRunning||installRunning||attention;$("thread-restore-error").textContent=(data.status==="failed"||attention)?(data.error||"Selected recovery stopped safely."):"";if(data.status==="running"){$("thread-restore-status").textContent="Verifying the backup again and recovering this conversation…"}else if(data.status==="installed"){$("thread-restore-status").textContent="Conversation restored and verified. Reopen Codex to use it."}else if(data.status==="already_present"){$("thread-restore-status").textContent="This exact conversation is already present. Nothing was changed."}else if(data.status==="failed"||attention){$("thread-restore-status").textContent=""}if(selectedRecoveryRunning&&!selectedRecoveryTimer)selectedRecoveryTimer=setInterval(refreshSelectedRecovery,1000);if(!selectedRecoveryRunning&&selectedRecoveryTimer){clearInterval(selectedRecoveryTimer);selectedRecoveryTimer=null}refreshRestoreButton()}
 async function refreshSelectedRecovery(){try{selectedRecoveryView(await api("/api/vault/thread-install-status"))}catch(error){$("thread-restore-error").textContent=error.message}}
 $("restore-thread").onclick=async()=>{if(!selected||selected.source!=="backup"||selected.physical_only)return;if(!confirm("Restore only this verified conversation into Codex? Close Codex and its CLI sessions first. Existing conversations will not be overwritten or merged."))return;try{$("thread-restore-error").textContent="";selectedRecoveryView(await api("/api/vault/install-thread",{collection:selected.collection,transcript:selected.transcript,apply:true}))}catch(error){$("thread-restore-error").textContent=error.message}};
-api("/api/vault/summary").then(data=>{
+if(view!=="recovery")api("/api/vault/summary").then(data=>{
   const files=data.active_transcripts+data.archived_transcripts;
   const attachmentFiles=data.attachment_files||0;
   const attachmentNote=attachmentFiles?` plus ${attachmentFiles.toLocaleString()} attachment ${attachmentFiles===1?"file":"files"} (${fmt(data.attachment_bytes||0)})`:"";
@@ -812,6 +928,7 @@ refreshBrowse();
 refreshSelectedRecovery();
 refreshIndex();
 backupFrequencyView();
+if(view==="recovery")refreshHostedRecovery();
 </script>
 </body>
 </html>'''

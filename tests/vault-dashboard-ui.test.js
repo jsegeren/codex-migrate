@@ -15,6 +15,89 @@ const markdownFile = source.match(/async function markdownFile\(\)\{[\s\S]*?\n\}
 const backupView = source.match(/function backupView\(data\)\{[\s\S]*?\n\}/)[0];
 const scheduleView = source.match(/function scheduleView\(data\)\{[\s\S]*?\n\}/)[0];
 const summaryCallback = source.match(/api\("\/api\/vault\/summary"\)\.then\(data=>\{([\s\S]*?)\}\)\.catch/)[1];
+const hostedRecoveryView = source.match(/function hostedRecoveryView\(data\)\{[\s\S]*?\n\}/)[0];
+
+test('hosted recovery stays hidden until enabled and key verification is not recovery', () => {
+  const elements = new Map();
+  const blocks = ['start', 'prepared', 'key_verified', 'verified'].map(phase => ({
+    dataset: { hostedPhase: phase }, hidden: false,
+  }));
+  const context = {
+    $: id => {
+      if (!elements.has(id)) elements.set(id, {
+        hidden: false, textContent: '', disabled: false, querySelectorAll: () => [],
+        contains: () => false,
+      });
+      return elements.get(id);
+    },
+    document: { querySelectorAll: () => blocks },
+    fmt: value => String(value), clearInterval: () => {},
+  };
+  vm.createContext(context);
+  vm.runInContext('let hostedRecoveryTimer=null,hostedRecoveryState=null,hostedRecoveryPhase=null; ' + hostedRecoveryView, context);
+  context.hostedRecoveryView({ enabled: false });
+  assert.equal(elements.get('hosted-recovery-panel').hidden, true);
+  context.hostedRecoveryView({ enabled: true, status: 'ready', phase: 'key_verified' });
+  assert.equal(elements.get('hosted-recovery-panel').hidden, false);
+  assert.match(elements.get('hosted-recovery-status').textContent, /Full backup verification is still needed/);
+  assert.equal(blocks.find(block => block.dataset.hostedPhase === 'verified').hidden, true);
+  context.hostedRecoveryView({ enabled: true, status: 'ready', phase: 'verified', needs_attention: true });
+  assert.match(elements.get('hosted-coverage').textContent, /missing or damaged/);
+  assert.match(source, /id="hosted-key" type="password" autocomplete="off"/);
+  assert.match(source, /\$\("hosted-key"\)\.value=""/);
+  assert.doesNotMatch(source, /sessionStorage\.setItem\([^\n]*(?:recovery_key|purchase_link|code)/);
+});
+
+test('uncertain hosted response polls state instead of repeating pairing', async () => {
+  const step = source.match(/async function hostedRecoveryStep\(action,step=\{\}\)\{[\s\S]*?\n\}/)[0];
+  let polls = 0;
+  const calls = [];
+  const context = {
+    $: () => ({ querySelectorAll: () => [], textContent: '', contains: () => false }),
+    document: { activeElement: null },
+    setInterval: () => { polls++; return 1; },
+    refreshHostedRecovery: async () => { polls++; },
+    hostedRecoveryView: () => {},
+    api: async (...args) => { calls.push(args); throw Error('reply lost'); },
+  };
+  vm.createContext(context);
+  vm.runInContext('let hostedRecoveryTimer=null; ' + step, context);
+  await context.hostedRecoveryStep('pair', { vault_id: 'synthetic' });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][1].step.apply, true);
+  assert.equal(polls, 2);
+});
+
+test('hosted phase transitions move owned focus and never steal outside focus', () => {
+  const elements = new Map();
+  const controls = { prepared: { id: 'key' }, key_verified: { id: 'download' } };
+  const document = { activeElement: { outside: true }, querySelectorAll: () => [] };
+  const context = {
+    $: id => {
+      if (!elements.has(id)) elements.set(id, { id, textContent: '',
+        querySelectorAll: () => [], contains: element => !!element && !element.outside,
+        querySelector: selector => controls[selector.match(/phase="([^"]+)"/)[1]],
+        focus() { document.activeElement = this; },
+      });
+      return elements.get(id);
+    }, document, clearInterval: () => {}, setInterval: () => 1, refreshHostedRecovery: () => {},
+  };
+  for (const control of Object.values(controls)) control.focus = () => { document.activeElement = control; };
+  vm.createContext(context);
+  vm.runInContext('let hostedRecoveryTimer=null,hostedRecoveryState=null,hostedRecoveryPhase=null; ' + hostedRecoveryView, context);
+  context.hostedRecoveryView({ enabled: true, phase: 'prepared', status: 'ready' });
+  assert.equal(document.activeElement.outside, true);
+  document.activeElement = controls.prepared;
+  context.hostedRecoveryView({ enabled: true, phase: 'key_verified', status: 'running', step: 'import_key' });
+  assert.equal(document.activeElement.id, 'hosted-recovery-status');
+  context.hostedRecoveryView({ enabled: true, phase: 'key_verified', status: 'ready' });
+  assert.equal(document.activeElement.id, 'download');
+  context.hostedRecoveryView({ enabled: true, phase: 'key_verified', status: 'running', step: 'download' });
+  assert.match(elements.get('hosted-recovery-status').textContent, /retry this version to resume/);
+  document.activeElement = { outside: true };
+  context.hostedRecoveryView({ enabled: true, phase: 'verified', status: 'ready' });
+  assert.equal(document.activeElement.outside, true);
+});
 
 test('local history shows database-backed threads without double-counting them', () => {
   const elements = new Map();
