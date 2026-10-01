@@ -404,7 +404,7 @@ for(const link of document.querySelectorAll("[data-route]")){link.classList.togg
 const fmt=n=>{const units=["B","KB","MB","GB","TB"];let i=0;while(n>=1000&&i<units.length-1){n/=1000;i++}return `${n.toFixed(n>=100?0:n>=10?1:2)} ${units[i]}`};
 async function api(path,data){const response=await fetch(path,{method:data===undefined?"GET":"POST",headers:{"X-Codex-Migrate-Token":token,"Content-Type":"application/json"},...(data===undefined?{}:{body:JSON.stringify(data)})});const type=response.headers.get("Content-Type")||"";const body=type.includes("application/json")?await response.json():await response.text();if(!response.ok)throw Error(body.error||"The local request failed");return body}
 function fail(error){$("error").textContent=error.message;$("status").textContent=""}
-let hostedSetupTimer=null,hostedSetupPhase=null;
+let hostedSetupTimer=null,hostedSetupPhase=null,hostedSetupEpoch=0;
 function hostedSetupView(data){
   const panel=$("hosted-setup-panel"),focusOwned=panel.contains(document.activeElement),phaseChanged=data.phase!==hostedSetupPhase;
   $("setup-recovery").value=data.enabled&&data.phase==="key_save"&&data.status!=="running"?data.recovery_key||"":"";
@@ -427,8 +427,10 @@ function hostedSetupView(data){
   if(!running&&hostedSetupTimer){clearInterval(hostedSetupTimer);hostedSetupTimer=null}
 }
 async function refreshHostedSetup(){
-  try{hostedSetupView(await api("/api/vault/hosted-setup-status"));return true}
+  const epoch=hostedSetupEpoch;
+  try{const data=await api("/api/vault/hosted-setup-status");if(epoch===hostedSetupEpoch)hostedSetupView(data);return true}
   catch(error){
+    if(epoch!==hostedSetupEpoch)return false;
     $("setup-recovery").value="";$("setup-saved-key").value="";
     for(const control of $("hosted-setup-panel").querySelectorAll("button,input,textarea"))control.disabled=true;
     $("hosted-setup-error").textContent="Setup status is unavailable. Do not repeat pairing. Check the connection or contact Joshua.";
@@ -436,13 +438,20 @@ async function refreshHostedSetup(){
   }
 }
 async function hostedSetupStep(action,step={}){
+  const epoch=++hostedSetupEpoch;
   $("setup-recovery").value="";$("setup-saved-key").value="";
   if($("hosted-setup-panel").contains(document.activeElement))$("hosted-setup-status").focus();
   for(const control of $("hosted-setup-panel").querySelectorAll("button,input,textarea"))control.disabled=true;
   if(!hostedSetupTimer)hostedSetupTimer=setInterval(refreshHostedSetup,1500);
-  try{hostedSetupView(await api("/api/vault/hosted-setup",{action,step:{...step,apply:true}}))}
+  try{
+    const data=await api("/api/vault/hosted-setup",{action,step:{...step,apply:true}});
+    if(epoch!==hostedSetupEpoch)return;
+    ++hostedSetupEpoch;hostedSetupView(data);
+  }
   catch(error){
-    if(await refreshHostedSetup())$("hosted-setup-error").textContent="The request response was not confirmed. Use the current setup step shown above; do not repeat a pairing request.";
+    if(epoch!==hostedSetupEpoch)return;
+    const checkEpoch=++hostedSetupEpoch;
+    if(await refreshHostedSetup()&&checkEpoch===hostedSetupEpoch)$("hosted-setup-error").textContent="The request response was not confirmed. Use the current setup step shown above; do not repeat a pairing request.";
   }
 }
 $("setup-send-code").onclick=()=>{const purchase_link=$("setup-purchase").value.trim();$("setup-purchase").value="";return hostedSetupStep("send_code",{purchase_link})};

@@ -39,7 +39,7 @@ function setupFixture() {
     }, document, clearInterval: () => {}, setInterval: () => 1,
   };
   vm.createContext(context);
-  vm.runInContext('let hostedSetupTimer=null,hostedSetupPhase=null; ' + hostedSetupView + '\n' + refreshHostedSetup + '\n' + hostedSetupStep, context);
+  vm.runInContext('let hostedSetupTimer=null,hostedSetupPhase=null,hostedSetupEpoch=0; ' + hostedSetupView + '\n' + refreshHostedSetup + '\n' + hostedSetupStep, context);
   return { context, panel, controls, elements, blocks, document };
 }
 
@@ -156,6 +156,21 @@ test('saved recovery-key input clears before confirmation and is never persisted
   assert.equal(captured.step.recovery_key, 'synthetic saved key');
   assert.match(source, /id="setup-saved-key" type="password" autocomplete="off"/);
   assert.doesNotMatch(source, /(?:localStorage|sessionStorage)\.setItem\([^\n]*(?:setup-recovery|setup-saved-key|recovery_key)/);
+});
+
+test('an older status response cannot repaint recovery material after confirmation', async () => {
+  const { context, elements } = setupFixture();
+  context.hostedSetupView({ enabled: true, phase: 'key_save', status: 'ready', recovery_key: 'synthetic' });
+  let resolveOldStatus;
+  context.api = async (path, payload) => payload ?
+    { enabled: true, phase: 'key_ready', status: 'ready' } :
+    new Promise(resolve => { resolveOldStatus = resolve; });
+  const old = context.refreshHostedSetup();
+  await context.hostedSetupStep('confirm_key', { recovery_key: 'synthetic' });
+  resolveOldStatus({ enabled: true, phase: 'key_save', status: 'ready', recovery_key: 'synthetic' });
+  await old;
+  assert.equal(elements.get('setup-recovery').value, '');
+  assert.match(elements.get('hosted-setup-status').textContent, /Saved recovery key confirmed/);
 });
 
 test('hosted recovery stays hidden until enabled and key verification is not recovery', () => {
