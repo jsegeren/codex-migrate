@@ -1,6 +1,6 @@
 # Desktop release readiness
 
-## September 30 verified recovery-key import — draft source
+## September 30 verified recovery-key import — signed candidate, release held
 
 The ordinary import could store a well-formed but wrong recovery key before
 trying to open the backup. The new dark hosted import fetches only bound
@@ -20,11 +20,29 @@ an occupied key ID, and refusal of changed manifest digests or snapshot IDs
 before storing any key. Source tests also prove bounded-key syntax checks before
 filesystem/network work, no bulk chunk download, receipt/authority binding,
 unconfirmed-import refusal, no prompt before explicit apply, and CLI secrecy.
-The related backup/recovery regression suite also passed 168 tests (one
-explicitly opt-in physical large-history probe skipped). The prior source CI run 36794649072 is
-fully green. The current signed app
-below predates this native-command addition; signed-package acceptance is still
-required. The guided hosted customer UI and real-service proof remain open.
+The related backup/recovery regression suite passed 169 tests (one explicitly
+opt-in physical large-history probe skipped). The prior source CI runs
+36794649072 and 36794887993 are fully green. The new source CI run 36796611251
+was queued when this receipt was recorded; it is not counted as passed.
+
+The exact clean source candidate is
+`65935091ed6dbd9f1f95a684d6701decb552aef0`, pushed to
+`origin/codex/hosted-vault-service`. Its Developer ID signed/provisioned app is
+`build/desktop-kbhwc7id/Codex Migrate.app`, with `source_dirty: false` in the
+embedded build receipt. Strict deep signature verification passed. The archive
+is `build/desktop-kbhwc7id/Codex-Migrate-0.1.0-build20-arm64-LOCAL-UNSIGNED.zip`,
+SHA-256 `8395782373806395196f10424a4e39d19ecd70b7dc0cc1b52a9fe2d73c2fa611`.
+Despite the conservative local-test filename, the app is Developer ID signed;
+it is **not notarized or approved for distribution**.
+
+All three new native key-import tests passed again using that exact app's
+provisioned ThisDeviceOnly helper, not the compiled legacy-test helper. All
+11 opt-in packaged compression, corruption, attachment/search, interruption,
+LaunchAgent/paginated, older-key and update/restore-contention checks passed
+against the same exact app. These are same-Mac package proofs, not a clean-Mac
+or real hosted-service proof. The clean macOS VM image pull remains active
+(40% at the last live-session observation) despite transient network retries.
+The guided hosted customer UI and real-service clean-Mac proof remain open.
 
 ## September 30 metadata-first replacement-Mac recovery — draft source
 
