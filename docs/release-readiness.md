@@ -1,5 +1,31 @@
 # Desktop release readiness
 
+## September 30 verified recovery-key import — draft source
+
+The ordinary import could store a well-formed but wrong recovery key before
+trying to open the backup. The new dark hosted import fetches only bound
+metadata and the encrypted manifest. Native `import-key-verified` first checks
+the supplied manifest digest and opens it with the candidate key entirely in
+memory, validating the snapshot identity/format before any Keychain write.
+It then stores or confirms the exact same personal key, refuses a conflicting
+existing/legacy/business key, and never silently replaces or deletes one.
+The key travels on private stdin, not arguments, diagnostics or return JSON.
+Import success means `ready_to_download`, not complete recovery.
+
+Twenty-eight focused tests passed, including three native tests using disposable
+legacy-test Keychain entries: wrong-key refusal without storing it, successful
+retry and repeated correct import, subsequent full snapshot verification, and
+preservation of both existing Vaults when an alternate valid key/manifest targets
+an occupied key ID, and refusal of changed manifest digests or snapshot IDs
+before storing any key. Source tests also prove bounded-key syntax checks before
+filesystem/network work, no bulk chunk download, receipt/authority binding,
+unconfirmed-import refusal, no prompt before explicit apply, and CLI secrecy.
+The related backup/recovery regression suite also passed 168 tests (one
+explicitly opt-in physical large-history probe skipped). The prior source CI run 36794649072 is
+fully green. The current signed app
+below predates this native-command addition; signed-package acceptance is still
+required. The guided hosted customer UI and real-service proof remain open.
+
 ## September 30 metadata-first replacement-Mac recovery — draft source
 
 The prior receiver downloaded the complete encrypted snapshot before discovering

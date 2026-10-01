@@ -14,7 +14,7 @@ from codex_migrate.vault_backup import _helper_path
 from codex_migrate.vault_hosted_enrollment_client import HostedEnrollmentClient
 from codex_migrate.vault_hosted_schedule import SERVICE_ORIGIN
 from codex_migrate.vault_remote_recovery import (
-    download_encrypted_snapshot, prepare_encrypted_recovery,
+    download_encrypted_snapshot, import_encrypted_recovery_key, prepare_encrypted_recovery,
 )
 from codex_migrate.vault_recovery import snapshot_catalog
 from codex_migrate.vault_schedule import _home
@@ -88,6 +88,23 @@ def prepare_hosted_recovery(
         crypto_helper=crypto_helper)
     return prepare_encrypted_recovery(home, output, store, receipt,
                                       max_bytes=max_bytes)
+
+
+def import_hosted_recovery_key(
+    source_home: str, output: str, device_id: str, recovery_key: str, *,
+    max_bytes: int, snapshot_id: Optional[str] = None,
+    crypto_helper: Optional[str] = None, apply: bool = False,
+) -> dict:
+    """Verify the saved key against bound ciphertext before storing it."""
+    if apply is not True:
+        raise MigrationError("Hosted recovery key import requires explicit confirmation.")
+    home = str(_home(source_home))
+    helper, _, receipt, store = _recovery_plan(
+        device_id, max_bytes=max_bytes, snapshot_id=snapshot_id,
+        crypto_helper=crypto_helper)
+    return import_encrypted_recovery_key(
+        home, output, store, receipt, recovery_key, max_bytes=max_bytes,
+        crypto_helper=str(helper))
 
 
 def recover_hosted_snapshot(

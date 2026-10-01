@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_remote_recovery import (
-    download_encrypted_snapshot, prepare_encrypted_recovery,
+    download_encrypted_snapshot, import_encrypted_recovery_key, prepare_encrypted_recovery,
 )
 
 
@@ -119,6 +119,44 @@ class RemotePreparationTests(unittest.TestCase):
                                              self.receipt["objects"][-2]["key"]])
                 self.assertFalse((output / "latest.json").exists())
                 self.assertTrue((output / ".hosted-recovery.json").exists())
+
+    def test_verified_key_import_uses_private_stdin_and_fetches_no_chunks(self):
+        secret = "CV1-" + "A" * 43
+        with patch("codex_migrate.vault_remote_recovery._helper_path",
+                   return_value=Path("/synthetic/helper")), patch(
+                "codex_migrate.vault_remote_recovery._run_helper",
+                return_value={"key_id": KEY, "imported": True}) as helper:
+            result = import_encrypted_recovery_key(str(self.home), str(self.output),
+                self, self.receipt, secret, max_bytes=1024 * 1024)
+        self.assertEqual(helper.call_args.kwargs, {"input_data": (secret + "\n").encode()})
+        arguments = helper.call_args.args[1]
+        self.assertEqual(arguments[0], "import-key-verified")
+        self.assertNotIn(secret, arguments)
+        self.assertEqual(arguments[-1], self.receipt["objects"][-2]["sha256"])
+        self.assertNotIn(secret, json.dumps(result))
+        self.assertEqual(result["status"], "ready_to_download")
+        self.assertEqual(self.reads, [self.receipt["objects"][0]["key"],
+                                     self.receipt["objects"][-2]["key"]])
+        self.assertFalse((self.output / "latest.json").exists())
+
+    def test_bad_key_syntax_refuses_before_any_fetch_or_folder_creation(self):
+        for secret in (None, "", "CV1-wrong", "CV1-" + "A" * 44, "CV1-" + "A" * 43 + "\n"):
+            with self.subTest(secret_type=type(secret).__name__):
+                with self.assertRaises(MigrationError):
+                    import_encrypted_recovery_key(str(self.home), str(self.output),
+                        self, self.receipt, secret, max_bytes=1024 * 1024)
+        self.assertEqual(self.reads, [])
+        self.assertFalse(self.output.exists())
+
+    def test_unconfirmed_key_import_keeps_recovery_incomplete(self):
+        with patch("codex_migrate.vault_remote_recovery._helper_path",
+                   return_value=Path("/synthetic/helper")), patch(
+                "codex_migrate.vault_remote_recovery._run_helper", return_value={}):
+            with self.assertRaises(MigrationError):
+                import_encrypted_recovery_key(str(self.home), str(self.output), self,
+                    self.receipt, "CV1-" + "A" * 43, max_bytes=1024 * 1024)
+        self.assertFalse((self.output / "latest.json").exists())
+        self.assertTrue((self.output / ".hosted-recovery.json").exists())
 
 
 if __name__ == "__main__":

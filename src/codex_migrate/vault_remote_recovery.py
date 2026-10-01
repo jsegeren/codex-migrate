@@ -426,3 +426,40 @@ def prepare_encrypted_recovery(
                 "status": "awaiting_recovery_key"}
     finally:
         os.close(descriptor)
+
+
+def import_encrypted_recovery_key(
+    source_home: str, output: str, store: ScopedReadStore, receipt: dict,
+    recovery_key: str, *, max_bytes: int, crypto_helper: Optional[str] = None,
+) -> dict:
+    """Prove a candidate key opens the selected manifest before saving it.
+
+    The secret travels only on the native helper's stdin. Metadata and the
+    manifest may be fetched; conversation chunks and references are not.
+    This is not complete snapshot verification or Codex installation.
+    """
+    if (not isinstance(recovery_key, str) or
+            not re.fullmatch(r"CV1-[A-Za-z0-9_-]{43}", recovery_key)):
+        raise MigrationError("The saved recovery key has an invalid format.")
+    snapshot_id, objects = _objects(receipt, max_bytes)
+    root, descriptor = _prepare_root(source_home, output,
+                                     _marker_bytes(snapshot_id, objects))
+    try:
+        _fetch_item(descriptor, objects[0], store)
+        metadata = _read_json(root / "vault.json")
+        key_id = _metadata(metadata)
+        if metadata.get("recovery_mode") == "business-v1":
+            raise MigrationError("This backup requires a role-bound business recovery kit.")
+        manifest = objects[-2]
+        _fetch_item(descriptor, manifest, store)
+        imported = _run_helper(_helper_path(crypto_helper), [
+            "import-key-verified", "--key-id", key_id,
+            "--snapshot-id", snapshot_id, "--manifest", str(root / manifest.key),
+            "--manifest-sha256", manifest.sha256,
+        ], input_data=(recovery_key + "\n").encode("ascii"))
+        if imported != {"key_id": key_id, "imported": True}:
+            raise MigrationError("The recovery key import could not be confirmed.")
+        return {"vault": str(root), "snapshot_id": snapshot_id,
+                "key_id": key_id, "status": "ready_to_download"}
+    finally:
+        os.close(descriptor)

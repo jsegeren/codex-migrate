@@ -9,7 +9,8 @@ from unittest.mock import patch
 from codex_migrate.cli import main, parser
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_hosted_disaster_recovery import (
-    hosted_recovery_options, prepare_hosted_recovery, recover_hosted_snapshot,
+    hosted_recovery_options, import_hosted_recovery_key, prepare_hosted_recovery,
+    recover_hosted_snapshot,
 )
 
 
@@ -117,6 +118,49 @@ class HostedDisasterRecoveryTests(unittest.TestCase):
                 self.home, self.output, DEVICE, max_bytes=400, apply=True)
         self.assertTrue(result["needs_attention"])
         self.assertEqual(result["at_risk_sources"], 2)
+
+    def test_verified_import_binds_authority_and_never_downloads_conversations(self):
+        secret = "CV1-" + "A" * 43
+        helper, enrollment, download = self._patches()
+        with helper, enrollment, download as receiver, patch(
+                "codex_migrate.vault_hosted_disaster_recovery.import_encrypted_recovery_key",
+                return_value={"status": "ready_to_download"}) as imported:
+            result = import_hosted_recovery_key(self.home, self.output, DEVICE, secret,
+                max_bytes=400, snapshot_id=SNAPSHOT, apply=True)
+        self.assertEqual(result, {"status": "ready_to_download"})
+        self.assertEqual(imported.call_args.args[:2],
+                         (str(Path(self.home).resolve()), self.output))
+        self.assertEqual(imported.call_args.args[-1], secret)
+        self.assertEqual(self.prepared, [{"max_bytes": 400,
+            "expected_pointer": self.pointer, "selected_snapshot_id": SNAPSHOT}])
+        receiver.assert_not_called()
+        self.catalog.assert_not_called()
+
+    def test_verified_import_requires_apply_before_credentials_or_prompt(self):
+        with patch("codex_migrate.vault_hosted_disaster_recovery.HostedEnrollmentClient") as client:
+            with self.assertRaisesRegex(MigrationError, "explicit confirmation"):
+                import_hosted_recovery_key(self.home, self.output, DEVICE,
+                                          "CV1-" + "A" * 43, max_bytes=400)
+            client.assert_not_called()
+        with patch("codex_migrate.cli.getpass.getpass") as prompt, redirect_stderr(io.StringIO()):
+            self.assertNotEqual(main([
+                "vault", "--source-home", self.home, "hosted-import-recovery-key",
+                "--device-id", DEVICE, "--output", self.output, "--max-bytes", "400"]), 0)
+            prompt.assert_not_called()
+
+    def test_verified_import_cli_never_echoes_the_key_or_claims_full_recovery(self):
+        secret = "CV1-" + "A" * 43
+        printed = io.StringIO()
+        with patch("codex_migrate.cli.getpass.getpass", return_value=secret), patch(
+                "codex_migrate.vault_hosted_disaster_recovery.import_hosted_recovery_key",
+                return_value={"status": "ready_to_download"}) as imported, redirect_stdout(printed):
+            self.assertEqual(main([
+                "vault", "--source-home", self.home, "hosted-import-recovery-key",
+                "--device-id", DEVICE, "--output", self.output, "--max-bytes", "400",
+                "--apply"]), 0)
+        self.assertEqual(imported.call_args.kwargs["recovery_key"], secret)
+        self.assertNotIn(secret, printed.getvalue())
+        self.assertIn("complete backup next", printed.getvalue())
 
     def test_unknown_coverage_does_not_become_a_clean_recovery_claim(self):
         self.pointer[2]["sourceCoverage"] = "unknown"

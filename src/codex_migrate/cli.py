@@ -199,7 +199,7 @@ def parser() -> argparse.ArgumentParser:
     vault_hosted_backups.add_argument("--device-id", required=True)
     vault_hosted_backups.add_argument("--crypto-helper")
     vault_hosted_backups.add_argument("--json", action="store_true")
-    for name in ("hosted-prepare-recovery", "hosted-recover"):
+    for name in ("hosted-prepare-recovery", "hosted-import-recovery-key", "hosted-recover"):
         vault_hosted_recover = vault_commands.add_parser(name, help=argparse.SUPPRESS)
         vault_hosted_recover.add_argument("--device-id", required=True)
         vault_hosted_recover.add_argument("--output", required=True)
@@ -335,18 +335,33 @@ def main(argv: Optional[List[str]] = None) -> int:
                         print("Newest source-reported complete backup: %s" % (
                             prior["snapshotId"] if prior else "none available"))
                 return 0
-            if args.vault_command in ("hosted-prepare-recovery", "hosted-recover"):
+            if args.vault_command in (
+                    "hosted-prepare-recovery", "hosted-import-recovery-key", "hosted-recover"):
                 from codex_migrate.vault_hosted_disaster_recovery import (
-                    prepare_hosted_recovery, recover_hosted_snapshot,
+                    import_hosted_recovery_key, prepare_hosted_recovery, recover_hosted_snapshot,
                 )
                 preparing = args.vault_command == "hosted-prepare-recovery"
-                operation = prepare_hosted_recovery if preparing else recover_hosted_snapshot
-                result = operation(
-                    args.source_home, args.output, args.device_id,
-                    max_bytes=args.max_bytes, snapshot_id=args.snapshot,
-                    crypto_helper=args.crypto_helper, apply=args.apply)
+                importing = args.vault_command == "hosted-import-recovery-key"
+                operation = (import_hosted_recovery_key if importing else
+                             prepare_hosted_recovery if preparing else recover_hosted_snapshot)
+                secret = {}
+                if importing:
+                    if args.apply is not True:
+                        raise ValueError("Hosted recovery key import requires explicit confirmation.")
+                    secret["recovery_key"] = getpass.getpass(
+                        "Saved recovery key (input hidden): ").strip()
+                try:
+                    result = operation(
+                        args.source_home, args.output, args.device_id,
+                        max_bytes=args.max_bytes, snapshot_id=args.snapshot,
+                        crypto_helper=args.crypto_helper, apply=args.apply, **secret)
+                finally:
+                    secret.clear()
                 if args.json:
                     print(json.dumps(result, indent=2, sort_keys=True))
+                elif importing:
+                    print("Recovery key checked and saved. Download and verify the "
+                          "complete backup next; your Codex data has not changed.")
                 elif preparing:
                     print("Recovery metadata prepared in: %s" % result["vault"])
                     print("Import your separately saved recovery key before downloading "

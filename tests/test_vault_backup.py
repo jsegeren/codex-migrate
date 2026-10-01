@@ -2329,6 +2329,95 @@ class VaultBackupTests(unittest.TestCase):
             finally:
                 self.delete_key(destination)
 
+    def test_verified_hosted_key_import_refuses_wrong_key_without_poisoning_keychain(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, destination = root / "source", root / "vault"
+            recovered = root / "hosted-recovery"
+            self.fixture(source)
+            store = MemoryObjectStore()
+            try:
+                saved = backup(str(source), str(destination), crypto_helper=str(self.helper))
+                staged = vault_remote_transfer.stage_encrypted_snapshot(
+                    str(destination), store, crypto_helper=str(self.helper))
+                self.delete_key(destination)
+                with patch.object(store, "open_read", wraps=store.open_read) as read, \
+                     self.assertRaises(MigrationError):
+                    vault_remote_recovery.import_encrypted_recovery_key(
+                        str(source), str(recovered), store, staged.receipt(), "CV1-" + "A" * 43,
+                        max_bytes=1024 * 1024, crypto_helper=str(self.helper))
+                self.assertEqual([call.args[0] for call in read.call_args_list],
+                                 [staged.objects[0].key, staged.objects[-2].key])
+                with self.assertRaises(MigrationError):
+                    export_recovery_key(str(destination), crypto_helper=str(self.helper))
+                self.assertFalse((recovered / "objects").exists())
+                self.assertFalse((recovered / "latest.json").exists())
+                for attempt in range(2):
+                    result = vault_remote_recovery.import_encrypted_recovery_key(
+                        str(source), str(recovered), store, staged.receipt(), saved.recovery_key,
+                        max_bytes=1024 * 1024, crypto_helper=str(self.helper))
+                    self.assertEqual(result["status"], "ready_to_download")
+                    self.assertNotIn(saved.recovery_key, json.dumps(result))
+                self.assertEqual(export_recovery_key(str(destination),
+                    crypto_helper=str(self.helper)), saved.recovery_key)
+                downloaded = vault_remote_recovery.download_encrypted_snapshot(
+                    str(source), str(recovered), store, staged.receipt(),
+                    max_bytes=1024 * 1024, crypto_helper=str(self.helper))
+                self.assertEqual(downloaded.snapshot_id, saved.snapshot_id)
+                self.assertEqual((source / ".codex/auth.json").read_text(), "NEVER-COPY-AUTH")
+            finally:
+                self.delete_key(destination)
+
+    def test_verified_import_never_replaces_an_existing_different_key(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, original, other = root / "source", root / "original", root / "other"
+            self.fixture(source)
+            try:
+                saved = backup(str(source), str(original), crypto_helper=str(self.helper))
+                alternate = backup(str(source), str(other), crypto_helper=str(self.helper))
+                manifest = other / "manifests" / (alternate.snapshot_id + ".cvmanifest")
+                with self.assertRaises(MigrationError):
+                    vault_backup._run_helper(self.helper, [
+                        "import-key-verified", "--key-id", saved.key_id,
+                        "--snapshot-id", alternate.snapshot_id, "--manifest", str(manifest),
+                        "--manifest-sha256", hashlib.sha256(manifest.read_bytes()).hexdigest(),
+                    ], input_data=(alternate.recovery_key + "\n").encode())
+                self.assertEqual(export_recovery_key(str(original),
+                    crypto_helper=str(self.helper)), saved.recovery_key)
+                self.assertEqual(verify_snapshot(str(original),
+                    crypto_helper=str(self.helper)).snapshot_id, saved.snapshot_id)
+                self.assertEqual(verify_snapshot(str(other),
+                    crypto_helper=str(self.helper)).snapshot_id, alternate.snapshot_id)
+            finally:
+                self.delete_key(original)
+                self.delete_key(other)
+
+    def test_verified_import_refuses_changed_digest_or_snapshot_before_saving_key(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, destination = root / "source", root / "vault"
+            self.fixture(source)
+            try:
+                saved = backup(str(source), str(destination), crypto_helper=str(self.helper))
+                manifest = destination / "manifests" / (saved.snapshot_id + ".cvmanifest")
+                digest = hashlib.sha256(manifest.read_bytes()).hexdigest()
+                self.delete_key(destination)
+                cases = ((saved.snapshot_id, "0" * 64),
+                         (str(uuid.uuid4()), digest))
+                for snapshot_id, expected_digest in cases:
+                    with self.subTest(snapshot_id=snapshot_id), self.assertRaises(MigrationError):
+                        vault_backup._run_helper(self.helper, [
+                            "import-key-verified", "--key-id", saved.key_id,
+                            "--snapshot-id", snapshot_id, "--manifest", str(manifest),
+                            "--manifest-sha256", expected_digest,
+                        ], input_data=(saved.recovery_key + "\n").encode())
+                    with self.assertRaises(MigrationError):
+                        export_recovery_key(str(destination), crypto_helper=str(self.helper))
+                self.assertEqual((source / ".codex/auth.json").read_text(), "NEVER-COPY-AUTH")
+            finally:
+                self.delete_key(destination)
+
     def test_hosted_recovery_requires_reimported_key_then_resumes_without_live_writes(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

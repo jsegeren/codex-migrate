@@ -884,6 +884,67 @@ private func importKeyCommand(_ arguments: [String]) throws {
                             imported: true, deleted: nil))
 }
 
+private func importVerifiedKeyCommand(_ arguments: [String]) throws {
+    let keyID = try canonicalKeyID(argument("--key-id", in: arguments))
+    let snapshotID = try canonicalKeyID(argument("--snapshot-id", in: arguments))
+    let digest = try argument("--manifest-sha256", in: arguments)
+    let input = try FileHandle.standardInput.read(upToCount: 257) ?? Data()
+    guard input.count <= 256, let text = String(data: input, encoding: .utf8) else {
+        throw VaultError.message("the recovery key is invalid")
+    }
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard trimmed.hasPrefix("CV1-") else {
+        throw VaultError.message("the recovery key is invalid")
+    }
+    let material = try decodeBase64URL(String(trimmed.dropFirst(4)))
+    guard material.count == 32,
+          digest.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil else {
+        throw VaultError.message("the recovery key or manifest digest is invalid")
+    }
+    let path = URL(fileURLWithPath: try argument("--manifest", in: arguments))
+    let ciphertext = try safeRegularFile(path, maxBytes: 128 * 1024 * 1024 + 64)
+    guard hex(SHA256.hash(data: ciphertext)) == digest else {
+        throw VaultError.message("the recovery manifest differs from its receipt")
+    }
+    let aad = Data("codex-vault:manifest:v1:\(snapshotID)".utf8)
+    let plaintext = try opened(ciphertext,
+                               key: encryptionKey(SymmetricKey(data: material)), aad: aad)
+    let manifest = try JSONDecoder().decode(Manifest.self, from: plaintext)
+    guard manifest.format == "codex-vault-snapshot",
+          (manifest.version >= formatVersion && manifest.version <= snapshotFormatVersion),
+          manifest.snapshot_id.lowercased() == snapshotID else {
+        throw VaultError.message("the decrypted manifest has an unsupported identity or format")
+    }
+    // Nothing above accesses or writes Keychain. Only a key that opens this
+    // exact selected manifest may now be stored; never replace another key.
+    var other = businessKeyQuery(keyID)
+    other[kSecReturnAttributes] = true
+    var otherItem: CFTypeRef?
+    guard SecItemCopyMatching(other as CFDictionary, &otherItem) == errSecItemNotFound else {
+        throw VaultError.message("the personal Vault key type could not be confirmed")
+    }
+#if !CODEX_VAULT_TEST_LEGACY_KEYCHAIN
+    if let legacy = try inspectLegacyKey(keyID), legacy != material {
+        throw VaultError.message("that key identifier has a different older Vault key")
+    }
+#endif
+    var query = keyQuery(keyID)
+    query[kSecReturnData] = true
+    query[kSecMatchLimit] = kSecMatchLimitOne
+    var item: CFTypeRef?
+    let status = SecItemCopyMatching(query as CFDictionary, &item)
+    if status == errSecItemNotFound {
+        try storeKey(material, keyID: keyID)
+    } else if status != errSecSuccess || (item as? Data) != material {
+        throw VaultError.message("the saved Vault key is unavailable or differs from this recovery key")
+    }
+    guard rawKey(try loadKey(keyID)) == material else {
+        throw VaultError.message("the imported key could not be verified")
+    }
+    try printJSON(KeyResult(key_id: keyID, recovery_key: nil,
+                            imported: true, deleted: nil))
+}
+
 private func exportKeyCommand(_ arguments: [String]) throws {
     let keyID = try canonicalKeyID(argument("--key-id", in: arguments))
     var business = businessKeyQuery(keyID)
@@ -1406,6 +1467,7 @@ private func run() throws {
     case "business-key-create": try createBusinessKeyCommand()
     case "business-key-import": try importBusinessKeyCommand(arguments)
     case "import-key": try importKeyCommand(arguments)
+    case "import-key-verified": try importVerifiedKeyCommand(arguments)
     case "export-key": try exportKeyCommand(arguments)
 #if CODEX_VAULT_TEST_LEGACY_KEYCHAIN
     case "inspect-key": try inspectKeyCommand(arguments)

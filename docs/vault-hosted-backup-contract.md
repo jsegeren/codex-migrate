@@ -69,8 +69,15 @@ encrypted backup. It does not replace their separately saved recovery key.
 The dark `hosted-prepare-recovery` path obtains the selected published receipt
 and downloads only its checksum-bound, structurally validated Vault metadata
 into an isolated private destination. It reports `awaiting_recovery_key`,
-never protection or decrypted recovery. This permits key import before the
-bulk transfer; the same receipt-bound destination then resumes through the
+never protection or decrypted recovery. The dark `hosted-import-recovery-key`
+path then fetches the receipt-bound encrypted manifest and passes the candidate
+key only on the native helper's private stdin. The helper verifies the exact
+manifest digest, authenticated decryption and snapshot identity **before**
+saving anything to Keychain. A wrong key does not occupy the backup's key slot;
+repeating a valid import confirms the same key without replacing it. A
+conflicting existing or legacy key is refused, never deleted or overwritten.
+Import reports `ready_to_download`, not verified protection or restored chats.
+The same receipt-bound destination then resumes through the
 normal authenticated download/verify path. Existing Codex and repositories
 are not changed. A different receipt or conflicting destination is refused,
 not silently overwritten.
@@ -82,8 +89,8 @@ manifest does not prove the chunks exist or the complete snapshot is sound:
 every object and the reconstructed snapshot must still verify before recovery
 can be reported complete.
 
-The initial customer UI must guide pairing → metadata preparation → separately
-saved key import → download/verify → read/export or explicit selected insertion.
+The initial customer UI must guide pairing → metadata preparation → verified
+saved-key import → download/verify → read/export or explicit selected insertion.
 The CLI primitives are not that completed UI, and a metadata checksum is not
 proof that the customer can decrypt the backup. Real-service clean-Mac proof
 remains required before offering this flow to buyers.
