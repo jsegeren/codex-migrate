@@ -1,5 +1,45 @@
 # Desktop release readiness
 
+## September 30 first/manual hosted backup — acceptance entrypoint
+
+The previously library-only first hosted backup now has an explicit dark CLI
+entrypoint, `vault hosted-backup`. It uses an already enrolled native device and
+existing individual Vault key metadata; it does not create a key, accept a
+bearer or caller-selected provider origin, or install a schedule. The default
+plan does no metadata/Keychain/network work. Applied runs share the existing
+app-update/LaunchAgent lock, preserve the live engine's durable reservation
+retries and independently reopen the exact remote sealed manifest. A changed
+pointer, wrong key, invalid receipt or disagreeing loss evidence refuses
+success. Suspect coverage remains `needs_attention`, and the returned status
+explicitly does not claim automatic protection.
+
+All 17 focused tests passed, including actual file-lock contention and an actual
+pending update marker, safe CLI routing/defaults, unchanged-versus-published
+results, malformed risk evidence, provider-error sanitization and no schedule
+creation. The initial related hosted-client suite passed 220 tests before the
+two additional real-guard tests were added. Independent reviewer
+`/root/public_release_review` accepted the implementation/security boundaries
+and documentation, then accepted the CLI/error wording after two corrections:
+pending state is not presumed to exist, and key metadata is distinguished from
+the Keychain-held encryption key. Its focused rerun passed 17/17, and its
+initial related run passed 70/70. These are synthetic unit tests, not real
+hosted service, provider retention or clean-Mac recovery acceptance. No customer
+data, real Mac schedule, public app, production runtime or paid catalog changed.
+
+### Separate migration compatibility failure discovered by the full local run
+
+The full Python suite ran 1,336 tests: 40 errors, 33 skipped. It did **not**
+pass. The observed errors fail in existing Git/workspace migration fixtures at
+the system rsync copy, not the new hosted manual command. A separate disposable
+Git fixture reproduced `/usr/bin/rsync -aE` failing with `openat: Permission
+denied` on a read-only `.git/objects` file. The same source copied with `-a`
+exited successfully. This isolates the extended-metadata path but does not
+establish the underlying OS implementation defect or a safe replacement.
+Do not remove `-E`, change source permissions, skip these tests or call this
+Mac's migration coverage green. Preserve metadata/content guarantees, investigate
+a compatible transfer path, and rerun the failing fixtures before certifying
+full migration here. Hosted backup/recovery acceptance remains separate.
+
 ## September 30 authenticated R2 endpoint — deployment preparation verified
 
 `hosted/r2-sandbox.wrangler.jsonc` now pins the real capability-protected

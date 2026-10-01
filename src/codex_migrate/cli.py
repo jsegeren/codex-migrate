@@ -194,6 +194,12 @@ def parser() -> argparse.ArgumentParser:
     vault_hosted_scheduled_run = vault_commands.add_parser(
         "hosted-scheduled-run", help=argparse.SUPPRESS)
     vault_hosted_scheduled_run.add_argument("--config", required=True)
+    vault_hosted_backup = vault_commands.add_parser("hosted-backup", help=argparse.SUPPRESS)
+    vault_hosted_backup.add_argument("--device-id", required=True)
+    vault_hosted_backup.add_argument("--key-metadata", required=True)
+    vault_hosted_backup.add_argument("--crypto-helper")
+    vault_hosted_backup.add_argument("--apply", action="store_true")
+    vault_hosted_backup.add_argument("--json", action="store_true")
     vault_hosted_backups = vault_commands.add_parser(
         "hosted-backups", help=argparse.SUPPRESS)
     vault_hosted_backups.add_argument("--device-id", required=True)
@@ -318,6 +324,24 @@ def main(argv: Optional[List[str]] = None) -> int:
             if args.vault_command == "hosted-scheduled-run":
                 from codex_migrate.vault_hosted_schedule import run_hosted_scheduled_backup
                 return run_hosted_scheduled_backup(args.config)
+            if args.vault_command == "hosted-backup":
+                if not args.apply:
+                    print("Planning mode only; add --apply to upload encrypted history "
+                          "using an already enrolled device, existing Keychain-held "
+                          "Vault key and metadata.")
+                    return 0
+                from codex_migrate.vault_hosted_manual import back_up_hosted_history
+                result = back_up_hosted_history(
+                    args.source_home, args.device_id, args.key_metadata,
+                    crypto_helper=args.crypto_helper, apply=True)
+                if args.json:
+                    print(json.dumps(result, indent=2, sort_keys=True))
+                else:
+                    print("Hosted backup result: %s (%s)" % (
+                        result["status"], result["snapshot_id"]))
+                    print("This command does not enable automatic backups or prove "
+                          "clean-Mac recovery. Verify those separately.")
+                return 0
             if args.vault_command == "hosted-backups":
                 from codex_migrate.vault_hosted_disaster_recovery import hosted_recovery_options
                 options = hosted_recovery_options(

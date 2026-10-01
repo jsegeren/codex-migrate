@@ -95,6 +95,32 @@ The CLI primitives are not that completed UI, and a metadata checksum is not
 proof that the customer can decrypt the backup. Real-service clean-Mac proof
 remains required before offering this flow to buyers.
 
+### First/manual backup acceptance entrypoint
+
+The dark `vault hosted-backup` command now connects an already enrolled native
+device and an existing individual Vault key to the live hosted upload engine.
+It requires `--device-id`, an absolute `--key-metadata` file (the existing
+non-secret `vault.json`), and explicit `--apply`. Without `--apply`, it does
+not open the metadata, use Keychain, contact a provider or create local state.
+The service origin is fixed; the authenticated service supplies the object
+Worker origin. Neither a service URL nor a bearer is a command-line option.
+
+The manual operation takes the same app-update/LaunchAgent lock and reuses the
+engine's durable reservation journal rather than creating a new upload on an
+ambiguous reply. After publication (or an unchanged check), it independently
+fetches the exact remote sealed manifest, authenticates it with the existing
+key, and compares its loss evidence with the upload result. Risky or unknown
+coverage stays `needs_attention`. Its public result is allowlisted and reports
+`automatic_protection_verified: false`: this command neither installs a timer
+nor proves a saved-key import or complete reconstruction on a clean Mac.
+Provider/helper diagnostics are not forwarded to the terminal.
+
+This enables the first/manual leg of real-service acceptance without silently
+enabling backups on either Founder's Mac. It does **not** complete buyer
+enrollment, recovery-key setup/custody, the customer backup UI, hosted billing,
+scheduled-run certification or clean-Mac recovery. Those gates still precede
+availability. Use only a disposable synthetic account until they pass.
+
 ## Customer choice
 
 The Mac app will offer two destinations for the *same* portable, encrypted
