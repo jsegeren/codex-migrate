@@ -23,6 +23,7 @@ from codex_migrate.vault_schedule import SchedulePlan
 from codex_migrate.vault_dashboard import VAULT_HTML
 from codex_migrate.vault_search_index import IndexCancelled, supported as search_index_supported
 from codex_migrate.vault_hosted_recovery_flow import HostedRecoveryFlow
+from codex_migrate.vault_hosted_setup_flow import HostedSetupFlow
 
 
 class SetupTests(unittest.TestCase):
@@ -172,6 +173,73 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(self.request("/api/vault/hosted-recovery", payload,
             extra_headers={"Origin": "https://attacker.test"})[0], 403)
         self.assertEqual(self.request("/api/vault/hosted-recovery", payload)[0], 400)
+
+    def test_hosted_setup_is_dark_and_requires_local_authority(self):
+        self.assertEqual(self.request("/api/vault/hosted-setup-status")[1], {"enabled": False})
+        self.assertEqual(self.request("/api/vault/hosted-setup-status", authorized=False)[0], 403)
+        payload = {"action": "send_code", "step": {"purchase_link": "private", "apply": True}}
+        for headers, authorized in ((None, False),
+                ({"Origin": "https://attacker.test"}, True)):
+            self.assertEqual(self.request("/api/vault/hosted-setup", payload,
+                authorized=authorized, extra_headers=headers)[0], 403)
+        self.assertEqual(self.request("/api/vault/hosted-setup", payload)[0], 400)
+
+    def test_hosted_setup_is_async_private_and_blocks_other_operations(self):
+        self.helper._hosted_setup = HostedSetupFlow(self.helper.registry)
+        self.helper._hosted_recovery = HostedRecoveryFlow(self.helper.source_home, self.helper.registry)
+        entered, release = threading.Event(), threading.Event()
+        secret = "cs_test_synthetic." + "a" * 64
+        def wait_for_email(_token, *, apply):
+            entered.set()
+            release.wait(3)
+        try:
+            with patch("codex_migrate.vault_hosted_setup_flow.HostedEnrollmentClient") as client:
+                client.return_value.begin.side_effect = wait_for_email
+                code, body = self.request("/api/vault/hosted-setup", {
+                    "action": "send_code", "step": {"purchase_link": secret, "apply": True}})
+                self.assertEqual(code, 202)
+                self.assertTrue(entered.wait(1))
+                self.assertEqual(body["status"], "running")
+                self.assertNotIn(secret, json.dumps(body))
+                self.assertFalse(self.helper.can_shutdown())
+                self.assertEqual(self.request("/api/shutdown", {})[0], 409)
+                self.assertEqual(self.request("/api/vault/hosted-recovery", {
+                    "action": "send_code", "step": {"purchase_link": secret, "apply": True}})[0], 400)
+                self.assertEqual(self.request("/api/vault/restore", {
+                    "vault": str(self.home / "vault"), "output": str(self.home / "out"),
+                    "snapshot": "latest", "apply": True})[0], 400)
+                release.set()
+                self.helper._restore_thread.join(3)
+                status = self.request("/api/vault/hosted-setup-status")[1]
+                self.assertEqual(status["phase"], "email")
+                self.assertFalse(status["upload_authorized"])
+                self.assertFalse(status["automatic_protection_verified"])
+                self.assertNotIn(secret, json.dumps(status))
+                self.assertNotIn(secret, self.helper.registry.path.read_text())
+                self.assertTrue(self.helper.can_shutdown())
+        finally:
+            release.set()
+            if self.helper._restore_thread:
+                self.helper._restore_thread.join(3)
+
+    def test_hosted_setup_rejects_extra_fields_without_secret_echo(self):
+        self.helper._hosted_setup = HostedSetupFlow(self.helper.registry)
+        secret = "CV1-" + "Z" * 43
+        for step in ({"apply": False}, {"apply": True, "secret": secret}, []):
+            code, body = self.request("/api/vault/hosted-setup", {"action": "resolve", "step": step})
+            self.assertEqual(code, 400)
+            self.assertNotIn(secret, json.dumps(body))
+        self.assertIsNone(self.helper._restore_thread)
+
+    def test_invalid_hosted_setup_binding_releases_startup_lock(self):
+        home = self.home / "bad-setup"
+        state = StateStore(str(home))
+        state.update(hosted_setup_device={"deviceId": "bad"})
+        with patch.dict(os.environ, {"CODEX_BACKUP_HOSTED_SETUP_ACCEPTANCE": "yes"}):
+            with self.assertRaises(MigrationError):
+                SetupDashboard(str(self.home), str(home))
+        state.acquire_process_lock()
+        state.release_process_lock()
 
     def test_hosted_recovery_step_is_async_private_and_blocks_quit_and_local_restore(self):
         self.helper._hosted_recovery = HostedRecoveryFlow(self.helper.source_home, self.helper.registry)
