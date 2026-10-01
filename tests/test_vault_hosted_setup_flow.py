@@ -260,6 +260,26 @@ class HostedSetupFlowTests(unittest.TestCase):
         self.flow._keys.prepare.assert_not_called()
         self.client.claim.assert_not_called()
 
+    def test_saved_key_requires_same_full_device_binding_before_any_provider_work(self):
+        self.saved["hosted_setup_key"] = {
+            "binding": dict(IDENTITY), "saved_copy_confirmed": False,
+            "metadata": {"format": "codex-vault", "version": 1,
+                         "key_id": "44444444-4444-4444-8444-444444444444",
+                         "created_at": "2026-10-01T00:00:00+00:00"},
+        }
+        for binding in (None, {"deviceId": DEVICE}, {"deviceId": ACCOUNT},
+                        {**IDENTITY, "vaultId": ACCOUNT}):
+            with self.subTest(binding=binding):
+                self.saved.pop("hosted_setup_device", None)
+                if binding is not None:
+                    self.saved["hosted_setup_device"] = binding
+                with self.assertRaises(MigrationError):
+                    HostedSetupFlow(self.registry)
+        self.factory.assert_not_called()
+        self.client.claim.assert_not_called()
+        self.saved["hosted_setup_device"] = dict(IDENTITY)
+        self.assertEqual(HostedSetupFlow(self.registry).snapshot()["phase"], "pairing_uncertain")
+
 
 if __name__ == "__main__":
     unittest.main()

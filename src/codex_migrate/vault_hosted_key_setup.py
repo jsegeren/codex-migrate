@@ -56,6 +56,11 @@ class HostedKeySetup:
         value = self._bound(binding)
         return value is not None and value["saved_copy_confirmed"] is True
 
+    def require_connection(self, binding):
+        value = self._read()
+        if value is not None and value["binding"] != binding:
+            raise MigrationError("The saved backup key and connection disagree; contact support.")
+
     def _save(self, value):
         self.registry.update(hosted_setup_key=value)
         self.registry.sync_recovery_checkpoint()

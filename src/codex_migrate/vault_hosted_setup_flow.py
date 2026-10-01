@@ -37,6 +37,9 @@ class HostedSetupFlow:
                         for value in self._binding.values())):
                 raise MigrationError("Saved backup setup needs support; it was not replaced.")
             self._binding = dict(self._binding)
+        # Keys can exist only after full pairing. Refuse inconsistent records
+        # before email or claim calls, not after a new remote claim succeeds.
+        self._keys.require_connection(self._binding)
         self._claim_attempted = self._binding is not None
         self._public = {
             "enabled": True, "status": "idle",
