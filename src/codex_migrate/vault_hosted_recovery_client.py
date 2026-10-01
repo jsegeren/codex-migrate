@@ -34,6 +34,21 @@ _HISTORY_PAGE_SIZE = 50
 _PUBLISHED_AT = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z\Z")
 _MAX_RESPONSE = 128 * 1024
 _UNSPECIFIED = object()
+_COST_ACTIONS = frozenset(("latest", "latest_complete", "snapshot", "usage",
+                           "history", "objects", "manifest", "get"))
+
+
+class _RecoveryReadOpener:
+    """Count actual object HTTP attempts without retaining request details."""
+
+    def __init__(self, opener, counts):
+        self._opener = opener
+        self._counts = counts
+
+    def open(self, request, *, timeout):
+        if request.get_method() == "GET":
+            self._counts["get"] += 1
+        return self._opener.open(request, timeout=timeout)
 
 
 def _origin(value: str, allow_loopback_http: bool) -> str:
@@ -66,6 +81,23 @@ class HostedRecoveryClient:
         self._timeout = timeout
         self._allow_loopback_http = allow_loopback_http
         self._opener = build_opener(_NoRedirect())
+        self._service_request_counts: Dict[str, int] = {}
+        self._worker_attempt_counts = {"get": 0}
+
+    def service_request_counts(self) -> Dict[str, int]:
+        """Attempted calls only; never claims, paths, grants or credentials."""
+        return dict(self._service_request_counts)
+
+    def worker_attempt_counts(self) -> Dict[str, int]:
+        """GET attempts, not completed downloads or verified recovery."""
+        return dict(self._worker_attempt_counts)
+
+    def _read_store(self, origin, account_id, expected, grant):
+        store = CapabilityHttpStore(origin, account_id, self._vault_id,
+                                    expected, grant, timeout=self._timeout,
+                                    allow_loopback_http=self._allow_loopback_http)
+        store._opener = _RecoveryReadOpener(store._opener, self._worker_attempt_counts)
+        return store
 
     def _post(self, claim: dict) -> dict:
         body = json.dumps(claim, separators=(",", ":")).encode("utf-8")
@@ -75,6 +107,9 @@ class HostedRecoveryClient:
                           headers={"Authorization": "Bearer " + self._device_token,
                                    "Content-Type": "application/json",
                                    "Content-Length": str(len(body))}, method="POST")
+        action = claim.get("action")
+        action = action if isinstance(action, str) and action in _COST_ACTIONS else "unknown"
+        self._service_request_counts[action] = self._service_request_counts.get(action, 0) + 1
         try:
             with self._opener.open(request, timeout=self._timeout) as response:
                 if (response.status != 200 or
@@ -367,9 +402,7 @@ class HostedRecoveryClient:
                 raise MigrationError("The hosted recovery grant is invalid.")
             return token
 
-        store = CapabilityHttpStore(worker_origin, account_id, self._vault_id,
-                                    expected, grant, timeout=self._timeout,
-                                    allow_loopback_http=self._allow_loopback_http)
+        store = self._read_store(worker_origin, account_id, expected, grant)
         return receipt, store
 
     def prior_catalog(self, *, key_id: str, crypto_helper: str, max_bytes: int,
@@ -434,9 +467,7 @@ class HostedRecoveryClient:
                 raise MigrationError("The prior hosted manifest grant is out of scope.")
             return token
 
-        store = CapabilityHttpStore(pointer[1], pointer[0], self._vault_id,
-                                    expected, grant, timeout=self._timeout,
-                                    allow_loopback_http=self._allow_loopback_http)
+        store = self._read_store(pointer[1], pointer[0], expected, grant)
         stream = store.open_read(key)
         if stream is None:
             raise MigrationError("The prior hosted manifest is missing.")

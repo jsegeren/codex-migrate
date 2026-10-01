@@ -1,3 +1,4 @@
+import io
 import json
 from datetime import datetime, timedelta, timezone
 import os
@@ -7,6 +8,7 @@ import tempfile
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
+from urllib.error import URLError
 
 from codex_migrate.cli import parser
 from codex_migrate.errors import MigrationError
@@ -16,6 +18,7 @@ from codex_migrate.vault_hosted_schedule import (
     run_hosted_scheduled_backup,
 )
 from codex_migrate.vault_hosted_upload_client import HostedUploadClient
+from codex_migrate.vault_hosted_recovery_client import HostedRecoveryClient
 from codex_migrate.vault_hosted_connection import active_binding, connection_path
 from codex_migrate.vault_schedule import prepare_update, resume_after_update
 
@@ -396,6 +399,8 @@ class HostedScheduleTests(unittest.TestCase):
         self.upload = HostedUploadClient(
             "http://127.0.0.1:49111", "http://127.0.0.1:49112",
             "hv1_" + "a" * 43, ACCOUNT, VAULT, allow_loopback_http=True)
+        self.recovery = HostedRecoveryClient("http://127.0.0.1:49111",
+            "hv1_" + "a" * 43, VAULT, allow_loopback_http=True)
         config_path, status_path, _, _ = _paths(self.home)
         fake_run = SimpleNamespace(back_up_live_history=lambda *_args, **_kw: {
             "unchanged": True, "lastGoodSnapshotId": SNAPSHOT,
@@ -407,6 +412,8 @@ class HostedScheduleTests(unittest.TestCase):
         status = json.loads(status_path.read_text())
         self.assertGreaterEqual(status["cost_metrics"]["elapsed_ms"], 0)
         self.assertEqual(status["cost_metrics"]["upload_service_attempts"], {})
+        self.assertEqual(status["cost_metrics"]["recovery_service_attempts"], {})
+        self.assertEqual(status["cost_metrics"]["recovery_worker_attempts"], {"get": 0})
         self.assertEqual(status["cost_metrics"]["worker_attempts"], {
             "head": 0, "put": 0, "put_bytes": 0,
             "put_confirmed": 0, "put_confirmed_bytes": 0,
@@ -418,6 +425,68 @@ class HostedScheduleTests(unittest.TestCase):
         self.assertEqual(history["runs"][0]["status"], "unchanged")
         self.assertNotIn("snapshot_id", history["runs"][0])
         self.assertEqual(history_path.stat().st_mode & 0o077, 0)
+
+    def test_failed_run_records_recovery_attempts_and_preserves_last_good(self):
+        self._install()
+        self.recovery = HostedRecoveryClient("http://127.0.0.1:49111",
+            "hv1_" + "a" * 43, VAULT, allow_loopback_http=True)
+        config_path, status_path, good_path, _ = _paths(self.home)
+        good_before = good_path.read_bytes()
+
+        def fail_run(*_args, **_kw):
+            self.recovery.latest_snapshot(expected_account_id=ACCOUNT)
+
+        a, b, _, _ = self._patches()
+        with a, b, patch.object(self.recovery._opener, "open",
+                side_effect=URLError("private-title-or-token")), patch(
+                "codex_migrate.vault_hosted_schedule.HostedLiveBackupRun",
+                return_value=SimpleNamespace(back_up_live_history=fail_run)):
+            self.assertEqual(run_hosted_scheduled_backup(str(config_path)), 1)
+        self.assertEqual(good_path.read_bytes(), good_before)
+        status = json.loads(status_path.read_text())
+        self.assertEqual(status["status"], "failed")
+        self.assertEqual(status["cost_metrics"]["recovery_service_attempts"], {"latest": 1})
+        self.assertEqual(status["cost_metrics"]["recovery_worker_attempts"], {"get": 0})
+        history_path = status_path.with_name("hosted-cost-history.json")
+        history = json.loads(history_path.read_text())
+        self.assertEqual(history["runs"][-1]["cost_metrics"], status["cost_metrics"])
+        for private_value in ("hv1_", "private-title-or-token", ACCOUNT, VAULT,
+                              SNAPSHOT, "http://", "snapshot_id"):
+            self.assertNotIn(private_value, history_path.read_text())
+        self.assertEqual(history_path.stat().st_mode & 0o077, 0)
+
+    def test_verified_and_unchanged_runs_persist_nonzero_recovery_cost_counts(self):
+        self._install()
+        config_path, status_path, _, _ = _paths(self.home)
+        for unchanged in (False, True):
+            with self.subTest(unchanged=unchanged):
+                self.recovery = HostedRecoveryClient("http://127.0.0.1:49111",
+                    "hv1_" + "a" * 43, VAULT, allow_loopback_http=True)
+                response = io.BytesIO(json.dumps({"accountId": ACCOUNT,
+                    "workerOrigin": "http://127.0.0.1:49112",
+                    "latest": {"snapshotId": SNAPSHOT, "totalObjects": 3,
+                               "totalBytes": 25, "sourceCoverage": "complete"}}).encode())
+                response.status = 200
+                response.headers = {"Content-Type": "application/json"}
+
+                def run(*_args, **_kw):
+                    self.recovery.latest_snapshot(expected_account_id=ACCOUNT)
+                    return {"unchanged": unchanged, "snapshotId": SNAPSHOT,
+                            "lastGoodSnapshotId": SNAPSHOT, "atRiskThreads": 0,
+                            "sourceCoverage": "complete"}
+
+                a, b, _, _ = self._patches()
+                with a, b, patch.object(self.recovery._opener, "open",
+                        return_value=response), patch(
+                        "codex_migrate.vault_hosted_schedule.HostedLiveBackupRun",
+                        return_value=SimpleNamespace(back_up_live_history=run)):
+                    self.assertEqual(run_hosted_scheduled_backup(str(config_path)), 0)
+                status = json.loads(status_path.read_text())
+                self.assertEqual(status["status"], "unchanged" if unchanged else "verified")
+                self.assertEqual(status["cost_metrics"]["recovery_service_attempts"],
+                                 {"latest": 1})
+                history = json.loads(status_path.with_name("hosted-cost-history.json").read_text())
+                self.assertEqual(history["runs"][-1]["cost_metrics"], status["cost_metrics"])
 
     def test_cost_history_is_bounded_and_cannot_block_backup_status(self):
         path = Path(self.home) / "hosted-last-run.json"
