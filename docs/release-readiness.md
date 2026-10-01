@@ -3,6 +3,40 @@
 Dated sections record historical checkpoints. Later receipts supersede older
 progress statements; use the latest receipt for current acceptance status.
 
+## October 1 source consolidation — main integration candidate
+
+The release stack is consolidated in PR #48, now targeting `main` directly.
+Current `main` was merged without dropping the Backup UI identity, domain
+redirects or team-intake branding. The local-only backup risk disclosure from
+PR #60 is included. The team page retains `main`'s existing source paragraph
+rather than reverting it to the older release-branch copy.
+
+PRs #26, #41 and #38 have their commits preserved in this candidate. The only
+non-ancestral search-index commit from PR #40 is patch-equivalent to incorporated
+commit `202376a`; `git cherry` marks it already applied. The parked research
+commit from PR #35 is also preserved; inclusion of that document does not activate
+multi-Mac sync or expand this release's scope. None of these branches should be
+deleted to retire their superseded PRs.
+
+Local integration checks passed: 1,371 Python tests run with 33 skips; 78 setup
+tests passed separately; 36 website tests passed separately; the Node suite
+reported 615 passes and one skip; seven object-Worker tests passed. Mocked
+notarization messages are test output, not a newly notarized release. CI and
+independent integration review must pass before merging the consolidated source.
+
+The accepted live release catalog is identical to `main`. The added build-20
+catalog entry remains `testingOnly: true`, `accepted: false`. Production
+environment-variable metadata lists no hosted activation or sandbox bootstrap
+flags. Hosted routes require explicit sandbox flags and the pinned sandbox
+database; the optional build bootstrap/preflight skip ordinary builds. This
+source merge must not provision Production schema, open hosted billing or
+publish a new paid installer. Those remain separate acceptance gates.
+
+The independent packaged-recovery receipt below still describes its exact older
+artifact and source. It is not proof for a newly packaged consolidated release.
+Real R2 publication/recovery, unattended off-device protection, final notarized
+package/update acceptance and commercial activation remain open.
+
 ## October 1 independent packaged recovery — passed, release still held
 
 Current clean source `b52ca326f21eaa232015561e0fbc858ec82b5cc5` produced a
@@ -19,8 +53,8 @@ The [exact receipt](codex-backup-packaged-recovery-2026-10-01.md) records packag
 and driver checksums, environment preparation, related packaged tests and
 remaining gates. This is not real R2, hosted scheduling, notarized first-launch,
 customer UI or real Codex resume acceptance. No public app, real user schedule,
-live data or paid catalog changed. This hosted-branch candidate does not yet
-include the newer app-branding commit on `main`; combined integration is open.
+live data or paid catalog changed. That exact artifact predates incorporation
+of current `main`; the source consolidation above does not change its receipt.
 
 ## October 1 read-only Mac metadata transfer — guarded candidate
 
