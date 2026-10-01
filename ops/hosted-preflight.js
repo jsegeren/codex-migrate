@@ -27,20 +27,28 @@ async function preflight(env = process.env, openDatabase = sandboxDatabaseRuntim
   migrations = expectedMigrations) {
   if (env.HOSTED_PREFLIGHT !== 'yes') return { skipped: true };
   let stage = 'configuration';
+  let receipts;
   try {
     validateEnvironment(env);
     const expected = migrations();
     requireCheck(expected.length > 0);
     stage = 'sandbox-identity';
     const query = await openDatabase(env);
+    stage = 'migration-ledger-presence';
+    const presence = await query(`SELECT to_regclass('drizzle.__drizzle_migrations')
+      IS NOT NULL AS present`, []);
+    requireCheck(presence?.rows?.length === 1 && presence.rows[0].present === true);
     stage = 'migration-ledger';
     const ledger = await query(`SELECT hash, created_at
       FROM drizzle.__drizzle_migrations ORDER BY created_at LIMIT 512`, []);
     requireCheck(Array.isArray(ledger?.rows) && ledger.rows.length < 512);
-    for (const migration of expected) {
+    stage = 'migration-receipts';
+    const matched = expected.filter(migration => {
       const matches = ledger.rows.filter(row => Number(row.created_at) === migration.folderMillis);
-      requireCheck(matches.length === 1 && matches[0].hash === migration.hash);
-    }
+      return matches.length === 1 && matches[0].hash === migration.hash;
+    }).length;
+    receipts = { expectedMigrationReceipts: expected.length, matchedMigrationReceipts: matched };
+    requireCheck(matched === expected.length);
     stage = 'schema-presence';
     const tables = await query(`SELECT name, to_regclass('hosted.' || name) IS NOT NULL AS present
       FROM unnest($1::text[]) AS name`, [TABLES]);
@@ -50,7 +58,8 @@ async function preflight(env = process.env, openDatabase = sandboxDatabaseRuntim
       requiredTablesPresent: true,
       note: 'Read-only provisioning evidence, not schema-drift, hosted backup or recovery acceptance.' };
   } catch {
-    const error = new Error('hosted_preflight_failed'); error.stage = stage; throw error;
+    const error = new Error('hosted_preflight_failed');
+    error.stage = stage; error.receipts = receipts; throw error;
   }
 }
 
@@ -59,7 +68,8 @@ async function main(env = process.env, openDatabase = sandboxDatabaseRuntime,
   try { report(JSON.stringify(await preflight(env, openDatabase, migrations))); return 0; }
   catch (error) {
     // Database errors may contain credentials or private identifiers.
-    report(JSON.stringify({ configured: false, code: 'hosted_preflight_failed', stage: error.stage }));
+    report(JSON.stringify({ configured: false, code: 'hosted_preflight_failed', stage: error.stage,
+      ...(error.receipts || {}) }));
     return 1;
   }
 }

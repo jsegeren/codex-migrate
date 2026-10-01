@@ -8,10 +8,13 @@ const env = { HOSTED_PREFLIGHT: 'yes', HOSTED_MODE: 'sandbox', COMMERCE_MODE: 's
   VERCEL_URL: 'codex-migrate-fixture-joshuas-projects-d3a5c48d.vercel.app',
   COMMERCE_DATABASE_URL: 'postgresql://fixture:fixture@ep-square-queen-av5us6bx.c-11.us-east-1.aws.neon.tech/neondb' };
 const migrations = () => [{ folderMillis: 123, hash: 'a'.repeat(64) }];
-function database({ ledger = [{ created_at: '123', hash: 'a'.repeat(64) }],
+function database({ presence = [{ present: true }], ledger = [{ created_at: '123', hash: 'a'.repeat(64) }],
   tables = TABLES.map(name => ({ name, present: true })) } = {}) {
   return async () => async (sql, params) => {
     assert.match(sql.trim(), /^SELECT /);
+    if (sql.includes("to_regclass('drizzle.")) {
+      assert.deepEqual(params, []); return { rows: presence };
+    }
     if (sql.includes('__drizzle_migrations')) {
       assert.deepEqual(params, []); return { rows: ledger };
     }
@@ -68,4 +71,18 @@ test('provider details never enter diagnostic output', async () => {
     value => output.push(JSON.parse(value)), migrations);
   assert.equal(code, 1);
   assert.deepEqual(output, [{ configured: false, code: 'hosted_preflight_failed', stage: 'sandbox-identity' }]);
+});
+test('absent ledger stops before reading migration rows', async () => {
+  const output = [];
+  assert.equal(await main(env, database({ presence: [{ present: false }] }),
+    value => output.push(JSON.parse(value)), migrations), 1);
+  assert.deepEqual(output, [{ configured: false, code: 'hosted_preflight_failed',
+    stage: 'migration-ledger-presence' }]);
+});
+test('incomplete receipts report counts only, not ledger hashes or private identifiers', async () => {
+  const output = [];
+  assert.equal(await main(env, database({ ledger: [{ created_at: 123, hash: 'PRIVATE' }] }),
+    value => output.push(JSON.parse(value)), migrations), 1);
+  assert.deepEqual(output, [{ configured: false, code: 'hosted_preflight_failed',
+    stage: 'migration-receipts', expectedMigrationReceipts: 1, matchedMigrationReceipts: 0 }]);
 });
