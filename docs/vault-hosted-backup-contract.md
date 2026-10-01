@@ -132,6 +132,12 @@ restart. A failed checkpoint cannot send the claim; a changed account/Vault
 binding is refused. Provider failures cannot echo private purchase links,
 email codes or native credential diagnostics.
 
+A crash between native credential creation and saving its device reference
+can leave an unclaimed local Keychain item. No remote claim has been sent at
+that point, so it cannot create an extra account, backup or upload authority.
+The controller does not delete unknown Keychain items to recover this case;
+bounded orphan cleanup remains a separate hardening task.
+
 Pairing shares the helper's existing recovery worker slot, preventing quit,
 local recovery, backup, installation or update from racing it. Purchase links
 and email proofs stay only in memory; persisted state contains opaque IDs.

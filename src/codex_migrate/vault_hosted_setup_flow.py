@@ -79,7 +79,8 @@ class HostedSetupFlow:
                 # Provider and native exceptions may contain private proofs.
                 self._update(status="failed", error=(
                     "Backup setup could not be confirmed. No backup or subscription "
-                    "was started. Retry the current step or contact joshua@segeren.com."))
+                    "was started. Check setup status before continuing, "
+                    "or contact joshua@segeren.com."))
             finally:
                 values.clear()
                 if self.snapshot()["phase"] in ("pairing_uncertain", "paired"):

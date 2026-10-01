@@ -67,6 +67,7 @@ class HostedSetupFlowTests(unittest.TestCase):
         self.email()
         self.client.claim.side_effect = MigrationError("private " + CODE)
         self.assertEqual(self.step("pair", code=CODE)["phase"], "pairing_uncertain")
+        self.assertNotIn("Retry the current step", self.flow.snapshot()["error"])
         self.flow = HostedSetupFlow(self.registry)
         with self.assertRaises(MigrationError):
             self.flow.stage("pair", {"code": CODE, "apply": True})
@@ -95,6 +96,21 @@ class HostedSetupFlowTests(unittest.TestCase):
         self.registry.sync_recovery_checkpoint.side_effect = None
         self.assertEqual(self.step("retry_save")["phase"], "paired")
         self.client.create_device.assert_called_once()
+
+    def test_crash_before_checkpoint_cannot_send_a_remote_claim(self):
+        self.email()
+        self.registry.update = Mock(side_effect=KeyboardInterrupt())
+        with self.assertRaises(KeyboardInterrupt):
+            self.step("pair", code=CODE)
+        self.assertEqual(self.saved, {})
+        self.client.claim.assert_not_called()
+        self.client.resolve.assert_not_called()
+        self.client.backup_clients.assert_not_called()
+        # The native credential can remain unclaimed; never delete arbitrary
+        # Keychain state or mistake it for an enrolled remote account.
+        self.registry.update = self.saved.update
+        self.flow = HostedSetupFlow(self.registry)
+        self.assertEqual(self.flow.snapshot()["phase"], "start")
 
     def test_restart_before_claim_requires_fresh_proof_for_same_device(self):
         self.saved["hosted_setup_device"] = {"deviceId": DEVICE}
