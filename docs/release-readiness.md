@@ -1,5 +1,27 @@
 # Desktop release readiness
 
+Dated sections record historical checkpoints. Later receipts supersede older
+progress statements; use the latest receipt for current acceptance status.
+
+## October 1 independent packaged recovery — passed, release still held
+
+Current clean source `b52ca326f21eaa232015561e0fbc858ec82b5cc5` produced a
+Developer ID signed, provisioned, **not notarized** local-test build 20. The
+actual bundled engine/native helper then passed key import, authenticated
+snapshot verification, exact-byte separate-folder restore, attachment search,
+conversation read and Markdown export on the independent macOS acceptance VM.
+The producer key was absent on the receiver; wrong-key refusal and cleanup
+were checked. The vendor Command Line Tools and Homebrew Python were moved
+aside; system Python failed and no active developer directory was available.
+All nine CI jobs for this exact source passed. The VM is stopped.
+
+The [exact receipt](codex-backup-packaged-recovery-2026-10-01.md) records package
+and driver checksums, environment preparation, related packaged tests and
+remaining gates. This is not real R2, hosted scheduling, notarized first-launch,
+customer UI or real Codex resume acceptance. No public app, real user schedule,
+live data or paid catalog changed. This hosted-branch candidate does not yet
+include the newer app-branding commit on `main`; combined integration is open.
+
 ## October 1 read-only Mac metadata transfer — guarded candidate
 
 The read-only Git-object failure below now has an integrated three-pass staging
@@ -55,12 +77,13 @@ verification. Restrictive directory ACLs that deny child creation/deletion still
 fail closed, as they did with the original system rsync; they are not stripped
 or silently declared supported. Unusually deep trees and older macOS versions
 need compatibility acceptance. No real workspace, schedule, public paid build,
-hosted runtime or purchase changed. Packaging, independent receiver recovery,
-hosted service acceptance and commercial gates remain separate.
+hosted runtime or purchase changed. Notarized packaging, real hosted-service
+recovery and commercial gates remain separate. The following packaged recovery
+drill is now passed under the latest receipt above.
 
-The previous acceptance VM clone exited after network loss at 47%. Registry
-connectivity subsequently recovered; one retry of the same target reused cached
-layers and reached 69%. No VM has booted or produced independent receiver proof.
+The acceptance VM clone initially exited after network loss at 47%. One cached
+retry subsequently completed; the VM booted, passed the current-candidate
+recovery drill and was stopped. See the exact October 1 receipt above.
 
 ## September 30 first/manual hosted backup — acceptance entrypoint
 
@@ -197,11 +220,13 @@ library validation was not weakened. Driver SHA-256 is
 `c1e2ec686992057ab105c979d5388c45950782a57e92eaca2f18abfbdf6641a9`.
 This remains same-host evidence, not an independent receiver receipt.
 
-The interrupted VM clone's tool handle was missing and process inventory
-confirmed no clone was running. A cached retry is now live; it has not booted.
+At this September 30 checkpoint, the interrupted VM clone's tool handle was
+missing and process inventory confirmed no clone was running. A cached retry
+was then live but had not booted. This progress state is superseded by the
+passed October 1 independent receiver receipt above.
 Its prepared read-only share contains only the exact app, self-contained driver
 and disposable synthetic encrypted fixture. No real home or credential is shared.
-Remaining gates are independent receiver recovery, authenticated hosted service
+The then-remaining gates were independent receiver recovery, authenticated hosted service
 publication/recovery, scheduled off-device protection, pricing/billing acceptance
 and final reviewed notarized distribution. Provisioning evidence does not close
 those functional gates.
@@ -225,9 +250,10 @@ three lifecycle findings were fixed. The exact signed/provisioned
 `8359f19d7a34d8391df64c8e8c4f5413042d3d35` package passed the revised drill
 on this Mac. Source CI run `36812976167` completed successfully.
 
-This is **same-host harness evidence**, not clean-Mac or hosted-service proof.
-The isolated Tahoe VM image clone remains live at 60% after transient network
-retries; it has not booted. Cloudflare's authenticated dashboard confirms the
+This checkpoint is **same-host harness evidence**, not clean-Mac or hosted-
+service proof. At this September 30 observation the Tahoe clone was live at 60%
+and had not booted; the VM progress and packaged receiver gap are now superseded
+by the October 1 receipt above. Cloudflare's authenticated dashboard confirmed the
 private sandbox bucket is empty (0 B), public access is disabled, no Worker
 projects are deployed, and current billable usage is $0.00. A read-only Vercel
 Preview configuration inventory confirms existing commerce settings but no
