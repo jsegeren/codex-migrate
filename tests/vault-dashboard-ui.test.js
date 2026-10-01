@@ -226,6 +226,9 @@ test('background states separate enabled from verified and stop remains availabl
   assert.deepEqual(intervals, [15000]);
   context.hostedSetupView({ ...ready, phase: 'pairing_uncertain', background: { enabled: true } });
   assert.equal(elements.get('setup-disable-schedule').disabled, false);
+  context.hostedSetupView({ ...ready, background: { enabled: false, can_stop: true,
+    error: 'Hosted backup setup is incomplete.' } });
+  assert.equal(elements.get('setup-disable-schedule').disabled, false);
   context.hostedSetupView({ ...ready, status: 'running', step: 'disable_schedule', background: { enabled: true } });
   assert.deepEqual(intervals, [15000, 1500]);
   context.hostedSetupView(ready);
@@ -245,6 +248,24 @@ test('incomplete captures cannot enable background backups and controls send exp
     elements.get(id).onclick();
   }
   assert.deepEqual(actions, ['enable_schedule', 'disable_schedule']);
+});
+
+test('background action completion keeps owned focus on the relevant background control', () => {
+  const { context, elements, document } = setupFixture();
+  const ready = { enabled: true, status: 'ready', phase: 'backup_ready',
+    last_backup: { status: 'published', source_coverage: 'complete', at_risk_threads: 0 } };
+  context.hostedSetupView(ready);
+  document.activeElement = elements.get('setup-enable-schedule');
+  context.hostedSetupView({ ...ready, status: 'running', step: 'enable_schedule' });
+  assert.equal(document.activeElement.id, 'hosted-setup-status');
+  context.hostedSetupView({ ...ready, step: 'enable_schedule', background: { enabled: true } });
+  assert.equal(document.activeElement.id, 'setup-disable-schedule');
+  context.hostedSetupView({ ...ready, status: 'running', step: 'disable_schedule', background: { enabled: true } });
+  context.hostedSetupView({ ...ready, step: 'disable_schedule', background: { enabled: false } });
+  assert.equal(document.activeElement.id, 'setup-enable-schedule');
+  context.hostedSetupView({ ...ready, status: 'running', phase: 'pairing_uncertain', step: 'disable_schedule' });
+  context.hostedSetupView({ ...ready, phase: 'pairing_uncertain', step: 'disable_schedule' });
+  assert.equal(document.activeElement.id, 'setup-background-status');
 });
 
 test('hosted recovery stays hidden until enabled and key verification is not recovery', () => {

@@ -142,7 +142,7 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 <div id="setup-background" hidden>
 <h3>Background backups</h3>
 <p>Check for changes every 30 minutes while this Mac is awake and online. Backups run without a browser window. Only changed content is uploaded; previous verified versions are kept.</p>
-<p id="setup-background-status" role="status" aria-live="polite"></p>
+<p id="setup-background-status" role="status" aria-live="polite" tabindex="-1"></p>
 <button id="setup-enable-schedule">Enable or resume background backups</button>
 <button id="setup-disable-schedule" class="secondary">Stop background backups</button>
 <p class="muted">Stopping the schedule does not delete backups or cancel hosted storage. This acceptance preview does not start a subscription or certify clean-Mac recovery.</p>
@@ -434,7 +434,7 @@ function hostedSetupView(data){
   const background=data.background||{enabled:false};
   $("setup-background").hidden=!data.last_backup;
   $("setup-enable-schedule").disabled=running||background.enabled||data.phase!=="backup_ready"||data.last_backup?.source_coverage!=="complete"||data.last_backup?.at_risk_threads!==0;
-  $("setup-disable-schedule").disabled=running||!background.enabled;
+  $("setup-disable-schedule").disabled=running||!(background.enabled||background.can_stop);
   const backgroundMessages={awaiting_check:"Enabled; the first scheduled check has not finished yet.",running:"A scheduled backup check is running.",failed:"The last scheduled check failed. New work may not be backed up; previous verified versions are kept.",needs_attention:"The last scheduled capture needs attention. Do not assume all new work is protected.",verified:"The last scheduled backup completed.",unchanged:"The last scheduled check found no changes."};
   $("setup-background-status").textContent=background.enabled?`${backgroundMessages[background.status]||"Background status needs attention."}${background.last_checked_at?" Last check: "+new Date(background.last_checked_at).toLocaleString()+".":""}${background.error?" "+background.error:""}`:background.error||"Background backups are off. You can still back up manually.";
   const messages={start:"Verify your purchase email to connect this Mac.",email:"Check your purchase email for the setup code.",pairing_checkpoint:"The connection still needs to be saved.",pairing_uncertain:"The saved connection needs confirmation.",paired:"This Mac is connected. Automatic protection is not active.",key_save:"Save your recovery key outside this Mac, then confirm your saved copy.",key_ready:"Saved recovery key confirmed. Automatic protection is not active.",backup_ready:data.last_backup?.status==="needs_attention"?"Backup coverage needs attention. Automatic protection is not active.":"Hosted backup verified. Automatic protection is not active."};
@@ -443,7 +443,9 @@ function hostedSetupView(data){
   $("hosted-setup-status").textContent=running?working[data.step]||"Checking setup…":messages[data.phase]||"Setup needs attention.";
   $("hosted-setup-error").textContent=data.error||"";
   if(focusOwned&&(phaseChanged||document.activeElement.disabled||(!running&&document.activeElement===$("hosted-setup-status")))){
-    const target=running?$("hosted-setup-status"):panel.querySelector(`[data-setup-phase="${data.phase}"] input:not(:disabled),[data-setup-phase="${data.phase}"] button:not(:disabled)`);
+    const backgroundAction=["enable_schedule","disable_schedule"].includes(data.step);
+    const backgroundTarget=$(background.enabled||background.can_stop?"setup-disable-schedule":"setup-enable-schedule");
+    const target=running?$("hosted-setup-status"):backgroundAction?(backgroundTarget.disabled?$("setup-background-status"):backgroundTarget):panel.querySelector(`[data-setup-phase="${data.phase}"] input:not(:disabled),[data-setup-phase="${data.phase}"] button:not(:disabled)`);
     (target||$("hosted-setup-status")).focus();
   }
   hostedSetupPhase=data.phase;

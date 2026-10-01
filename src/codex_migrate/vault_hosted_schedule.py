@@ -502,14 +502,21 @@ def hosted_schedule_status(source_home: str, *, expected_binding=None) -> dict:
     if not config_path.exists() and not plist_path.exists():
         return {"enabled": False}
     if not config_path.exists() or not plist_path.exists():
-        return {"enabled": False, "healthy": False,
+        can_stop = False
+        if config_path.exists():
+            configuration = _configuration(config_path)
+            if configuration["source_home"] != str(_home(source_home)):
+                raise MigrationError("The hosted backup schedule belongs to another account.")
+            _require_schedule_binding(configuration, expected_binding)
+            can_stop = True
+        return {"enabled": False, "healthy": False, "can_stop": can_stop,
                 "error": "Hosted backup setup is incomplete."}
     configuration = _configuration(config_path)
     if configuration["source_home"] != str(_home(source_home)):
         raise MigrationError("The hosted backup schedule belongs to another account.")
     _require_schedule_binding(configuration, expected_binding)
     _safe_file(plist_path)
-    result = {"enabled": True, "healthy": False,
+    result = {"enabled": True, "healthy": False, "can_stop": True,
               "loaded": _loaded(), "interval_minutes": 30,
               "last_good_snapshot_id": None, "last_checked_at": None,
               "status": "awaiting_check"}
@@ -578,9 +585,12 @@ def remove_hosted_schedule(source_home: str, *, expected_binding=None, apply: bo
             raise MigrationError("The hosted backup schedule cannot be identified safely.")
         if _loaded():
             _launchctl(["bootout", "gui/%d/%s" % (os.getuid(), LABEL)])
-        config_path.unlink(missing_ok=True)
+        # Keep identity evidence until the launch-on-login file is durably
+        # removed. A failed unlink must leave Stop safely retryable.
         plist_path.unlink(missing_ok=True)
-        for directory in (config_path.parent, plist_path.parent):
-            if directory.exists():
-                _fsync_directory(directory)
+        if plist_path.parent.exists():
+            _fsync_directory(plist_path.parent)
+        config_path.unlink(missing_ok=True)
+        if config_path.parent.exists():
+            _fsync_directory(config_path.parent)
     return {"enabled": False}

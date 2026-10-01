@@ -327,6 +327,31 @@ class HostedScheduleTests(unittest.TestCase):
         self.assertTrue(config_path.exists())
         self.assertTrue(plist_path.exists())
 
+    def test_stop_unlink_failures_preserve_identity_and_allow_retry(self):
+        anchor = {"deviceId": DEVICE, "accountId": ACCOUNT, "vaultId": VAULT, "keyId": KEY}
+        original_unlink = Path.unlink
+        for failing_file in ("plist", "config"):
+            with self.subTest(failing_file=failing_file):
+                self._install()
+                config_path, _, _, plist_path = _paths(self.home)
+                selected = plist_path if failing_file == "plist" else config_path
+                def fail_selected(path, *args, **kwargs):
+                    if path == selected:
+                        raise OSError("synthetic unlink failure")
+                    return original_unlink(path, *args, **kwargs)
+                with patch("pathlib.Path.unlink", new=fail_selected), patch(
+                        "codex_migrate.vault_hosted_schedule._loaded", return_value=False):
+                    with self.assertRaises(OSError):
+                        remove_hosted_schedule(self.home, expected_binding=anchor, apply=True)
+                self.assertTrue(config_path.exists())
+                self.assertTrue(connection_path(self.home).exists())
+                self.assertTrue(hosted_schedule_status(self.home, expected_binding=anchor)["can_stop"])
+                with patch("codex_migrate.vault_hosted_schedule._loaded", return_value=False):
+                    self.assertEqual(remove_hosted_schedule(self.home,
+                        expected_binding=anchor, apply=True), {"enabled": False})
+                self.assertFalse(config_path.exists())
+                self.assertFalse(plist_path.exists())
+
     def test_unchanged_check_records_check_but_not_new_publication(self):
         self._install()
         config_path, status_path, good_path, _ = _paths(self.home)

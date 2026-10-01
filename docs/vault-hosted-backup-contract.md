@@ -202,6 +202,9 @@ from a background process. Stopping keeps the reference and all backups, so
 resuming does not reuse a revoked credential. An unresolved rotation refuses
 manual upload, reinstall or schedule removal until the handoff is reconciled.
 It is a visible failed/attention state, never a fresh protection claim.
+Stop durably removes the launch-on-login plist before deleting configuration;
+if either removal fails, identity evidence remains and the bound Stop action
+is retryable. A config-only partial removal keeps Stop available in the UI.
 
 These controls remain dark and synthetic-testable. Real-service unattended
 operation, clean-Mac recovery, billing and packaged release acceptance still
