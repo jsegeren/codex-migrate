@@ -21,10 +21,11 @@ function reply(res, status, heading, message, analyticsEvent = '', flow = 'launc
   // Only static messages enter this template. Never reflect submitted content.
   const eventAttribute = analyticsEvent ? ` data-analytics-event="${analyticsEvent}"` : '';
   const team = flow === 'team-pilot';
+  const brand = team ? 'Codex Backup' : 'Codex Migrate';
   const back = team ? '/codex-backup-for-teams' : '/#launch-email';
   const backLabel = team ? 'Back to Codex Backup for teams' : 'Back to Codex Migrate';
   const subject = team ? 'Codex%20Backup%20team%20pilot' : 'Codex%20Migrate%20launch%20request';
-  res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>${heading} — Codex Migrate</title><link rel="stylesheet" href="/styles.css?v=20260904-regional"><script src="/analytics.js?v=20260911-ecommerce" defer></script></head><body${eventAttribute}><header class="site-header"><a class="brand" href="/">Codex Migrate</a></header><main class="legal shell"><h1>${heading}</h1><p role="status">${message}</p><p><a class="button button-primary" href="${back}">${backLabel}</a></p><p>Need help? <a href="mailto:joshua@segeren.com?subject=${subject}">Email Joshua</a>.</p></main></body></html>`);
+  res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>${heading} — ${brand}</title><link rel="stylesheet" href="/styles.css?v=20260904-regional"><script src="/analytics.js?v=20260911-ecommerce" defer></script></head><body${eventAttribute}><header class="site-header"><a class="brand" href="/">${brand}</a></header><main class="legal shell"><h1>${heading}</h1><p role="status">${message}</p><p><a class="button button-primary" href="${back}">${backLabel}</a></p><p>Need help? <a href="mailto:joshua@segeren.com?subject=${subject}">Email Joshua</a>.</p></main></body></html>`);
 }
 
 async function handler(req, res) {
@@ -84,7 +85,7 @@ async function handler(req, res) {
       signal: AbortSignal.timeout(8000),
       body: JSON.stringify({
         personalizations: [{ to: [{ email: to }] }],
-        from: { email: from, name: 'Codex Migrate' },
+        from: { email: from, name: team ? 'Codex Backup' : 'Codex Migrate' },
         reply_to: { email },
         subject: team ? '[Codex Backup] Team pilot conversation request' : '[Codex Migrate] Launch email request',
         content: [{ type: 'text/plain', value: (team ? [
