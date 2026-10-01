@@ -21,7 +21,7 @@ const hostedSetupStep = source.match(/async function hostedSetupStep\(action,ste
 const refreshHostedSetup = source.match(/async function refreshHostedSetup\(\)\{[\s\S]*?\n\}/)[0];
 
 function setupFixture() {
-  const phases = ['start', 'email', 'pairing_checkpoint', 'pairing_uncertain', 'paired'];
+  const phases = ['start', 'email', 'pairing_checkpoint', 'pairing_uncertain', 'paired', 'key_save', 'key_ready'];
   const blocks = phases.map(phase => ({ dataset: { setupPhase: phase }, hidden: false }));
   const document = { activeElement: { outside: true } };
   const controls = phases.map(phase => ({ phase, disabled: false, focus() { document.activeElement = this; } }));
@@ -121,6 +121,41 @@ test('setup private fields clear before requests and never enter browser storage
   assert.match(source, /id="setup-purchase" type="password" autocomplete="off"/);
   assert.match(source, /id="setup-code" type="password" autocomplete="off"/);
   assert.doesNotMatch(source, /(?:sessionStorage|localStorage)\.setItem\([^\n]*(?:purchase_link|setup-code|setup-purchase)/);
+});
+
+test('recovery key display clears on running, success, disable and failed status', async () => {
+  const { context, elements } = setupFixture();
+  context.hostedSetupView({ enabled: true, phase: 'key_save', status: 'ready', recovery_key: 'synthetic' });
+  assert.equal(elements.get('setup-recovery').value, 'synthetic');
+  context.hostedSetupView({ enabled: true, phase: 'key_save', status: 'running', step: 'confirm_key' });
+  assert.equal(elements.get('setup-recovery').value, '');
+  context.hostedSetupView({ enabled: true, phase: 'key_ready', status: 'ready' });
+  assert.equal(elements.get('setup-recovery').value, '');
+  assert.match(elements.get('hosted-setup-status').textContent, /Automatic protection is not active/);
+  context.hostedSetupView({ enabled: true, phase: 'key_save', status: 'ready', recovery_key: 'synthetic' });
+  context.api = async () => { throw Error('private'); };
+  await context.refreshHostedSetup();
+  assert.equal(elements.get('setup-recovery').value, '');
+  context.hostedSetupView({ enabled: false });
+  assert.equal(elements.get('setup-recovery').value, '');
+  assert.match(source, /This check does not prove recovery on another Mac/);
+  assert.match(source, /Do not keep the only copy on this Mac or inside its backup/);
+});
+
+test('saved recovery-key input clears before confirmation and is never persisted', () => {
+  const elements = new Map([['setup-saved-key', { value: ' synthetic saved key ' }], ['setup-confirm-key', {}]]);
+  let captured;
+  const context = { $: id => elements.get(id), hostedSetupStep: (action, step) => {
+    assert.equal(elements.get('setup-saved-key').value, '');
+    captured = { action, step };
+  } };
+  vm.createContext(context);
+  vm.runInContext(source.match(/\$\("setup-confirm-key"\)\.onclick=.*?;\n/)[0], context);
+  elements.get('setup-confirm-key').onclick();
+  assert.equal(captured.action, 'confirm_key');
+  assert.equal(captured.step.recovery_key, 'synthetic saved key');
+  assert.match(source, /id="setup-saved-key" type="password" autocomplete="off"/);
+  assert.doesNotMatch(source, /(?:localStorage|sessionStorage)\.setItem\([^\n]*(?:setup-recovery|setup-saved-key|recovery_key)/);
 });
 
 test('hosted recovery stays hidden until enabled and key verification is not recovery', () => {

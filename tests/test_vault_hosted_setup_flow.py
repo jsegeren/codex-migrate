@@ -211,6 +211,55 @@ class HostedSetupFlowTests(unittest.TestCase):
         self.assertFalse(result["automatic_protection_verified"])
         self.assertEqual(self.saved, {})
 
+    def test_explicit_key_setup_requires_pairing_and_never_starts_backup(self):
+        with self.assertRaises(MigrationError):
+            self.flow.stage("prepare_key", {"apply": True})
+        self.email()
+        self.step("pair", code=CODE)
+        secret = "CV1-" + "A" * 43
+        self.flow._keys = Mock()
+        self.flow._keys.prepare.return_value = secret
+        result = self.step("prepare_key")
+        self.assertEqual(result["phase"], "key_save")
+        self.assertEqual(result["recovery_key"], secret)
+        self.flow._keys.prepare.assert_called_once_with(IDENTITY)
+        run = self.flow.stage("confirm_key", {"recovery_key": secret, "apply": True})
+        self.assertNotIn("recovery_key", self.flow.snapshot())
+        run()
+        result = self.flow.snapshot()
+        self.assertEqual(result["phase"], "key_ready")
+        self.assertNotIn("recovery_key", result)
+        self.assertIsNone(self.flow._recovery_key)
+        self.assertFalse(result["upload_authorized"])
+        self.assertFalse(result["automatic_protection_verified"])
+        self.assertNotIn(secret, json.dumps(self.saved))
+        self.client.backup_clients.assert_not_called()
+
+    def test_failed_saved_copy_confirmation_stays_in_key_step(self):
+        self.email()
+        self.step("pair", code=CODE)
+        secret = "CV1-" + "A" * 43
+        self.flow._keys = Mock()
+        self.flow._keys.prepare.return_value = secret
+        self.flow._keys.confirm.side_effect = MigrationError("private " + secret)
+        self.step("prepare_key")
+        result = self.step("confirm_key", recovery_key=secret)
+        self.assertEqual(result["phase"], "key_save")
+        self.assertEqual(result["status"], "failed")
+        self.assertNotIn(secret, result["error"])
+        self.client.backup_clients.assert_not_called()
+
+    def test_resolve_retains_confirmed_key_state_without_revealing_it(self):
+        self.saved["hosted_setup_device"] = dict(IDENTITY)
+        self.flow = HostedSetupFlow(self.registry)
+        self.flow._keys = Mock()
+        self.flow._keys.confirmed.return_value = True
+        result = self.step("resolve")
+        self.assertEqual(result["phase"], "key_ready")
+        self.assertNotIn("recovery_key", result)
+        self.flow._keys.prepare.assert_not_called()
+        self.client.claim.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

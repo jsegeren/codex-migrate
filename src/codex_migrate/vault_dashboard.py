@@ -111,7 +111,24 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 </div>
 <div class="hosted-step" data-setup-phase="paired" hidden>
 <p>This setup has not created a backup. Your recovery key, hosted storage authorization, first verified backup and successful automatic run are still required before automatic protection is active.</p>
+<button id="setup-prepare-key">Prepare my recovery key</button>
 <button id="setup-check-paired" class="secondary">Check saved connection</button>
+</div>
+<div class="hosted-step" data-setup-phase="key_save" hidden>
+<h3>Save your recovery key</h3>
+<p>Save it in a password manager you can access from another device, or keep a printed copy somewhere safe. Do not keep the only copy on this Mac or inside its backup.</p>
+<label for="setup-recovery">Recovery key to save</label>
+<textarea id="setup-recovery" readonly rows="3" autocomplete="off" spellcheck="false"></textarea>
+<button id="setup-copy-key" class="secondary">Copy recovery key</button>
+<label for="setup-saved-key">Recovery key from your saved copy</label>
+<input id="setup-saved-key" type="password" autocomplete="off" spellcheck="false">
+<button id="setup-confirm-key">Confirm my saved copy</button>
+<p class="muted">We check it against the key protected in this Mac’s Keychain. It is not sent to our hosted service. This check does not prove recovery on another Mac.</p>
+</div>
+<div class="hosted-step" data-setup-phase="key_ready" hidden>
+<p>Your saved copy matches this Mac’s recovery key. No backup has been created or uploaded, and automatic protection is not active.</p>
+<p class="muted">Hosted storage authorization and verified backup are the next release steps. Connection and key setup alone do not protect your work.</p>
+<button id="setup-check-key-ready" class="secondary">Check saved connection</button>
 </div>
 <p class="muted">Need help? <a href="mailto:joshua@segeren.com">Email Joshua</a>. Never email your private purchase link, setup code or recovery key.</p>
 </section>
@@ -390,13 +407,15 @@ function fail(error){$("error").textContent=error.message;$("status").textConten
 let hostedSetupTimer=null,hostedSetupPhase=null;
 function hostedSetupView(data){
   const panel=$("hosted-setup-panel"),focusOwned=panel.contains(document.activeElement),phaseChanged=data.phase!==hostedSetupPhase;
+  $("setup-recovery").value=data.enabled&&data.phase==="key_save"&&data.status!=="running"?data.recovery_key||"":"";
+  if(!data.enabled||data.phase!=="key_save"||data.status==="running")$("setup-saved-key").value="";
   panel.hidden=!data.enabled;
   if(!data.enabled){if(hostedSetupTimer){clearInterval(hostedSetupTimer);hostedSetupTimer=null}return}
   const running=data.status==="running";
   for(const block of panel.querySelectorAll("[data-setup-phase]"))block.hidden=running||block.dataset.setupPhase!==data.phase;
-  for(const control of panel.querySelectorAll("button,input"))control.disabled=running;
-  const messages={start:"Verify your purchase email to connect this Mac.",email:"Check your purchase email for the setup code.",pairing_checkpoint:"The connection still needs to be saved.",pairing_uncertain:"The saved connection needs confirmation.",paired:"This Mac is connected. Automatic protection is not active."};
-  const working={send_code:"Requesting your setup email…",pair:"Saving and connecting this Mac…",retry_save:"Retrying the saved connection…",resolve:"Checking the saved connection…",reauthorize:"Preparing email verification…"};
+  for(const control of panel.querySelectorAll("button,input,textarea"))control.disabled=running;
+  const messages={start:"Verify your purchase email to connect this Mac.",email:"Check your purchase email for the setup code.",pairing_checkpoint:"The connection still needs to be saved.",pairing_uncertain:"The saved connection needs confirmation.",paired:"This Mac is connected. Automatic protection is not active.",key_save:"Save your recovery key outside this Mac, then confirm your saved copy.",key_ready:"Saved recovery key confirmed. Automatic protection is not active."};
+  const working={send_code:"Requesting your setup email…",pair:"Saving and connecting this Mac…",retry_save:"Retrying the saved connection…",resolve:"Checking the saved connection…",reauthorize:"Preparing email verification…",prepare_key:"Preparing the same protected recovery key…",confirm_key:"Checking your saved recovery key…"};
   $("hosted-setup-status").textContent=running?working[data.step]||"Checking setup…":messages[data.phase]||"Setup needs attention.";
   $("hosted-setup-error").textContent=data.error||"";
   if(focusOwned&&(phaseChanged||document.activeElement.disabled||(!running&&document.activeElement===$("hosted-setup-status")))){
@@ -410,14 +429,16 @@ function hostedSetupView(data){
 async function refreshHostedSetup(){
   try{hostedSetupView(await api("/api/vault/hosted-setup-status"));return true}
   catch(error){
-    for(const control of $("hosted-setup-panel").querySelectorAll("button,input"))control.disabled=true;
+    $("setup-recovery").value="";$("setup-saved-key").value="";
+    for(const control of $("hosted-setup-panel").querySelectorAll("button,input,textarea"))control.disabled=true;
     $("hosted-setup-error").textContent="Setup status is unavailable. Do not repeat pairing. Check the connection or contact Joshua.";
     return false;
   }
 }
 async function hostedSetupStep(action,step={}){
+  $("setup-recovery").value="";$("setup-saved-key").value="";
   if($("hosted-setup-panel").contains(document.activeElement))$("hosted-setup-status").focus();
-  for(const control of $("hosted-setup-panel").querySelectorAll("button,input"))control.disabled=true;
+  for(const control of $("hosted-setup-panel").querySelectorAll("button,input,textarea"))control.disabled=true;
   if(!hostedSetupTimer)hostedSetupTimer=setInterval(refreshHostedSetup,1500);
   try{hostedSetupView(await api("/api/vault/hosted-setup",{action,step:{...step,apply:true}}))}
   catch(error){
@@ -430,6 +451,10 @@ $("setup-retry-save").onclick=()=>hostedSetupStep("retry_save");
 $("setup-resolve").onclick=()=>hostedSetupStep("resolve");
 $("setup-check-paired").onclick=()=>hostedSetupStep("resolve");
 $("setup-reauthorize").onclick=()=>hostedSetupStep("reauthorize");
+$("setup-prepare-key").onclick=()=>hostedSetupStep("prepare_key");
+$("setup-confirm-key").onclick=()=>{const recovery_key=$("setup-saved-key").value.trim();$("setup-saved-key").value="";return hostedSetupStep("confirm_key",{recovery_key})};
+$("setup-check-key-ready").onclick=()=>hostedSetupStep("resolve");
+$("setup-copy-key").onclick=async()=>{try{await navigator.clipboard.writeText($("setup-recovery").value);$("hosted-setup-status").textContent="Key copied. Save it outside this Mac before confirming."}catch(error){$("hosted-setup-error").textContent="Copy failed. Select the recovery key and copy it manually."}};
 let hostedRecoveryTimer=null,hostedRecoveryState=null,hostedRecoveryPhase=null;
 function hostedRecoveryView(data){
   hostedRecoveryState=data;

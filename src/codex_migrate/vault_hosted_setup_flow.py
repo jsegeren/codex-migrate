@@ -2,7 +2,8 @@
 
 Persist the Keychain device reference before claiming a purchase. A lost reply
 must resolve that same device; purchase links and email proofs stay in memory.
-This controller does not create a trial, encryption key, snapshot or schedule.
+Recovery-key preparation is explicit and account-bound. This controller does
+not create a trial, snapshot or schedule, or grant upload authorization.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from codex_migrate.vault_hosted_enrollment_client import (
     HostedEnrollmentClient, _CODE, _UUID, _identity,
 )
 from codex_migrate.vault_hosted_recovery_flow import purchase_token
+from codex_migrate.vault_hosted_key_setup import HostedKeySetup
 from codex_migrate.vault_hosted_schedule import SERVICE_ORIGIN
 
 
@@ -24,6 +26,8 @@ class HostedSetupFlow:
         self.registry = registry
         self._lock = threading.Lock()
         self._proof = {}
+        self._recovery_key = None
+        self._keys = HostedKeySetup(registry)
         self._binding = registry.read().get("hosted_setup_device")
         if self._binding is not None:
             if (not isinstance(self._binding, dict) or
@@ -42,7 +46,11 @@ class HostedSetupFlow:
 
     def snapshot(self):
         with self._lock:
-            return copy.deepcopy(self._public)
+            result = copy.deepcopy(self._public)
+            if (result["phase"] == "key_save" and result["status"] != "running"
+                    and self._recovery_key is not None):
+                result["recovery_key"] = self._recovery_key
+            return result
 
     def _update(self, **changes):
         with self._lock:
@@ -50,11 +58,14 @@ class HostedSetupFlow:
 
     def stage(self, action, payload):
         fields = {"send_code": {"purchase_link"}, "pair": {"code"},
-                  "retry_save": set(), "resolve": set(), "reauthorize": set()}
+                  "retry_save": set(), "resolve": set(), "reauthorize": set(),
+                  "prepare_key": set(), "confirm_key": {"recovery_key"}}
         phases = {"send_code": {"start", "email"}, "pair": {"email"},
                   "retry_save": {"pairing_checkpoint"},
-                  "resolve": {"pairing_uncertain", "paired"},
-                  "reauthorize": {"pairing_uncertain"}}
+                  "resolve": {"pairing_uncertain", "paired", "key_ready"},
+                  "reauthorize": {"pairing_uncertain"},
+                  "prepare_key": {"paired", "key_save"},
+                  "confirm_key": {"key_save"}}
         with self._lock:
             if (action not in fields or not isinstance(payload, dict) or
                     set(payload) != fields[action] | {"apply"} or
@@ -69,6 +80,10 @@ class HostedSetupFlow:
             if action == "pair":
                 if not isinstance(values["code"], str) or not _CODE.fullmatch(values["code"]):
                     raise MigrationError("Enter the setup code from your purchase email.")
+            if action == "confirm_key":
+                if (not isinstance(values["recovery_key"], str) or
+                        not re.fullmatch(r"CV1-[A-Za-z0-9_-]{43}", values["recovery_key"])):
+                    raise MigrationError("Enter the recovery key from your saved copy.")
             self._public.update(status="running", step=action, error=None)
 
         def run():
@@ -85,6 +100,8 @@ class HostedSetupFlow:
                 values.clear()
                 if self.snapshot()["phase"] in ("pairing_uncertain", "paired"):
                     self._proof.clear()
+                if self.snapshot()["phase"] == "key_ready":
+                    self._recovery_key = None
         return run
 
     def _save(self):
@@ -97,10 +114,11 @@ class HostedSetupFlow:
             raise MigrationError("The saved backup connection changed identity.")
         # Keep the observed identity even if durable saving fails. A retry must
         # verify the same account and Vault, not accept a changed server answer.
+        key_confirmed = self._keys.confirmed(identity)
         self._binding = dict(identity)
         self._save()
         self._proof.clear()
-        self._update(phase="paired")
+        self._update(phase="key_ready" if key_confirmed else "paired")
 
     def _claim(self, client):
         if self._claim_attempted:
@@ -118,6 +136,14 @@ class HostedSetupFlow:
                                   self._binding["deviceId"], apply=True))
 
     def _perform(self, action, values):
+        if action == "prepare_key":
+            self._recovery_key = self._keys.prepare(self._binding)
+            self._update(phase="key_save")
+            return
+        if action == "confirm_key":
+            self._keys.confirm(self._binding, values["recovery_key"])
+            self._update(phase="key_ready")
+            return
         client = HostedEnrollmentClient(SERVICE_ORIGIN)
         if action == "send_code":
             client.begin(values["purchase_link"], apply=True)
