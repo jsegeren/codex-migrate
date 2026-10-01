@@ -39,6 +39,7 @@ from codex_migrate.vault_backup import backup as backup_vault
 from codex_migrate.vault_backup import plan as plan_vault_backup
 from codex_migrate.vault_dashboard import VAULT_HTML
 from codex_migrate.vault_hosted_recovery_flow import HostedRecoveryFlow
+from codex_migrate.vault_hosted_setup_flow import HostedSetupFlow
 from codex_migrate.vault_history import search_titles, thread_timeline
 from codex_migrate.vault_recovery import export_recovery_key
 from codex_migrate.vault_recovery import list_snapshots as list_vault_snapshots
@@ -472,6 +473,9 @@ class SetupDashboard(Dashboard):
         self._restore_thread = None
         self._restore_status = {"status": "idle"}
         try:
+            self._hosted_setup = (HostedSetupFlow(self.registry)
+                                 if os.environ.get("CODEX_BACKUP_HOSTED_SETUP_ACCEPTANCE") == "yes"
+                                 else None)
             self._hosted_recovery = (HostedRecoveryFlow(self.source_home, self.registry)
                                     if os.environ.get("CODEX_BACKUP_HOSTED_RECOVERY_UI") == "yes"
                                     else None)
@@ -788,6 +792,24 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
     def hosted_recovery_status(self):
         return (self._hosted_recovery.snapshot() if self._hosted_recovery is not None
                 else {"enabled": False})
+
+    def hosted_setup_status(self):
+        return (self._hosted_setup.snapshot() if self._hosted_setup is not None
+                else {"enabled": False})
+
+    def start_hosted_setup(self, action, payload):
+        if self._hosted_setup is None:
+            raise MigrationError("Hosted setup is not enabled in this build session.")
+        if not self._idle_for_shutdown():
+            raise MigrationError("Finish running work and save any displayed recovery key first.")
+        run = self._hosted_setup.stage(action, payload)
+        # Pairing shares the existing restore slot so quit, backup, recovery,
+        # installation and update cannot race its native Keychain operation.
+        worker = threading.Thread(target=run, daemon=True)
+        with self._vault_lock:
+            self._restore_thread = worker
+            worker.start()
+        return self.hosted_setup_status()
 
     def start_hosted_recovery(self, action, payload):
         if self._hosted_recovery is None:
@@ -1402,6 +1424,9 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                         if parsed.path == "/api/vault/hosted-recovery-status" and not query:
                             self._json(200, setup.hosted_recovery_status())
                             return
+                        if parsed.path == "/api/vault/hosted-setup-status" and not query:
+                            self._json(200, setup.hosted_setup_status())
+                            return
                         if parsed.path == "/api/vault/install-status" and not query:
                             self._json(200, setup.vault_install_status())
                             return
@@ -1608,6 +1633,25 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
                     setup._closing = True
                     self._json(200, {"closing": True})
                     threading.Thread(target=self.server.shutdown, daemon=True).start()
+                    return
+                if self.path == "/api/vault/hosted-setup":
+                    try:
+                        length = int(self.headers.get("Content-Length", "0"))
+                        if not 0 < length <= 8192:
+                            raise MigrationError("Invalid setup request size")
+                        payload = json.loads(self.rfile.read(length))
+                        if (not isinstance(payload, dict) or
+                                set(payload) != {"action", "step"} or
+                                not isinstance(payload["action"], str)):
+                            raise MigrationError("Choose a valid setup step.")
+                        self._json(202, setup.start_hosted_setup(
+                            payload["action"], payload["step"]))
+                    except (MigrationError, ValueError, TypeError):
+                        self._json(400, {"error": "Backup setup could not start. Finish "
+                            "running work, confirm the current step, and check its fields."})
+                    except Exception:
+                        self._json(409, {"error": "Backup setup could not start safely. "
+                            "Contact joshua@segeren.com; no backup or subscription was started."})
                     return
                 if self.path == "/api/vault/hosted-recovery":
                     try:

@@ -120,6 +120,27 @@ enrollment, recovery-key setup/custody, the customer backup UI, hosted billing,
 scheduled-run certification or clean-Mac recovery. Those gates still precede
 availability. Use only a disposable synthetic account until they pass.
 
+### First-device pairing controller — acceptance only
+
+The local helper has a disabled-by-default first-device pairing controller
+behind `CODEX_BACKUP_HOSTED_SETUP_ACCEPTANCE=yes`. Its private, loopback-only
+setup/status APIs require the existing control token and local-origin checks.
+The controller verifies the purchase email through the existing challenge
+client, saves the opaque Keychain device reference with a durable checkpoint
+before the claim, and resolves that same device after a lost response or
+restart. A failed checkpoint cannot send the claim; a changed account/Vault
+binding is refused. Provider failures cannot echo private purchase links,
+email codes or native credential diagnostics.
+
+Pairing shares the helper's existing recovery worker slot, preventing quit,
+local recovery, backup, installation or update from racing it. Purchase links
+and email proofs stay only in memory; persisted state contains opaque IDs.
+Successful pairing explicitly reports neither upload authorization nor
+automatic protection. It does not create encryption keys, start a trial or
+subscription, publish a snapshot, or install a timer. Buyer-facing setup,
+separately saved-key custody, approved hosted entitlement, first backup and
+scheduled-run certification remain required before availability.
+
 ## Customer choice
 
 The Mac app will offer two destinations for the *same* portable, encrypted
