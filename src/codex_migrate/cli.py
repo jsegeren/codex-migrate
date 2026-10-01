@@ -199,15 +199,15 @@ def parser() -> argparse.ArgumentParser:
     vault_hosted_backups.add_argument("--device-id", required=True)
     vault_hosted_backups.add_argument("--crypto-helper")
     vault_hosted_backups.add_argument("--json", action="store_true")
-    vault_hosted_recover = vault_commands.add_parser(
-        "hosted-recover", help=argparse.SUPPRESS)
-    vault_hosted_recover.add_argument("--device-id", required=True)
-    vault_hosted_recover.add_argument("--output", required=True)
-    vault_hosted_recover.add_argument("--snapshot")
-    vault_hosted_recover.add_argument("--max-bytes", type=int, required=True)
-    vault_hosted_recover.add_argument("--crypto-helper")
-    vault_hosted_recover.add_argument("--apply", action="store_true")
-    vault_hosted_recover.add_argument("--json", action="store_true")
+    for name in ("hosted-prepare-recovery", "hosted-recover"):
+        vault_hosted_recover = vault_commands.add_parser(name, help=argparse.SUPPRESS)
+        vault_hosted_recover.add_argument("--device-id", required=True)
+        vault_hosted_recover.add_argument("--output", required=True)
+        vault_hosted_recover.add_argument("--snapshot")
+        vault_hosted_recover.add_argument("--max-bytes", type=int, required=True)
+        vault_hosted_recover.add_argument("--crypto-helper")
+        vault_hosted_recover.add_argument("--apply", action="store_true")
+        vault_hosted_recover.add_argument("--json", action="store_true")
 
     return root
 
@@ -335,14 +335,22 @@ def main(argv: Optional[List[str]] = None) -> int:
                         print("Newest source-reported complete backup: %s" % (
                             prior["snapshotId"] if prior else "none available"))
                 return 0
-            if args.vault_command == "hosted-recover":
-                from codex_migrate.vault_hosted_disaster_recovery import recover_hosted_snapshot
-                result = recover_hosted_snapshot(
+            if args.vault_command in ("hosted-prepare-recovery", "hosted-recover"):
+                from codex_migrate.vault_hosted_disaster_recovery import (
+                    prepare_hosted_recovery, recover_hosted_snapshot,
+                )
+                preparing = args.vault_command == "hosted-prepare-recovery"
+                operation = prepare_hosted_recovery if preparing else recover_hosted_snapshot
+                result = operation(
                     args.source_home, args.output, args.device_id,
                     max_bytes=args.max_bytes, snapshot_id=args.snapshot,
                     crypto_helper=args.crypto_helper, apply=args.apply)
                 if args.json:
                     print(json.dumps(result, indent=2, sort_keys=True))
+                elif preparing:
+                    print("Recovery metadata prepared in: %s" % result["vault"])
+                    print("Import your separately saved recovery key before downloading "
+                          "the backup. No conversations have been decrypted or verified.")
                 else:
                     print("Encrypted hosted snapshot verified in: %s" % result["vault"])
                     if result["needs_attention"]:

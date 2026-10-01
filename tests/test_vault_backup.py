@@ -2290,6 +2290,45 @@ class VaultBackupTests(unittest.TestCase):
             finally:
                 self.delete_key(destination)
 
+    def test_metadata_first_recovery_imports_saved_key_before_bulk_download(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, destination = root / "source", root / "vault"
+            recovered, transcripts = root / "hosted-recovery", root / "transcripts"
+            self.fixture(source)
+            store = MemoryObjectStore()
+            try:
+                saved = backup(str(source), str(destination), crypto_helper=str(self.helper))
+                staged = vault_remote_transfer.stage_encrypted_snapshot(
+                    str(destination), store, crypto_helper=str(self.helper))
+                self.delete_key(destination)
+                with patch.object(store, "open_read", wraps=store.open_read) as read:
+                    prepared = vault_remote_recovery.prepare_encrypted_recovery(
+                        str(source), str(recovered), store, staged.receipt(),
+                        max_bytes=1024 * 1024)
+                self.assertEqual(prepared["key_id"], saved.key_id)
+                self.assertEqual(prepared["status"], "awaiting_recovery_key")
+                read.assert_called_once_with(staged.objects[0].key)
+                self.assertEqual({path.name for path in recovered.iterdir()},
+                                 {"vault.json", ".hosted-recovery.json"})
+                import_recovery_key(str(recovered), saved.recovery_key,
+                                    crypto_helper=str(self.helper))
+                result = vault_remote_recovery.download_encrypted_snapshot(
+                    str(source), str(recovered), store, staged.receipt(),
+                    max_bytes=1024 * 1024, crypto_helper=str(self.helper))
+                self.assertEqual(result.reused_files, 1)
+                self.assertEqual(result.downloaded_files, len(staged.objects) - 1)
+                self.assertEqual(result.snapshot_id, saved.snapshot_id)
+                restore_snapshot(str(source), str(recovered), str(transcripts),
+                                 crypto_helper=str(self.helper))
+                self.assertEqual(
+                    (transcripts / "sessions/2026/09/17/active.jsonl").read_bytes(),
+                    (source / ".codex/sessions/2026/09/17/active.jsonl").read_bytes())
+                self.assertEqual((source / ".codex/auth.json").read_text(), "NEVER-COPY-AUTH")
+                self.assertFalse((recovered / "auth.json").exists())
+            finally:
+                self.delete_key(destination)
+
     def test_hosted_recovery_requires_reimported_key_then_resumes_without_live_writes(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -2302,13 +2341,29 @@ class VaultBackupTests(unittest.TestCase):
                 staged = vault_remote_transfer.stage_encrypted_snapshot(
                     str(destination), store, crypto_helper=str(self.helper))
                 self.delete_key(destination)
-                with self.assertRaises(MigrationError):
+                with patch.object(store, "open_read", wraps=store.open_read) as read, \
+                     self.assertRaises(MigrationError):
                     vault_remote_recovery.download_encrypted_snapshot(
                         str(source), str(recovered), store, staged.receipt(),
                         max_bytes=1024 * 1024, crypto_helper=str(self.helper))
+                self.assertEqual([call.args[0] for call in read.call_args_list],
+                                 [staged.objects[0].key, staged.objects[-2].key])
+                self.assertFalse((recovered / "objects").exists())
                 self.assertFalse((recovered / "latest.json").exists())
                 self.assertTrue((recovered / "vault.json").is_file())
                 (recovered / "vault.json.cvdownload").write_bytes(b"interrupted ciphertext")
+
+                # A present but wrong key must also fail before reading chunks.
+                import_recovery_key(str(recovered), "CV1-" + "A" * 43,
+                                    crypto_helper=str(self.helper))
+                with patch.object(store, "open_read", wraps=store.open_read) as read, \
+                     self.assertRaises(MigrationError):
+                    vault_remote_recovery.download_encrypted_snapshot(
+                        str(source), str(recovered), store, staged.receipt(),
+                        max_bytes=1024 * 1024, crypto_helper=str(self.helper))
+                read.assert_not_called()  # Only existing bound metadata is reused.
+                self.assertFalse((recovered / "objects").exists())
+                self.delete_key(destination)
 
                 import_recovery_key(
                     str(recovered), saved.recovery_key, crypto_helper=str(self.helper))
@@ -2316,8 +2371,8 @@ class VaultBackupTests(unittest.TestCase):
                     str(source), str(recovered), store, staged.receipt(),
                     max_bytes=1024 * 1024, crypto_helper=str(self.helper))
                 self.assertEqual(result.snapshot_id, saved.snapshot_id)
-                self.assertEqual(result.downloaded_files, 0)
-                self.assertEqual(result.reused_files, len(staged.objects))
+                self.assertEqual(result.downloaded_files, len(staged.objects) - 2)
+                self.assertEqual(result.reused_files, 2)
                 self.assertEqual(result.transcript_files, 2)
                 self.assertFalse((recovered / ".hosted-recovery.json").exists())
                 self.assertFalse((recovered / "vault.json.cvdownload").exists())

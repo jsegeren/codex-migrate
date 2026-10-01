@@ -13,7 +13,9 @@ from codex_migrate.errors import MigrationError
 from codex_migrate.vault_backup import _helper_path
 from codex_migrate.vault_hosted_enrollment_client import HostedEnrollmentClient
 from codex_migrate.vault_hosted_schedule import SERVICE_ORIGIN
-from codex_migrate.vault_remote_recovery import download_encrypted_snapshot
+from codex_migrate.vault_remote_recovery import (
+    download_encrypted_snapshot, prepare_encrypted_recovery,
+)
 from codex_migrate.vault_recovery import snapshot_catalog
 from codex_migrate.vault_schedule import _home
 
@@ -42,22 +44,14 @@ def hosted_recovery_options(device_id: str, *,
             latest["sourceCoverage"] != "complete"}
 
 
-def recover_hosted_snapshot(
-    source_home: str, output: str, device_id: str, *,
+def _recovery_plan(
+    device_id: str, *,
     max_bytes: int, snapshot_id: Optional[str] = None,
-    crypto_helper: Optional[str] = None, apply: bool = False,
-) -> dict:
-    """Fetch and authenticate a published version without installing it.
-
-    A server pointer change between planning and transfer fails closed. A
-    partial download may be retried with the same selected snapshot; the
-    underlying receiver checks every reused object's exact bytes.
-    """
-    if apply is not True:
-        raise MigrationError("Hosted recovery requires explicit confirmation.")
+    crypto_helper: Optional[str] = None,
+) -> tuple:
+    """Bind both recovery phases to the same authenticated published version."""
     if type(max_bytes) is not int or max_bytes <= 0:
         raise MigrationError("The hosted recovery size limit is invalid.")
-    home = str(_home(source_home))
     helper = _helper_path(crypto_helper)
     enrollment = HostedEnrollmentClient(SERVICE_ORIGIN)
     upload, recovery = enrollment.backup_clients(device_id, crypto_helper=str(helper))
@@ -77,6 +71,42 @@ def recover_hosted_snapshot(
     receipt, store = recovery.prepare(
         max_bytes=max_bytes, expected_pointer=(account_id, worker_origin, latest),
         selected_snapshot_id=snapshot_id)
+    return helper, selected, receipt, store
+
+
+def prepare_hosted_recovery(
+    source_home: str, output: str, device_id: str, *, max_bytes: int,
+    snapshot_id: Optional[str] = None, crypto_helper: Optional[str] = None,
+    apply: bool = False,
+) -> dict:
+    """Download only bound metadata; do not claim decryptable recovery."""
+    if apply is not True:
+        raise MigrationError("Hosted recovery preparation requires explicit confirmation.")
+    home = str(_home(source_home))
+    _, _, receipt, store = _recovery_plan(
+        device_id, max_bytes=max_bytes, snapshot_id=snapshot_id,
+        crypto_helper=crypto_helper)
+    return prepare_encrypted_recovery(home, output, store, receipt,
+                                      max_bytes=max_bytes)
+
+
+def recover_hosted_snapshot(
+    source_home: str, output: str, device_id: str, *,
+    max_bytes: int, snapshot_id: Optional[str] = None,
+    crypto_helper: Optional[str] = None, apply: bool = False,
+) -> dict:
+    """Fetch and authenticate a published version without installing it.
+
+    A server pointer change between planning and transfer fails closed. A
+    partial download may be retried with the same selected snapshot; the
+    underlying receiver checks every reused object's exact bytes.
+    """
+    if apply is not True:
+        raise MigrationError("Hosted recovery requires explicit confirmation.")
+    home = str(_home(source_home))
+    helper, selected, receipt, store = _recovery_plan(
+        device_id, max_bytes=max_bytes, snapshot_id=snapshot_id,
+        crypto_helper=crypto_helper)
     result = download_encrypted_snapshot(
         home, output, store, receipt, max_bytes=max_bytes,
         crypto_helper=str(helper))

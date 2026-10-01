@@ -9,7 +9,7 @@ from unittest.mock import patch
 from codex_migrate.cli import main, parser
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_hosted_disaster_recovery import (
-    hosted_recovery_options, recover_hosted_snapshot,
+    hosted_recovery_options, prepare_hosted_recovery, recover_hosted_snapshot,
 )
 
 
@@ -82,6 +82,25 @@ class HostedDisasterRecoveryTests(unittest.TestCase):
                          (str(Path(self.home).resolve()), self.output))
         self.assertEqual(receiver.call_args.kwargs["max_bytes"], 400)
         self.assertFalse((Path(self.home) / ".codex").exists())
+
+    def test_preparation_binds_the_same_authority_without_downloading_history(self):
+        helper, enrollment, download = self._patches()
+        prepared = {"vault": self.output, "snapshot_id": SNAPSHOT,
+                    "status": "awaiting_recovery_key"}
+        with helper, enrollment, download as receiver, patch(
+                "codex_migrate.vault_hosted_disaster_recovery.prepare_encrypted_recovery",
+                return_value=prepared) as metadata:
+            result = prepare_hosted_recovery(
+                self.home, self.output, DEVICE, max_bytes=400,
+                snapshot_id=SNAPSHOT, apply=True)
+        self.assertEqual(result, prepared)
+        self.assertEqual(metadata.call_args.args[0:2],
+                         (str(Path(self.home).resolve()), self.output))
+        self.assertEqual(metadata.call_args.kwargs, {"max_bytes": 400})
+        self.assertEqual(self.prepared, [{"max_bytes": 400,
+            "expected_pointer": self.pointer, "selected_snapshot_id": SNAPSHOT}])
+        receiver.assert_not_called()
+        self.catalog.assert_not_called()
 
     def test_recovered_ciphertext_does_not_hide_incomplete_conversations(self):
         self.catalog.return_value = [
@@ -169,12 +188,26 @@ class HostedDisasterRecoveryTests(unittest.TestCase):
 
     def test_plan_and_bad_limit_do_not_open_credentials(self):
         with patch("codex_migrate.vault_hosted_disaster_recovery.HostedEnrollmentClient") as client:
-            with self.assertRaisesRegex(MigrationError, "explicit confirmation"):
-                recover_hosted_snapshot(self.home, self.output, DEVICE, max_bytes=400)
-            with self.assertRaisesRegex(MigrationError, "size limit"):
-                recover_hosted_snapshot(self.home, self.output, DEVICE,
-                                        max_bytes=0, apply=True)
+            for operation in (prepare_hosted_recovery, recover_hosted_snapshot):
+                with self.subTest(operation=operation.__name__):
+                    with self.assertRaisesRegex(MigrationError, "explicit confirmation"):
+                        operation(self.home, self.output, DEVICE, max_bytes=400)
+                    with self.assertRaisesRegex(MigrationError, "size limit"):
+                        operation(self.home, self.output, DEVICE, max_bytes=0, apply=True)
             client.assert_not_called()
+
+    def test_preparation_cli_does_not_claim_verified_recovery(self):
+        printed = io.StringIO()
+        with patch("codex_migrate.vault_hosted_disaster_recovery.prepare_hosted_recovery",
+                   return_value={"vault": self.output,
+                                 "status": "awaiting_recovery_key"}), \
+                redirect_stdout(printed):
+            self.assertEqual(main([
+                "vault", "--source-home", self.home, "hosted-prepare-recovery",
+                "--device-id", DEVICE, "--output", self.output,
+                "--max-bytes", "400", "--apply"]), 0)
+        self.assertIn("No conversations have been decrypted or verified", printed.getvalue())
+        self.assertNotIn("snapshot verified", printed.getvalue())
 
     def test_pointer_or_worker_substitution_refuses_download(self):
         self.pointer = (DEVICE, WORKER, self.pointer[2])

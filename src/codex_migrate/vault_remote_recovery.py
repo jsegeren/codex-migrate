@@ -17,7 +17,9 @@ import stat
 from typing import BinaryIO, Dict, List, Optional, Protocol, Tuple
 
 from codex_migrate.errors import MigrationError
-from codex_migrate.vault_backup import _validate_destination
+from codex_migrate.vault_backup import (
+    _helper_path, _metadata, _read_json, _run_helper, _validate_destination,
+)
 from codex_migrate.vault_recovery import verify_snapshot
 from codex_migrate.vault_remote_inventory import (
     MAX_CHUNKS, MAX_ENCRYPTED_CHUNK_BYTES, MAX_ENCRYPTED_MANIFEST_BYTES,
@@ -363,7 +365,25 @@ def download_encrypted_snapshot(
                                      _marker_bytes(snapshot_id, objects))
     downloaded = reused = 0
     try:
-        for item in objects:
+        # Prove this Mac can open the exact manifest before fetching potentially
+        # gigabytes of chunks. Metadata alone cannot validate a recovery key.
+        for item in (objects[0], objects[-2]):
+            if _fetch_item(descriptor, item, store):
+                downloaded += 1
+            else:
+                reused += 1
+        key_id = _metadata(_read_json(root / "vault.json"))
+        fingerprint = _run_helper(_helper_path(crypto_helper), [
+            "manifest-fingerprint", "--key-id", key_id,
+            "--snapshot-id", snapshot_id, "--manifest", str(root / objects[-2].key),
+        ])
+        if (set(fingerprint) != {"snapshot_id", "plaintext_sha256", "ciphertext_sha256"}
+                or fingerprint["snapshot_id"] != snapshot_id
+                or fingerprint["ciphertext_sha256"] != objects[-2].sha256
+                or not isinstance(fingerprint["plaintext_sha256"], str)
+                or not _HEX.fullmatch(fingerprint["plaintext_sha256"])):
+            raise MigrationError("The hosted recovery manifest could not be authenticated.")
+        for item in (*objects[1:-2], objects[-1]):
             if _fetch_item(descriptor, item, store):
                 downloaded += 1
             else:
@@ -377,5 +397,32 @@ def download_encrypted_snapshot(
             encrypted_bytes_checked=sum(item.bytes for item in objects),
             transcript_files=verified.transcript_files,
         )
+    finally:
+        os.close(descriptor)
+
+
+def prepare_encrypted_recovery(
+    source_home: str, output: str, store: ScopedReadStore, receipt: dict, *,
+    max_bytes: int,
+) -> dict:
+    """Fetch only receipt-bound metadata before importing a recovery key.
+
+    The account-scoped service and object receipt authorize this read, not
+    successful decryption. No key is created/imported and no recovery-complete
+    marker is written. The ordinary downloader can resume this same private
+    destination after a separately confirmed key import.
+    """
+    snapshot_id, objects = _objects(receipt, max_bytes)
+    root, descriptor = _prepare_root(source_home, output,
+                                     _marker_bytes(snapshot_id, objects))
+    try:
+        _fetch_item(descriptor, objects[0], store)
+        metadata = _read_json(root / "vault.json")
+        key_id = _metadata(metadata)
+        return {"vault": str(root), "snapshot_id": snapshot_id,
+                "key_id": key_id,
+                "recovery_mode": metadata.get("recovery_mode", "personal"),
+                "encrypted_bytes_expected": sum(item.bytes for item in objects),
+                "status": "awaiting_recovery_key"}
     finally:
         os.close(descriptor)

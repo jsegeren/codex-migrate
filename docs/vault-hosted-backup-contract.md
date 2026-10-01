@@ -62,6 +62,32 @@ a completed hosted recovery journey. The remaining critical sequence is
 real-service backup → clean-Mac recovery → unattended operation → measured
 offer/billing → independently reviewed, notarized customer release.
 
+### Replacement-Mac recovery bootstrap
+
+Email/device pairing grants only authenticated access to the customer's
+encrypted backup. It does not replace their separately saved recovery key.
+The dark `hosted-prepare-recovery` path obtains the selected published receipt
+and downloads only its checksum-bound, structurally validated Vault metadata
+into an isolated private destination. It reports `awaiting_recovery_key`,
+never protection or decrypted recovery. This permits key import before the
+bulk transfer; the same receipt-bound destination then resumes through the
+normal authenticated download/verify path. Existing Codex and repositories
+are not changed. A different receipt or conflicting destination is refused,
+not silently overwritten.
+
+Before transferring conversation chunks, the receiver downloads and opens the
+selected encrypted manifest with the imported key and checks its exact receipt
+fingerprint. A missing or wrong key stops before bulk transfer. Opening that
+manifest does not prove the chunks exist or the complete snapshot is sound:
+every object and the reconstructed snapshot must still verify before recovery
+can be reported complete.
+
+The initial customer UI must guide pairing → metadata preparation → separately
+saved key import → download/verify → read/export or explicit selected insertion.
+The CLI primitives are not that completed UI, and a metadata checksum is not
+proof that the customer can decrypt the backup. Real-service clean-Mac proof
+remains required before offering this flow to buyers.
+
 ## Customer choice
 
 The Mac app will offer two destinations for the *same* portable, encrypted

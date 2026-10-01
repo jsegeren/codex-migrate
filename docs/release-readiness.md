@@ -1,5 +1,37 @@
 # Desktop release readiness
 
+## September 30 metadata-first replacement-Mac recovery — draft source
+
+The prior receiver downloaded the complete encrypted snapshot before discovering
+that a replacement Mac lacked its recovery key. The new authenticated
+`hosted-prepare-recovery` primitive downloads only the selected receipt's Vault
+metadata into a private, isolated recovery folder. It validates its receipt
+checksum and metadata structure, retains the interrupted-recovery marker and
+reports `awaiting_recovery_key`; it does not import a key, mark `latest`,
+decrypt conversations, install into Codex, or claim successful recovery.
+The normal receiver resumes the same receipt after explicit key import.
+
+Twenty-four focused tests passed, including metadata-only reads, private/retryable
+destination, corrupt/missing metadata refusal, byte-limit refusal, the shared
+authenticated authority binding and explicit-apply guard, and truthful CLI
+preparation output. These include five native-helper tests with disposable
+data: metadata-first/key-import/full-download/verify/exact-restore; missing and
+wrong-key refusal before bulk transfer; interrupted reads and corruption;
+unsafe receipt/destination refusal; and a link-swapped partial folder. The
+receiver now authenticates the exact encrypted manifest with the saved key
+before fetching conversation chunks. Neither a missing/wrong key nor a
+malformed native confirmation can trigger the bulk download or mark recovery
+complete. The original source authentication
+sentinel remained unchanged. This is source plus signed-helper evidence using
+an in-memory object store, not real-R2 or clean-Mac acceptance. The signed
+engine below predates this addition and will need rebuilding. Customer UI
+guidance and real service enrollment remain incomplete; no public hosted route
+or billing was enabled.
+
+The broader native-backup and hosted recovery/schedule/client regression run
+completed with 160 tests, one intentional skip, and no failures. It used the
+signed native helper with disposable fixtures, not customers' Codex state.
+
 ## September 30 unattended loss-evidence gate — source only
 
 The hosted scheduler previously accepted a missing risk count on a complete
