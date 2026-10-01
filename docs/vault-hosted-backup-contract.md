@@ -142,9 +142,22 @@ Pairing shares the helper's existing recovery worker slot, preventing quit,
 local recovery, backup, installation or update from racing it. Purchase links
 and email proofs stay only in memory; persisted state contains opaque IDs.
 Successful pairing explicitly reports neither upload authorization nor
-automatic protection. It does not create encryption keys, start a trial or
-subscription, publish a snapshot, or install a timer. Buyer-facing setup,
-separately saved-key custody, approved hosted entitlement, first backup and
+automatic protection. Pairing itself does not create encryption keys, start
+a trial or subscription, publish a snapshot, or install a timer.
+
+The next explicit acceptance-only step prepares a personal recovery key. It
+durably checkpoints an account/Vault/device-bound opaque key ID before native
+Keychain creation. A restart or lost helper reply reuses that exact ID and
+existing key; a different binding, key type or metadata is refused, never
+silently replaced. Key material remains in ThisDeviceOnly Keychain and the
+temporary, control-token-protected setup view, not persisted in browser storage,
+local JSON, support diagnostics, or the hosted service. The customer must save
+their recovery key outside the Mac and backup, then re-enter that saved copy.
+The native helper checks the submitted copy through private stdin without
+importing or replacing a key. The view clears key material during confirmation
+and after success. This saved-copy match is **not** a clean-Mac recovery test,
+proof of independently retained recovery material, or automatic protection.
+Approved hosted entitlement, first backup, real-service clean-Mac recovery and
 scheduled-run certification remain required before availability.
 
 ## Customer choice

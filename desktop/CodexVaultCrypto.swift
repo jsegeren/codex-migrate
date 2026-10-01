@@ -123,6 +123,11 @@ private struct KeyResult: Codable {
     let deleted: Bool?
 }
 
+private struct RecoveryKeyCheck: Codable {
+    let key_id: String
+    let verified: Bool
+}
+
 private struct BusinessRecoveryEnvelope: Codable {
     let version: Int
     let key_id: String
@@ -785,6 +790,72 @@ private func createKeyCommand() throws {
     try printJSON(KeyResult(key_id: keyID,
                             recovery_key: "CV1-" + base64URL(material),
                             imported: nil, deleted: nil))
+}
+
+// The caller durably saves this opaque ID before invoking us. Retrying after
+// a lost reply must reuse the same protected key, never generate a replacement.
+private func prepareKeyCommand(_ arguments: [String]) throws {
+    let keyID = try canonicalKeyID(argument("--key-id", in: arguments))
+    var other = businessKeyQuery(keyID)
+    other[kSecReturnAttributes] = true
+    var otherItem: CFTypeRef?
+    guard SecItemCopyMatching(other as CFDictionary, &otherItem) == errSecItemNotFound else {
+        throw VaultError.message("the personal Vault key type could not be confirmed")
+    }
+#if !CODEX_VAULT_TEST_LEGACY_KEYCHAIN
+    guard try inspectLegacyKey(keyID) == nil else {
+        throw VaultError.message("that key identifier belongs to an older Vault key")
+    }
+#endif
+    var query = keyQuery(keyID)
+    query[kSecReturnData] = true
+    query[kSecMatchLimit] = kSecMatchLimitOne
+    var item: CFTypeRef?
+    let status = SecItemCopyMatching(query as CFDictionary, &item)
+    let material: Data
+    if status == errSecItemNotFound {
+        material = rawKey(SymmetricKey(size: .bits256))
+        try storeKey(material, keyID: keyID)
+    } else if status == errSecSuccess, let existing = item as? Data, existing.count == 32 {
+        material = existing
+    } else {
+        throw VaultError.message("the saved Vault key could not be confirmed")
+    }
+    guard rawKey(try loadKey(keyID)) == material else {
+        throw VaultError.message("the prepared Vault key could not be verified")
+    }
+    try printJSON(KeyResult(key_id: keyID, recovery_key: "CV1-" + base64URL(material),
+                            imported: nil, deleted: nil))
+}
+
+private func checkRecoveryKeyCommand(_ arguments: [String]) throws {
+    let keyID = try canonicalKeyID(argument("--key-id", in: arguments))
+    let input = try FileHandle.standardInput.read(upToCount: 257) ?? Data()
+    guard input.count <= 256, let text = String(data: input, encoding: .utf8) else {
+        throw VaultError.message("the recovery key is invalid")
+    }
+    let candidate = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard candidate.hasPrefix("CV1-") else {
+        throw VaultError.message("the recovery key is invalid")
+    }
+    let material = try decodeBase64URL(String(candidate.dropFirst(4)))
+    var other = businessKeyQuery(keyID)
+    other[kSecReturnAttributes] = true
+    var otherItem: CFTypeRef?
+    guard SecItemCopyMatching(other as CFDictionary, &otherItem) == errSecItemNotFound else {
+        throw VaultError.message("the personal Vault key type could not be confirmed")
+    }
+    var query = keyQuery(keyID)
+    query[kSecReturnData] = true
+    query[kSecMatchLimit] = kSecMatchLimitOne
+    var item: CFTypeRef?
+    let status = SecItemCopyMatching(query as CFDictionary, &item)
+    guard material.count == 32, candidate == "CV1-" + base64URL(material),
+          status == errSecSuccess, (item as? Data) == material else {
+        throw VaultError.message("the saved recovery key does not match")
+    }
+    // Read-only comparison: this command never imports or overwrites a key.
+    try printJSON(RecoveryKeyCheck(key_id: keyID, verified: true))
 }
 
 private func businessRecoveryAAD(_ keyID: String, role: String) -> Data {
@@ -1464,6 +1535,8 @@ private func run() throws {
     }
     switch command {
     case "create-key": try createKeyCommand()
+    case "prepare-key": try prepareKeyCommand(arguments)
+    case "check-recovery-key": try checkRecoveryKeyCommand(arguments)
     case "business-key-create": try createBusinessKeyCommand()
     case "business-key-import": try importBusinessKeyCommand(arguments)
     case "import-key": try importKeyCommand(arguments)
