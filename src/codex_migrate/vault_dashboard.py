@@ -23,6 +23,9 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 @media(max-width:620px){#salvage-search{grid-template-columns:1fr}#salvage-search button{width:100%}}
 @media print{body{background:white;color:black}header,.summary,#backup-panel,#restore-panel,#search-panel,#results-panel,.actions,#error,#status{display:none!important}main{width:auto;margin:0}.panel{border:0;padding:0;background:white}.entry{break-inside:avoid;border-color:#bbb}.entry time{color:#444}}
 .hosted-step label{display:block;margin:14px 0 8px;font-weight:700}.hosted-step input,.hosted-step select{max-width:100%;width:100%;margin-bottom:14px}.hosted-step button{margin:8px 0}.hosted-step .actions input{width:auto}.view-backup #hosted-recovery-panel,.view-conversations #hosted-recovery-panel{display:none!important}#hosted-recovery-error{color:#ffc3c8}#hosted-recovery-status{color:var(--muted)}
+.view-conversations #hosted-setup-panel,.view-recovery #hosted-setup-panel{display:none!important}#hosted-setup-error{color:#ffc3c8}#hosted-setup-status{color:var(--muted)}
+.brand small,.protection{font-size:14px}
+@media print{#hosted-setup-panel,#hosted-recovery-panel{display:none!important}}
 </style>
 </head>
 <body>
@@ -79,6 +82,38 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 <strong id="bytes">—</strong>
 </div>
 <p class="summary-note" id="paginated-note" hidden>Database-backed threads may also have transcript files; these counts are not additive.</p>
+</section>
+<section class="panel" id="hosted-setup-panel" hidden>
+<h2>Connect this Mac</h2>
+<p class="muted">Hosted backup acceptance preview. This connection step does not start a subscription or back up your work.</p>
+<p id="hosted-setup-status" role="status" aria-live="polite" tabindex="-1"></p>
+<p id="hosted-setup-error" role="alert"></p>
+<div class="hosted-step" data-setup-phase="start">
+<label for="setup-purchase">Private purchase link</label>
+<input id="setup-purchase" type="password" autocomplete="off" spellcheck="false" placeholder="Paste the link from your receipt">
+<p class="muted">We send the setup code to the email used for this purchase. No Google or OpenAI sign-in is needed.</p>
+<button id="setup-send-code">Email me a setup code</button>
+</div>
+<div class="hosted-step" data-setup-phase="email" hidden>
+<label for="setup-code">Setup code from your email</label>
+<input id="setup-code" type="password" autocomplete="off" spellcheck="false">
+<button id="setup-pair">Verify email + connect this Mac</button>
+</div>
+<div class="hosted-step" data-setup-phase="pairing_checkpoint" hidden>
+<p>The connection could not be safely saved. This step did not send a pairing request. Retry saving the same connection.</p>
+<button id="setup-retry-save">Retry saving connection</button>
+</div>
+<div class="hosted-step" data-setup-phase="pairing_uncertain" hidden>
+<p>We need to confirm the saved connection. Check it before trying again; we reuse the same device credential.</p>
+<button id="setup-resolve">Check saved connection</button>
+<p class="muted">If it still cannot be confirmed, verify your purchase email again. This keeps the same saved connection.</p>
+<button id="setup-reauthorize" class="secondary">Verify purchase email again</button>
+</div>
+<div class="hosted-step" data-setup-phase="paired" hidden>
+<p>This setup has not created a backup. Your recovery key, hosted storage authorization, first verified backup and successful automatic run are still required before automatic protection is active.</p>
+<button id="setup-check-paired" class="secondary">Check saved connection</button>
+</div>
+<p class="muted">Need help? <a href="mailto:joshua@segeren.com">Email Joshua</a>. Never email your private purchase link, setup code or recovery key.</p>
 </section>
 <section class="panel" id="backup-panel">
 <h2>Backup settings</h2>
@@ -352,6 +387,49 @@ for(const link of document.querySelectorAll("[data-route]")){link.classList.togg
 const fmt=n=>{const units=["B","KB","MB","GB","TB"];let i=0;while(n>=1000&&i<units.length-1){n/=1000;i++}return `${n.toFixed(n>=100?0:n>=10?1:2)} ${units[i]}`};
 async function api(path,data){const response=await fetch(path,{method:data===undefined?"GET":"POST",headers:{"X-Codex-Migrate-Token":token,"Content-Type":"application/json"},...(data===undefined?{}:{body:JSON.stringify(data)})});const type=response.headers.get("Content-Type")||"";const body=type.includes("application/json")?await response.json():await response.text();if(!response.ok)throw Error(body.error||"The local request failed");return body}
 function fail(error){$("error").textContent=error.message;$("status").textContent=""}
+let hostedSetupTimer=null,hostedSetupPhase=null;
+function hostedSetupView(data){
+  const panel=$("hosted-setup-panel"),focusOwned=panel.contains(document.activeElement),phaseChanged=data.phase!==hostedSetupPhase;
+  panel.hidden=!data.enabled;
+  if(!data.enabled){if(hostedSetupTimer){clearInterval(hostedSetupTimer);hostedSetupTimer=null}return}
+  const running=data.status==="running";
+  for(const block of panel.querySelectorAll("[data-setup-phase]"))block.hidden=running||block.dataset.setupPhase!==data.phase;
+  for(const control of panel.querySelectorAll("button,input"))control.disabled=running;
+  const messages={start:"Verify your purchase email to connect this Mac.",email:"Check your purchase email for the setup code.",pairing_checkpoint:"The connection still needs to be saved.",pairing_uncertain:"The saved connection needs confirmation.",paired:"This Mac is connected. Automatic protection is not active."};
+  const working={send_code:"Requesting your setup email…",pair:"Saving and connecting this Mac…",retry_save:"Retrying the saved connection…",resolve:"Checking the saved connection…",reauthorize:"Preparing email verification…"};
+  $("hosted-setup-status").textContent=running?working[data.step]||"Checking setup…":messages[data.phase]||"Setup needs attention.";
+  $("hosted-setup-error").textContent=data.error||"";
+  if(focusOwned&&(phaseChanged||document.activeElement.disabled||(!running&&document.activeElement===$("hosted-setup-status")))){
+    const target=running?$("hosted-setup-status"):panel.querySelector(`[data-setup-phase="${data.phase}"] input:not(:disabled),[data-setup-phase="${data.phase}"] button:not(:disabled)`);
+    (target||$("hosted-setup-status")).focus();
+  }
+  hostedSetupPhase=data.phase;
+  if(running&&!hostedSetupTimer)hostedSetupTimer=setInterval(refreshHostedSetup,1500);
+  if(!running&&hostedSetupTimer){clearInterval(hostedSetupTimer);hostedSetupTimer=null}
+}
+async function refreshHostedSetup(){
+  try{hostedSetupView(await api("/api/vault/hosted-setup-status"));return true}
+  catch(error){
+    for(const control of $("hosted-setup-panel").querySelectorAll("button,input"))control.disabled=true;
+    $("hosted-setup-error").textContent="Setup status is unavailable. Do not repeat pairing. Check the connection or contact Joshua.";
+    return false;
+  }
+}
+async function hostedSetupStep(action,step={}){
+  if($("hosted-setup-panel").contains(document.activeElement))$("hosted-setup-status").focus();
+  for(const control of $("hosted-setup-panel").querySelectorAll("button,input"))control.disabled=true;
+  if(!hostedSetupTimer)hostedSetupTimer=setInterval(refreshHostedSetup,1500);
+  try{hostedSetupView(await api("/api/vault/hosted-setup",{action,step:{...step,apply:true}}))}
+  catch(error){
+    if(await refreshHostedSetup())$("hosted-setup-error").textContent="The request response was not confirmed. Use the current setup step shown above; do not repeat a pairing request.";
+  }
+}
+$("setup-send-code").onclick=()=>{const purchase_link=$("setup-purchase").value.trim();$("setup-purchase").value="";return hostedSetupStep("send_code",{purchase_link})};
+$("setup-pair").onclick=()=>{const code=$("setup-code").value.trim();$("setup-code").value="";return hostedSetupStep("pair",{code})};
+$("setup-retry-save").onclick=()=>hostedSetupStep("retry_save");
+$("setup-resolve").onclick=()=>hostedSetupStep("resolve");
+$("setup-check-paired").onclick=()=>hostedSetupStep("resolve");
+$("setup-reauthorize").onclick=()=>hostedSetupStep("reauthorize");
 let hostedRecoveryTimer=null,hostedRecoveryState=null,hostedRecoveryPhase=null;
 function hostedRecoveryView(data){
   hostedRecoveryState=data;
@@ -951,6 +1029,7 @@ refreshSelectedRecovery();
 refreshIndex();
 backupFrequencyView();
 if(view==="recovery")refreshHostedRecovery();
+if(view==="backup")refreshHostedSetup();
 </script>
 </body>
 </html>'''

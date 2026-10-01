@@ -16,6 +16,112 @@ const backupView = source.match(/function backupView\(data\)\{[\s\S]*?\n\}/)[0];
 const scheduleView = source.match(/function scheduleView\(data\)\{[\s\S]*?\n\}/)[0];
 const summaryCallback = source.match(/api\("\/api\/vault\/summary"\)\.then\(data=>\{([\s\S]*?)\}\)\.catch/)[1];
 const hostedRecoveryView = source.match(/function hostedRecoveryView\(data\)\{[\s\S]*?\n\}/)[0];
+const hostedSetupView = source.match(/function hostedSetupView\(data\)\{[\s\S]*?\n\}/)[0];
+const hostedSetupStep = source.match(/async function hostedSetupStep\(action,step=\{\}\)\{[\s\S]*?\n\}/)[0];
+const refreshHostedSetup = source.match(/async function refreshHostedSetup\(\)\{[\s\S]*?\n\}/)[0];
+
+function setupFixture() {
+  const phases = ['start', 'email', 'pairing_checkpoint', 'pairing_uncertain', 'paired'];
+  const blocks = phases.map(phase => ({ dataset: { setupPhase: phase }, hidden: false }));
+  const document = { activeElement: { outside: true } };
+  const controls = phases.map(phase => ({ phase, disabled: false, focus() { document.activeElement = this; } }));
+  const elements = new Map();
+  const panel = {
+    hidden: true, contains: element => Boolean(element && !element.outside),
+    querySelectorAll: selector => selector === '[data-setup-phase]' ? blocks : controls,
+    querySelector: selector => controls.find(control => control.phase === selector.match(/phase="([^"]+)"/)[1]),
+  };
+  const context = {
+    $: id => {
+      if (id === 'hosted-setup-panel') return panel;
+      if (!elements.has(id)) elements.set(id, { id, textContent: '', focus() { document.activeElement = this; } });
+      return elements.get(id);
+    }, document, clearInterval: () => {}, setInterval: () => 1,
+  };
+  vm.createContext(context);
+  vm.runInContext('let hostedSetupTimer=null,hostedSetupPhase=null; ' + hostedSetupView + '\n' + refreshHostedSetup + '\n' + hostedSetupStep, context);
+  return { context, panel, controls, elements, blocks, document };
+}
+
+test('hosted setup is gated and pairing never claims backup or automatic protection', () => {
+  const { context, panel, controls, blocks, elements } = setupFixture();
+  context.hostedSetupView({ enabled: false });
+  assert.equal(panel.hidden, true);
+  context.hostedSetupView({ enabled: true, phase: 'email', status: 'running', step: 'pair' });
+  assert.equal(panel.hidden, false);
+  assert.ok(controls.every(control => control.disabled));
+  assert.equal(blocks.filter(block => !block.hidden).length, 0);
+  context.hostedSetupView({ enabled: true, phase: 'pairing_uncertain', status: 'failed', error: 'Not confirmed.' });
+  assert.equal(blocks.filter(block => !block.hidden)[0].dataset.setupPhase, 'pairing_uncertain');
+  context.hostedSetupView({ enabled: true, phase: 'paired', status: 'ready' });
+  assert.match(elements.get('hosted-setup-status').textContent, /Automatic protection is not active/);
+  assert.equal(elements.get('hosted-setup-error').textContent, '');
+  assert.match(source, /This setup has not created a backup/);
+  assert.match(source, /\.brand small,\.protection\{font-size:14px\}/);
+  assert.match(source, /if\(view==="backup"\)refreshHostedSetup\(\)/);
+  assert.match(source, /@media print\{#hosted-setup-panel,#hosted-recovery-panel\{display:none!important\}\}/);
+});
+
+test('setup lost reply reads status exactly once without repeating pairing or echoing a private proof', async () => {
+  const { context, controls, elements } = setupFixture();
+  const calls = [];
+  context.api = async (path, payload) => {
+    calls.push({ path, payload });
+    if (payload) throw Error('private proof must never appear');
+    return { enabled: true, phase: 'pairing_uncertain', status: 'failed' };
+  };
+  await context.hostedSetupStep('pair', { code: 'synthetic' });
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].path, '/api/vault/hosted-setup');
+  assert.equal(calls[0].payload.step.apply, true);
+  assert.equal(calls[1].path, '/api/vault/hosted-setup-status');
+  assert.equal(calls[1].payload, undefined);
+  assert.ok(controls.every(control => !control.disabled));
+  assert.match(elements.get('hosted-setup-error').textContent, /do not repeat a pairing request/);
+  assert.doesNotMatch(elements.get('hosted-setup-error').textContent, /private proof/);
+});
+
+test('unavailable setup status keeps controls disabled and never retries a mutation', async () => {
+  const { context, controls, elements } = setupFixture();
+  const calls = [];
+  context.api = async (path, payload) => { calls.push({ path, payload }); throw Error('private'); };
+  await context.hostedSetupStep('pair', { code: 'synthetic' });
+  assert.equal(calls.filter(call => call.payload).length, 1);
+  assert.ok(controls.every(control => control.disabled));
+  assert.match(elements.get('hosted-setup-error').textContent, /status is unavailable/);
+  assert.doesNotMatch(elements.get('hosted-setup-error').textContent, /private/);
+});
+
+test('setup phase changes move owned focus without stealing outside focus', () => {
+  const { context, controls, document } = setupFixture();
+  context.hostedSetupView({ enabled: true, phase: 'start', status: 'ready' });
+  assert.equal(document.activeElement.outside, true);
+  document.activeElement = controls[0];
+  context.hostedSetupView({ enabled: true, phase: 'email', status: 'running', step: 'send_code' });
+  assert.equal(document.activeElement.id, 'hosted-setup-status');
+  context.hostedSetupView({ enabled: true, phase: 'email', status: 'ready' });
+  assert.equal(document.activeElement.phase, 'email');
+});
+
+test('setup private fields clear before requests and never enter browser storage', async () => {
+  const elements = new Map([['setup-purchase', { value: ' synthetic receipt ' }], ['setup-code', { value: ' synthetic code ' }]]);
+  const calls = [];
+  const context = { $: id => elements.get(id), hostedSetupStep: (action, step) => {
+    assert.equal(elements.get(action === 'pair' ? 'setup-code' : 'setup-purchase').value, '');
+    calls.push({ action, step });
+  } };
+  vm.createContext(context);
+  for (const id of ['setup-send-code', 'setup-pair']) {
+    elements.set(id, {});
+    vm.runInContext(source.match(new RegExp('\\$\\("' + id + '"\\)\\.onclick=.*?;\\n'))[0], context);
+    elements.get(id).onclick();
+  }
+  assert.equal(calls[0].step.purchase_link, 'synthetic receipt');
+  assert.equal(calls[1].step.code, 'synthetic code');
+  assert.match(source, /id="setup-purchase" type="password" autocomplete="off"/);
+  assert.match(source, /id="setup-code" type="password" autocomplete="off"/);
+  assert.doesNotMatch(source, /(?:sessionStorage|localStorage)\.setItem\([^\n]*(?:purchase_link|setup-code|setup-purchase)/);
+});
 
 test('hosted recovery stays hidden until enabled and key verification is not recovery', () => {
   const elements = new Map();
