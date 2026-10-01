@@ -1,5 +1,38 @@
 # Desktop release readiness
 
+## September 30 hosted sandbox schema — provisioned and read back
+
+Clean source `011b15cd31475e4e61230007481d55e2c702fd75` is pushed to draft
+PR #48. The explicit operator bootstrap skips ordinary builds and runs only
+against this project's pinned sandbox Preview with checkout closed. Independent
+reviewer `/root/public_release_review` accepted its installed Neon transaction
+API usage, guard ordering, bounded output and no-retry behavior. All 31 focused
+bootstrap/preflight tests passed; the full Node suite passed 612 tests with one
+skip. This review does not certify the hosted service or customer recovery.
+
+Read-only deployment `dpl_3Mu9LYivhCYr2PSVebks2aJdEYnC` independently proved
+the sandbox identity, absent hosted namespace and existing migration ledger.
+Only after that observation, deployment `dpl_4N5y8vzgYm41j3vnpHuy2Td3fRWa`
+submitted one Serializable PostgreSQL transaction containing an advisory lock,
+repeated environment/empty-schema/receipt guards, all 194 migration statements
+and 42 exact receipts. Any existing hosted namespace is refused; the bootstrap
+does not repair or replay partial/untracked schemas. A provider error or timeout
+requires read-only reconciliation before any retry.
+
+The actual transaction reported 42 committed migrations. Its separate follow-up
+preflight re-opened the sandbox database, matched all 42 source hashes/timestamps
+and verified the required table names. The Preview completed successfully.
+**The previously verified provisioning gap is now closed.** Receipt/table
+presence does not prove absence of schema drift or functional correctness.
+
+No production schema, public app, release catalog or checkout changed. Preview
+hosted runtime and checkout remained explicitly closed; no customer row was
+created, no email/payment was sent and no R2 content was uploaded. Hosted
+enrollment/subscription authorization, authenticated R2 publication/recovery,
+independent receiver key import, scheduled off-device protection, pricing/billing
+and final notarized distribution remain outstanding. The VM download is live,
+has retried transient network losses and has not booted.
+
 ## September 30 hosted provisioning — database gap verified
 
 Source `ea9eed4d9335bc4c6ce9e5717c72228ca431f56d` is pushed to draft PR #48.
