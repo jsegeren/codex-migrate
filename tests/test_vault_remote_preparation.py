@@ -5,12 +5,13 @@ import io
 import json
 from pathlib import Path
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_remote_recovery import (
-    download_encrypted_snapshot, import_encrypted_recovery_key, prepare_encrypted_recovery,
+    RecoveryStopped, download_encrypted_snapshot, import_encrypted_recovery_key, prepare_encrypted_recovery,
 )
 
 
@@ -157,6 +158,75 @@ class RemotePreparationTests(unittest.TestCase):
                     self.receipt, "CV1-" + "A" * 43, max_bytes=1024 * 1024)
         self.assertFalse((self.output / "latest.json").exists())
         self.assertTrue((self.output / ".hosted-recovery.json").exists())
+
+    def downloader(self, **controls):
+        fingerprint = {"snapshot_id": SNAPSHOT, "plaintext_sha256": "a" * 64,
+                       "ciphertext_sha256": self.receipt["objects"][-2]["sha256"]}
+        with patch("codex_migrate.vault_remote_recovery._helper_path",
+                   return_value=Path("/synthetic/helper")), patch(
+                "codex_migrate.vault_remote_recovery._run_helper", return_value=fingerprint), patch(
+                "codex_migrate.vault_remote_recovery.verify_snapshot",
+                return_value=SimpleNamespace(transcript_files=1)):
+            return download_encrypted_snapshot(str(self.home), str(self.output), self,
+                self.receipt, max_bytes=1024 * 1024, **controls)
+
+    def test_stop_before_download_creates_no_folder(self):
+        with self.assertRaises(RecoveryStopped):
+            self.downloader(cancelled=lambda: True)
+        self.assertFalse(self.output.exists())
+        self.assertEqual(self.reads, [])
+
+    def test_stop_mid_file_discards_partial_and_resume_reuses_verified_files(self):
+        stopped = False
+        def progress(value):
+            nonlocal stopped
+            if value["checked_objects"] == 1 and value["processed_bytes"] > value["checked_bytes"]:
+                stopped = True
+        with self.assertRaises(RecoveryStopped):
+            self.downloader(cancelled=lambda: stopped, progress=progress)
+        self.assertTrue((self.output / "vault.json").exists())
+        self.assertFalse((self.output / self.receipt["objects"][-2]["key"]).exists())
+        self.assertEqual(list(self.output.rglob("*.cvdownload")), [])
+        self.assertFalse((self.output / "latest.json").exists())
+        self.reads.clear()
+        reports = []
+        result = self.downloader(progress=reports.append)
+        self.assertEqual(result.reused_files, 1)
+        self.assertEqual(result.downloaded_files, 2)
+        self.assertNotIn(self.receipt["objects"][0]["key"], self.reads)
+        self.assertEqual(reports[-1]["stage"], "complete")
+        self.assertEqual(reports[-1]["checked_bytes"], self.receipt["remote_bytes_checked"])
+        self.assertEqual(reports[-1]["processed_bytes"], self.receipt["remote_bytes_checked"])
+        self.assertTrue((self.output / "latest.json").exists())
+        self.assertFalse((self.output / ".hosted-recovery.json").exists())
+        for report in reports:
+            self.assertLessEqual(report["checked_bytes"], report["processed_bytes"])
+            self.assertLessEqual(report["processed_bytes"], report["total_bytes"])
+            self.assertNotIn("key", report)
+
+    def test_stop_during_reused_file_verification_keeps_it_and_does_not_finish(self):
+        self.prepare()
+        original = (self.output / "vault.json").read_bytes()
+        stopped = False
+        def progress(value):
+            nonlocal stopped
+            stopped = value["processed_bytes"] > 0
+        with self.assertRaises(RecoveryStopped):
+            self.downloader(cancelled=lambda: stopped, progress=progress)
+        self.assertEqual((self.output / "vault.json").read_bytes(), original)
+        self.assertFalse((self.output / "latest.json").exists())
+
+    def test_stop_before_publication_never_sets_latest(self):
+        stopped = False
+        def progress(value):
+            nonlocal stopped
+            if value["stage"] == "verifying":
+                stopped = True
+        with self.assertRaises(RecoveryStopped):
+            self.downloader(cancelled=lambda: stopped, progress=progress)
+        self.assertFalse((self.output / "latest.json").exists())
+        self.assertTrue((self.output / ".hosted-recovery.json").exists())
+        self.assertEqual(self.downloader().reused_files, 3)
 
 
 if __name__ == "__main__":

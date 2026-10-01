@@ -215,6 +215,50 @@ class SetupTests(unittest.TestCase):
             self.assertNotIn(secret, json.dumps(body))
         self.assertIsNone(self.helper._restore_thread)
 
+    def test_hosted_stop_signals_same_worker_and_keeps_shutdown_guard_until_exit(self):
+        flow = HostedRecoveryFlow(self.helper.source_home, self.helper.registry)
+        self.helper._hosted_recovery = flow
+        flow._update(phase="key_verified")
+        flow._device = {"deviceId": "11111111-1111-4111-8111-111111111111"}
+        flow._plan = {"output": str(self.home / "out"), "snapshot_id": "synthetic", "max_bytes": 10}
+        entered, release = threading.Event(), threading.Event()
+        def download(*args, **kwargs):
+            entered.set()
+            release.wait(3)
+            from codex_migrate.vault_remote_recovery import _check_stop
+            _check_stop(kwargs["cancelled"])
+        stop = {"action": "stop_download", "step": {"apply": True}}
+        try:
+            with patch("codex_migrate.vault_hosted_recovery_flow.recover_hosted_snapshot",
+                       side_effect=download):
+                self.assertEqual(self.request("/api/vault/hosted-recovery", {
+                    "action": "download", "step": {"apply": True}})[0], 202)
+                self.assertTrue(entered.wait(1))
+                worker = self.helper._restore_thread
+                self.assertEqual(self.request("/api/vault/hosted-recovery", stop,
+                    authorized=False)[0], 403)
+                self.assertEqual(self.request("/api/vault/hosted-recovery", stop,
+                    extra_headers={"Origin": "https://attacker.test"})[0], 403)
+                for step in ({"apply": False}, {"apply": 1}, {"apply": True, "extra": 1}):
+                    self.assertEqual(self.request("/api/vault/hosted-recovery", {
+                        "action": "stop_download", "step": step})[0], 400)
+                code, state = self.request("/api/vault/hosted-recovery", stop)
+                self.assertEqual(code, 202)
+                self.assertTrue(state["stop_requested"])
+                self.assertEqual(state["status"], "running")
+                self.assertIs(self.helper._restore_thread, worker)
+                self.assertFalse(self.helper.can_shutdown())
+                self.assertEqual(self.request("/api/shutdown", {})[0], 409)
+                release.set()
+                worker.join(3)
+                self.assertEqual(flow.snapshot()["status"], "stopped")
+                self.assertEqual(self.request("/api/vault/hosted-recovery", stop)[0], 400)
+                self.assertTrue(self.helper.can_shutdown())
+        finally:
+            release.set()
+            if self.helper._restore_thread:
+                self.helper._restore_thread.join(3)
+
     def test_invalid_hosted_recovery_binding_releases_startup_lock(self):
         state_dir = str(self.home / "invalid-recovery-state")
         state = StateStore(state_dir)

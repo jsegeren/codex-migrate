@@ -22,6 +22,7 @@ from codex_migrate.vault_hosted_enrollment_client import (
     HostedEnrollmentClient, _CODE, _PURCHASE, _UUID,
 )
 from codex_migrate.vault_hosted_schedule import SERVICE_ORIGIN
+from codex_migrate.vault_remote_recovery import RecoveryStopped
 
 
 def purchase_token(value: object) -> str:
@@ -44,6 +45,7 @@ class HostedRecoveryFlow:
     def __init__(self, home: str, registry):
         self.home, self.registry = home, registry
         self._lock = threading.Lock()
+        self._stop = threading.Event()
         self._public = {"enabled": True, "status": "idle", "phase": "start"}
         self._proof = {}
         self._plan = None
@@ -64,6 +66,19 @@ class HostedRecoveryFlow:
     def _update(self, **changes):
         with self._lock:
             self._public.update(changes)
+
+    def stop_download(self, payload):
+        if (not isinstance(payload, dict) or set(payload) != {"apply"} or
+                payload.get("apply") is not True):
+            raise MigrationError("Stopping recovery requires explicit confirmation.")
+        with self._lock:
+            if (self._public["status"] != "running" or
+                    self._public.get("step") != "download" or
+                    self._public["phase"] != "key_verified"):
+                raise MigrationError("No recovery download is running.")
+            self._stop.set()
+            self._public["stop_requested"] = True
+        return self.snapshot()
 
     def stage(self, action: str, payload: dict):
         """Validate synchronously, then return a single-use worker operation."""
@@ -113,15 +128,20 @@ class HostedRecoveryFlow:
             if (not isinstance(values["recovery_key"], str) or
                     not re.fullmatch(r"CV1-[A-Za-z0-9_-]{43}", values["recovery_key"])):
                 raise MigrationError("Enter the separately saved CV1 recovery key.")
-        self._update(status="running", step=action, error=None)
+        if action == "download":
+            self._stop.clear()
+            self._update(progress={"stage": "connecting"})
+        self._update(status="running", step=action, error=None, stop_requested=False)
 
         def run():
             try:
                 self._perform(action, values)
-                self._update(status="ready", error=None)
+                self._update(status="ready", error=None, stop_requested=False)
+            except RecoveryStopped:
+                self._update(status="stopped", error=None, stop_requested=False)
             except Exception:
                 # Provider/native exceptions can contain secrets and paths.
-                self._update(status="failed", error=(
+                self._update(status="failed", stop_requested=False, error=(
                     "This recovery step could not be confirmed. Your live Codex data "
                     "was not changed. Retry this step or contact joshua@segeren.com."))
             finally:
@@ -213,7 +233,8 @@ class HostedRecoveryFlow:
             self._update(phase="key_verified")
         elif action == "download":
             result = recover_hosted_snapshot(self.home, device_id=self._device["deviceId"],
-                                            **self._plan, apply=True)
+                **self._plan, apply=True, cancelled=self._stop.is_set,
+                progress=lambda value: self._update(progress=value))
             if result["snapshot_id"] != self._plan["snapshot_id"]:
                 raise MigrationError("Recovered backup changed version.")
             self._update(phase="verified", vault=result["vault"],

@@ -31,7 +31,8 @@ test('hosted recovery stays hidden until enabled and key verification is not rec
       return elements.get(id);
     },
     document: { querySelectorAll: () => blocks },
-    fmt: value => String(value), clearInterval: () => {},
+    fmt: value => String(value), clearInterval: () => {}, setInterval: () => 1,
+    refreshHostedRecovery: () => {},
   };
   vm.createContext(context);
   vm.runInContext('let hostedRecoveryTimer=null,hostedRecoveryState=null,hostedRecoveryPhase=null; ' + hostedRecoveryView, context);
@@ -41,6 +42,21 @@ test('hosted recovery stays hidden until enabled and key verification is not rec
   assert.equal(elements.get('hosted-recovery-panel').hidden, false);
   assert.match(elements.get('hosted-recovery-status').textContent, /Full backup verification is still needed/);
   assert.equal(blocks.find(block => block.dataset.hostedPhase === 'verified').hidden, true);
+  const progress = {stage:'verifying',processed_bytes:100,checked_bytes:100,total_bytes:100,checked_objects:3,total_objects:3};
+  context.hostedRecoveryView({enabled:true,status:'running',step:'download',phase:'key_verified',progress});
+  assert.equal(elements.get('hosted-stop').hidden, false);
+  assert.equal(elements.get('hosted-stop').disabled, false);
+  assert.equal(elements.get('hosted-progress').value, 100);
+  assert.match(elements.get('hosted-progress-detail').textContent, /Verifying the full encrypted backup/);
+  assert.equal(blocks.find(block => block.dataset.hostedPhase === 'verified').hidden, true);
+  context.hostedRecoveryView({enabled:true,status:'running',step:'download',phase:'key_verified',progress,stop_requested:true});
+  assert.equal(elements.get('hosted-stop').disabled, true);
+  assert.match(elements.get('hosted-recovery-status').textContent, /Stopping after the current/);
+  context.hostedRecoveryView({enabled:true,status:'stopped',step:'download',phase:'key_verified',progress});
+  assert.equal(elements.get('hosted-stop').hidden, true);
+  assert.equal(elements.get('hosted-download').textContent, 'Resume and verify backup');
+  assert.match(elements.get('hosted-progress-detail').textContent, /Full backup verification is still required/);
+  assert.doesNotMatch(elements.get('hosted-progress-detail').textContent, /Verifying the full/);
   context.hostedRecoveryView({ enabled: true, status: 'ready', phase: 'verified', needs_attention: true });
   assert.match(elements.get('hosted-coverage').textContent, /missing or damaged/);
   assert.match(source, /id="hosted-key" type="password" autocomplete="off"/);

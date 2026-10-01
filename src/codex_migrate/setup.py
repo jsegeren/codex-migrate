@@ -792,6 +792,10 @@ String(app.chooseFolder({withPrompt: "Choose an empty folder for the recovered C
     def start_hosted_recovery(self, action, payload):
         if self._hosted_recovery is None:
             raise MigrationError("Hosted recovery is not enabled in this build session.")
+        if action == "stop_download":
+            # Signal the existing worker; never replace its slot or release the
+            # backup/install/update exclusion before it has actually stopped.
+            return self._hosted_recovery.stop_download(payload)
         # Reuse the restore worker slot: existing backup/install/browse/update
         # gates then exclude hosted recovery too, without a second lock plane.
         if not self._idle_for_shutdown():

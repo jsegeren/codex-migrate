@@ -189,8 +189,15 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 <button id="hosted-import-key">Verify and save key</button>
 </div>
 <div class="hosted-step" data-hosted-phase="key_verified" hidden>
-<p>The key opens this backup’s manifest. Conversation data has not been downloaded or fully verified yet.</p>
+<p>The key opens this backup’s manifest. Recovery is not complete until all conversation data has been downloaded and verified.</p>
 <button id="hosted-download">Download and verify backup</button>
+<div id="hosted-download-progress" hidden>
+<label for="hosted-progress">Encrypted data read</label>
+<progress id="hosted-progress" max="1" value="0" style="width:100%"></progress>
+<p id="hosted-progress-detail" class="muted"></p>
+</div>
+<button id="hosted-stop" class="secondary" hidden>Stop download safely</button>
+<p class="muted">Stop keeps completed files for retry. It may wait for the current network request or integrity check to finish. Your live Codex data stays unchanged.</p>
 </div>
 <div class="hosted-step" data-hosted-phase="verified" hidden>
 <p id="hosted-coverage"></p>
@@ -354,17 +361,31 @@ function hostedRecoveryView(data){
   const running=data.status==="running";
   for(const block of document.querySelectorAll("[data-hosted-phase]"))block.hidden=block.dataset.hostedPhase!==data.phase;
   for(const control of $("hosted-recovery-panel").querySelectorAll("button,input,select"))control.disabled=running;
+  const downloading=running&&data.step==="download",stopping=downloading&&data.stop_requested===true;
+  $("hosted-stop").hidden=!downloading;
+  $("hosted-stop").disabled=!downloading||stopping;
+  $("hosted-stop").textContent=stopping?"Stopping safely…":"Stop download safely";
+  $("hosted-download").textContent=data.status==="stopped"?"Resume and verify backup":"Download and verify backup";
+  const progress=data.progress;
+  $("hosted-download-progress").hidden=!(data.phase==="key_verified"&&progress?.total_bytes>0);
+  if(progress?.total_bytes>0){
+    $("hosted-progress").max=progress.total_bytes;
+    $("hosted-progress").value=progress.processed_bytes;
+    $("hosted-progress-detail").textContent=`${fmt(progress.processed_bytes)} of ${fmt(progress.total_bytes)} read · ${progress.checked_objects} of ${progress.total_objects} files checked against their receipts. ${running&&progress.stage==="verifying"?"Verifying the full encrypted backup…":"Full backup verification is still required."}`;
+  }
   $("hosted-recovery-error").textContent=data.error||"";
   const messages={start:"Connect using your purchase receipt.",email:"Check your email for the recovery code.",vaults:"Choose the backup you want to recover.",pairing_checkpoint:"Save this connection before pairing.",pairing_uncertain:"Saved pairing needs confirmation.",paired:"This Mac is connected for recovery.",versions:"Choose a published version and a separate folder.",prepared:"Metadata ready. Your recovery key is still needed.",key_verified:"Key verified. Full backup verification is still needed.",verified:"Encrypted backup downloaded and verified. Live Codex data is unchanged."};
   const working={send_code:"Requesting your recovery email…",list_vaults:"Finding your backups…",pair:"Saving and connecting this Mac…",resolve:"Checking the saved connection…",versions:"Loading backup versions…",prepare:"Preparing the selected version’s metadata…",import_key:"Checking your key against the selected backup…",download:"Downloading and verifying the selected backup. Large backups can take a while. Keep the app open; if interrupted, retry this version to resume."};
   $("hosted-recovery-status").textContent=running?working[data.step]||"Checking recovery…":messages[data.phase]||"Recovery needs attention.";
+  if(stopping)$("hosted-recovery-status").textContent="Stopping after the current network request or integrity check. Completed files will be kept for retry.";
+  else if(data.status==="stopped")$("hosted-recovery-status").textContent="Stopped safely. Resume this version to reuse completed, verified files.";
   if(data.phase!==hostedRecoveryPhase){
     if(data.phase==="vaults")$("hosted-vault").replaceChildren(...data.vaults.map((item,index)=>new Option(`Backup ${index+1} · ${item.lastGoodAt?new Date(item.lastGoodAt).toLocaleString():"no verified backup date"} · ${item.vaultId.slice(0,8)}`,item.vaultId)));
     if(data.phase==="versions")$("hosted-snapshot").replaceChildren(...data.versions.map((item,index)=>new Option(`${index===0?"Newest published":"Last complete source capture"} · ${fmt(item.totalBytes)} · ${item.sourceCoverage==="complete"?"complete source coverage":"needs attention"} · ${item.snapshotId.slice(0,8)}`,item.snapshotId)));
     hostedRecoveryPhase=data.phase;
   }
   if(data.phase==="verified")$("hosted-coverage").textContent=data.needs_attention?"This backup is readable, but some source data may be missing or damaged. Keep earlier versions and review the affected conversations.":"The selected backup verified successfully. Open it to search, read, and export your conversations.";
-  if(focusOwned&&(phaseChanged||document.activeElement.disabled||(!running&&document.activeElement===$("hosted-recovery-status")))){
+  if(focusOwned&&(phaseChanged||document.activeElement.disabled||document.activeElement.hidden||(!running&&document.activeElement===$("hosted-recovery-status")))){
     const target=running?$("hosted-recovery-status"):panel.querySelector(`[data-hosted-phase="${data.phase}"] button:not(:disabled),[data-hosted-phase="${data.phase}"] input:not(:disabled),[data-hosted-phase="${data.phase}"] select:not(:disabled)`);
     (target||$("hosted-recovery-status")).focus();
   }
@@ -393,6 +414,7 @@ $("hosted-choose-output").onclick=async()=>{try{const result=await api("/api/vau
 $("hosted-prepare").onclick=()=>hostedRecoveryStep("prepare",{snapshot_id:$("hosted-snapshot").value,output:$("hosted-output").value});
 $("hosted-import-key").onclick=()=>{const recovery_key=$("hosted-key").value.trim();$("hosted-key").value="";return hostedRecoveryStep("import_key",{recovery_key})};
 $("hosted-download").onclick=()=>hostedRecoveryStep("download");
+$("hosted-stop").onclick=()=>hostedRecoveryStep("stop_download");
 $("hosted-open").onclick=async()=>{
   if(hostedRecoveryState?.phase!=="verified"||hostedRecoveryState.status!=="ready")return;
   try{

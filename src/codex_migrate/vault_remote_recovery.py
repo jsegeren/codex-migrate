@@ -14,7 +14,7 @@ import os
 from pathlib import Path
 import re
 import stat
-from typing import BinaryIO, Dict, List, Optional, Protocol, Tuple
+from typing import BinaryIO, Callable, Dict, List, Optional, Protocol, Tuple
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_backup import (
@@ -135,11 +135,22 @@ def _private_directory(descriptor: int, name: str) -> int:
         raise
 
 
-def _digest(stream: BinaryIO, expected: int) -> str:
+class RecoveryStopped(MigrationError):
+    """Cooperative stop; completed receipt-verified objects remain resumable."""
+
+
+def _check_stop(cancelled):
+    if cancelled is not None and cancelled():
+        raise RecoveryStopped("Hosted recovery stopped safely.")
+
+
+def _digest(stream: BinaryIO, expected: int, *, cancelled=None, progress=None) -> str:
     digest = hashlib.sha256()
     total = 0
     while True:
+        _check_stop(cancelled)
         block = stream.read(_BLOCK_BYTES)
+        _check_stop(cancelled)
         if not block:
             break
         if not isinstance(block, bytes):
@@ -148,17 +159,24 @@ def _digest(stream: BinaryIO, expected: int) -> str:
         if total > expected:
             raise MigrationError("A hosted recovery object has the wrong size.")
         digest.update(block)
+        if progress is not None:
+            progress(len(block))
     if total != expected:
         raise MigrationError("A hosted recovery object is incomplete.")
     return digest.hexdigest()
 
 
-def _copy_to_file(stream: BinaryIO, descriptor: int, item: _Object) -> None:
+def _copy_to_file(stream: BinaryIO, descriptor: int, item: _Object, *,
+                  cancelled=None, progress=None) -> None:
     digest = hashlib.sha256()
     total = 0
     with os.fdopen(descriptor, "wb") as destination:
         while True:
-            block = stream.read(_BLOCK_BYTES)
+            _check_stop(cancelled)
+            # HTTPResponse.read can wait to fill a megabyte. read1 returns
+            # available bytes, allowing Stop between network reads.
+            block = getattr(stream, "read1", stream.read)(_BLOCK_BYTES)
+            _check_stop(cancelled)
             if not block:
                 break
             if not isinstance(block, bytes):
@@ -168,13 +186,16 @@ def _copy_to_file(stream: BinaryIO, descriptor: int, item: _Object) -> None:
                 raise MigrationError("A hosted recovery object has the wrong size.")
             destination.write(block)
             digest.update(block)
+            if progress is not None:
+                progress(len(block))
         destination.flush()
         os.fsync(destination.fileno())
     if total != item.bytes or digest.hexdigest() != item.sha256:
         raise MigrationError("A hosted recovery object is missing or differs from its receipt.")
 
 
-def _checked_file(directory: int, name: str, item: _Object) -> bool:
+def _checked_file(directory: int, name: str, item: _Object, *,
+                  cancelled=None, progress=None) -> bool:
     try:
         descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
                              dir_fd=directory)
@@ -186,7 +207,8 @@ def _checked_file(directory: int, name: str, item: _Object) -> bool:
         info = os.fstat(handle.fileno())
         if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
                 or info.st_uid != os.geteuid() or info.st_size != item.bytes
-                or _digest(handle, item.bytes) != item.sha256):
+                or _digest(handle, item.bytes, cancelled=cancelled,
+                           progress=progress) != item.sha256):
             raise MigrationError("An existing hosted recovery file differs from its receipt.")
     return True
 
@@ -208,7 +230,9 @@ def _clear_partial(directory: int, name: str) -> None:
     os.unlink(name, dir_fd=directory)
 
 
-def _fetch_item(root: int, item: _Object, store: ScopedReadStore) -> bool:
+def _fetch_item(root: int, item: _Object, store: ScopedReadStore, *,
+                cancelled=None, progress=None) -> bool:
+    _check_stop(cancelled)
     relative = "vault.json" if item.key.startswith("metadata/") else item.key
     parts = relative.split("/")
     directory = os.dup(root)
@@ -220,7 +244,7 @@ def _fetch_item(root: int, item: _Object, store: ScopedReadStore) -> bool:
         name = parts[-1]
         temporary = name + ".cvdownload"
         _clear_partial(directory, temporary)
-        if _checked_file(directory, name, item):
+        if _checked_file(directory, name, item, cancelled=cancelled, progress=progress):
             return False
         stream = store.open_read(item.key)
         if stream is None:
@@ -228,10 +252,13 @@ def _fetch_item(root: int, item: _Object, store: ScopedReadStore) -> bool:
         created_temporary = False
         try:
             with stream:
+                _check_stop(cancelled)
                 descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
                                      os.O_NOFOLLOW, 0o600, dir_fd=directory)
                 created_temporary = True
-                _copy_to_file(stream, descriptor, item)
+                _copy_to_file(stream, descriptor, item, cancelled=cancelled,
+                              progress=progress)
+            _check_stop(cancelled)
             os.link(temporary, name, src_dir_fd=directory,
                     dst_dir_fd=directory, follow_symlinks=False)
             os.fsync(directory)
@@ -352,6 +379,8 @@ def download_encrypted_snapshot(
     *,
     max_bytes: int,
     crypto_helper: Optional[str] = None,
+    cancelled: Optional[Callable[[], bool]] = None,
+    progress: Optional[Callable[[dict], None]] = None,
 ) -> RemoteRecoveryResult:
     """Download and authenticate one snapshot without touching live Codex.
 
@@ -360,18 +389,43 @@ def download_encrypted_snapshot(
     Vault is marked latest only after the native helper authenticates its
     encrypted manifest and chunks with the separately imported recovery key.
     """
+    _check_stop(cancelled)
     snapshot_id, objects = _objects(receipt, max_bytes)
     root, descriptor = _prepare_root(source_home, output,
                                      _marker_bytes(snapshot_id, objects))
     downloaded = reused = 0
+    total_bytes = sum(item.bytes for item in objects)
+    processed = checked = 0
+
+    def report(stage):
+        if progress is not None:
+            progress({"stage": stage, "processed_bytes": processed,
+                      "checked_bytes": checked, "total_bytes": total_bytes,
+                      "checked_objects": downloaded + reused,
+                      "total_objects": len(objects)})
+
+    def advanced(count):
+        nonlocal processed
+        processed += count
+        report("transferring")
+
+    def fetch(item):
+        nonlocal downloaded, reused, checked
+        if _fetch_item(descriptor, item, store, cancelled=cancelled, progress=advanced):
+            downloaded += 1
+        else:
+            reused += 1
+        checked += item.bytes
+        report("transferring")
+
     try:
+        report("transferring")
         # Prove this Mac can open the exact manifest before fetching potentially
         # gigabytes of chunks. Metadata alone cannot validate a recovery key.
         for item in (objects[0], objects[-2]):
-            if _fetch_item(descriptor, item, store):
-                downloaded += 1
-            else:
-                reused += 1
+            fetch(item)
+        _check_stop(cancelled)
+        report("verifying_key")
         key_id = _metadata(_read_json(root / "vault.json"))
         fingerprint = _run_helper(_helper_path(crypto_helper), [
             "manifest-fingerprint", "--key-id", key_id,
@@ -383,14 +437,16 @@ def download_encrypted_snapshot(
                 or not isinstance(fingerprint["plaintext_sha256"], str)
                 or not _HEX.fullmatch(fingerprint["plaintext_sha256"])):
             raise MigrationError("The hosted recovery manifest could not be authenticated.")
+        _check_stop(cancelled)
         for item in (*objects[1:-2], objects[-1]):
-            if _fetch_item(descriptor, item, store):
-                downloaded += 1
-            else:
-                reused += 1
+            fetch(item)
+        _check_stop(cancelled)
+        report("verifying")
         verified = verify_snapshot(str(root), snapshot=snapshot_id,
                                    crypto_helper=crypto_helper)
+        _check_stop(cancelled)
         _finish(descriptor, objects[-1])
+        report("complete")
         return RemoteRecoveryResult(
             vault=str(root), snapshot_id=snapshot_id,
             downloaded_files=downloaded, reused_files=reused,

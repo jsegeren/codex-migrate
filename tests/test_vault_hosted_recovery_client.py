@@ -16,7 +16,7 @@ from codex_migrate.vault_hosted_disaster_recovery import recover_hosted_snapshot
 from codex_migrate.vault_hosted_recovery_client import HostedRecoveryClient
 from codex_migrate.vault_backup import backup
 from codex_migrate.vault_recovery import import_recovery_key, restore_snapshot
-from codex_migrate.vault_remote_recovery import download_encrypted_snapshot
+from codex_migrate.vault_remote_recovery import RecoveryStopped, download_encrypted_snapshot
 from codex_migrate.vault_remote_transfer import stage_encrypted_snapshot
 from tests.portable_vault_roundtrip import delete_test_key
 
@@ -191,6 +191,19 @@ class HostedRecoveryClientTests(unittest.TestCase):
             self.client().latest_snapshot(expected_account_id=VAULT)
         self.server.snapshot_id = None
         self.assertIsNone(self.client().latest_snapshot(expected_account_id=ACCOUNT))
+
+    def test_stop_during_inventory_prevents_the_next_page_and_any_object_grant(self):
+        self.server.objects = inventory(chunk_count=300)
+        stopped = threading.Event()
+        self.server.mutate_page = lambda _page: stopped.set()
+        with self.assertRaises(RecoveryStopped):
+            self.client().prepare(max_bytes=100000, cancelled=stopped.is_set)
+        self.assertEqual([item["action"] for item in self.server.requests], ["latest", "objects"])
+        self.assertEqual(self.server.get_requests, [])
+        self.server.requests.clear()
+        with self.assertRaises(RecoveryStopped):
+            self.client().prepare(max_bytes=100000, cancelled=lambda: True)
+        self.assertEqual(self.server.requests, [])
 
     def test_recovery_rejects_unrecognized_source_coverage(self):
         self.server.history = [{"snapshotId": SNAPSHOT, "totalObjects": 3,
@@ -525,6 +538,18 @@ class HostedRecoveryClientTests(unittest.TestCase):
                                                 crypto_helper=str(helper))
                 key_id = import_recovery_key(str(recovered), saved.recovery_key,
                                              crypto_helper=str(helper))
+                stop = threading.Event()
+                def progress(value):
+                    if value["checked_objects"] == 2 and value["processed_bytes"] > value["checked_bytes"]:
+                        stop.set()
+                with self.assertRaises(RecoveryStopped):
+                    download_encrypted_snapshot(str(empty_home), str(recovered),
+                        read_store, receipt, max_bytes=5_000_000,
+                        crypto_helper=str(helper), cancelled=stop.is_set, progress=progress)
+                self.assertTrue(stop.is_set())
+                self.assertFalse((recovered / "latest.json").exists())
+                self.assertEqual(list(recovered.rglob("*.cvdownload")), [])
+                self.assertTrue((recovered / ".hosted-recovery.json").exists())
                 enrollment = SimpleNamespace(backup_clients=lambda *_args, **_kwargs: (
                     SimpleNamespace(_account_id=ACCOUNT,
                                     _worker_origin=self.server.origin), self.client()))

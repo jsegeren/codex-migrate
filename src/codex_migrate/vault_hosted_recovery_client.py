@@ -21,7 +21,7 @@ from codex_migrate.errors import MigrationError
 from codex_migrate.vault_backup import _helper_path, _run_helper
 from codex_migrate.vault_http_store import CapabilityHttpStore, _NoRedirect
 from codex_migrate.vault_remote_inventory import MAX_CHUNKS, MAX_ENCRYPTED_MANIFEST_BYTES
-from codex_migrate.vault_remote_recovery import _Object, _copy_to_file, _objects
+from codex_migrate.vault_remote_recovery import _Object, _check_stop, _copy_to_file, _objects
 
 
 _UUID = r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
@@ -262,12 +262,14 @@ class HostedRecoveryClient:
 
     def prepare(self, *, max_bytes: int,
                 expected_pointer: Optional[Tuple[str, str, dict]] = None,
-                selected_snapshot_id: Optional[str] = None
+                selected_snapshot_id: Optional[str] = None, cancelled=None
                 ) -> Tuple[dict, CapabilityHttpStore]:
         """Return a validated receipt and exact-object read store, without writes."""
         if type(max_bytes) is not int or max_bytes <= 0:
             raise MigrationError("The hosted recovery size limit is invalid.")
+        _check_stop(cancelled)
         account_id, worker_origin, latest = self._latest()
+        _check_stop(cancelled)
         if latest is None:
             raise MigrationError("This Vault has no verified hosted backup yet.")
         if (expected_pointer is not None and
@@ -280,6 +282,7 @@ class HostedRecoveryClient:
                 raise MigrationError("The hosted recovery version is invalid.")
             reply = self._post({"action": "snapshot", "vaultId": self._vault_id,
                                 "snapshotId": selected_snapshot_id})
+            _check_stop(cancelled)
             if (set(reply) != {"accountId", "workerOrigin", "snapshot"}
                     or reply["accountId"] != account_id
                     or reply["workerOrigin"] != worker_origin):
@@ -294,11 +297,13 @@ class HostedRecoveryClient:
         expected: Dict[str, Tuple[int, str]] = {}
         cursor = None
         while True:
+            _check_stop(cancelled)
             claim = {"action": "objects", "vaultId": self._vault_id,
                      "snapshotId": snapshot_id}
             if cursor is not None:
                 claim["afterKey"] = cursor
             page = self._post(claim)
+            _check_stop(cancelled)
             if (set(page) != {"snapshotId", "totalObjects", "totalBytes",
                              "objects", "nextCursor"}
                     or page["snapshotId"] != snapshot_id

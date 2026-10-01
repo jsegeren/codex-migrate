@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_hosted_recovery_flow import HostedRecoveryFlow, purchase_token
+from codex_migrate.vault_remote_recovery import RecoveryStopped
 
 
 DEVICE = "11111111-1111-4111-8111-111111111111"
@@ -77,7 +78,10 @@ class HostedRecoveryFlowTests(unittest.TestCase):
                    return_value=result) as download:
             state = self.step("download")
         self.assertEqual(state["phase"], "verified")
-        self.assertEqual(download.call_args.kwargs, {
+        arguments = dict(download.call_args.kwargs)
+        self.assertTrue(callable(arguments.pop("cancelled")))
+        self.assertTrue(callable(arguments.pop("progress")))
+        self.assertEqual(arguments, {
             "device_id": DEVICE, "output": self.output, "snapshot_id": SNAPSHOT,
             "max_bytes": VERSION["totalBytes"], "apply": True})
         self.assertEqual(self.saved, {"hosted_recovery_device": {
@@ -86,6 +90,43 @@ class HostedRecoveryFlowTests(unittest.TestCase):
             self.assertNotIn(secret, json.dumps(state))
             self.assertNotIn(secret, json.dumps(self.saved))
         self.assertEqual(self.flow._proof, {})
+
+    def test_stop_retains_worker_state_until_acknowledged_and_can_resume(self):
+        self.prepare()
+        self.flow._update(phase="key_verified")
+        result = {"snapshot_id": SNAPSHOT, "vault": self.output,
+                  "needs_attention": False, "source_coverage": "complete", "at_risk_sources": 0}
+        def interrupted(*args, **kwargs):
+            kwargs["progress"]({"stage": "transferring", "processed_bytes": 10})
+            self.flow.stop_download({"apply": True})
+            self.assertEqual(self.flow.snapshot()["status"], "running")
+            self.assertTrue(kwargs["cancelled"]())
+            with self.assertRaises(MigrationError):
+                self.flow.stage("download", {"apply": True})
+            raise RecoveryStopped("safe stop")
+        with patch("codex_migrate.vault_hosted_recovery_flow.recover_hosted_snapshot",
+                   side_effect=interrupted):
+            state = self.step("download")
+        self.assertEqual(state["status"], "stopped")
+        self.assertEqual(state["phase"], "key_verified")
+        self.assertIsNone(state["error"])
+        with patch("codex_migrate.vault_hosted_recovery_flow.recover_hosted_snapshot",
+                   return_value=result) as resume:
+            self.assertEqual(self.step("download")["phase"], "verified")
+        self.assertFalse(resume.call_args.kwargs["cancelled"]())
+        self.assertEqual(resume.call_args.kwargs["output"], self.output)
+        self.assertEqual(resume.call_args.kwargs["snapshot_id"], SNAPSHOT)
+
+    def test_stop_refuses_other_steps_and_unconfirmed_or_extra_fields(self):
+        for payload in ({"apply": False}, {"apply": True, "extra": True}, []):
+            with self.assertRaises(MigrationError):
+                self.flow.stop_download(payload)
+        with self.assertRaises(MigrationError):
+            self.flow.stop_download({"apply": True})
+        run = self.flow.stage("send_code", {"purchase_link": PURCHASE, "apply": True})
+        with self.assertRaises(MigrationError):
+            self.flow.stop_download({"apply": True})
+        run()
 
     def test_lost_pairing_reply_resolves_exact_saved_device_even_after_restart(self):
         self.client.claim_recovery.side_effect = MigrationError("private " + CODE)
