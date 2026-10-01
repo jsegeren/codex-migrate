@@ -1,19 +1,28 @@
-# Codex Vault product plan
+# Codex Backup product plan
 
 ## Decision
 
-**Codex Migrate** remains the umbrella product and public name. **Vault +
-Migration** describes its expanded category, while Backups, Conversations,
-Recovery, and Move Macs are explicit jobs inside the same app. This extends the
-existing repository and engine; it is not a second application or a rewrite.
+**Codex Backup** is the Founder-approved product direction and the primary
+identity of the current website and source UI. Backups, Conversations,
+Recovery, and Move Macs are explicit jobs inside the same app. This extends
+the existing repository and engine; it is not a second application or a rewrite.
 
-Do not rename the public app, repository, or website to Codex Vault, Codex
-Guard, or Codex Guardian. Those names collide with existing developer tools,
-and the established Codex Migrate name preserves customer and search continuity.
+The currently offered signed Mac beta remains **Codex Migrate** until a
+separately reviewed, notarized release replaces it. `Vault` remains the portable
+backup format and CLI identifier; migration remains a supported workflow.
+Keep existing repository names, bundle identifiers, storage paths, and backup
+formats compatible. A branding change does not certify hosted backup, change
+the current checkout, or migrate customer data.
 
 The product promise is:
 
-> Back up, find, restore and move your Codex work.
+> Protect your Codex work. Find it, recover it, and take it to another Mac.
+
+Finish the individual backup and recovery journey first, including developers
+inside businesses. Team administration and aggregate insights are follow-ons,
+not prerequisites for the first verified individual hosted release. Protection
+claims require a verified off-device backup and a successful scheduled run;
+installation alone is not protection.
 
 ## Customer jobs
 
@@ -39,12 +48,12 @@ Keep the first offer simple while the market is being proven:
   automatic encrypted backup to a customer-owned folder, browse/search,
   verified recovery, the complete Mac migration, updates during the beta, and
   best-effort support.
-- **Optional hosted Vault backup:** offer a second backup destination operated by
+- **Optional hosted Codex Backup:** offer a second backup destination operated by
   Segeren Studio, with client-side encryption. A buyer pays $49 for the Mac app
   whether they use a folder they control or opt into hosting. The first month
-  of hosted backup is free if they opt in; the earlier $10/month direction was
-  rejected as too low. A $20/month plus usage model is only an economic floor,
-  not approved business pricing. Existing app buyers may opt in later
+  of hosted backup is free if they opt in. Final recurring prices, capacity,
+  retention, usage units, and renewal terms are not approved or live.
+  Existing app buyers may opt in later
   without repurchasing the app and receive the same
   one-time free hosted month. The customer-owned-folder backup remains
   available without a subscription. The hosted tier is approved product
@@ -131,7 +140,8 @@ next backup milestone.
 ### 3. Verified restore
 
 - Default to inspection and a restore plan.
-- Require explicit apply intent and Codex shutdown.
+- Require explicit apply intent for recovery. Reading/exporting into a separate
+  folder does not require Codex shutdown; writing back into Codex does.
 - Back up displaced destination state before replacement.
 - Stage, verify, install, verify again and roll back on failure.
 - Support selected transcript recovery before whole-state replacement.
@@ -181,7 +191,7 @@ unchanged, the receipt verified, and a repeated plan returned
 [selected-thread acceptance receipt](vault-selected-thread-acceptance-2026-09-18.md)
 for its deliberately bounded claim.
 
-### 4. Optional Vault Cloud
+### 4. Optional hosted backup
 
 - The client encrypts before upload; the service never receives plaintext keys.
 - The first hosted release needs an independent-Mac download, key-import,
@@ -191,9 +201,10 @@ for its deliberately bounded claim.
 - Storage, retention, deletion, export, recovery and provider exit are explicit.
 - Keep the local/user-owned destination available so cloud service is optional.
 
-## Launch gate
+## Customer release gate
 
-The umbrella rename is ready only when a nontechnical customer can:
+The name change is approved, but a new customer release still requires proof
+that a customer can:
 
 1. see what local history was found;
 2. create and verify a backup;
@@ -201,4 +212,8 @@ The umbrella rename is ready only when a nontechnical customer can:
 4. restore a disposable deleted conversation through the guarded workflow; and
 5. understand exactly what is and is not encrypted, uploaded and recoverable.
 
-Until then, public commerce remains the truthful Codex Migrate beta.
+For hosted backup, also prove authenticated enrollment, independently saved-key
+import, real-service recovery on a clean Mac, unattended incremental runs, and
+the disclosed billing and retention contract. Synthetic transport checks alone
+do not meet those gates. Until then, public commerce remains the current
+Codex Migrate local beta and the hosted offer stays unavailable.

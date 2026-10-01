@@ -5,6 +5,24 @@ progress statements; use the latest receipt for current acceptance status.
 
 ## October 1 source consolidation — main integration candidate
 
+**Integrated:** PR #48 merged into `origin/main` at
+`496e205f31251663bd41e1cc8d7ecbccd3ff3b65` on October 1. Six superseded
+PRs (#26, #41, #38, #40, #35, #60) are closed; their source was preserved in
+the consolidation. No open PR remains from that stack. The current main
+[CI run](https://github.com/jsegeren/codex-migrate/actions/runs/36834880618)
+passed on attempt 2. Attempt 1 timed out in the SIGTERM cancellation test;
+the same unchanged test passed 100 consecutive local runs and the related
+36-test cancellation/transport suite passed. This does not establish the
+cause of the original timeout or justify weakening the safety test.
+
+The consolidated source was deployed to the existing Vercel Production project
+as `dpl_CbWWibjCAcENtoNnJXn44FMVRHG7`. Hosted routes remain unavailable,
+checkout is unchanged, and the public appcast still offers build 16. Source
+integration and website deployment are complete; the new customer installer,
+authenticated hosted recovery, unattended protection, and commercial release
+are not. The following paragraphs record the pre-merge candidate evidence,
+not additional unmerged PRs.
+
 The release stack is consolidated in PR #48, now targeting `main` directly.
 Current `main` was merged without dropping the Backup UI identity, domain
 redirects or team-intake branding. The local-only backup risk disclosure from

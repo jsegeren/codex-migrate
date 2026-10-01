@@ -45,12 +45,11 @@ onboarding are deferred, not release prerequisites for the individual offer.
   this with corrupt, truncated, missing-source, and interrupted-run tests before
   release. A valid hash does not establish that the source was semantically
   correct; neither the client nor encrypted server can detect every bad edit.
-- The new pricing direction is **2× fully loaded COGS** (100% markup; 50%
-  gross margin if cost is correctly measured). This supersedes the earlier
-  3× minimum / 80% target. Include retained-version storage, provider requests,
+- Keep internal pricing policy and commercial sensitivities outside this
+  public repository. Measure retained-version storage, provider requests,
   Workers/API/database/email/monitoring, payment fees, allocated support and
-  recovery costs, and fixed overhead—not storage alone. The internal markup
-  formula is not public copy. Final customer prices, allowance, usage units,
+  recovery costs, and fixed overhead—not storage alone. Final customer prices,
+  allowance, usage units,
   and renewal terms still need a measured, customer-visible offer before billing.
 - There are no confirmed external customers. Maintain the existing checkout
   and update path without expanding a legacy-purchase compatibility project;
@@ -552,17 +551,15 @@ backup telemetry as a covert individual-productivity or conversation-monitoring
 system. Decide with pilot buyers whether any further aggregate work insights
 are useful and permissible before collecting additional content-derived data.
 
-The Founder rejected a customer-set spending cap. The September 30 amendment
-replaces the earlier 3× minimum and 80% margin target: price the recovery
-service at **2× fully loaded per-customer cost** after measuring retained
-encrypted bytes and version
-growth, R2 and Worker operations, database/API/monitoring, payment processing,
-expected support and recovery drills, refunds, and allocated fixed overhead.
-Twice cost yields a 50% gross margin only when all costs are included. Bound included
+The Founder rejected a customer-set spending cap. Measure the fully loaded
+cost of retained encrypted bytes and version growth, R2 and Worker operations,
+database/API/monitoring, payment processing, expected support and recovery
+drills, refunds, and allocated fixed overhead. Internal pricing policy belongs
+in private commercial records, not public engineering documentation. Bound included
 retention and storage in the published offer, price exceptional usage
 explicitly, and do not silently pause backup or delete the last good version
-when a customer crosses a limit. Any $20/month plus usage example is only an
-obsolete economics floor, not approved business pricing. Publish no hosted
+when a customer crosses a limit. Earlier commercial models do not establish
+approved business pricing. Publish no hosted
 price or enterprise protection claim until product proof, service scope,
 retention, billing behavior, and customer-facing terms are approved.
 
@@ -582,9 +579,9 @@ existing one-time checkout must remain operable independently.
 Use **R2 Standard** as the first provider candidate, subject to a proof with
 realistic object counts and a clean-Mac restore. Vercel Blob is a technically
 plausible alternative because private signed URLs permit direct transfers, but
-its first-time download transfer charges make large disaster restores and a
-flat $10 allowance materially riskier. See the
-[measured sizing and provider comparison](vault-hosted-economics-2026-09-26.md).
+its download transfer charges must be included when evaluating large disaster
+restores. See the
+[storage-cost validation method](vault-hosted-economics-2026-09-26.md).
 Cloudflare's setup requires a separate Cloudflare account and R2 subscription
 checkout, even for included free monthly usage; hosting the website on Vercel
 does not itself activate R2. The Founder activated R2 on September 27, 2026,
