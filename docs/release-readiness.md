@@ -1,5 +1,81 @@
 # Desktop release readiness
 
+## September 30 guided hosted recovery — internal acceptance, release held
+
+Clean runtime source `85008ebfe39e9ead479e24669986f01c17b1e502` is pushed to
+`origin/codex/hosted-vault-service` in draft PR #48. The local Recovery page
+now has an acceptance-gated hosted wizard: purchase receipt → emailed proof →
+owned backup selection → saved device pairing → newest/last-complete version
+selection → metadata preparation → verified CV1 key import → full download and
+verification → opening the recovered backup for search/read/export. It is
+hidden and its mutation API refuses requests unless
+`CODEX_BACKUP_HOSTED_RECOVERY_UI=yes` explicitly enables the acceptance session.
+No public hosted checkout, subscription or customer recovery route was enabled.
+
+Email proofs and recovery keys remain transient; they are not returned in
+status JSON, persisted in dashboard state, put in URLs, or sent to the hosted
+service as a decryption key. Only opaque device/Vault IDs survive restart.
+The existing native helper keeps the device bearer and verified backup key in
+Keychain. Metadata and encrypted manifest verification precede bulk transfer;
+key confirmation is explicitly **not** full recovery. Recovery uses a separate
+folder and does not install or overwrite live Codex history.
+
+Independent review found and then accepted fixes for a failed-save pairing
+dead end, missing durable checkpoint synchronization and hidden keyboard focus.
+The saved binding is file/directory-synced and macOS full-synced before claim.
+Save/sync failures retry the same identity without sending a claim. Ambiguous
+claims resolve the exact saved credential. If a restart occurred before claim,
+the user can explicitly re-verify their purchase email; the list remains
+confined to the saved Vault and resolution is tried before claiming that same
+device with fresh email authority. There is no automatic new credential or
+blind claim retry. Invalid saved binding startup releases its process lock.
+
+Verification against this slice:
+
+- 92 recovery-flow/setup tests passed, including strict input and local
+  token/origin guards, private asynchronous steps, operation/quit exclusion,
+  wrong-key retry, interrupted download retry, update/full-sync failures,
+  same-ID reauthorization, wrong-Vault refusal and startup-lock release.
+- All 202 `test_vault_hosted*.py` tests passed. Separately, 34 enrollment,
+  disaster-recovery and state tests passed. These suites overlap; the counts
+  must not be added into a supposed independent-test total.
+- All 15 Node dashboard tests passed, including focus retention without
+  stealing outside focus and truthful key-vs-full-recovery/coverage messages.
+- Browser keyboard interaction exercised every wizard step with a synthetic
+  provider. Focus moved to visible controls after each step. Desktop and
+  390px layouts were checked; the latter had no horizontal page overflow.
+  Independent reviewer `/root/public_release_review` accepted the bounded
+  diff and desktop/320px render, including readable 16px panel text and usable
+  controls. This preview mocked provider/native recovery calls and is not
+  evidence of real cloud recovery or restored bytes.
+
+The exact Developer ID signed/provisioned build-20 candidate is
+`build/desktop-gboo5adb/Codex Migrate.app`. Its embedded receipt records the
+runtime revision above and `source_dirty: false`; strict deep signature
+verification passed. The archive is
+`build/desktop-gboo5adb/Codex-Migrate-0.1.0-build20-arm64-LOCAL-UNSIGNED.zip`,
+SHA-256 `c52fbf04e50f829321f01b1bbfe111d5841cb4412fe091fef33fa19ea8ed9c54`.
+The local-test filename is conservative: it is Developer ID signed but **not
+notarized or distributed**.
+
+All 11 packaged compression, corruption, attachment/search, interruption,
+LaunchAgent/paginated, older-key and updater/restore-contention checks passed
+against that exact app. All three native verified-key-import tests passed
+against its provisioned ThisDeviceOnly helper. The real packaged-engine HTTP
+smoke test passed both with the default dark gate and with the acceptance flag:
+the controller/module is bundled, status requires the local token, and an
+invalid download step is refused before provider or Keychain access. All data
+and keys in these tests were disposable; no real customer history or cloud
+account was used. The additional HTTP assertions are in `tests/test_desktop.py`.
+
+Remaining customer-release gates: measurable download progress and a Stop
+control; independent clean-Mac key import/read/export recovery from the exact
+package; real hosted enrollment/upload/download/recovery proof; hosted billing
+and pricing acceptance; final reviewed release, notarization and distribution.
+The clean VM image pull remains active despite transient network retries.
+These internal checks do not certify the whole product or hosted business
+service. Existing public paid build 16 and checkout are unchanged.
+
 ## September 30 verified recovery-key import — signed candidate, release held
 
 The ordinary import could store a well-formed but wrong recovery key before

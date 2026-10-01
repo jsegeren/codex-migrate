@@ -291,6 +291,27 @@ class DesktopTests(unittest.TestCase):
                 with urlopen(base + "/vault?view=conversations", timeout=3) as response:
                     vault_html = response.read().decode()
                 self.assertIn('<option value="local_titles">This Mac · Current and old titles</option>', vault_html)
+                self.assertIn('id="hosted-recovery-panel" hidden', vault_html)
+                recovery_url = base + "/api/vault/hosted-recovery-status"
+                with self.assertRaises(HTTPError) as denied_recovery:
+                    urlopen(recovery_url, timeout=3)
+                self.assertEqual(denied_recovery.exception.code, 403)
+                denied_recovery.exception.close()
+                with urlopen(Request(recovery_url, headers={
+                        "X-Codex-Migrate-Token": token}), timeout=3) as response:
+                    recovery_state = json.load(response)
+                expected_recovery = ({"enabled": True, "status": "idle", "phase": "start"}
+                    if env.get("CODEX_BACKUP_HOSTED_RECOVERY_UI") == "yes"
+                    else {"enabled": False})
+                self.assertEqual(recovery_state, expected_recovery)
+                # Invalid phase is refused before any provider/Keychain call.
+                with self.assertRaises(HTTPError) as denied_step:
+                    urlopen(Request(base + "/api/vault/hosted-recovery",
+                        data=b'{"action":"download","step":{"apply":true}}',
+                        headers={"X-Codex-Migrate-Token": token,
+                                 "Content-Type": "application/json", "Origin": base}), timeout=3)
+                self.assertEqual(denied_step.exception.code, 400)
+                denied_step.exception.close()
                 fixture_id = "11111111-1111-4111-8111-111111111111"
                 codex = Path(temporary) / ".codex"
                 sessions = codex / "sessions"
