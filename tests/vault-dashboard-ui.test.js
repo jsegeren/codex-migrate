@@ -16,6 +16,8 @@ const backupView = source.match(/function backupView\(data\)\{[\s\S]*?\n\}/)[0];
 const scheduleView = source.match(/function scheduleView\(data\)\{[\s\S]*?\n\}/)[0];
 const summaryCallback = source.match(/api\("\/api\/vault\/summary"\)\.then\(data=>\{([\s\S]*?)\}\)\.catch/)[1];
 const hostedRecoveryView = source.match(/function hostedRecoveryView\(data\)\{[\s\S]*?\n\}/)[0];
+const hostedRecoveryStep = source.match(/async function hostedRecoveryStep\(action,step=\{\}\)\{[\s\S]*?\n\}/)[0];
+const refreshHostedRecovery = source.match(/async function refreshHostedRecovery\(\)\{[\s\S]*?\n\}/)[0];
 const hostedSetupView = source.match(/function hostedSetupView\(data\)\{[\s\S]*?\n\}/)[0];
 const hostedSetupStep = source.match(/async function hostedSetupStep\(action,step=\{\}\)\{[\s\S]*?\n\}/)[0];
 const refreshHostedSetup = source.match(/async function refreshHostedSetup\(\)\{[\s\S]*?\n\}/)[0];
@@ -315,24 +317,105 @@ test('hosted recovery stays hidden until enabled and key verification is not rec
   assert.doesNotMatch(source, /sessionStorage\.setItem\([^\n]*(?:recovery_key|purchase_link|code)/);
 });
 
-test('uncertain hosted response polls state instead of repeating pairing', async () => {
-  const step = source.match(/async function hostedRecoveryStep\(action,step=\{\}\)\{[\s\S]*?\n\}/)[0];
-  let polls = 0;
-  const calls = [];
+function recoveryRequestFixture() {
+  const elements = new Map();
+  const controls = [{disabled:false}, {disabled:false}];
+  const views = [];
   const context = {
-    $: () => ({ querySelectorAll: () => [], textContent: '', contains: () => false }),
+    $: id => {
+      if (!elements.has(id)) elements.set(id, {querySelectorAll: () => controls,
+        textContent: '', contains: () => false});
+      return elements.get(id);
+    },
     document: { activeElement: null },
-    setInterval: () => { polls++; return 1; },
-    refreshHostedRecovery: async () => { polls++; },
-    hostedRecoveryView: () => {},
-    api: async (...args) => { calls.push(args); throw Error('reply lost'); },
+    setInterval: () => 1,
+    hostedRecoveryView: data => {views.push(data);},
   };
   vm.createContext(context);
-  vm.runInContext('let hostedRecoveryTimer=null; ' + step, context);
+  vm.runInContext('let hostedRecoveryTimer=null,hostedRecoveryEpoch=0,hostedRecoveryPoll=0,hostedRecoveryPending=false; ' +
+    hostedRecoveryStep + '\n' + refreshHostedRecovery, context);
+  return {context, elements, controls, views};
+}
+
+test('uncertain hosted response polls state without repeating pairing or exposing private diagnostics', async () => {
+  const {context, elements, views} = recoveryRequestFixture();
+  const calls = [];
+  context.api = async (path, payload) => {
+    calls.push({path,payload});
+    if (payload) throw Error('private recovery proof');
+    return {enabled:true,phase:'pairing_uncertain',status:'failed'};
+  };
   await context.hostedRecoveryStep('pair', { vault_id: 'synthetic' });
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0][1].step.apply, true);
-  assert.equal(polls, 2);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].payload.step.apply, true);
+  assert.equal(calls[1].path, '/api/vault/hosted-recovery-status');
+  assert.equal(calls[1].payload, undefined);
+  assert.equal(views.length, 1);
+  assert.match(elements.get('hosted-recovery-error').textContent, /do not repeat a pairing request/);
+  assert.doesNotMatch(elements.get('hosted-recovery-error').textContent, /private recovery proof/);
+});
+
+test('recovery ignores a status reply started before a newer action', async () => {
+  const {context, views} = recoveryRequestFixture();
+  let oldReply;
+  context.api = (path, payload) => payload
+    ? Promise.resolve({phase:'key_verified',status:'running'})
+    : new Promise(resolve => {oldReply=resolve;});
+  const pending = context.refreshHostedRecovery();
+  await context.hostedRecoveryStep('import_key', {recovery_key:'synthetic'});
+  oldReply({phase:'prepared',status:'ready'});
+  await pending;
+  assert.deepEqual(views.map(value=>value.phase), ['key_verified']);
+});
+
+test('recovery holds polling and disabled controls until the action reply is resolved', async () => {
+  const {context, views, controls} = recoveryRequestFixture();
+  let actionReply;
+  let polls=0;
+  context.api = (_path, payload) => new Promise(resolve => {
+    if (payload) actionReply=resolve;
+    else {polls++;resolve({phase:'verified',status:'ready'});}
+  });
+  const action = context.hostedRecoveryStep('download');
+  await context.refreshHostedRecovery();
+  assert.equal(polls, 0);
+  assert.ok(controls.every(control=>control.disabled));
+  actionReply({phase:'key_verified',status:'running'});
+  await action;
+  assert.deepEqual(views.map(value=>value.status), ['running']);
+  await context.refreshHostedRecovery();
+  assert.equal(polls, 1);
+  assert.deepEqual(views.map(value=>value.phase), ['key_verified','verified']);
+});
+
+test('recovery ignores older overlapping poll successes and failures', async () => {
+  for (const failOlder of [false,true]) {
+    const {context, views, elements} = recoveryRequestFixture();
+    const pending = [];
+    context.api = () => new Promise((resolve,reject) => {pending.push({resolve,reject});});
+    const older = context.refreshHostedRecovery();
+    const newer = context.refreshHostedRecovery();
+    pending[1].resolve({phase:'verified',status:'ready'});
+    await newer;
+    if (failOlder) pending[0].reject(Error('stale failure'));
+    else pending[0].resolve({phase:'key_verified',status:'running'});
+    await older;
+    assert.deepEqual(views.map(value=>value.phase), ['verified']);
+    assert.notEqual(elements.get('hosted-recovery-error')?.textContent, 'stale failure');
+    assert.equal(elements.get('hosted-recovery-error')?.textContent || '', '');
+  }
+});
+
+test('unavailable current recovery status keeps controls disabled without retrying mutations', async () => {
+  const {context, controls, elements, views} = recoveryRequestFixture();
+  const calls = [];
+  context.api = async (path,payload) => {calls.push({path,payload});throw Error('private proof');};
+  await context.hostedRecoveryStep('pair', {vault_id:'synthetic'});
+  assert.equal(calls.length, 2);
+  assert.ok(controls.every(control=>control.disabled));
+  assert.equal(views.length, 0);
+  assert.match(elements.get('hosted-recovery-error').textContent, /status is unavailable/);
+  assert.doesNotMatch(elements.get('hosted-recovery-error').textContent, /private proof/);
 });
 
 test('hosted phase transitions move owned focus and never steal outside focus', () => {

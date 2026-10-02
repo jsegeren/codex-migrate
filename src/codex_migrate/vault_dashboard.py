@@ -499,7 +499,7 @@ $("setup-check-backup-ready").onclick=()=>hostedSetupStep("resolve");
 $("setup-enable-schedule").onclick=()=>hostedSetupStep("enable_schedule");
 $("setup-disable-schedule").onclick=()=>hostedSetupStep("disable_schedule");
 $("setup-copy-key").onclick=async()=>{try{await navigator.clipboard.writeText($("setup-recovery").value);$("hosted-setup-status").textContent="Key copied. Save it outside this Mac before confirming."}catch(error){$("hosted-setup-error").textContent="Copy failed. Select the recovery key and copy it manually."}};
-let hostedRecoveryTimer=null,hostedRecoveryState=null,hostedRecoveryPhase=null;
+let hostedRecoveryTimer=null,hostedRecoveryState=null,hostedRecoveryPhase=null,hostedRecoveryEpoch=0,hostedRecoveryPoll=0,hostedRecoveryPending=false;
 function hostedRecoveryView(data){
   hostedRecoveryState=data;
   const panel=$("hosted-recovery-panel"),focusOwned=panel.contains(document.activeElement),phaseChanged=data.phase!==hostedRecoveryPhase;
@@ -540,15 +540,38 @@ function hostedRecoveryView(data){
   if(!running&&hostedRecoveryTimer){clearInterval(hostedRecoveryTimer);hostedRecoveryTimer=null}
 }
 async function refreshHostedRecovery(){
-  try{hostedRecoveryView(await api("/api/vault/hosted-recovery-status"))}
-  catch(error){$("hosted-recovery-error").textContent="Recovery status is unavailable. Do not repeat a pairing request; check the connection or contact support."}
+  if(hostedRecoveryPending)return false;
+  const epoch=hostedRecoveryEpoch,poll=++hostedRecoveryPoll;
+  try{
+    const data=await api("/api/vault/hosted-recovery-status");
+    if(epoch!==hostedRecoveryEpoch||poll!==hostedRecoveryPoll)return false;
+    hostedRecoveryView(data);return true;
+  }
+  catch(error){
+    if(epoch!==hostedRecoveryEpoch||poll!==hostedRecoveryPoll)return false;
+    for(const control of $("hosted-recovery-panel").querySelectorAll("button,input,select"))control.disabled=true;
+    $("hosted-recovery-error").textContent="Recovery status is unavailable. Do not repeat a pairing request; check the connection or contact support.";
+    return false;
+  }
 }
 async function hostedRecoveryStep(action,step={}){
+  const epoch=++hostedRecoveryEpoch;
+  hostedRecoveryPending=true;
   if($("hosted-recovery-panel").contains(document.activeElement))$("hosted-recovery-status").focus();
   for(const control of $("hosted-recovery-panel").querySelectorAll("button,input,select"))control.disabled=true;
   if(!hostedRecoveryTimer)hostedRecoveryTimer=setInterval(refreshHostedRecovery,1500);
-  try{hostedRecoveryView(await api("/api/vault/hosted-recovery",{action,step:{...step,apply:true}}))}
-  catch(error){await refreshHostedRecovery();$("hosted-recovery-error").textContent=error.message}
+  try{
+    const data=await api("/api/vault/hosted-recovery",{action,step:{...step,apply:true}});
+    if(epoch!==hostedRecoveryEpoch)return;
+    hostedRecoveryPending=false;
+    ++hostedRecoveryEpoch;hostedRecoveryView(data);
+  }
+  catch(error){
+    if(epoch!==hostedRecoveryEpoch)return;
+    hostedRecoveryPending=false;
+    const checkEpoch=++hostedRecoveryEpoch;
+    if(await refreshHostedRecovery()&&checkEpoch===hostedRecoveryEpoch)$("hosted-recovery-error").textContent="The request response was not confirmed. Use the current recovery step shown above; do not repeat a pairing request.";
+  }
 }
 $("hosted-send-code").onclick=()=>{const purchase_link=$("hosted-purchase").value.trim();$("hosted-purchase").value="";return hostedRecoveryStep("send_code",{purchase_link})};
 $("hosted-list-vaults").onclick=()=>{const code=$("hosted-code").value.trim();$("hosted-code").value="";return hostedRecoveryStep("list_vaults",{code})};
