@@ -106,6 +106,69 @@ class IdentityTests(unittest.TestCase):
                 scan_transcript(path, path.name, {})
             self.assertNotIsInstance(raised.exception, TranscriptChanged)
 
+    def test_identity_scan_bounds_reads_before_rejecting_oversized_records(self):
+        limit = 128
+        original_fdopen = vault_identity.os.fdopen
+        read_sizes = []
+
+        class CheckedReader:
+            def __init__(self, stream):
+                self.stream = stream
+
+            def __enter__(self):
+                self.stream.__enter__()
+                return self
+
+            def __exit__(self, *arguments):
+                return self.stream.__exit__(*arguments)
+
+            def fileno(self):
+                return self.stream.fileno()
+
+            def __iter__(self):
+                raise AssertionError("Transcript iteration reads an unbounded line")
+
+            def readline(self, size=-1):
+                read_sizes.append(size)
+                if size != limit + 1:
+                    raise AssertionError("Transcript reads must enforce the record limit")
+                return self.stream.readline(size)
+
+        def open_checked(*arguments, **keywords):
+            return CheckedReader(original_fdopen(*arguments, **keywords))
+
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "active.jsonl"
+            content = record("session_meta", {"id": THREAD_ID}).encode() + b"x" * 512
+            path.write_bytes(content)
+            with patch.object(vault_identity, "MAX_RECORD_BYTES", limit), \
+                    patch.object(vault_identity.os, "fdopen", side_effect=open_checked):
+                with self.assertRaisesRegex(MigrationError, "record is too large") as raised:
+                    scan_transcript(path, path.name, {})
+            self.assertNotIsInstance(raised.exception, TranscriptChanged)
+            self.assertEqual(read_sizes, [limit + 1, limit + 1])
+            self.assertEqual(path.read_bytes(), content)
+
+    def test_identity_scan_accepts_exact_limit_and_unterminated_final_record(self):
+        limit = 128
+        message = record("response_item", {"role": "user", "content": "synthetic"})
+        for newline in (True, False):
+            with self.subTest(newline=newline), tempfile.TemporaryDirectory() as temporary:
+                path = Path(temporary) / "active.jsonl"
+                raw = message.rstrip("\n").encode()
+                raw += b" " * (limit - len(raw) - int(newline))
+                raw += b"\n" if newline else b""
+                self.assertEqual(len(raw), limit)
+                content = record("session_meta", {"id": THREAD_ID}).encode() + raw
+                path.write_bytes(content)
+                with patch.object(vault_identity, "MAX_RECORD_BYTES", limit):
+                    signals = scan_transcript(path, path.name, {})
+                self.assertEqual(signals.thread_id, THREAD_ID)
+                self.assertEqual(signals.identity_state, "verified")
+                self.assertEqual(signals.records, 2)
+                self.assertEqual(signals.user_messages, 1)
+                self.assertEqual(path.read_bytes(), content)
+
     def test_non_object_json_record_is_not_a_valid_conversation(self):
         for invalid in (None, [], "synthetic", 42, True):
             with self.subTest(kind=type(invalid).__name__), tempfile.TemporaryDirectory() as temporary:
