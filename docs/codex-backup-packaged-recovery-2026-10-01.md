@@ -1,5 +1,43 @@
 # October 1 packaged recovery acceptance
 
+## Current-main rerun — October 1, 2026 (Pacific)
+
+The same independent receiver drill passed again after integration and the
+bounded-transcript-read safety fix, using a newly built package from clean
+`main` at `e2913365a7ffdb75b04f488c2b3ebacd2094b4d4`. The branch-candidate
+receipt below is historical; this rerun is the current packaged recovery proof.
+
+- Version/build/architecture: `0.1.0` / `20` / `arm64`.
+- Package built at `2026-10-02T00:36:14.737852Z`; Developer ID signed,
+  Vault-profile provisioned, **not notarized** and not published.
+- ZIP SHA-256:
+  `d9c94b090ed705985fd584d70c6cb2cfe570801a185fe06157bc6c5c7ff259f4`.
+- The self-contained driver's SHA-256 remains
+  `c1e2ec686992057ab105c979d5388c45950782a57e92eaca2f18abfbdf6641a9`;
+  its source is unchanged from the earlier receipt.
+- A fresh synthetic snapshot and recovery key were generated with this exact
+  packaged engine. The producer test key was removed before receiver import.
+- The retained `codex-backup-clean-acceptance` guest reported macOS `26.6.2`
+  (`25G83`), separate `admin` user, two CPUs and 6 GiB RAM. It still had no
+  active developer directory or working system Python. Only this guest ran.
+- The test-only share was read-only; audio and clipboard sharing were disabled.
+  Both guest Ethernet interfaces were disabled before the drill, not during
+  boot. No source repository or producer Keychain was transferred.
+- Producer and receiver both exited zero. The receiver enforced all seven
+  checks listed below, including wrong-key rejection, authenticated key import,
+  exact-file/byte restore, attachment search, archived-thread read/Markdown
+  export, reader shutdown and receiver test-key removal.
+- The guest was stopped afterward; Tart reported `Running:false` at
+  `2026-10-02T00:44:42Z`.
+- Exact-main [CI run 36946227632](https://github.com/jsegeren/codex-migrate/actions/runs/36946227632)
+  succeeded. Its path-gated portability jobs did not all rerun; this separately
+  executed VM drill supplies the fresh packaged-recovery evidence.
+
+This closes the freshness gap between the older branch package and integrated
+`main`. It does **not** prove live R2 publication/recovery, unattended hosted
+backup, notarized first-launch/updating, billing, buyer UI, or Codex resume.
+No customer data, real schedule, public download or cloud resource was changed.
+
 ## Result and scope
 
 The Developer ID signed hosted-branch candidate passed synthetic recovery on
