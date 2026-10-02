@@ -248,7 +248,7 @@ def scan_transcript(path: Path, relative: str, titles: Dict[str, List[str]]) -> 
             embedded_ids = set()
             pasted_attachment_ids = set()
             records = assistant = user = 0
-            for raw in handle:
+            for raw in iter(lambda: handle.readline(MAX_RECORD_BYTES + 1), b""):
                 if len(raw) > MAX_RECORD_BYTES:
                     raise MigrationError("A conversation record is too large for safe identity inspection.")
                 try:
