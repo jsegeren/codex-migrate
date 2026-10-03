@@ -170,6 +170,7 @@ def stage_hosted_snapshot(
     journal: HostedChunkJournal, client: RemoteAwareClient, *,
     crypto_helper: str, chunk_size: int = DEFAULT_CHUNK_SIZE,
     window_bytes: int = 64 * 1024 * 1024, apply: bool = False,
+    deletion_approval=None,
 ) -> HostedSnapshotStage:
     """Stage every supported history source under one sealed reservation.
 
@@ -190,6 +191,17 @@ def stage_hosted_snapshot(
     codex_root = _canonical_macos_path(Path(source_home) / ".codex")
     if journal.directory == codex_root or codex_root in journal.directory.parents:
         raise MigrationError("Hosted backup state cannot be inside Codex history.")
+    if deletion_approval is not None:
+        from codex_migrate.vault_hosted_rebaseline import RebaselineApproval
+        from codex_migrate.vault_hosted_source_review import _inventory
+        if not isinstance(deletion_approval, RebaselineApproval):
+            raise MigrationError("The intentional-deletion approval is invalid.")
+        deletion_approval.check_authority(source_home, journal.account_id, journal.vault_id, journal.key_id)
+        # _inventory takes its own non-reentrant history lock. Final staged
+        # content is compared again below while the staging lock is held.
+        current, missing = _inventory(source_home)
+        deletion_approval.check_catalogs(previous_catalog, current,
+            deletion_approval.value["priorVersion"], journal.base_snapshot_id, missing)
     with local_history_lock(source_home):
         paginated_before = source_fingerprint(source_home)
         has_paginated = paginated_before is not None
@@ -204,7 +216,7 @@ def stage_hosted_snapshot(
                 raise MigrationError("Codex paginated history changed before hosted staging.")
             paginated_stable = source_fingerprint(source_home) == paginated_before
         if (any(item.get("collection") == "paginated" for item in previous_catalog)
-                and (not has_paginated or paginated_count == 0)):
+                and (not has_paginated or paginated_count == 0) and deletion_approval is None):
             raise MigrationError(
                 "Codex paginated history disappeared or emptied since the prior "
                 "backup. No new hosted snapshot was staged; review the source.")
@@ -214,7 +226,7 @@ def stage_hosted_snapshot(
         if (any(item.get("collection") in ("active", "archived")
                 for item in previous_catalog) and
                 not any(folder in ("sessions", "archived_sessions")
-                        for folder, _, _ in files)):
+                        for folder, _, _ in files) and deletion_approval is None):
             raise MigrationError(
                 "Codex transcript history disappeared since the prior backup. "
                 "No new hosted snapshot was staged; review the source.")
@@ -436,11 +448,17 @@ def stage_hosted_snapshot(
             if _identity(check_info(path.lstat())) != source_facts[(folder, relative)]:
                 raise MigrationError("A conversation changed after hosted staging.")
             require_local(path)
-        if _missing_verified_threads(previous_catalog, manifest_files):
+        if deletion_approval is not None:
+            deletion_approval.check_catalogs(previous_catalog, manifest_files,
+                deletion_approval.value["priorVersion"], journal.base_snapshot_id,
+                missing_attachments | missing_paginated_attachments)
+            if at_risk:
+                raise MigrationError("Intentional deletion cannot clear remaining source risk.")
+        if deletion_approval is None and _missing_verified_threads(previous_catalog, manifest_files):
             raise MigrationError(
                 "A previously verified Codex thread disappeared since the prior "
                 "backup. No new hosted snapshot was published; review the source.")
-        if _missing_unidentified_transcripts(previous_catalog, manifest_files):
+        if deletion_approval is None and _missing_unidentified_transcripts(previous_catalog, manifest_files):
             raise MigrationError(
                 "A Codex transcript without a verified thread ID disappeared or "
                 "moved ambiguously since the prior backup. No new hosted snapshot "

@@ -1439,8 +1439,14 @@ egress allowance. Do not claim that B2 restores are always free. See its
    The dark `hosted-source-review` command now compares a bound authenticated
    prior manifest with a validated current source and reports bounded missing-ID,
    unidentified-file, shrink, identity-conflict and missing-attachment evidence.
-   It never approves deletion or changes the backup baseline; that explicit
-   rebaseline remains a release gate. See
+   It never approves deletion or changes the backup baseline. The separate dark
+   operator confirmation now binds one upload to a complete private deletion
+   report, exact content/base and source/device identity. It refuses stale
+   approval, shortened/ambiguous remaining threads, corruption, missing
+   referenced attachments and empty replacement histories. Retry and
+   abandonment cannot turn it into unattended permission, and no older snapshot
+   or referenced chunk is deleted. Buyer UI and actual-R2/independent-Mac
+   acceptance for confirmation remain release gates. See
    [the diagnosis boundary](hosted-source-review-2026-10-03.md).
 4. **Prove commerce and operations:** separate Stripe *subscription* checkout
    and webhook state from the existing one-time purchase; enforce active,

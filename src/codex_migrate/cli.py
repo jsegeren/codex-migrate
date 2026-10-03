@@ -205,6 +205,16 @@ def parser() -> argparse.ArgumentParser:
     vault_hosted_review.add_argument("--key-metadata", required=True)
     vault_hosted_review.add_argument("--crypto-helper")
     vault_hosted_review.add_argument("--json", action="store_true")
+    for name in ("hosted-prepare-deletions", "hosted-confirm-deletions"):
+        command = vault_commands.add_parser(name, help=argparse.SUPPRESS)
+        command.add_argument("--device-id", required=True)
+        command.add_argument("--key-metadata", required=True)
+        command.add_argument("--crypto-helper")
+        command.add_argument("--apply", action="store_true")
+        command.add_argument("--json", action="store_true")
+        if name == "hosted-confirm-deletions":
+            command.add_argument("--review-id", required=True)
+            command.add_argument("--confirm-intentional-deletions", action="store_true")
     vault_hosted_backups = vault_commands.add_parser(
         "hosted-backups", help=argparse.SUPPRESS)
     vault_hosted_backups.add_argument("--device-id", required=True)
@@ -363,6 +373,31 @@ def main(argv: Optional[List[str]] = None) -> int:
                               result["ambiguous_entries"], result["missing_attachments"]))
                     print("Read-only diagnosis, not deletion approval or proof of protection. "
                           "Existing backups are unchanged. Use --json for bounded ID/path samples.")
+                return 0
+            if args.vault_command in ("hosted-prepare-deletions", "hosted-confirm-deletions"):
+                if not args.apply:
+                    print("Planning only. Prepare and read the complete private deletion review first; "
+                          "confirmation requires its exact ID, --confirm-intentional-deletions and --apply.")
+                    return 0
+                if args.vault_command == "hosted-prepare-deletions":
+                    from codex_migrate.vault_hosted_rebaseline import prepare_rebaseline
+                    result = prepare_rebaseline(args.source_home, args.device_id, args.key_metadata,
+                        crypto_helper=args.crypto_helper, apply=True)
+                else:
+                    from codex_migrate.vault_hosted_manual import back_up_hosted_history
+                    result = back_up_hosted_history(args.source_home, args.device_id, args.key_metadata,
+                        crypto_helper=args.crypto_helper, deletion_review_id=args.review_id,
+                        confirm_intentional_deletions=args.confirm_intentional_deletions, apply=True)
+                if args.json:
+                    print(json.dumps(result, indent=2, sort_keys=True))
+                elif args.vault_command == "hosted-prepare-deletions":
+                    print("Private review saved: %s" % result["review_file"])
+                    print("Read the entire missingThreadIds, missingFiles and missingAttachments lists before confirmation. "
+                          "Review ID: %s. No deletion has been approved or uploaded." % result["review_id"])
+                else:
+                    print("Confirmed backup result: %s (%s). Older backups remain available; "
+                          "this is not proof of scheduled protection or clean-Mac recovery." % (
+                              result["status"], result["snapshot_id"]))
                 return 0
             if args.vault_command == "hosted-backups":
                 from codex_migrate.vault_hosted_disaster_recovery import hosted_recovery_options

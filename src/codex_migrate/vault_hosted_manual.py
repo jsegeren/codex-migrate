@@ -20,6 +20,8 @@ from codex_migrate.vault_schedule import _home, _pending_update, _safe_json, _up
 def back_up_hosted_history(source_home: str, device_id: str, metadata_path: str, *,
                            crypto_helper: Optional[str] = None,
                            expected_binding: Optional[dict] = None,
+                           deletion_review_id: Optional[str] = None,
+                           confirm_intentional_deletions: bool = False,
                            apply: bool = False) -> dict:
     """Publish or resume one snapshot, then reopen its remote sealed manifest.
 
@@ -29,6 +31,11 @@ def back_up_hosted_history(source_home: str, device_id: str, metadata_path: str,
     """
     if apply is not True:
         raise MigrationError("Hosted backup requires explicit confirmation.")
+    if (type(confirm_intentional_deletions) is not bool or
+            (deletion_review_id is not None) != confirm_intentional_deletions or
+            deletion_review_id is not None and (
+                not isinstance(deletion_review_id, str) or not _UUID.fullmatch(deletion_review_id))):
+        raise MigrationError("Intentional deletion needs the exact review ID and separate confirmation.")
     if not isinstance(device_id, str) or not _UUID.fullmatch(device_id):
         raise MigrationError("The hosted backup device is invalid.")
     if not isinstance(metadata_path, str) or not Path(metadata_path).is_absolute():
@@ -61,7 +68,8 @@ def back_up_hosted_history(source_home: str, device_id: str, metadata_path: str,
                 raise MigrationError("The hosted backup connection changed identity.")
             result = HostedLiveBackupRun(upload, recovery, home).back_up_live_history(
                 metadata, crypto_helper=str(helper), max_prior_bytes=MAX_PRIOR_BYTES,
-                apply=True)
+                apply=True, **({} if deletion_review_id is None else {
+                    "deletion_review_id": deletion_review_id, "deletion_device_id": device_id}))
             unchanged = result.get("unchanged") is True
             snapshot_id = result.get("lastGoodSnapshotId" if unchanged else "snapshotId")
             risk = result.get("atRiskThreads")
