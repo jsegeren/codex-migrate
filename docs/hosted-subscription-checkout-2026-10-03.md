@@ -61,6 +61,34 @@ without an automatic retry. A subscribed result is not a backup or protection
 receipt. This client neither opens the browser nor completes a payment. Wiring
 the customer flow and certifying real Stripe pairing remain separate work.
 
+### Acceptance-only setup integration
+
+The setup flow now accepts an explicit
+`CODEX_BACKUP_HOSTED_SUBSCRIPTION_PREVIEW` protected Preview origin, only when
+`CODEX_BACKUP_HOSTED_SETUP_ACCEPTANCE=yes` already enables the dark setup UI.
+The named-project origin validation still refuses Production and live billing.
+After pairing and confirming the separately saved recovery key, the operator
+checks test subscription status, explicitly prepares checkout if none is
+confirmed, opens Stripe's test checkout, and explicitly checks status again.
+No automatic checkout navigation or payment occurs.
+
+Before beginning, the flow checkpoints the original account/device/Vault and
+service origin, not the checkout URL or bearer. A lost response, failed local
+checkpoint, or restart returns to an unchecked state and requires status before
+begin. Server idempotency remains the authority for a pending checkout. Native
+credential rotation is resolved under the same update lock as background work;
+the original identity remains immutable provenance. A configured flow will not
+start an upload or enable its schedule until the test subscription is confirmed;
+stopping an existing schedule and inspecting upload state remain available.
+Every actual upload still performs fresh server-side authorization.
+
+This is test-mode wiring, not a commercial release or real-service acceptance.
+The browser receives only a validated Stripe test checkout link and public
+status. It never receives the native bearer, caller-selectable price, account
+selector, or stored subscription entitlement. Read-only setup polling does not
+perform subscription mutations. The independently saved-key recovery drill,
+real test catalog/enrollment, measured pricing and signed release remain gates.
+
 ## Verification boundary
 
 Focused JavaScript tests cover account/catalog refusal, payment status,

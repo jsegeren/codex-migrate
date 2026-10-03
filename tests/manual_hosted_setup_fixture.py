@@ -22,10 +22,13 @@ def main():
     parser.add_argument("--state", choices=("active", "cleanup_pending", "released", "published"), default="active")
     parser.add_argument("--deletions", action="store_true", help="Simulate complete missing-history review, no upload")
     parser.add_argument("--unicode-paths", action="store_true", help="Simulate display-control filename spoofing")
+    parser.add_argument("--subscription", choices=("unchecked", "not_entitled", "checkout_required", "subscribed", "needs_support"), help="Simulate test checkout, never call Stripe")
     args = parser.parse_args()
     state = {"remote": None if args.deletions else args.state,
              "phase": "deletion_review" if args.deletions else "pending_upload",
              "review": args.deletions}
+    if args.subscription:
+        state.update(remote=None, review=False, phase="key_ready", subscription=args.subscription)
 
     def public():
         result = {"enabled": True, "phase": state["phase"], "status": "ready",
@@ -33,6 +36,12 @@ def main():
                   "last_backup_checked_at": "2026-10-03T00:00:00+00:00",
                   "last_backup": {"status": "published", "source_coverage": "complete", "at_risk_threads": 0},
                   "background": {"enabled": False}}
+        if args.subscription:
+            result.pop("last_backup", None)
+            result.pop("last_backup_checked_at", None)
+            result["subscription"] = {"enabled": True, "test_mode": True, "status": state["subscription"]}
+            if state["subscription"] == "checkout_required":
+                result["subscription"]["checkout_url"] = "https://checkout.stripe.com/c/pay/cs_test_Synthetic"
         if state["remote"] is not None:
             result["pending_upload"] = {"pending": True, "reservation_id": RESERVATION,
                 "snapshot_id": SNAPSHOT, "local_phase": "active", "remote_status": state["remote"],
@@ -102,6 +111,10 @@ def main():
                     state.update(review=False, phase="backup_ready")
                 elif action == "check_upload":
                     state["phase"] = "pending_upload" if state["remote"] else "backup_ready"
+                elif action == "check_subscription" and args.subscription:
+                    state["subscription"] = "not_entitled" if state["subscription"] == "unchecked" else state["subscription"]
+                elif action == "begin_subscription" and state.get("subscription") == "not_entitled":
+                    state["subscription"] = "checkout_required"
                 elif (action == "abandon_upload" and state["phase"] == "pending_upload"
                       and step.get("reservation_id") == RESERVATION
                       and step.get("confirm_abandon") is True and state["remote"] != "published"):

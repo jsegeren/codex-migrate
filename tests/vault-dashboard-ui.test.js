@@ -37,14 +37,76 @@ function setupFixture() {
   const context = {
     $: id => {
       if (id === 'hosted-setup-panel') return panel;
-      if (!elements.has(id)) elements.set(id, { id, textContent: '', focus() { document.activeElement = this; } });
+      if (!elements.has(id)) elements.set(id, { id, textContent: '', removeAttribute(name) { delete this[name]; }, focus() { document.activeElement = this; } });
       return elements.get(id);
     }, document, clearInterval: () => {}, setInterval: () => 1,
   };
   vm.createContext(context);
-  vm.runInContext('let hostedSetupTimer=null,hostedSetupInterval=0,hostedSetupPhase=null,hostedSetupEpoch=0,hostedUploadReservation=null,hostedDeletionReview=null; ' + reviewPathLabel + '\n' + hostedSetupView + '\n' + refreshHostedSetup + '\n' + hostedSetupStep, context);
+  vm.runInContext('let hostedSetupTimer=null,hostedSetupInterval=0,hostedSetupPhase=null,hostedSetupEpoch=0,hostedUploadReservation=null,hostedDeletionReview=null,hostedBillingUnconfirmed=false; ' + reviewPathLabel + '\n' + hostedSetupView + '\n' + refreshHostedSetup + '\n' + hostedSetupStep, context);
   return { context, panel, controls, elements, blocks, document };
 }
+
+test('test checkout is separate, default-off and never substitutes for a backup receipt', () => {
+  const { context, elements } = setupFixture();
+  const data = { enabled: true, phase: 'key_ready', status: 'ready' };
+  context.hostedSetupView(data);
+  assert.equal(elements.get('setup-subscription').hidden, true);
+  assert.equal(elements.get('setup-first-backup').disabled, false);
+  for (const status of ['unchecked', 'not_entitled', 'checkout_required', 'needs_support']) {
+    context.hostedSetupView({ ...data, subscription: { enabled: true, status } });
+    assert.equal(elements.get('setup-subscription').hidden, false);
+    assert.equal(elements.get('setup-first-backup').disabled, true);
+    assert.equal(elements.get('setup-begin-subscription').disabled, status !== 'not_entitled');
+  }
+  context.hostedSetupView({ ...data, subscription: { enabled: true, status: 'subscribed' } });
+  assert.equal(elements.get('setup-first-backup').disabled, false);
+  assert.match(elements.get('setup-subscription-status').textContent, /protection is not active/);
+  assert.match(source, /No real charge is authorized by this preview/);
+  assert.match(source, /rel="noopener noreferrer"/);
+  assert.match(source, /setup-check-subscription"\)\.onclick=\(\)=>hostedSetupStep\("check_subscription"\)/);
+  assert.match(source, /setup-begin-subscription"\)\.onclick=\(\)=>hostedSetupStep\("begin_subscription"\)/);
+});
+
+test('test checkout links refuse foreign/live destinations and disappear during uncertainty', async () => {
+  const { context, elements } = setupFixture();
+  const valid = 'https://checkout.stripe.com/c/pay/cs_test_Synthetic#test';
+  const data = { enabled: true, phase: 'key_ready', status: 'ready',
+    subscription: { enabled: true, status: 'checkout_required', checkout_url: valid } };
+  context.hostedSetupView(data);
+  const link = elements.get('setup-subscription-link');
+  assert.equal(link.href, valid);
+  assert.equal(link.hidden, false);
+  for (const url of ['https://foreign.example/c/pay/cs_test_Synthetic',
+    'https://checkout.stripe.com/c/pay/cs_live_Synthetic', 'javascript:alert(1)',
+    'https://checkout.stripe.com:443/c/pay/cs_test_Synthetic',
+    'https://checkout.stripe.com/c/pay/cs_test_Synthetic?bad=\\x']) {
+    context.hostedSetupView({ ...data, subscription: { ...data.subscription, checkout_url: url } });
+    assert.equal(link.hidden, true);
+    assert.equal(link.href, undefined);
+  }
+  context.hostedSetupView(data);
+  context.hostedSetupView({ ...data, status: 'running', step: 'check_subscription' });
+  assert.equal(link.href, undefined);
+  assert.equal(link.hidden, true);
+  context.hostedSetupView(data);
+  context.api = async () => { throw Error('unavailable'); };
+  await context.refreshHostedSetup();
+  assert.equal(link.href, undefined);
+  assert.equal(link.hidden, true);
+});
+
+test('test entitlement cannot enable background backup and never blocks stopping', () => {
+  const { context, elements } = setupFixture();
+  const data = { enabled: true, phase: 'backup_ready', status: 'ready',
+    last_backup: { source_coverage: 'complete', at_risk_threads: 0 }, background: { enabled: false },
+    subscription: { enabled: true, status: 'unchecked' } };
+  context.hostedSetupView(data);
+  assert.equal(elements.get('setup-enable-schedule').disabled, true);
+  context.hostedSetupView({ ...data, background: { enabled: true } });
+  assert.equal(elements.get('setup-disable-schedule').disabled, false);
+  context.hostedSetupView({ ...data, subscription: { enabled: true, status: 'subscribed' } });
+  assert.equal(elements.get('setup-enable-schedule').disabled, false);
+});
 
 test('hosted setup is gated and pairing never claims backup or automatic protection', () => {
   const { context, panel, controls, blocks, elements } = setupFixture();

@@ -3,8 +3,9 @@
 Persist the Keychain device reference before claiming a purchase. A lost reply
 must resolve that same device; purchase links and email proofs stay in memory.
 Recovery-key preparation is explicit and account-bound. Separate backup and
-schedule steps use existing server-authorized storage; setup never creates a
-trial/subscription or grants upload authorization.
+schedule steps use existing server-authorized storage. An explicitly configured
+protected Preview permits separate test checkout/status steps; setup never pays
+automatically or grants upload authorization.
 """
 
 from __future__ import annotations
@@ -24,6 +25,9 @@ from codex_migrate.vault_hosted_manual import back_up_hosted_history
 from codex_migrate.vault_hosted_pending import pending_hosted_upload, abandon_hosted_upload
 from codex_migrate.vault_hosted_rebaseline import prepare_setup_rebaseline, validate_deletion_review_view
 from codex_migrate.vault_hosted_connection import active_binding
+from codex_migrate.vault_hosted_subscription_client import (
+    HostedSubscriptionClient, _result as subscription_result,
+)
 from codex_migrate.vault_hosted_schedule import (
     SERVICE_ORIGIN, hosted_schedule_status, install_hosted_schedule, remove_hosted_schedule,
 )
@@ -48,7 +52,7 @@ def _backup_receipt(value):
 
 
 class HostedSetupFlow:
-    def __init__(self, registry, source_home=None):
+    def __init__(self, registry, source_home=None, *, subscription_origin=None):
         self.registry = registry
         self.source_home = source_home
         self._lock = threading.Lock()
@@ -69,6 +73,22 @@ class HostedSetupFlow:
         # Keys can exist only after full pairing. Refuse inconsistent records
         # before email or claim calls, not after a new remote claim succeeds.
         self._keys.require_connection(self._binding)
+        self._subscription_client = (HostedSubscriptionClient(subscription_origin)
+                                     if subscription_origin is not None else None)
+        self._subscription = {"enabled": self._subscription_client is not None,
+                              "status": "unchecked", "test_mode": True}
+        # The server owns the durable Stripe attempt. Locally preserve its
+        # account/origin boundary before beginning; never persist the URL or
+        # treat a saved status as fresh entitlement after a restart.
+        attempt = registry.read().get("hosted_setup_subscription")
+        if attempt is not None:
+            if (not isinstance(attempt, dict) or set(attempt) != {"binding", "origin"} or
+                    attempt["binding"] != self._binding):
+                raise MigrationError("Saved test checkout disagrees with this connection; contact support.")
+            saved_client = HostedSubscriptionClient(attempt["origin"])
+            if (self._subscription_client is not None and
+                    saved_client._origin != self._subscription_client._origin):
+                raise MigrationError("Saved test checkout uses a different service; contact support.")
         self._last_backup = registry.read().get("hosted_setup_backup")
         if self._last_backup is not None:
             saved_key = registry.read().get("hosted_setup_key")
@@ -90,6 +110,9 @@ class HostedSetupFlow:
     def snapshot(self):
         with self._lock:
             result = copy.deepcopy(self._public)
+            result["subscription"] = dict(self._subscription)
+            if result["status"] == "running":
+                result["subscription"].pop("checkout_url", None)
             if self._pending_upload is not None:
                 result["pending_upload"] = dict(self._pending_upload)
             if self._deletion_review is not None:
@@ -120,6 +143,7 @@ class HostedSetupFlow:
         fields = {"send_code": {"purchase_link"}, "pair": {"code"},
                   "retry_save": set(), "resolve": set(), "reauthorize": set(),
                   "prepare_key": set(), "confirm_key": {"recovery_key"},
+                  "begin_subscription": set(), "check_subscription": set(),
                   "first_backup": set(), "enable_schedule": set(), "disable_schedule": set(),
                   "check_upload": set(), "leave_upload_review": set(),
                   "abandon_upload": {"reservation_id", "confirm_abandon"},
@@ -131,6 +155,8 @@ class HostedSetupFlow:
                   "reauthorize": {"pairing_uncertain"},
                   "prepare_key": {"paired", "key_save"},
                   "confirm_key": {"key_save"},
+                  "begin_subscription": {"key_ready", "backup_ready"},
+                  "check_subscription": {"key_ready", "backup_ready"},
                   "first_backup": {"key_ready", "backup_ready"},
                   "enable_schedule": {"backup_ready"},
                   "disable_schedule": {"backup_ready", "pairing_uncertain", "pending_upload", "deletion_review"},
@@ -148,6 +174,15 @@ class HostedSetupFlow:
             if (self._public["status"] == "running" or
                     self._public["phase"] not in phases[action]):
                 raise MigrationError("Finish the current backup setup step first.")
+            if action in ("begin_subscription", "check_subscription"):
+                if self._subscription_client is None:
+                    raise MigrationError("Test subscription checkout is not enabled.")
+                if action == "begin_subscription" and self._subscription["status"] != "not_entitled":
+                    raise MigrationError("Check test subscription status before preparing checkout.")
+            if (self._subscription_client is not None and
+                    action in ("first_backup", "confirm_deletions", "enable_schedule") and
+                    self._subscription["status"] != "subscribed"):
+                raise MigrationError("Confirm the test subscription before uploading or enabling backups.")
             if action == "enable_schedule" and (
                     self._pending_upload is not None or self._deletion_review is not None or
                     self._last_backup is None or
@@ -186,6 +221,10 @@ class HostedSetupFlow:
             except Exception:
                 # Provider and native exceptions may contain private proofs.
                 self._update(status="failed", error=(
+                    "Test checkout could not be confirmed. Check subscription status before "
+                    "preparing checkout again. No payment or backup was confirmed; contact "
+                    "joshua@segeren.com if needed."
+                    if action in ("begin_subscription", "check_subscription") else
                     "Hosted backup could not be confirmed. Keep the pending state and "
                     "retry with this same connection and key. Previously verified snapshots "
                     "are kept. Automatic protection is not active; contact "
@@ -244,6 +283,9 @@ class HostedSetupFlow:
                                   self._binding["deviceId"], apply=True))
 
     def _perform(self, action, values):
+        if action in ("begin_subscription", "check_subscription"):
+            self._update_subscription(action)
+            return
         if action == "leave_deletion_review":
             # Leaving is not consent, cancellation, or journal cleanup.
             self._update(phase="backup_ready" if self._last_backup else "key_ready")
@@ -398,3 +440,36 @@ class HostedSetupFlow:
             # before any one-off claim, never create a second credential.
             self._proof.clear()
             self._update(phase="start")
+
+    def _update_subscription(self, action):
+        with self._lock:
+            self._subscription = {"enabled": True, "status": "unchecked", "test_mode": True}
+        anchor = self._keys.confirmed_binding(self._binding)
+        if anchor is None:
+            raise MigrationError("Confirm the saved recovery key before test checkout.")
+
+        def call(device_id):
+            if action == "begin_subscription":
+                self.registry.update(hosted_setup_subscription={
+                    "binding": dict(self._binding), "origin": self._subscription_client._origin})
+                self.registry.sync_recovery_checkpoint()
+            method = (self._subscription_client.begin if action == "begin_subscription"
+                      else self._subscription_client.status)
+            # Validate again at the flow boundary, including for injected
+            # clients. No unexpected fields or untrusted link reach the UI.
+            return subscription_result(method(device_id, apply=True))
+
+        if self.source_home is None:
+            result = call(self._binding["deviceId"])
+        else:
+            # Shares the schedule/update lock so credential renewal cannot race
+            # this native request. The original binding remains provenance.
+            with _update_lock(self.source_home, nonblocking=True) as marker:
+                if _pending_update(marker) is not None:
+                    raise MigrationError("Wait for the app update before test checkout.")
+                current = active_binding(self.source_home, anchor)
+                result = call(current["deviceId"])
+        with self._lock:
+            self._subscription = {"enabled": True, "status": result["status"], "test_mode": True}
+            if "checkoutUrl" in result:
+                self._subscription["checkout_url"] = result["checkoutUrl"]

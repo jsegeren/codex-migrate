@@ -170,13 +170,22 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 <button id="setup-leave-upload" class="secondary">Return to backup</button>
 <p class="muted">If this upload already published, return to backup to resume its verification. If a deletion-reviewed upload cannot resume there, <a href="mailto:joshua@segeren.com">email Joshua</a>. Do not delete local backup state yourself.</p>
 </div>
+<div id="setup-subscription" hidden>
+<h3>Hosted storage — test mode</h3>
+<p>This acceptance-only checkout uses Stripe test mode, not real payment. The server selects the test plan; the app cannot choose its price. Completing checkout does not create a backup or enable automatic protection.</p>
+<p id="setup-subscription-status" role="status" aria-live="polite"></p>
+<button id="setup-check-subscription" class="secondary">Check test subscription status</button>
+<button id="setup-begin-subscription" disabled>Prepare Stripe test checkout</button>
+<p><a id="setup-subscription-link" target="_blank" rel="noopener noreferrer" hidden>Open Stripe test checkout</a></p>
+<p class="muted">After checkout, return here and check status. If a response is uncertain, check status before preparing checkout again. No real charge is authorized by this preview.</p>
+</div>
 <div id="setup-background" hidden>
 <h3>Background backups</h3>
 <p>Check for changes every 30 minutes while this Mac is awake and online. Backups run without a browser window. Only changed content is uploaded; previous verified versions are kept.</p>
 <p id="setup-background-status" role="status" aria-live="polite" tabindex="-1"></p>
 <button id="setup-enable-schedule">Enable or resume background backups</button>
 <button id="setup-disable-schedule" class="secondary">Stop background backups</button>
-<p class="muted">Stopping the schedule does not delete backups or cancel hosted storage. This acceptance preview does not start a subscription or certify clean-Mac recovery.</p>
+<p class="muted">Stopping the schedule does not delete backups or cancel hosted storage. This acceptance preview does not authorize real payment or certify clean-Mac recovery.</p>
 </div>
 <p class="muted">Need help? <a href="mailto:joshua@segeren.com">Email Joshua</a>. Never email your private purchase link, setup code or recovery key.</p>
 </section>
@@ -452,7 +461,7 @@ for(const link of document.querySelectorAll("[data-route]")){link.classList.togg
 const fmt=n=>{const units=["B","KB","MB","GB","TB"];let i=0;while(n>=1000&&i<units.length-1){n/=1000;i++}return `${n.toFixed(n>=100?0:n>=10?1:2)} ${units[i]}`};
 async function api(path,data){const response=await fetch(path,{method:data===undefined?"GET":"POST",headers:{"X-Codex-Migrate-Token":token,"Content-Type":"application/json"},...(data===undefined?{}:{body:JSON.stringify(data)})});const type=response.headers.get("Content-Type")||"";const body=type.includes("application/json")?await response.json():await response.text();if(!response.ok)throw Error(body.error||"The local request failed");return body}
 function fail(error){$("error").textContent=error.message;$("status").textContent=""}
-let hostedSetupTimer=null,hostedSetupInterval=0,hostedSetupPhase=null,hostedSetupEpoch=0,hostedUploadReservation=null,hostedDeletionReview=null;
+let hostedSetupTimer=null,hostedSetupInterval=0,hostedSetupPhase=null,hostedSetupEpoch=0,hostedUploadReservation=null,hostedDeletionReview=null,hostedBillingUnconfirmed=false;
 function reviewPathLabel(path){
   return JSON.stringify(path).replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu,character=>{
     const code=character.codePointAt(0),hex=code.toString(16);
@@ -464,15 +473,31 @@ function hostedSetupView(data){
   $("setup-recovery").value=data.enabled&&data.phase==="key_save"&&data.status!=="running"?data.recovery_key||"":"";
   if(!data.enabled||data.phase!=="key_save"||data.status==="running")$("setup-saved-key").value="";
   panel.hidden=!data.enabled;
-  if(!data.enabled){if(hostedSetupTimer){clearInterval(hostedSetupTimer);hostedSetupTimer=null}return}
+  if(!data.enabled){$("setup-subscription-link").removeAttribute("href");$("setup-subscription-link").hidden=true;if(hostedSetupTimer){clearInterval(hostedSetupTimer);hostedSetupTimer=null}return}
   const running=data.status==="running";
   for(const block of panel.querySelectorAll("[data-setup-phase]"))block.hidden=running||block.dataset.setupPhase!==data.phase;
   for(const control of panel.querySelectorAll("button,input,textarea"))control.disabled=running;
+  const subscription=data.subscription||{enabled:false};
+  const checkoutReady=!running&&subscription.enabled&&["key_ready","backup_ready"].includes(data.phase);
+  $("setup-subscription").hidden=!checkoutReady;
+  $("setup-check-subscription").disabled=!checkoutReady;
+  $("setup-begin-subscription").disabled=!checkoutReady||subscription.status!=="not_entitled";
+  const checkoutLink=$("setup-subscription-link");
+  checkoutLink.removeAttribute("href");checkoutLink.hidden=true;
+  if(checkoutReady&&subscription.status==="checkout_required"&&typeof subscription.checkout_url==="string"&&/^https:\/\/checkout\.stripe\.com\/c\/pay\/cs_test_[A-Za-z0-9]+(?:[?#][^\s\\]*)?$/.test(subscription.checkout_url)){
+    checkoutLink.href=subscription.checkout_url;checkoutLink.hidden=false;
+  }
+  const subscriptionMessages={unchecked:"Test subscription has not been confirmed. Check status first.",not_entitled:"No active test subscription was confirmed. You can prepare test checkout.",checkout_required:"Test checkout is ready. Open Stripe, then return here and check status.",subscribed:"Test subscription confirmed. You can now create a backup; protection is not active yet.",needs_support:"Test checkout needs support review. Do not prepare another checkout. Email Joshua for help."};
+  $("setup-subscription-status").textContent=subscriptionMessages[subscription.status]||subscriptionMessages.unchecked;
+  const billingUnconfirmed=subscription.enabled&&subscription.status!=="subscribed";
+  hostedBillingUnconfirmed=billingUnconfirmed;
+  $("setup-first-backup").disabled=running||billingUnconfirmed;
+  $("setup-backup-again").disabled=running||billingUnconfirmed;
   const pending=data.pending_upload;
   const review=data.deletion_review;
   if(running||phaseChanged||hostedDeletionReview!==review?.review_id)$("setup-deletion-confirm").checked=false;
   hostedDeletionReview=review?.review_id||null;
-  $("setup-confirm-deletions").disabled=running||data.phase!=="deletion_review"||!hostedDeletionReview||!$("setup-deletion-confirm").checked;
+  $("setup-confirm-deletions").disabled=running||billingUnconfirmed||data.phase!=="deletion_review"||!hostedDeletionReview||!$("setup-deletion-confirm").checked;
   $("setup-deletion-reference").textContent=review?"Review reference: "+review.review_id:"";
   $("setup-deletion-list").textContent=review?["Missing conversation IDs ("+review.missing_thread_ids.length+")",...review.missing_thread_ids,"", "Missing unidentified files ("+review.missing_files.length+")",...review.missing_files.map(item=>item.collection+" / "+reviewPathLabel(item.path)),"", "Missing pasted-text attachments ("+review.missing_attachments.length+")",...review.missing_attachments.map(path=>reviewPathLabel(path))].join("\n"):"";
   if(running||phaseChanged||hostedUploadReservation!==pending?.reservation_id)$("setup-abandon-confirm").checked=false;
@@ -488,7 +513,7 @@ function hostedSetupView(data){
   $("setup-upload-reference").textContent=pending?"Upload reference: "+pending.reservation_id:"";
   const background=data.background||{enabled:false};
   $("setup-background").hidden=!data.last_backup;
-  $("setup-enable-schedule").disabled=running||Boolean(pending)||Boolean(review)||background.enabled||data.phase!=="backup_ready"||data.last_backup?.source_coverage!=="complete"||data.last_backup?.at_risk_threads!==0;
+  $("setup-enable-schedule").disabled=running||billingUnconfirmed||Boolean(pending)||Boolean(review)||background.enabled||data.phase!=="backup_ready"||data.last_backup?.source_coverage!=="complete"||data.last_backup?.at_risk_threads!==0;
   $("setup-disable-schedule").disabled=running||!(background.enabled||background.can_stop);
   const backgroundMessages={awaiting_check:"Enabled; the first scheduled check has not finished yet.",running:"A scheduled backup check is running.",failed:"The last scheduled check failed. New work may not be backed up; previous verified versions are kept.",needs_attention:"The last scheduled capture needs attention. Do not assume all new work is protected.",verified:"The last scheduled backup completed.",unchanged:"The last scheduled check found no changes."};
   $("setup-background-status").textContent=background.enabled?`${backgroundMessages[background.status]||"Background status needs attention."}${background.last_checked_at?" Last check: "+new Date(background.last_checked_at).toLocaleString()+".":""}${background.error?" "+background.error:""}`:background.error||"Background backups are off. You can still back up manually.";
@@ -497,6 +522,7 @@ function hostedSetupView(data){
   const working={send_code:"Requesting your setup email…",pair:"Saving and connecting this Mac…",retry_save:"Retrying the saved connection…",resolve:"Checking the saved connection…",reauthorize:"Preparing email verification…",prepare_key:"Preparing the same protected recovery key…",confirm_key:"Checking your saved recovery key…",first_backup:"Encrypting, uploading and verifying your Codex backup… Keep this Mac awake.",enable_schedule:"Enabling background backups…",disable_schedule:"Stopping background backups…",check_upload:"Checking this unfinished upload with the service…",abandon_upload:"Requesting release of this exact upload… Its retry state stays until release is confirmed.",leave_upload_review:"Returning to backup…"};
   Object.assign(messages,{deletion_review:"Review only. Missing history has not been approved for a new backup."});
   Object.assign(working,{prepare_deletions:"Verifying the complete missing-history review…",confirm_deletions:"Rechecking your exact review and backing up remaining work…",leave_deletion_review:"Leaving without granting deletion approval…"});
+  Object.assign(working,{begin_subscription:"Preparing Stripe test checkout… No automatic payment.",check_subscription:"Checking test subscription status…"});
   $("hosted-setup-status").textContent=running?working[data.step]||"Checking setup…":messages[data.phase]||"Setup needs attention.";
   if(!running&&review&&data.phase!=="deletion_review")$("hosted-setup-status").textContent="Missing-history review is unresolved. New work may not be backed up.";
   $("hosted-setup-error").textContent=data.error||"";
@@ -519,6 +545,7 @@ async function refreshHostedSetup(){
     if(epoch!==hostedSetupEpoch)return false;
     $("setup-recovery").value="";$("setup-saved-key").value="";
     for(const control of $("hosted-setup-panel").querySelectorAll("button,input,textarea"))control.disabled=true;
+    $("setup-subscription-link").removeAttribute("href");$("setup-subscription-link").hidden=true;
     $("hosted-setup-error").textContent="Setup status is unavailable. Do not repeat pairing. Check the connection or contact Joshua.";
     return false;
   }
@@ -528,6 +555,7 @@ async function hostedSetupStep(action,step={}){
   $("setup-recovery").value="";$("setup-saved-key").value="";
   if($("hosted-setup-panel").contains(document.activeElement))$("hosted-setup-status").focus();
   for(const control of $("hosted-setup-panel").querySelectorAll("button,input,textarea"))control.disabled=true;
+  $("setup-subscription-link").removeAttribute("href");$("setup-subscription-link").hidden=true;
   if(hostedSetupTimer&&hostedSetupInterval!==1500){clearInterval(hostedSetupTimer);hostedSetupTimer=null}
   hostedSetupInterval=1500;
   if(!hostedSetupTimer)hostedSetupTimer=setInterval(refreshHostedSetup,1500);
@@ -554,6 +582,8 @@ $("setup-check-key-ready").onclick=()=>hostedSetupStep("resolve");
 $("setup-first-backup").onclick=()=>hostedSetupStep("first_backup");
 $("setup-backup-again").onclick=()=>hostedSetupStep("first_backup");
 $("setup-check-backup-ready").onclick=()=>hostedSetupStep("resolve");
+$("setup-check-subscription").onclick=()=>hostedSetupStep("check_subscription");
+$("setup-begin-subscription").onclick=()=>hostedSetupStep("begin_subscription");
 $("setup-enable-schedule").onclick=()=>hostedSetupStep("enable_schedule");
 $("setup-disable-schedule").onclick=()=>hostedSetupStep("disable_schedule");
 $("setup-check-upload").onclick=()=>hostedSetupStep("check_upload");
@@ -562,7 +592,7 @@ $("setup-leave-upload").onclick=()=>hostedSetupStep("leave_upload_review");
 $("setup-prepare-deletions").onclick=()=>hostedSetupStep("prepare_deletions");
 $("setup-refresh-deletions").onclick=()=>hostedSetupStep("prepare_deletions");
 $("setup-leave-deletions").onclick=()=>hostedSetupStep("leave_deletion_review");
-$("setup-deletion-confirm").onchange=()=>{$("setup-confirm-deletions").disabled=!hostedDeletionReview||!$("setup-deletion-confirm").checked};
+$("setup-deletion-confirm").onchange=()=>{$("setup-confirm-deletions").disabled=hostedBillingUnconfirmed||!hostedDeletionReview||!$("setup-deletion-confirm").checked};
 $("setup-confirm-deletions").onclick=()=>{if(!$("setup-deletion-confirm").checked||!hostedDeletionReview)return;const review_id=hostedDeletionReview;$("setup-deletion-confirm").checked=false;return hostedSetupStep("confirm_deletions",{review_id,confirm_intentional_deletions:true})};
 $("setup-abandon-confirm").onchange=()=>{const button=$("setup-abandon-upload");button.disabled=button.hidden||!hostedUploadReservation||!$("setup-abandon-confirm").checked};
 $("setup-abandon-upload").onclick=()=>{if(!$("setup-abandon-confirm").checked||!hostedUploadReservation)return;const reservation_id=hostedUploadReservation;$("setup-abandon-confirm").checked=false;return hostedSetupStep("abandon_upload",{reservation_id,confirm_abandon:true})};
