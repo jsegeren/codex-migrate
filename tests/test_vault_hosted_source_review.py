@@ -44,7 +44,9 @@ class HostedSourceReviewTests(unittest.TestCase):
         self.pointer = (ACCOUNT, WORKER, {"snapshotId": SNAPSHOT, "sourceCoverage": "complete"})
         self.recovery._latest.return_value = self.pointer
         self.prior = []
-        self.recovery.prior_catalog.side_effect = lambda **_kwargs: (SNAPSHOT, self.catalog())
+        self.version = 4
+        self.recovery.prior_catalog.side_effect = lambda **_kwargs: (
+            SNAPSHOT, self.catalog(), self.version)
         self.enrollment = Mock()
         self.enrollment.backup_clients.return_value = (self.upload, self.recovery)
         patcher = patch(PREFIX + "HostedEnrollmentClient", return_value=self.enrollment)
@@ -93,7 +95,7 @@ class HostedSourceReviewTests(unittest.TestCase):
         self.assertFalse(result["automatic_protection_verified"])
         self.recovery.prior_catalog.assert_called_once_with(
             key_id=KEY, crypto_helper=str(self.helper), max_bytes=MAX_PRIOR_BYTES,
-            expected_snapshot_id=SNAPSHOT, expected_account_id=ACCOUNT)
+            expected_snapshot_id=SNAPSHOT, expected_account_id=ACCOUNT, include_version=True)
         self.assertEqual(path.read_bytes(), content)
         self.assertNotIn("PRIVATE BODY", json.dumps(result))
         self.assertNotIn("sha256", json.dumps(result))
@@ -172,7 +174,7 @@ class HostedSourceReviewTests(unittest.TestCase):
 
     def test_no_prior_is_not_a_protection_claim(self):
         self.recovery._latest.return_value = (ACCOUNT, WORKER, None)
-        self.recovery.prior_catalog.return_value = (None, [])
+        self.recovery.prior_catalog.return_value = (None, [], None)
         self.recovery.prior_catalog.side_effect = None
         result = self.review()
         self.assertEqual(result["status"], "no_prior_backup")
@@ -228,12 +230,36 @@ class HostedSourceReviewTests(unittest.TestCase):
         self.assert_no_remote_writes()
 
     def test_legacy_v1_catalog_does_not_invent_verified_identity(self):
+        self.version = 1
         self.prior = [{"collection": "active", "path": "old.jsonl",
                        "thread_id": None, "identity_state": None, "records": None,
                        "user_messages": None, "assistant_messages": None}]
         result = self.review()
         self.assertEqual(result["missing_verified_threads"], 0)
         self.assertEqual(result["missing_unidentified_transcripts"], 1)
+
+    def test_modern_catalog_cannot_masquerade_as_legacy_v1(self):
+        self.prior = [{"collection": "active", "path": "old.jsonl",
+                       "thread_id": None, "identity_state": None, "records": None,
+                       "user_messages": None, "assistant_messages": None}]
+        for version in (2, 3, 4, None, True, 0, 5):
+            with self.subTest(version=version):
+                self.version = version
+                with self.assertRaisesRegex(MigrationError, "could not be verified"):
+                    self.review()
+        self.assert_no_remote_writes()
+
+    def test_collection_features_require_the_authenticated_format_version(self):
+        for collection, version in (("paginated", 2), ("attachments", 3)):
+            self.version = version
+            self.prior = [{"collection": collection, "path": THREAD + ".jsonl",
+                           "thread_id": THREAD, "identity_state": "verified"}]
+            if collection == "attachments":
+                self.prior[0].update(thread_id=None, identity_state="unverified",
+                                     records=0, user_messages=0, assistant_messages=0)
+            with self.subTest(collection=collection):
+                with self.assertRaisesRegex(MigrationError, "could not be verified"):
+                    self.review()
 
     def test_source_change_during_scan_refuses_review(self):
         path = self.transcript()

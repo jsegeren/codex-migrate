@@ -26,7 +26,10 @@ relative file names can themselves contain sensitive information.
 - Fetch and decrypt the authenticated last-good manifest bound to its account,
   Worker origin and snapshot ID; a failed read is not a first backup. Validate
   catalog paths, IDs, metadata and collection invariants before comparison or
-  output. Decryption alone does not prove that those fields are valid.
+  output. The recovery client retains the authenticated catalog format version:
+  absent identity/count fields are accepted only for explicit legacy v1, never
+  inferred from missing fields in a modern backup. Decryption alone does not
+  prove that those fields are valid.
 - Inspect active and archived transcripts, pasted attachments and supported
   paginated SQLite history without staging plaintext or ciphertext. Validate
   JSON and source identities, stream body hashes in memory for exact-byte move

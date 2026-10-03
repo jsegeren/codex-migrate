@@ -49,7 +49,7 @@ def _files(source_home):
     return files, state
 
 
-def _validate_prior(rows):
+def _validate_prior(rows, version):
     """Authenticated bytes still need schema validation before comparison/output.
 
     The native catalog command authenticates/decrypts but does not validate all
@@ -58,6 +58,12 @@ def _validate_prior(rows):
     """
     if not isinstance(rows, list) or len(rows) > 100_000:
         raise MigrationError("The prior source catalog is invalid.")
+    if version is None:
+        if rows:
+            raise MigrationError("A first backup cannot have a prior source catalog.")
+        return
+    if type(version) is not int or version not in (1, 2, 3, 4):
+        raise MigrationError("The prior source catalog version is invalid.")
     seen = set()
     for row in rows:
         if not isinstance(row, dict):
@@ -74,7 +80,7 @@ def _validate_prior(rows):
         seen.add((collection, path))
         size, digest, thread_id = row.get("size"), row.get("sha256"), row.get("thread_id")
         state = row.get("identity_state")
-        if state is None:  # Native v1 catalog has optional identity fields.
+        if state is None and version == 1:
             state = "unverified"
         if (type(size) is not int or not 0 <= size <= 2**63 - 1 or
                 not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest) or
@@ -85,7 +91,7 @@ def _validate_prior(rows):
         counts = [row.get(key) for key in ("records", "user_messages", "assistant_messages")]
         if (any(value is not None and (type(value) is not int or not 0 <= value <= 2**63 - 1)
                 for value in counts) or
-                state == "verified" and any(value is None for value in counts) or
+                (version >= 2 or state == "verified") and any(value is None for value in counts) or
                 counts[0] is not None and any(value is not None and value > counts[0]
                                              for value in counts[1:])):
             raise MigrationError("The prior source catalog has invalid message counts.")
@@ -96,11 +102,12 @@ def _validate_prior(rows):
                 row.get("at_risk") is not None and type(row["at_risk"]) is not bool):
             raise MigrationError("The prior source catalog has invalid metadata.")
         if collection == "paginated" and (
-                state != "verified" or path != thread_id + ".jsonl" or size == 0 or
+                version < 3 or state != "verified" or path != thread_id + ".jsonl" or size == 0 or
                 counts[0] == 0):
             raise MigrationError("The prior source catalog has an invalid paginated identity.")
         if collection == "attachments" and (
-                state != "unverified" or thread_id is not None or titles or counts != [0, 0, 0]):
+                version < 4 or state != "unverified" or thread_id is not None or
+                titles or counts != [0, 0, 0]):
             raise MigrationError("The prior source catalog has an invalid attachment identity.")
 
 
@@ -190,14 +197,15 @@ def review_hosted_source(source_home: str, device_id: str, metadata_path: str, *
         if account != upload._account_id or worker != upload._worker_origin:
             raise MigrationError("The hosted review authority changed.")
         snapshot_id = None if latest is None else latest["snapshotId"]
-        observed, prior = recovery.prior_catalog(
+        observed, prior, version = recovery.prior_catalog(
             key_id=key_id, crypto_helper=str(helper), max_bytes=MAX_PRIOR_BYTES,
-            expected_snapshot_id=snapshot_id, expected_account_id=account)
+            expected_snapshot_id=snapshot_id, expected_account_id=account,
+            include_version=True)
         if observed != snapshot_id:
             raise MigrationError("The hosted review version changed.")
-        _validate_prior(prior)
-        if snapshot_id is None and prior:
-            raise MigrationError("A first backup cannot have a prior source catalog.")
+        _validate_prior(prior, version)
+        if (snapshot_id is None) != (version is None):
+            raise MigrationError("The prior source catalog version is unbound.")
         current, missing_attachments = _inventory(home)
         if recovery._latest() != pointer:
             raise MigrationError("The hosted backup changed during source review.")
