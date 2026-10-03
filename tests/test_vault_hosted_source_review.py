@@ -7,13 +7,12 @@ import json
 from pathlib import Path
 import sqlite3
 import tempfile
-from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
 from codex_migrate.cli import main, parser
 from codex_migrate.errors import MigrationError
-from codex_migrate.vault_hosted_source_review import _inventory, review_hosted_source
+from codex_migrate.vault_hosted_source_review import review_hosted_source
 from codex_migrate.vault_hosted_schedule import MAX_PRIOR_BYTES
 
 
