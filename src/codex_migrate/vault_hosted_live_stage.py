@@ -23,6 +23,7 @@ def stage_reserved_hosted_snapshot(
     chunk_size: int = DEFAULT_CHUNK_SIZE,
     window_bytes: int = 64 * 1024 * 1024,
     apply: bool = False,
+    deletion_approval=None,
 ) -> HostedSnapshotStage:
     """Read the exact prior catalog before staging any live transcript.
 
@@ -45,13 +46,25 @@ def stage_reserved_hosted_snapshot(
         raise MigrationError("The hosted snapshot clients or identity do not match.")
     journal.ensure_private_directory()
     base = journal.base_snapshot_id
-    observed, catalog = recovery.prior_catalog(
+    options = {} if deletion_approval is None else {"include_version": True}
+    prior = recovery.prior_catalog(
         key_id=journal.key_id, crypto_helper=crypto_helper,
         max_bytes=max_prior_bytes, expected_snapshot_id=base,
-        expected_account_id=journal.account_id, include_chunks=True)
+        expected_account_id=journal.account_id, include_chunks=True, **options)
+    observed, catalog = prior[:2]
     if observed != base:
         raise MigrationError("The hosted backup changed after reservation.")
+    if deletion_approval is not None:
+        from codex_migrate.vault_hosted_rebaseline import RebaselineApproval
+        if not isinstance(deletion_approval, RebaselineApproval) or len(prior) != 3:
+            raise MigrationError("The intentional-deletion approval is invalid.")
+        deletion_approval.check_authority(source_home, journal.account_id, journal.vault_id, journal.key_id)
+        from codex_migrate.vault_hosted_source_review import _validate_prior
+        _validate_prior(catalog, prior[2])
+        if prior[2] != deletion_approval.value["priorVersion"]:
+            raise MigrationError("The authenticated prior format changed after review.")
+        options = {"deletion_approval": deletion_approval}
     return stage_hosted_snapshot(
         source_home, metadata, catalog, journal, upload,
         crypto_helper=crypto_helper, chunk_size=chunk_size,
-        window_bytes=window_bytes, apply=True)
+        window_bytes=window_bytes, apply=True, **options)

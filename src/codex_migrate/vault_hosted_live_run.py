@@ -92,15 +92,28 @@ class HostedLiveBackupRun:
                 info = os.fstat(stream.fileno())
                 if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or
                         info.st_nlink != 1 or info.st_mode & 0o077 or
-                        info.st_size > 1024):
+                        info.st_size > 8192):
                     raise MigrationError("The hosted backup state is unsafe.")
                 value = json.load(stream)
         except (OSError, UnicodeError, ValueError) as error:
             raise MigrationError("The hosted backup state is invalid.") from error
         common = {"format", "version", "accountId", "vaultId", "reservationId",
                   "snapshotId", "keyId", "phase"}
+        version = value.get("version") if isinstance(value, dict) else None
+        if version == 2 and type(version) is int:
+            common.add("deletionReview")
+            binding = value.get("deletionReview")
+            if (not isinstance(binding, dict) or set(binding) != {
+                    "reviewId", "deviceId", "digest", "sourceDigest", "baseSnapshotId"} or
+                    any(not isinstance(binding[key], str) or not _UUID.fullmatch(binding[key])
+                        for key in ("reviewId", "deviceId", "baseSnapshotId")) or
+                    any(not isinstance(binding[key], str) or not re.fullmatch(r"[0-9a-f]{64}", binding[key])
+                        for key in ("digest", "sourceDigest")) or
+                    value.get("phase") != "reserving" and
+                    value.get("baseSnapshotId") != binding["baseSnapshotId"]):
+                raise MigrationError("The pending deletion review is invalid.")
         if (not isinstance(value, dict) or value.get("format") != _FORMAT or
-                value.get("version") != 1 or type(value.get("version")) is not int or
+                version not in (1, 2) or type(version) is not int or
                 value.get("accountId") != self._upload._account_id or
                 value.get("vaultId") != self._upload._vault_id or
                 any(not isinstance(value.get(key), str) or
@@ -142,20 +155,40 @@ class HostedLiveBackupRun:
         return published
 
     def back_up_live_history(self, metadata: dict, *, crypto_helper: str,
-                             max_prior_bytes: int, apply: bool = False) -> dict:
+                             max_prior_bytes: int, apply: bool = False,
+                             deletion_review_id: Optional[str] = None,
+                             deletion_device_id: Optional[str] = None) -> dict:
+        from codex_migrate.vault_hosted_rebaseline import consume_review, review_consumed
         if apply is not True:
             raise MigrationError("Hosted backup changes require explicit confirmation.")
         if type(max_prior_bytes) is not int or not 0 < max_prior_bytes <= 1_000_000_000:
             raise MigrationError("The hosted prior-catalog size limit is invalid.")
         _helper_path(crypto_helper)
         key_id = _metadata(metadata)
+        if ((deletion_review_id is None) != (deletion_device_id is None) or
+                deletion_review_id is not None and any(
+                    not isinstance(value, str) or not _UUID.fullmatch(value)
+                    for value in (deletion_review_id, deletion_device_id))):
+            raise MigrationError("The intentional-deletion review ID is invalid.")
         with self._locked():
             state = self._pending()
+            if state is not None and (
+                    (state.get("deletionReview", {}).get("reviewId"),
+                     state.get("deletionReview", {}).get("deviceId")) !=
+                    (deletion_review_id, deletion_device_id)):
+                raise MigrationError("Resume the pending upload with its exact deletion confirmation, "
+                                     "or abandon it safely. Ordinary backup cannot approve deletion.")
             if state is not None and state["phase"] == "cleanup_pending":
                 raise MigrationError(
                     "The abandoned hosted upload needs verified cleanup before another backup.")
             if state is None:
-                unchanged = unchanged_published_history(
+                approval = None
+                if deletion_review_id is not None:
+                    if review_consumed(str(self._home), deletion_review_id):
+                        raise MigrationError("This deletion review was consumed; it cannot be reused.")
+                    approval = self._checked_approval(deletion_review_id, key_id,
+                                                     crypto_helper, max_prior_bytes, deletion_device_id)
+                unchanged = None if approval is not None else unchanged_published_history(
                     str(self._home), self._directory, self._recovery,
                     account_id=self._upload._account_id,
                     vault_id=self._upload._vault_id, key_id=key_id,
@@ -168,6 +201,8 @@ class HostedLiveBackupRun:
                          "reservationId": str(uuid.uuid4()),
                          "snapshotId": str(uuid.uuid4()),
                          "keyId": key_id, "phase": "reserving"}
+                if approval is not None:
+                    state.update(version=2, deletionReview=approval.stamp)
                 # Persist the random ID before the first network call. If its
                 # response is lost, the exact ID can be safely retried.
                 _atomic_json(self._state, state)
@@ -180,6 +215,8 @@ class HostedLiveBackupRun:
                     reservation_id=reservation_id, apply=True)
                 if observed_id != reservation_id:
                     raise MigrationError("The hosted upload reservation changed.")
+                if state.get("deletionReview") is not None and base != state["deletionReview"]["baseSnapshotId"]:
+                    raise MigrationError("The backup base changed after deletion review; abandon this run safely.")
                 state = {**state, "phase": "active", "baseSnapshotId": base}
                 _atomic_json(self._state, state, replace=True)
             else:
@@ -194,17 +231,23 @@ class HostedLiveBackupRun:
                     # Reopen this exact encrypted manifest instead of treating
                     # absent loss evidence as zero, or relying on server
                     # coverage alone (the server cannot read conversations).
-                    observed, catalog = self._recovery.prior_catalog(
+                    opened = self._recovery.prior_catalog(
                         key_id=key_id, crypto_helper=crypto_helper,
                         max_bytes=max_prior_bytes, expected_snapshot_id=snapshot_id,
-                        expected_account_id=self._upload._account_id)
+                        expected_account_id=self._upload._account_id,
+                        **({} if state.get("deletionReview") is None else {"include_version": True}))
+                    observed, catalog = opened[:2]
                     if observed != snapshot_id:
                         raise MigrationError("The hosted recovery catalog changed on retry.")
+                    self._check_approved_publication(state, catalog, opened[2] if len(opened) == 3 else None)
+                    if state.get("deletionReview") is not None and published["sourceCoverage"] != "complete":
+                        raise MigrationError("The approved publication has incomplete coverage.")
                     at_risk = {
                         (item["collection"], item.get("thread_id") or item["path"])
                         for item in catalog if item["collection"] != "attachments"
                         and item.get("at_risk") is not False
                     }
+                    consume_review(str(self._home), state, "published")
                     self._finish(snapshot_id)
                     return {"snapshotId": snapshot_id,
                             "verifiedObjectCount": status["verifiedObjectCount"],
@@ -217,6 +260,15 @@ class HostedLiveBackupRun:
                 if observed_id != reservation_id or base != state["baseSnapshotId"]:
                     raise MigrationError("The hosted reservation base changed on retry.")
 
+            approval = None
+            if state.get("deletionReview") is not None:
+                if review_consumed(str(self._home), deletion_review_id):
+                    raise MigrationError("This deletion review was consumed; finish its cleanup instead of resuming.")
+                approval = self._checked_approval(deletion_review_id, key_id,
+                                                 crypto_helper, max_prior_bytes, deletion_device_id)
+                if approval.stamp != state["deletionReview"]:
+                    raise MigrationError("The deletion approval changed while its upload was pending.")
+
             journal_dir = self._directory / ("snapshot-" + snapshot_id)
             _ensure_owned_directory(self._home, journal_dir)
             with HostedChunkJournal(
@@ -227,7 +279,15 @@ class HostedLiveBackupRun:
                 staged = stage_reserved_hosted_snapshot(
                     str(self._home), metadata, journal, self._upload,
                     self._recovery, crypto_helper=crypto_helper,
-                    max_prior_bytes=max_prior_bytes, apply=True)
+                    max_prior_bytes=max_prior_bytes, apply=True,
+                    **({} if approval is None else {"deletion_approval": approval}))
+                if approval is not None:
+                    if staged.at_risk_threads != 0:
+                        raise MigrationError("The reviewed backup has remaining source risk.")
+                    approval.check_current(str(self._home))
+                    self._recovery.published_snapshot(approval.value["baseSnapshotId"],
+                        expected_account_id=self._upload._account_id,
+                        expected_worker_origin=self._upload._worker_origin)
                 result = self._upload.publish_hosted_stage(
                     reservation_id, staged, apply=True)
             if result.get("snapshotId") != snapshot_id:
@@ -237,8 +297,56 @@ class HostedLiveBackupRun:
             self._confirmed_publication(
                 snapshot_id, result.get("verifiedObjectCount"),
                 result.get("sourceCoverage"))
+            if approval is not None:
+                observed, catalog, version = self._recovery.prior_catalog(
+                    key_id=key_id, crypto_helper=crypto_helper, max_bytes=max_prior_bytes,
+                    expected_snapshot_id=snapshot_id, expected_account_id=self._upload._account_id,
+                    include_version=True)
+                if observed != snapshot_id:
+                    raise MigrationError("The reviewed publication changed during confirmation.")
+                self._check_approved_publication(state, catalog, version)
+                if result["sourceCoverage"] != "complete":
+                    raise MigrationError("The approved publication has incomplete coverage.")
+                self._recovery.published_snapshot(approval.value["baseSnapshotId"],
+                    expected_account_id=self._upload._account_id,
+                    expected_worker_origin=self._upload._worker_origin)
+            consume_review(str(self._home), state, "published")
             self._finish(snapshot_id)
             return result
+
+    def _checked_approval(self, review_id, key_id, helper, limit, device_id):
+        from codex_migrate.vault_hosted_rebaseline import load_rebaseline
+        approval = load_rebaseline(str(self._home), review_id)
+        approval.check_authority(str(self._home), self._upload._account_id,
+                                 self._upload._vault_id, key_id)
+        if approval.value["deviceId"] != device_id:
+            raise MigrationError("The deletion review belongs to another enrolled device.")
+        account, worker, latest = self._recovery._latest()
+        if (account != self._upload._account_id or worker != self._upload._worker_origin or
+                latest is None or latest.get("sourceCoverage") != "complete" or
+                latest["snapshotId"] != approval.value["baseSnapshotId"]):
+            raise MigrationError("The backup baseline changed; prepare a new deletion review.")
+        base, prior, version = self._recovery.prior_catalog(
+            key_id=key_id, crypto_helper=helper, max_bytes=limit,
+            expected_snapshot_id=latest["snapshotId"], expected_account_id=account,
+            include_version=True)
+        from codex_migrate.vault_hosted_source_review import _inventory
+        current, missing = _inventory(str(self._home))
+        approval.check_catalogs(prior, current, version, base, missing)
+        return approval
+
+    @staticmethod
+    def _check_approved_publication(state, catalog, version):
+        from codex_migrate.vault_hosted_rebaseline import catalog_digest
+        binding = state.get("deletionReview")
+        if binding is not None:
+            from codex_migrate.vault_hosted_source_review import _validate_prior
+            if version not in (2, 3, 4) or type(version) is not int:
+                raise MigrationError("The approved publication format is invalid.")
+            _validate_prior(catalog, version)
+        if binding is not None and (catalog_digest(catalog) != binding["sourceDigest"] or
+                any(row.get("at_risk") is not False for row in catalog if row["collection"] != "attachments")):
+            raise MigrationError("The published backup does not match the approved content.")
 
     def cleanup_status(self) -> Optional[str]:
         """Report service state; local quarantine alone never releases quota."""
@@ -253,6 +361,7 @@ class HostedLiveBackupRun:
         service confirms release, remove only this run's recognized scratch.
         Neither a lost ACK nor an unexpected local file authorizes a new run.
         """
+        from codex_migrate.vault_hosted_rebaseline import consume_review
         if apply is not True:
             raise MigrationError("Hosted backup changes require explicit confirmation.")
         with self._locked():
@@ -267,11 +376,15 @@ class HostedLiveBackupRun:
                     raise MigrationError("The hosted publication conflicts with abandonment.")
                 self._confirmed_publication(
                     state["snapshotId"], receipt["verifiedObjectCount"])
+                if state.get("deletionReview") is not None:
+                    raise MigrationError("The reviewed backup published; resume its exact confirmation "
+                                         "to verify it instead of abandoning it.")
                 self._finish(state["snapshotId"])
                 return "published"
             if receipt["state"] == "active":
                 if state["phase"] == "cleanup_pending":
                     raise MigrationError("The abandoned hosted upload is active again.")
+                consume_review(str(self._home), state, "abandoned")
                 try:
                     self._upload.abandon(reservation_id, apply=True)
                     receipt = {"state": "cleanup_pending"}
@@ -284,9 +397,10 @@ class HostedLiveBackupRun:
                             "The hosted upload could not be confirmed abandoned.") from None
             if receipt["state"] not in ("cleanup_pending", "released"):
                 raise MigrationError("The hosted upload needs manual review.")
+            consume_review(str(self._home), state, "abandoned")
             if state["phase"] != "cleanup_pending":
                 state = {**state, "phase": "cleanup_pending",
-                         "baseSnapshotId": state.get("baseSnapshotId")}
+                         "baseSnapshotId": state.get("baseSnapshotId", state.get("deletionReview", {}).get("baseSnapshotId"))}
                 _atomic_json(self._state, state, replace=True)
             if receipt["state"] == "cleanup_pending":
                 return "cleanup_pending"
