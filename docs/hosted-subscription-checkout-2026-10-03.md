@@ -88,6 +88,9 @@ status. It never receives the native bearer, caller-selectable price, account
 selector, or stored subscription entitlement. Read-only setup polling does not
 perform subscription mutations. The independently saved-key recovery drill,
 real test catalog/enrollment, measured pricing and signed release remain gates.
+The single-threaded operator-only protected-Preview context includes this
+client's opener factory and restores it afterward, without changing encrypted
+object transport or copying the operator's Vercel credential into the app.
 
 ## Verification boundary
 
