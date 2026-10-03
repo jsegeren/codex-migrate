@@ -141,8 +141,8 @@ deletion upload requires operator help. Do not remove local retry state by hand.
 
 While cleanup is pending, the app preserves the journal, displays that another
 backup cannot start, and requires a fresh confirmation to finish cleanup. A
-lost reply stays uncertain until another status check. Only verified release
-returns to the ordinary backup screen. Previously verified receipts, published
+lost reply stays uncertain until another status check. A release request clears
+the pending review only after confirmed release. Previously verified receipts, published
 backups, live Codex files, schedules, subscriptions and deletion approvals are
 not changed by these controls. Returning to backup closes the review only;
 it does not abandon an upload. Background enablement is refused while a known
