@@ -42,6 +42,25 @@ automatic replacement of expired checkouts are deliberately absent until an
 explicit reconciliation path proves there is no second subscription. This is
 not yet a public billing UI or a complete subscription lifecycle.
 
+### Native test checkout client
+
+The dark `HostedSubscriptionClient` now supplies a native begin/status bridge
+to this endpoint. Both actions require explicit mutation consent: status can
+record a completed checkout on the server and is not a read-only check. The
+existing crypto helper supplies the device bearer; it never enters a browser
+result, argument, receipt or error message. Only the named project's protected
+Preview origins are supported (plus explicitly selected loopback fixtures).
+The public service origin and live subscription results remain refused.
+
+The request contains only the action and device ID. It cannot choose a price,
+allowance, account, trial or Checkout Session. Results are exact, bounded,
+test-mode shapes; checkout links must point to the test-session checkout path
+on `https://checkout.stripe.com`. Redirects, extra/duplicate JSON fields,
+unexpected content types/encoding, and provider/native diagnostics are refused
+without an automatic retry. A subscribed result is not a backup or protection
+receipt. This client neither opens the browser nor completes a payment. Wiring
+the customer flow and certifying real Stripe pairing remain separate work.
+
 ## Verification boundary
 
 Focused JavaScript tests cover account/catalog refusal, payment status,
