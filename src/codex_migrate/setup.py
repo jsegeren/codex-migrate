@@ -473,7 +473,8 @@ class SetupDashboard(Dashboard):
         self._restore_thread = None
         self._restore_status = {"status": "idle"}
         try:
-            self._hosted_setup = (HostedSetupFlow(self.registry, self.source_home)
+            self._hosted_setup = (HostedSetupFlow(self.registry, self.source_home,
+                                     subscription_origin=os.environ.get("CODEX_BACKUP_HOSTED_SUBSCRIPTION_PREVIEW"))
                                  if os.environ.get("CODEX_BACKUP_HOSTED_SETUP_ACCEPTANCE") == "yes"
                                  else None)
             self._hosted_recovery = (HostedRecoveryFlow(self.source_home, self.registry)

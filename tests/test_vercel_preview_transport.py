@@ -140,14 +140,35 @@ class PreviewTransportTests(unittest.TestCase):
     def test_context_restores_constructors_and_does_not_touch_object_transport(self):
         from codex_migrate import vault_http_store
         original = [module.build_opener for module in
-                    (TRANSPORT.enrollment, TRANSPORT.recovery, TRANSPORT.upload, vault_http_store)]
+                    (TRANSPORT.enrollment, TRANSPORT.recovery, TRANSPORT.upload, TRANSPORT.subscription, vault_http_store)]
         with self.assertRaises(RuntimeError):
             with TRANSPORT.protected_preview(ORIGIN, self.root):
                 self.assertIs(TRANSPORT.enrollment.build_opener(), TRANSPORT.recovery.build_opener())
+                self.assertIs(TRANSPORT.enrollment.build_opener(), TRANSPORT.subscription.build_opener())
                 self.assertIs(vault_http_store.build_opener, original[-1])
                 raise RuntimeError("synthetic")
         self.assertEqual(original, [module.build_opener for module in
-                         (TRANSPORT.enrollment, TRANSPORT.recovery, TRANSPORT.upload, vault_http_store)])
+                         (TRANSPORT.enrollment, TRANSPORT.recovery, TRANSPORT.upload, TRANSPORT.subscription, vault_http_store)])
+
+    def test_subscription_client_uses_existing_preview_relay_with_stdin_only_bearer(self):
+        device = "11111111-1111-4111-8111-111111111111"
+        token = "hv1_" + "A" * 43
+        def response(command, **kwargs):
+            self.assertEqual(command[:3], [TRANSPORT.CLI, "curl", "/api/hosted-subscription"])
+            self.assertNotIn(token, " ".join(command))
+            config = kwargs["input"].decode("ascii")
+            self.assertIn('Authorization: Bearer ' + token, config)
+            self.assertIn('max-redirs = 0', config)
+            header_line = next(line for line in config.splitlines() if line.startswith("dump-header"))
+            path = Path(json.loads(header_line.split(" = ", 1)[1]))
+            path.write_bytes(b"HTTP/2 200\r\nContent-Type: application/json\r\n\r\n")
+            kwargs["stdout"].write(b'{"status":"not_entitled","testMode":true}')
+            return subprocess.CompletedProcess(command, 0)
+        with TRANSPORT.protected_preview(ORIGIN, self.root), patch.object(
+                TRANSPORT.enrollment.HostedEnrollmentClient, "_credential", return_value=token), patch.object(
+                TRANSPORT.subprocess, "run", side_effect=response):
+            result = TRANSPORT.subscription.HostedSubscriptionClient(ORIGIN).status(device, apply=True)
+        self.assertEqual(result, {"status": "not_entitled", "testMode": True})
 
 
 if __name__ == "__main__":

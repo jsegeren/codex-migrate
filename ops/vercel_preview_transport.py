@@ -16,6 +16,7 @@ from urllib.error import URLError
 from codex_migrate import vault_hosted_enrollment_client as enrollment
 from codex_migrate import vault_hosted_recovery_client as recovery
 from codex_migrate import vault_hosted_upload_client as upload
+from codex_migrate import vault_hosted_subscription_client as subscription
 
 PREVIEW = re.compile(
     r"https://codex-migrate-[a-z0-9]+-joshuas-projects-d3a5c48d\.vercel\.app\Z")
@@ -119,7 +120,7 @@ class PreviewOpener:
 def protected_preview(origin, working_directory):
     """Single-threaded operator process only; never changes shipping clients."""
     opener = PreviewOpener(origin, working_directory)
-    modules = (enrollment, recovery, upload)
+    modules = (enrollment, recovery, upload, subscription)
     previous = [module.build_opener for module in modules]
     try:
         for module in modules:

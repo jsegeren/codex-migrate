@@ -322,6 +322,157 @@ class HostedSetupFlowTests(unittest.TestCase):
         self.client.resolve.assert_called_with(new_device)
         self.assertEqual(json.dumps(self.saved, sort_keys=True), before)
 
+    def subscription_ready(self):
+        self.ready_for_backup()
+        self.origin = "https://codex-migrate-fixture-joshuas-projects-d3a5c48d.vercel.app"
+        self.subscription_client = Mock()
+        self.subscription_client._origin = self.origin
+        self.subscription_client.status.return_value = {"status": "not_entitled", "testMode": True}
+        self.subscription_client.begin.return_value = {"status": "checkout_required", "testMode": True,
+            "checkoutUrl": "https://checkout.stripe.com/c/pay/cs_test_Synthetic"}
+        patcher = patch("codex_migrate.vault_hosted_setup_flow.HostedSubscriptionClient",
+                        return_value=self.subscription_client)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.flow._subscription_client = self.subscription_client
+        self.flow._subscription = {"enabled": True, "status": "unchecked", "test_mode": True}
+
+    def test_subscription_requires_config_pairing_saved_key_and_explicit_status_first(self):
+        with self.assertRaises(MigrationError):
+            self.flow.stage("check_subscription", {"apply": True})
+        self.subscription_ready()
+        for action in ("first_backup", "enable_schedule", "begin_subscription"):
+            with self.assertRaises(MigrationError):
+                self.flow.stage(action, {"apply": True})
+        for payload in ({}, {"apply": 1}, {"apply": True, "price": "private"}):
+            with self.assertRaises(MigrationError):
+                self.flow.stage("check_subscription", payload)
+        self.flow._keys.confirmed_binding.return_value = None
+        self.assertEqual(self.step("check_subscription")["status"], "failed")
+        self.subscription_client.status.assert_not_called()
+        self.backup.assert_not_called()
+
+    def test_subscription_checkpoint_precedes_begin_and_does_not_persist_url(self):
+        self.subscription_ready()
+        self.step("check_subscription")
+        def begin(device_id, **kwargs):
+            self.assertEqual(self.saved["hosted_setup_subscription"], {
+                "binding": IDENTITY, "origin": self.origin})
+            return self.subscription_client.begin.return_value
+        self.subscription_client.begin.side_effect = begin
+        result = self.step("begin_subscription")
+        self.assertEqual(result["subscription"]["status"], "checkout_required")
+        self.subscription_client.begin.assert_called_once_with(DEVICE, apply=True)
+        self.assertNotIn("checkout.stripe.com", json.dumps(self.saved))
+        with self.assertRaises(MigrationError):
+            self.flow.stage("begin_subscription", {"apply": True})
+        self.assertFalse(result["upload_authorized"])
+        self.assertFalse(result["automatic_protection_verified"])
+
+    def test_subscription_lost_reply_needs_status_without_blind_begin_retry(self):
+        self.subscription_ready()
+        self.step("check_subscription")
+        self.subscription_client.begin.side_effect = MigrationError("private bearer or checkout")
+        result = self.step("begin_subscription")
+        self.assertEqual(result["subscription"]["status"], "unchecked")
+        self.assertNotIn("private bearer", result["error"])
+        self.assertIn("Check subscription status", result["error"])
+        with self.assertRaises(MigrationError):
+            self.flow.stage("begin_subscription", {"apply": True})
+        self.subscription_client.status.return_value = self.subscription_client.begin.return_value
+        self.assertEqual(self.step("check_subscription")["subscription"]["status"], "checkout_required")
+        self.assertEqual(self.subscription_client.begin.call_count, 1)
+
+    def test_subscription_failed_checkpoint_prevents_provider_creation(self):
+        self.subscription_ready()
+        self.step("check_subscription")
+        self.registry.sync_recovery_checkpoint.side_effect = OSError("private")
+        self.assertEqual(self.step("begin_subscription")["status"], "failed")
+        self.subscription_client.begin.assert_not_called()
+        self.assertIn("hosted_setup_subscription", self.saved)
+
+    def test_subscription_validated_again_before_exposing_link_or_entitlement(self):
+        self.subscription_ready()
+        for result in ({"status": "subscribed", "testMode": False},
+                       {"status": "subscribed", "testMode": True, "bearer": "private"},
+                       {"status": "checkout_required", "testMode": True,
+                        "checkoutUrl": "https://foreign.example/c/pay/cs_test_Leak"}):
+            self.subscription_client.status.return_value = result
+            view = self.step("check_subscription")
+            self.assertEqual(view["status"], "failed")
+            self.assertEqual(view["subscription"]["status"], "unchecked")
+            self.assertNotIn("private", json.dumps(view))
+            self.assertNotIn("foreign.example", json.dumps(view))
+
+    def test_subscription_confirmed_is_not_protection_and_restart_requires_fresh_check(self):
+        self.subscription_ready()
+        self.step("check_subscription")
+        self.step("begin_subscription")
+        self.subscription_client.status.return_value = {"status": "subscribed", "testMode": True}
+        view = self.step("check_subscription")
+        self.assertEqual(view["subscription"]["status"], "subscribed")
+        self.assertFalse(view["upload_authorized"])
+        self.assertFalse(view["automatic_protection_verified"])
+        self.step("first_backup")
+        self.backup.assert_called_once()
+        self.flow = HostedSetupFlow(self.registry, self.home, subscription_origin=self.origin)
+        self.assertEqual(self.flow.snapshot()["subscription"]["status"], "unchecked")
+        self.step("resolve")
+        with self.assertRaises(MigrationError):
+            self.flow.stage("first_backup", {"apply": True})
+
+    def test_subscription_uses_rotated_device_and_keeps_original_attempt_boundary(self):
+        from codex_migrate.vault_hosted_connection import save_connection
+        self.subscription_ready()
+        anchor = self.flow._keys.confirmed_binding.return_value
+        new_device = "55555555-5555-4555-8555-555555555555"
+        save_connection(self.home, anchor)
+        save_connection(self.home, {**anchor, "deviceId": new_device}, previous_device=DEVICE)
+        self.step("check_subscription")
+        self.subscription_client.status.assert_called_once_with(new_device, apply=True)
+        self.step("begin_subscription")
+        self.subscription_client.begin.assert_called_once_with(new_device, apply=True)
+        self.assertEqual(self.saved["hosted_setup_subscription"]["binding"], IDENTITY)
+
+    def test_subscription_attempt_refuses_binding_or_origin_change(self):
+        self.subscription_ready()
+        for bad in ({"binding": {**IDENTITY, "vaultId": ACCOUNT}, "origin": self.origin},
+                    {"binding": IDENTITY, "origin": self.origin, "url": "private"}):
+            self.saved["hosted_setup_subscription"] = bad
+            with self.assertRaises(MigrationError):
+                HostedSetupFlow(self.registry, self.home, subscription_origin=self.origin)
+        self.subscription_client.status.assert_not_called()
+        self.subscription_client.begin.assert_not_called()
+
+    def test_saved_subscription_origin_is_not_silently_switched(self):
+        from codex_migrate.vault_hosted_subscription_client import HostedSubscriptionClient
+        self.ready_for_backup()
+        origin = "https://codex-migrate-first-joshuas-projects-d3a5c48d.vercel.app"
+        self.saved["hosted_setup_subscription"] = {"binding": IDENTITY, "origin": origin}
+        HostedSetupFlow(self.registry, self.home, subscription_origin=origin)
+        # Disabling the dark feature is safe; it does not remove its checkpoint.
+        HostedSetupFlow(self.registry, self.home)
+        for target in ("https://codex-migrate-second-joshuas-projects-d3a5c48d.vercel.app",
+                       "https://codexbackup.segeren.com", "http://127.0.0.1:1234"):
+            with self.assertRaises(MigrationError):
+                HostedSetupFlow(self.registry, self.home, subscription_origin=target)
+        self.assertEqual(self.saved["hosted_setup_subscription"]["origin"], origin)
+
+    def test_subscription_provider_failure_preserves_backup_and_local_stop(self):
+        self.subscription_ready()
+        self.subscription_client.status.return_value = {"status": "subscribed", "testMode": True}
+        self.step("check_subscription")
+        self.step("first_backup")
+        previous = json.dumps(self.saved["hosted_setup_backup"], sort_keys=True)
+        self.subscription_client.status.side_effect = OSError("private provider error")
+        result = self.step("check_subscription")
+        self.assertEqual(result["subscription"]["status"], "unchecked")
+        self.assertEqual(json.dumps(self.saved["hosted_setup_backup"], sort_keys=True), previous)
+        self.assertEqual(result["last_backup"], self.receipt)
+        with patch("codex_migrate.vault_hosted_setup_flow.remove_hosted_schedule") as stop:
+            self.assertEqual(self.step("disable_schedule")["status"], "ready")
+            stop.assert_called_once()
+
     def test_schedule_steps_require_good_receipt_and_keep_explicit_key_binding(self):
         key_id = self.ready_for_backup()
         with self.assertRaises(MigrationError):
