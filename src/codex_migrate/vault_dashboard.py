@@ -173,7 +173,7 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 <div id="setup-subscription" hidden>
 <h3>Hosted storage — test mode</h3>
 <p>This acceptance-only checkout uses Stripe test mode, not real payment. The server selects the test plan; the app cannot choose its price. Completing checkout does not create a backup or enable automatic protection.</p>
-<p id="setup-subscription-status" role="status" aria-live="polite"></p>
+<p id="setup-subscription-status" role="status" aria-live="polite" tabindex="-1"></p>
 <button id="setup-check-subscription" class="secondary">Check test subscription status</button>
 <button id="setup-begin-subscription" disabled>Prepare Stripe test checkout</button>
 <p><a id="setup-subscription-link" target="_blank" rel="noopener noreferrer" hidden>Open Stripe test checkout</a></p>
@@ -528,8 +528,10 @@ function hostedSetupView(data){
   $("hosted-setup-error").textContent=data.error||"";
   if(focusOwned&&(phaseChanged||document.activeElement.disabled||(!running&&document.activeElement===$("hosted-setup-status")))){
     const backgroundAction=["enable_schedule","disable_schedule"].includes(data.step);
+    const subscriptionAction=["begin_subscription","check_subscription"].includes(data.step);
+    const subscriptionTarget=!checkoutLink.hidden?checkoutLink:$("setup-check-subscription");
     const backgroundTarget=$(background.enabled||background.can_stop?"setup-disable-schedule":"setup-enable-schedule");
-    const target=running?$("hosted-setup-status"):backgroundAction?(backgroundTarget.disabled?$("setup-background-status"):backgroundTarget):panel.querySelector(`[data-setup-phase="${data.phase}"] input:not(:disabled),[data-setup-phase="${data.phase}"] button:not(:disabled)`);
+    const target=running?$("hosted-setup-status"):subscriptionAction?(subscriptionTarget.disabled?$("setup-subscription-status"):subscriptionTarget):backgroundAction?(backgroundTarget.disabled?$("setup-background-status"):backgroundTarget):panel.querySelector(`[data-setup-phase="${data.phase}"] input:not(:disabled),[data-setup-phase="${data.phase}"] button:not(:disabled)`);
     (target||$("hosted-setup-status")).focus();
   }
   hostedSetupPhase=data.phase;

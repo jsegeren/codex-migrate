@@ -36,6 +36,8 @@ def main():
                   "last_backup_checked_at": "2026-10-03T00:00:00+00:00",
                   "last_backup": {"status": "published", "source_coverage": "complete", "at_risk_threads": 0},
                   "background": {"enabled": False}}
+        if "step" in state:
+            result["step"] = state["step"]
         if args.subscription:
             result.pop("last_backup", None)
             result.pop("last_backup_checked_at", None)
@@ -99,6 +101,7 @@ def main():
                 step, action = data["step"], data["action"]
                 if step.get("apply") is not True:
                     raise ValueError()
+                state["step"] = action
                 if action == "leave_upload_review":
                     state["phase"] = "backup_ready"
                 elif action == "leave_deletion_review":

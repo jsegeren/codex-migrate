@@ -108,6 +108,24 @@ test('test entitlement cannot enable background backup and never blocks stopping
   assert.equal(elements.get('setup-enable-schedule').disabled, false);
 });
 
+test('checkout completion retains checkout focus without jumping to the connection step', () => {
+  const { context, elements, document } = setupFixture();
+  const data = { enabled: true, phase: 'key_ready', status: 'running', step: 'check_subscription',
+    subscription: { enabled: true, status: 'unchecked' } };
+  context.hostedSetupView(data);
+  document.activeElement = elements.get('hosted-setup-status');
+  context.hostedSetupView({ ...data, status: 'ready', subscription: { enabled: true, status: 'not_entitled' } });
+  assert.equal(document.activeElement.id, 'setup-check-subscription');
+  document.activeElement = elements.get('hosted-setup-status');
+  const checkout = { enabled: true, status: 'checkout_required',
+    checkout_url: 'https://checkout.stripe.com/c/pay/cs_test_Synthetic' };
+  context.hostedSetupView({ ...data, status: 'ready', step: 'begin_subscription', subscription: checkout });
+  assert.equal(document.activeElement.id, 'setup-subscription-link');
+  document.activeElement = { outside: true };
+  context.hostedSetupView({ ...data, status: 'ready', step: 'begin_subscription', subscription: checkout });
+  assert.equal(document.activeElement.outside, true);
+});
+
 test('hosted setup is gated and pairing never claims backup or automatic protection', () => {
   const { context, panel, controls, blocks, elements } = setupFixture();
   context.hostedSetupView({ enabled: false });
