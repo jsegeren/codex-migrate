@@ -21,6 +21,7 @@ from codex_migrate.vault_hosted_enrollment_client import (
 from codex_migrate.vault_hosted_recovery_flow import purchase_token
 from codex_migrate.vault_hosted_key_setup import HostedKeySetup
 from codex_migrate.vault_hosted_manual import back_up_hosted_history
+from codex_migrate.vault_hosted_pending import pending_hosted_upload, abandon_hosted_upload
 from codex_migrate.vault_hosted_connection import active_binding
 from codex_migrate.vault_hosted_schedule import (
     SERVICE_ORIGIN, hosted_schedule_status, install_hosted_schedule, remove_hosted_schedule,
@@ -52,6 +53,7 @@ class HostedSetupFlow:
         self._lock = threading.Lock()
         self._proof = {}
         self._recovery_key = None
+        self._pending_upload = None
         self._keys = HostedKeySetup(registry)
         self._binding = registry.read().get("hosted_setup_device")
         if self._binding is not None:
@@ -86,6 +88,8 @@ class HostedSetupFlow:
     def snapshot(self):
         with self._lock:
             result = copy.deepcopy(self._public)
+            if self._pending_upload is not None:
+                result["pending_upload"] = dict(self._pending_upload)
             if self._last_backup is not None:
                 result["last_backup"] = copy.deepcopy(self._last_backup["receipt"])
                 result["last_backup_checked_at"] = self._last_backup["checked_at"]
@@ -112,7 +116,9 @@ class HostedSetupFlow:
         fields = {"send_code": {"purchase_link"}, "pair": {"code"},
                   "retry_save": set(), "resolve": set(), "reauthorize": set(),
                   "prepare_key": set(), "confirm_key": {"recovery_key"},
-                  "first_backup": set(), "enable_schedule": set(), "disable_schedule": set()}
+                  "first_backup": set(), "enable_schedule": set(), "disable_schedule": set(),
+                  "check_upload": set(), "leave_upload_review": set(),
+                  "abandon_upload": {"reservation_id", "confirm_abandon"}}
         phases = {"send_code": {"start", "email"}, "pair": {"email"},
                   "retry_save": {"pairing_checkpoint"},
                   "resolve": {"pairing_uncertain", "paired", "key_ready", "backup_ready"},
@@ -121,7 +127,10 @@ class HostedSetupFlow:
                   "confirm_key": {"key_save"},
                   "first_backup": {"key_ready", "backup_ready"},
                   "enable_schedule": {"backup_ready"},
-                  "disable_schedule": {"backup_ready", "pairing_uncertain"}}
+                  "disable_schedule": {"backup_ready", "pairing_uncertain", "pending_upload"},
+                  "check_upload": {"key_ready", "backup_ready", "pending_upload"},
+                  "leave_upload_review": {"pending_upload"},
+                  "abandon_upload": {"pending_upload"}}
         with self._lock:
             if (action not in fields or not isinstance(payload, dict) or
                     set(payload) != fields[action] | {"apply"} or
@@ -131,11 +140,20 @@ class HostedSetupFlow:
                     self._public["phase"] not in phases[action]):
                 raise MigrationError("Finish the current backup setup step first.")
             if action == "enable_schedule" and (
+                    self._pending_upload is not None or
                     self._last_backup is None or
                     self._last_backup["receipt"]["source_coverage"] != "complete" or
                     self._last_backup["receipt"]["at_risk_threads"] != 0):
                 raise MigrationError("Review incomplete backup coverage before enabling automatic backups.")
             values = {name: payload[name] for name in fields[action]}
+            if action == "abandon_upload" and (
+                    values["confirm_abandon"] is not True or
+                    not isinstance(values["reservation_id"], str) or
+                    not re.fullmatch(_UUID, values["reservation_id"]) or
+                    self._pending_upload is None or
+                    self._pending_upload["can_abandon"] is not True or
+                    values["reservation_id"] != self._pending_upload["reservation_id"]):
+                raise MigrationError("Review and confirm this exact unpublished upload first.")
             if action == "send_code":
                 values["purchase_link"] = purchase_token(values["purchase_link"])
             if action == "pair":
@@ -158,6 +176,10 @@ class HostedSetupFlow:
                     "retry with this same connection and key. Previously verified snapshots "
                     "are kept. Automatic protection is not active; contact "
                     "joshua@segeren.com if needed." if action == "first_backup" else
+                    "Upload status or cleanup could not be confirmed. Keep its pending state. "
+                    "Use Check upload status before trying again; previously verified backups "
+                    "are kept. Contact joshua@segeren.com if needed."
+                    if action in ("check_upload", "abandon_upload") else
                     "The schedule change could not be confirmed. Check background status "
                     "before retrying. Existing backups are kept; contact joshua@segeren.com."
                     if action in ("enable_schedule", "disable_schedule") else
@@ -205,6 +227,56 @@ class HostedSetupFlow:
                                   self._binding["deviceId"], apply=True))
 
     def _perform(self, action, values):
+        if action == "leave_upload_review":
+            # Leave the view, not the durable upload. No journal, reservation,
+            # published backup or schedule is removed by this navigation step.
+            self._update(phase="backup_ready" if self._last_backup else "key_ready")
+            return
+        if action in ("check_upload", "abandon_upload"):
+            if self.source_home is None:
+                raise MigrationError("The backup source has not been configured.")
+            path, key_id = self._keys.backup_metadata(self._binding)
+            anchor = {**self._binding, "keyId": key_id}
+            if action == "check_upload":
+                result = pending_hosted_upload(self.source_home, self._binding["deviceId"],
+                    str(path), expected_binding=anchor)
+                # The transport boundary returns only this fixed public shape.
+                if not isinstance(result, dict):
+                    raise MigrationError("The pending-upload status is invalid.")
+                fields = {"pending", "automatic_protection_verified"}
+                if result.get("pending") is True:
+                    fields |= {"reservation_id", "snapshot_id", "local_phase", "remote_status", "can_abandon"}
+                if (set(result) != fields or
+                        type(result["pending"]) is not bool or result["automatic_protection_verified"] is not False or
+                        result["pending"] and (
+                            any(not isinstance(result[k], str) or not re.fullmatch(_UUID, result[k])
+                                for k in ("reservation_id", "snapshot_id")) or
+                            result["local_phase"] not in ("reserving", "active", "cleanup_pending") or
+                            result["remote_status"] not in ("active", "cleanup_pending", "released", "published") or
+                            type(result["can_abandon"]) is not bool or
+                            result["can_abandon"] != (result["remote_status"] != "published"))):
+                    raise MigrationError("The pending-upload status is invalid.")
+                with self._lock:
+                    self._pending_upload = dict(result) if result["pending"] else None
+                    self._public["phase"] = ("pending_upload" if result["pending"] else
+                        "backup_ready" if self._last_backup else "key_ready")
+                return
+            result = abandon_hosted_upload(self.source_home, self._binding["deviceId"],
+                str(path), expected_binding=anchor, reservation_id=values["reservation_id"], apply=True)
+            if (not isinstance(result, dict) or set(result) != {
+                    "applied", "reservation_id", "status", "automatic_protection_verified"} or
+                    result["applied"] is not True or result["reservation_id"] != values["reservation_id"] or
+                    result["status"] not in ("cleanup_pending", "released") or
+                    result["automatic_protection_verified"] is not False):
+                raise MigrationError("The upload cleanup receipt is invalid.")
+            with self._lock:
+                if result["status"] == "released":
+                    self._pending_upload = None
+                    self._public["phase"] = "backup_ready" if self._last_backup else "key_ready"
+                else:
+                    self._pending_upload = {**self._pending_upload,
+                        "remote_status": "cleanup_pending", "local_phase": "cleanup_pending"}
+            return
         if action in ("enable_schedule", "disable_schedule"):
             if self.source_home is None:
                 raise MigrationError("The backup source has not been configured.")
@@ -234,6 +306,7 @@ class HostedSetupFlow:
             self.registry.sync_recovery_checkpoint()
             with self._lock:
                 self._last_backup = saved
+                self._pending_upload = None
                 self._public["phase"] = "backup_ready"
             return
         if action == "prepare_key":

@@ -122,8 +122,35 @@ temporary upload scratch and that reservation's local journal. A failed reply
 uses the existing exact-reservation reconciliation instead of blindly issuing
 another action. Published snapshots, live Codex files and unknown scratch stay
 intact. These commands do not change the schedule or grant deletion approval.
-The customer-facing confirmation controls and actual-R2 cleanup/recovery proof
-remain separate work.
+The acceptance-gated dashboard now exposes these controls. Actual-R2
+cleanup/recovery proof remains separate work.
+
+### Acceptance-gated unfinished-upload controls
+
+From the hosted setup's saved-key or verified-backup screen, open **If a hosted
+backup is stuck**, then **Check upload status**. The app inspects the exact
+local pending reservation with its confirmed individual key. Reviewing status
+does not authorize release, intentional deletion, or another upload.
+
+For an unpublished upload, a separate unchecked confirmation enables **Release
+this unfinished upload**. The server checks the same opaque reservation again;
+an old selection cannot release its replacement. The checkbox resets when an
+action starts or the reservation changes. A published upload has no release
+control: return to backup for verification, or contact Joshua if a reviewed
+deletion upload requires operator help. Do not remove local retry state by hand.
+
+While cleanup is pending, the app preserves the journal, displays that another
+backup cannot start, and requires a fresh confirmation to finish cleanup. A
+lost reply stays uncertain until another status check. A release request clears
+the pending review only after confirmed release. Previously verified receipts, published
+backups, live Codex files, schedules, subscriptions and deletion approvals are
+not changed by these controls. Returning to backup closes the review only;
+it does not abandon an upload. Background enablement is refused while a known
+unfinished upload remains. Restart does not replay a release or retain consent.
+
+`tests/manual_hosted_setup_fixture.py` serves the real dashboard on loopback
+with clearly labelled simulated states and no file, Keychain, billing or
+provider access. It is for rendered interaction review, not hosted acceptance.
 
 The baseline is never erased or treated as a first backup. No remote snapshot
 or referenced chunk is deleted; old publication records remain selectable under
@@ -133,10 +160,11 @@ real-service/independent-Mac recovery proof remains required before release.
 
 ## Remaining release work
 
-The confirmation path is operator-only, not yet buyer UI. Tests exercise real
+Intentional-deletion confirmation is still operator-only, not yet buyer UI.
+Unfinished-upload controls exist only behind the hosted acceptance gate. Tests exercise real
 source inventory/staging and retry logic with synthetic service/crypto boundaries;
 they are not production, real-R2 or clean-Mac certification. Integrate a clear
-buyer review/confirmation and pending-cleanup flow, complete those independent
+buyer intentional-deletion review/confirmation, prove cleanup against actual R2, complete those independent
 recovery checks, and certify the original full release objective.
 
 Owner: the primary Codex Backup implementation task. The clean sibling task

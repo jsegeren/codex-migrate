@@ -456,6 +456,153 @@ class HostedSetupFlowTests(unittest.TestCase):
                     HostedSetupFlow(self.registry, "/synthetic/home")
         self.factory.assert_not_called()
 
+    def pending_upload(self, *, state="active"):
+        return {"pending": True, "reservation_id": DEVICE, "snapshot_id": VAULT,
+                "local_phase": "active", "remote_status": state,
+                "can_abandon": state != "published", "automatic_protection_verified": False}
+
+    def check_upload(self, value=None):
+        with patch("codex_migrate.vault_hosted_setup_flow.pending_hosted_upload",
+                   return_value=value if value is not None else self.pending_upload()) as inspect:
+            result = self.step("check_upload")
+            return result, inspect
+
+    def test_upload_review_requires_key_and_does_not_change_backup_receipt(self):
+        with self.assertRaises(MigrationError):
+            self.flow.stage("check_upload", {"apply": True})
+        key_id = self.ready_for_backup()
+        self.step("first_backup")
+        before = json.dumps(self.saved, sort_keys=True)
+        result, inspect = self.check_upload()
+        inspect.assert_called_once_with(self.home, DEVICE, "/synthetic/state/hosted-key.json",
+            expected_binding={**IDENTITY, "keyId": key_id})
+        self.assertEqual(result["phase"], "pending_upload")
+        self.assertEqual(result["last_backup"], self.receipt)
+        self.assertFalse(result["automatic_protection_verified"])
+        self.assertEqual(json.dumps(self.saved, sort_keys=True), before)
+        self.backup.assert_called_once()
+
+    def test_upload_abandon_requires_separate_exact_boolean_confirmation(self):
+        self.ready_for_backup()
+        self.check_upload()
+        with patch("codex_migrate.vault_hosted_setup_flow.abandon_hosted_upload") as abandon:
+            for values in ({"reservation_id": DEVICE, "confirm_abandon": False},
+                           {"reservation_id": DEVICE, "confirm_abandon": 1},
+                           {"reservation_id": VAULT, "confirm_abandon": True},
+                           {"reservation_id": "bad", "confirm_abandon": True}):
+                with self.subTest(values=values), self.assertRaises(MigrationError):
+                    self.flow.stage("abandon_upload", {**values, "apply": True})
+            abandon.assert_not_called()
+
+    def test_published_upload_cannot_be_abandoned_in_setup(self):
+        self.ready_for_backup()
+        self.check_upload(self.pending_upload(state="published"))
+        with self.assertRaises(MigrationError):
+            self.flow.stage("abandon_upload", {"reservation_id": DEVICE,
+                "confirm_abandon": True, "apply": True})
+        self.step("leave_upload_review")
+        self.assertEqual(self.flow.snapshot()["phase"], "key_ready")
+        self.assertEqual(self.flow.snapshot()["pending_upload"]["remote_status"], "published")
+
+    def test_cleanup_pending_then_release_keeps_same_target_and_prior_backup(self):
+        key_id = self.ready_for_backup()
+        self.step("first_backup")
+        before = json.dumps(self.saved, sort_keys=True)
+        self.check_upload()
+        receipt = {"applied": True, "reservation_id": DEVICE,
+                   "status": "cleanup_pending", "automatic_protection_verified": False}
+        with patch("codex_migrate.vault_hosted_setup_flow.abandon_hosted_upload",
+                   return_value=receipt) as abandon:
+            result = self.step("abandon_upload", reservation_id=DEVICE, confirm_abandon=True)
+            self.assertEqual(result["phase"], "pending_upload")
+            self.assertEqual(result["pending_upload"]["remote_status"], "cleanup_pending")
+            abandon.assert_called_once_with(self.home, DEVICE, "/synthetic/state/hosted-key.json",
+                expected_binding={**IDENTITY, "keyId": key_id}, reservation_id=DEVICE, apply=True)
+            receipt["status"] = "released"
+            result = self.step("abandon_upload", reservation_id=DEVICE, confirm_abandon=True)
+            self.assertEqual(result["phase"], "backup_ready")
+            self.assertNotIn("pending_upload", result)
+        self.assertEqual(json.dumps(self.saved, sort_keys=True), before)
+        self.assertEqual(result["last_backup"], self.receipt)
+
+    def test_retry_clears_review_only_after_verified_backup_and_checkpoint(self):
+        self.ready_for_backup()
+        self.check_upload(self.pending_upload(state="published"))
+        self.step("leave_upload_review")
+        self.backup.side_effect = MigrationError("reply not verified")
+        self.assertEqual(self.step("first_backup")["status"], "failed")
+        self.assertEqual(self.flow.snapshot()["pending_upload"]["reservation_id"], DEVICE)
+        self.backup.side_effect = None
+        self.registry.sync_recovery_checkpoint.side_effect = OSError("disk full")
+        self.assertEqual(self.step("first_backup")["status"], "failed")
+        self.assertIn("pending_upload", self.flow.snapshot())
+        self.registry.sync_recovery_checkpoint.side_effect = None
+        result = self.step("first_backup")
+        self.assertEqual(result["phase"], "backup_ready")
+        self.assertNotIn("pending_upload", result)
+        self.assertEqual(result["last_backup"], self.receipt)
+
+    def test_lost_cleanup_reply_keeps_exact_review_and_redacts_private_error(self):
+        self.ready_for_backup()
+        self.check_upload()
+        with patch("codex_migrate.vault_hosted_setup_flow.abandon_hosted_upload",
+                   side_effect=MigrationError("private token and signed URL")) as abandon:
+            result = self.step("abandon_upload", reservation_id=DEVICE, confirm_abandon=True)
+            self.assertEqual(result["status"], "failed")
+            self.assertEqual(result["pending_upload"]["reservation_id"], DEVICE)
+            self.assertNotIn("private token", result["error"])
+            self.assertIn("Check upload status", result["error"])
+            abandon.assert_called_once()
+        self.assertEqual(self.check_upload({"pending": False,
+            "automatic_protection_verified": False})[0]["phase"], "key_ready")
+
+    def test_replacement_review_invalidates_old_confirmation_and_return_does_not_release(self):
+        self.ready_for_backup()
+        self.step("first_backup")
+        self.check_upload()
+        self.check_upload({**self.pending_upload(), "reservation_id": VAULT})
+        with self.assertRaises(MigrationError):
+            self.flow.stage("abandon_upload", {"reservation_id": DEVICE,
+                "confirm_abandon": True, "apply": True})
+        with patch("codex_migrate.vault_hosted_setup_flow.abandon_hosted_upload") as abandon:
+            self.step("leave_upload_review")
+            abandon.assert_not_called()
+        with self.assertRaises(MigrationError):
+            self.flow.stage("enable_schedule", {"apply": True})
+
+    def test_restart_never_automatically_repeats_upload_cleanup(self):
+        self.ready_for_backup()
+        self.check_upload()
+        with patch("codex_migrate.vault_hosted_setup_flow.abandon_hosted_upload") as abandon:
+            self.flow = HostedSetupFlow(self.registry, self.home)
+            self.assertEqual(self.flow.snapshot()["phase"], "pairing_uncertain")
+            self.assertNotIn("pending_upload", self.flow.snapshot())
+            with self.assertRaises(MigrationError):
+                self.flow.stage("abandon_upload", {"reservation_id": DEVICE,
+                    "confirm_abandon": True, "apply": True})
+            abandon.assert_not_called()
+
+    def test_invalid_status_or_cleanup_receipt_cannot_repaint_success(self):
+        self.ready_for_backup()
+        pending = self.pending_upload()
+        for value in (None, [], {**pending, "private": "secret"},
+                      {**pending, "can_abandon": 1}, {**pending, "reservation_id": "bad"},
+                      {**pending, "remote_status": "published"},
+                      {"pending": False, "automatic_protection_verified": True}):
+            with self.subTest(value=value), patch(
+                    "codex_migrate.vault_hosted_setup_flow.pending_hosted_upload", return_value=value):
+                self.assertEqual(self.step("check_upload")["status"], "failed")
+                self.assertNotIn("pending_upload", self.flow.snapshot())
+        self.check_upload()
+        for status in ("published", "active", "unknown"):
+            with self.subTest(status=status), patch(
+                    "codex_migrate.vault_hosted_setup_flow.abandon_hosted_upload",
+                    return_value={"applied": True, "reservation_id": DEVICE, "status": status,
+                                  "automatic_protection_verified": False}):
+                self.assertEqual(self.step("abandon_upload", reservation_id=DEVICE,
+                    confirm_abandon=True)["status"], "failed")
+                self.assertEqual(self.flow.snapshot()["phase"], "pending_upload")
+
 
 if __name__ == "__main__":
     unittest.main()
