@@ -34,6 +34,13 @@ certification**. Production checkout, appcast and customer data were not changed
 - 21 harness safety/regression tests pass. The existing live-run suite passes
   26 tests and the recovery-client suite passes 21 tests. These are local tests;
   mocks do not count as successful real-service or VM acceptance.
+- Independent reviewer `public_release_review` accepted the final bounded
+  harness as-is after fixes to fixture binding, durable retry ownership and
+  live-state overlap. Its independent 21-test run, compilation and diff check
+  pass. That review does not certify a real cloud/VM run.
+- Read-only sandbox preflight matched all 42 source migration receipts and
+  found the required tables. It ran as an operator check, not as a hosted build
+  check; it does not certify schema drift or customer backup/recovery.
 
 ## Next required proof
 
