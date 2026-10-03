@@ -200,6 +200,11 @@ def parser() -> argparse.ArgumentParser:
     vault_hosted_backup.add_argument("--crypto-helper")
     vault_hosted_backup.add_argument("--apply", action="store_true")
     vault_hosted_backup.add_argument("--json", action="store_true")
+    vault_hosted_review = vault_commands.add_parser("hosted-source-review", help=argparse.SUPPRESS)
+    vault_hosted_review.add_argument("--device-id", required=True)
+    vault_hosted_review.add_argument("--key-metadata", required=True)
+    vault_hosted_review.add_argument("--crypto-helper")
+    vault_hosted_review.add_argument("--json", action="store_true")
     vault_hosted_backups = vault_commands.add_parser(
         "hosted-backups", help=argparse.SUPPRESS)
     vault_hosted_backups.add_argument("--device-id", required=True)
@@ -341,6 +346,23 @@ def main(argv: Optional[List[str]] = None) -> int:
                         result["status"], result["snapshot_id"]))
                     print("This command does not enable automatic backups or prove "
                           "clean-Mac recovery. Verify those separately.")
+                return 0
+            if args.vault_command == "hosted-source-review":
+                from codex_migrate.vault_hosted_source_review import review_hosted_source
+                result = review_hosted_source(
+                    args.source_home, args.device_id, args.key_metadata,
+                    crypto_helper=args.crypto_helper)
+                if args.json:
+                    print(json.dumps(result, indent=2, sort_keys=True))
+                else:
+                    print("Hosted source review: %s" % result["status"])
+                    print("Missing verified threads: %d; unidentified transcripts: %d; "
+                          "at-risk threads: %d; ambiguous entries: %d; missing attachments: %d" % (
+                              result["missing_verified_threads"],
+                              result["missing_unidentified_transcripts"], result["at_risk_threads"],
+                              result["ambiguous_entries"], result["missing_attachments"]))
+                    print("Read-only diagnosis, not deletion approval or proof of protection. "
+                          "Existing backups are unchanged. Use --json for bounded ID/path samples.")
                 return 0
             if args.vault_command == "hosted-backups":
                 from codex_migrate.vault_hosted_disaster_recovery import hosted_recovery_options

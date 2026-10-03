@@ -1436,6 +1436,12 @@ egress allowance. Do not claim that B2 restores are always free. See its
    A legitimate intentional reset will need an explicit reviewed rebaseline
    path before customer release; silently treating it as a fresh first backup
    would discard the only evidence of the gap.
+   The dark `hosted-source-review` command now compares a bound authenticated
+   prior manifest with a validated current source and reports bounded missing-ID,
+   unidentified-file, shrink, identity-conflict and missing-attachment evidence.
+   It never approves deletion or changes the backup baseline; that explicit
+   rebaseline remains a release gate. See
+   [the diagnosis boundary](hosted-source-review-2026-10-03.md).
 4. **Prove commerce and operations:** separate Stripe *subscription* checkout
    and webhook state from the existing one-time purchase; enforce active,
    past-due, cancellation, refund, and dispute states; publish no entitlement

@@ -12,7 +12,7 @@ import os
 import re
 from datetime import datetime
 from tempfile import TemporaryDirectory
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, build_opener
@@ -409,13 +409,19 @@ class HostedRecoveryClient:
                       expected_snapshot_id: object = _UNSPECIFIED,
                       expected_account_id: Optional[str] = None,
                       include_chunks: bool = False,
-                      ) -> Tuple[Optional[str], List[dict]]:
+                      include_version: bool = False,
+                      ) -> Union[Tuple[Optional[str], List[dict]],
+                                 Tuple[Optional[str], List[dict], Optional[int]]]:
         """Read only the authenticated prior manifest for hosted loss warnings.
 
         No prior pointer is a genuine first backup, not a transport error. A
         caller must retain the returned snapshot identity through publication;
         this read alone does not provide compare-and-swap protection.
+        ``include_version`` retains the authenticated format version for callers
+        that must distinguish legacy v1 metadata from malformed modern rows.
         """
+        if type(include_version) is not bool:
+            raise MigrationError("The hosted catalog version option is invalid.")
         if type(max_bytes) is not int or max_bytes <= 0:
             raise MigrationError("The hosted recovery size limit is invalid.")
         if (expected_snapshot_id is not _UNSPECIFIED and
@@ -435,7 +441,7 @@ class HostedRecoveryClient:
         if expected_snapshot_id is not _UNSPECIFIED and observed != expected_snapshot_id:
             raise MigrationError("The hosted backup changed after reservation.")
         if latest is None:
-            return None, []
+            return (None, [], None) if include_version else (None, [])
         helper = _helper_path(crypto_helper)
         snapshot_id = latest["snapshotId"]
         key = f"manifests/{snapshot_id}.cvmanifest"
@@ -487,4 +493,9 @@ class HostedRecoveryClient:
                 not isinstance(files, list) or len(files) > 100_000 or
                 not all(isinstance(item, dict) for item in files)):
             raise MigrationError("The prior hosted catalog is invalid.")
+        if include_version:
+            version = catalog.get("version")
+            if type(version) is not int or version not in (1, 2, 3, 4):
+                raise MigrationError("The authenticated hosted catalog version is invalid.")
+            return snapshot_id, files, version
         return snapshot_id, files

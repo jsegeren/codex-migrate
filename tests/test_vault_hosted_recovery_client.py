@@ -312,6 +312,26 @@ class HostedRecoveryClientTests(unittest.TestCase):
         for private_value in (ACCOUNT, VAULT, SNAPSHOT, TOKEN, "synthetic-key", "cvmanifest"):
             self.assertNotIn(private_value, metrics)
 
+    def test_prior_catalog_can_retain_authenticated_version_without_breaking_default(self):
+        client = self.client()
+        with patch("codex_migrate.vault_hosted_recovery_client._helper_path",
+                   return_value=Path("/synthetic/helper")), patch(
+                "codex_migrate.vault_hosted_recovery_client._run_helper",
+                return_value={"snapshot_id": SNAPSHOT, "version": 4, "files": []}) as helper:
+            self.assertEqual(client.prior_catalog(key_id="synthetic-key",
+                crypto_helper="/synthetic/helper", max_bytes=1_000_000,
+                expected_snapshot_id=SNAPSHOT, include_version=True), (SNAPSHOT, [], 4))
+            for version in (None, True, 0, 5, "4"):
+                helper.return_value = {"snapshot_id": SNAPSHOT, "files": [], "version": version}
+                with self.subTest(version=version), self.assertRaisesRegex(MigrationError, "version"):
+                    client.prior_catalog(key_id="synthetic-key", crypto_helper="/synthetic/helper",
+                                         max_bytes=1_000_000, include_version=True)
+
+    def test_empty_vault_has_no_catalog_version(self):
+        self.server.snapshot_id = None
+        self.assertEqual(self.client().prior_catalog(key_id="unused", crypto_helper="unused",
+            max_bytes=1_000_000, include_version=True), (None, [], None))
+
     def test_discovers_and_prepares_an_older_published_version(self):
         old = inventory(snapshot_id=OLDER)
         self.server.versions = {SNAPSHOT: inventory(), OLDER: old}
