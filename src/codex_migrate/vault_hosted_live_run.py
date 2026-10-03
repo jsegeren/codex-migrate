@@ -128,8 +128,19 @@ class HostedLiveBackupRun:
             raise MigrationError("The hosted backup state does not match this Vault.")
         return value
 
-    def pending(self) -> Optional[dict]:
+    @staticmethod
+    def _match_pending(state, *, expected_key_id=None, expected_reservation_id=None):
+        for expected in (expected_key_id, expected_reservation_id):
+            if expected is not None and (not isinstance(expected, str) or not _UUID.fullmatch(expected)):
+                raise MigrationError("The pending upload confirmation is invalid.")
+        if (state is not None and expected_key_id is not None and state["keyId"] != expected_key_id or
+                expected_reservation_id is not None and
+                (state is None or state["reservationId"] != expected_reservation_id)):
+            raise MigrationError("The pending upload changed; inspect it again before continuing.")
+
+    def pending(self, *, expected_key_id=None) -> Optional[dict]:
         """Expose opaque state only; never infer protection from a local file."""
+        self._match_pending(None, expected_key_id=expected_key_id)
         try:
             info = self._directory.lstat()
         except FileNotFoundError:
@@ -139,6 +150,7 @@ class HostedLiveBackupRun:
                 info.st_mode & 0o077):
             raise MigrationError("The hosted backup state folder is not private.")
         state = self._pending()
+        self._match_pending(state, expected_key_id=expected_key_id)
         return None if state is None else {
             "reservationId": state["reservationId"],
             "snapshotId": state["snapshotId"], "phase": state["phase"]}
@@ -354,7 +366,8 @@ class HostedLiveBackupRun:
         return (None if state is None else
                 self._upload.reservation_status(state["reservationId"]))
 
-    def abandon_pending(self, *, apply: bool = False) -> str:
+    def abandon_pending(self, *, apply: bool = False,
+                        expected_key_id=None, expected_reservation_id=None) -> str:
         """Quarantine a failed run; retire its journal only after release.
 
         Keep the owner-only journal while the provider cleans up. After the
@@ -364,13 +377,26 @@ class HostedLiveBackupRun:
         from codex_migrate.vault_hosted_rebaseline import consume_review
         if apply is not True:
             raise MigrationError("Hosted backup changes require explicit confirmation.")
+        # Validate before opening state or reaching the provider. The exact-ID
+        # interface is for a separate customer/operator confirmation, not a
+        # generic "cancel whatever is pending" action.
+        self._match_pending(None, expected_key_id=expected_key_id)
+        if expected_reservation_id is not None and (
+                not isinstance(expected_reservation_id, str) or
+                not _UUID.fullmatch(expected_reservation_id)):
+            raise MigrationError("The pending upload confirmation is invalid.")
         with self._locked():
             state = self._pending()
+            self._match_pending(state, expected_key_id=expected_key_id,
+                                expected_reservation_id=expected_reservation_id)
             if state is None:
                 return "none"
             reservation_id = state["reservationId"]
             receipt = self._upload.reservation_receipt(reservation_id)
             if receipt["state"] == "published":
+                if expected_reservation_id is not None:
+                    raise MigrationError("This upload published. Resume its exact backup verification; "
+                                         "published backups cannot be abandoned.")
                 if (state["phase"] == "cleanup_pending" or
                         receipt["snapshotId"] != state["snapshotId"]):
                     raise MigrationError("The hosted publication conflicts with abandonment.")

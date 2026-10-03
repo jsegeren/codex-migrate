@@ -205,6 +205,15 @@ def parser() -> argparse.ArgumentParser:
     vault_hosted_review.add_argument("--key-metadata", required=True)
     vault_hosted_review.add_argument("--crypto-helper")
     vault_hosted_review.add_argument("--json", action="store_true")
+    for name in ("hosted-pending-upload", "hosted-abandon-upload"):
+        command = vault_commands.add_parser(name, help=argparse.SUPPRESS)
+        command.add_argument("--device-id", required=True)
+        command.add_argument("--key-metadata", required=True)
+        command.add_argument("--crypto-helper")
+        command.add_argument("--json", action="store_true")
+        if name == "hosted-abandon-upload":
+            command.add_argument("--reservation-id", required=True)
+            command.add_argument("--apply", action="store_true")
     for name in ("hosted-prepare-deletions", "hosted-confirm-deletions"):
         command = vault_commands.add_parser(name, help=argparse.SUPPRESS)
         command.add_argument("--device-id", required=True)
@@ -373,6 +382,29 @@ def main(argv: Optional[List[str]] = None) -> int:
                               result["ambiguous_entries"], result["missing_attachments"]))
                     print("Read-only diagnosis, not deletion approval or proof of protection. "
                           "Existing backups are unchanged. Use --json for bounded ID/path samples.")
+                return 0
+            if args.vault_command in ("hosted-pending-upload", "hosted-abandon-upload"):
+                if args.vault_command == "hosted-abandon-upload" and not args.apply:
+                    print("Planning only. Inspect the pending upload first. Abandonment requires "
+                          "its exact reservation ID and --apply; published backups are never abandoned.")
+                    return 0
+                from codex_migrate.vault_hosted_pending import pending_hosted_upload, abandon_hosted_upload
+                if args.vault_command == "hosted-pending-upload":
+                    result = pending_hosted_upload(args.source_home, args.device_id, args.key_metadata,
+                        crypto_helper=args.crypto_helper)
+                else:
+                    result = abandon_hosted_upload(args.source_home, args.device_id, args.key_metadata,
+                        crypto_helper=args.crypto_helper, reservation_id=args.reservation_id, apply=True)
+                if args.json:
+                    print(json.dumps(result, indent=2, sort_keys=True))
+                elif args.vault_command == "hosted-abandon-upload":
+                    print("Upload cleanup: %s. Existing published backups and Codex data are unchanged; "
+                          "do not start another backup until cleanup is released." % result["status"])
+                elif not result["pending"]:
+                    print("No pending upload. This is not evidence of backup protection.")
+                else:
+                    print("Pending reservation: %s; service state: %s. This is not backup protection." % (
+                        result["reservation_id"], result["remote_status"]))
                 return 0
             if args.vault_command in ("hosted-prepare-deletions", "hosted-confirm-deletions"):
                 if not args.apply:
