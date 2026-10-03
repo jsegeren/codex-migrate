@@ -14,6 +14,7 @@ from codex_migrate.errors import MigrationError
 from codex_migrate.vault_hosted_live_run import HostedLiveBackupRun
 from codex_migrate.vault_hosted_rebaseline import (
     _deletions, catalog_digest, load_rebaseline, prepare_rebaseline, review_consumed,
+    deletion_review_view, validate_deletion_review_view, prepare_setup_rebaseline,
 )
 from codex_migrate.vault_hosted_recovery_client import HostedRecoveryClient
 from codex_migrate.vault_hosted_source_review import _inventory
@@ -124,6 +125,77 @@ class HostedRebaselineTests(unittest.TestCase):
     def prepare(self):
         return prepare_rebaseline(str(self.home), DEVICE, str(self.metadata_path),
                                   crypto_helper=str(self.helper), apply=True)
+
+    def test_bound_complete_view_has_no_private_fingerprints_or_upload(self):
+        binding = {"deviceId": DEVICE, "accountId": ACCOUNT, "vaultId": VAULT, "keyId": KEY}
+        with patch("codex_migrate.vault_hosted_rebaseline.active_binding", return_value=binding):
+            result = prepare_rebaseline(str(self.home), DEVICE, str(self.metadata_path),
+                crypto_helper=str(self.helper), expected_binding=binding, include_review=True, apply=True)
+        self.assertEqual(result["missing_thread_ids"], [LOST])
+        self.assertEqual(result["missing_files"], [])
+        self.assertFalse(result["rebaseline_authorized"])
+        for private in ("PRIVATE BODY", "sourceDigest", "sourceHome", "priorDigest", str(self.home)):
+            self.assertNotIn(private, json.dumps(result))
+        self.reserve.assert_not_called()
+        self.publish.assert_not_called()
+
+    def test_prepare_binding_refuses_changed_account_or_key_before_save(self):
+        binding = {"deviceId": DEVICE, "accountId": OTHER, "vaultId": VAULT, "keyId": KEY}
+        with patch("codex_migrate.vault_hosted_rebaseline.active_binding", return_value=binding):
+            with self.assertRaises(MigrationError):
+                prepare_rebaseline(str(self.home), DEVICE, str(self.metadata_path),
+                    crypto_helper=str(self.helper), expected_binding=binding, apply=True)
+        self.catalog.assert_not_called()
+        with self.assertRaises(MigrationError):
+            prepare_rebaseline(str(self.home), DEVICE, str(self.metadata_path),
+                crypto_helper=str(self.helper), expected_binding={**binding, "keyId": OTHER}, apply=True)
+        self.assertFalse((self.home / "Library/Application Support/Codex Vault/hosted/deletion-reviews").exists())
+
+    def test_prepare_follows_verified_device_renewal_with_same_authority(self):
+        binding = {"deviceId": DEVICE, "accountId": ACCOUNT, "vaultId": VAULT, "keyId": KEY}
+        with patch("codex_migrate.vault_hosted_rebaseline.active_binding",
+                   return_value={**binding, "deviceId": OTHER}):
+            result = prepare_rebaseline(str(self.home), DEVICE, str(self.metadata_path),
+                crypto_helper=str(self.helper), expected_binding=binding, apply=True)
+        self.enrollment.return_value.backup_clients.assert_called_once_with(OTHER, crypto_helper=str(self.helper))
+        self.assertEqual(load_rebaseline(str(self.home), result["review_id"]).value["deviceId"], OTHER)
+
+    def test_complete_view_rejects_untrusted_or_sampled_shape(self):
+        result = deletion_review_view(load_rebaseline(str(self.home), self.prepare()["review_id"]))
+        for changes in ({"missing_thread_ids": [LOST, LOST]}, {"missing_thread_ids": ["bad"]},
+                        {"missing_files": [{"collection": "active", "path": "../private.jsonl"}]},
+                        {"missing_attachments": ["/private"]}, {"rebaseline_authorized": True},
+                        {"private": "secret"}, {"missing_thread_ids": []}):
+            with self.subTest(changes=changes), self.assertRaises(MigrationError):
+                validate_deletion_review_view({**result, **changes})
+
+    def test_interrupted_review_reopens_same_digest_without_upload_or_new_approval(self):
+        result = self.prepare()
+        self.publish.side_effect = MigrationError("synthetic interruption")
+        with self.assertRaises(MigrationError):
+            self.backup(result["review_id"])
+        pending = self.run.pending()
+        approval = self.run.pending_deletion_review(expected_key_id=KEY)
+        self.assertEqual(approval.value["reviewId"], result["review_id"])
+        self.assertEqual(self.run.pending(), pending)
+        before = self.reserve.call_count
+        from contextlib import contextmanager
+        @contextmanager
+        def bound(*args, **kwargs):
+            yield self.run, self.upload, KEY
+        with patch("codex_migrate.vault_hosted_pending._bound_run", bound):
+            view = prepare_setup_rebaseline(str(self.home), DEVICE, str(self.metadata_path),
+                expected_binding={}, apply=True)
+        self.assertEqual(view["review_id"], result["review_id"])
+        self.assertEqual(self.reserve.call_count, before)
+        self.assertFalse(view["rebaseline_authorized"])
+        with self.assertRaises(MigrationError):
+            self.run.pending_deletion_review(expected_key_id=OTHER)
+        report = json.loads(Path(result["review_file"]).read_text())
+        report["missingThreadIds"] = []
+        Path(result["review_file"]).write_text(json.dumps(report))
+        with self.assertRaises(MigrationError):
+            self.run.pending_deletion_review(expected_key_id=KEY)
 
     def backup(self, review_id=None):
         return self.run.back_up_live_history(self.metadata, crypto_helper=str(self.helper),

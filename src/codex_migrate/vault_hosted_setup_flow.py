@@ -22,6 +22,7 @@ from codex_migrate.vault_hosted_recovery_flow import purchase_token
 from codex_migrate.vault_hosted_key_setup import HostedKeySetup
 from codex_migrate.vault_hosted_manual import back_up_hosted_history
 from codex_migrate.vault_hosted_pending import pending_hosted_upload, abandon_hosted_upload
+from codex_migrate.vault_hosted_rebaseline import prepare_setup_rebaseline, validate_deletion_review_view
 from codex_migrate.vault_hosted_connection import active_binding
 from codex_migrate.vault_hosted_schedule import (
     SERVICE_ORIGIN, hosted_schedule_status, install_hosted_schedule, remove_hosted_schedule,
@@ -54,6 +55,7 @@ class HostedSetupFlow:
         self._proof = {}
         self._recovery_key = None
         self._pending_upload = None
+        self._deletion_review = None
         self._keys = HostedKeySetup(registry)
         self._binding = registry.read().get("hosted_setup_device")
         if self._binding is not None:
@@ -90,6 +92,8 @@ class HostedSetupFlow:
             result = copy.deepcopy(self._public)
             if self._pending_upload is not None:
                 result["pending_upload"] = dict(self._pending_upload)
+            if self._deletion_review is not None:
+                result["deletion_review"] = copy.deepcopy(self._deletion_review)
             if self._last_backup is not None:
                 result["last_backup"] = copy.deepcopy(self._last_backup["receipt"])
                 result["last_backup_checked_at"] = self._last_backup["checked_at"]
@@ -118,7 +122,9 @@ class HostedSetupFlow:
                   "prepare_key": set(), "confirm_key": {"recovery_key"},
                   "first_backup": set(), "enable_schedule": set(), "disable_schedule": set(),
                   "check_upload": set(), "leave_upload_review": set(),
-                  "abandon_upload": {"reservation_id", "confirm_abandon"}}
+                  "abandon_upload": {"reservation_id", "confirm_abandon"},
+                  "prepare_deletions": set(), "leave_deletion_review": set(),
+                  "confirm_deletions": {"review_id", "confirm_intentional_deletions"}}
         phases = {"send_code": {"start", "email"}, "pair": {"email"},
                   "retry_save": {"pairing_checkpoint"},
                   "resolve": {"pairing_uncertain", "paired", "key_ready", "backup_ready"},
@@ -127,10 +133,13 @@ class HostedSetupFlow:
                   "confirm_key": {"key_save"},
                   "first_backup": {"key_ready", "backup_ready"},
                   "enable_schedule": {"backup_ready"},
-                  "disable_schedule": {"backup_ready", "pairing_uncertain", "pending_upload"},
+                  "disable_schedule": {"backup_ready", "pairing_uncertain", "pending_upload", "deletion_review"},
                   "check_upload": {"key_ready", "backup_ready", "pending_upload"},
                   "leave_upload_review": {"pending_upload"},
-                  "abandon_upload": {"pending_upload"}}
+                  "abandon_upload": {"pending_upload"},
+                  "prepare_deletions": {"key_ready", "backup_ready", "deletion_review"},
+                  "leave_deletion_review": {"deletion_review"},
+                  "confirm_deletions": {"deletion_review"}}
         with self._lock:
             if (action not in fields or not isinstance(payload, dict) or
                     set(payload) != fields[action] | {"apply"} or
@@ -140,12 +149,17 @@ class HostedSetupFlow:
                     self._public["phase"] not in phases[action]):
                 raise MigrationError("Finish the current backup setup step first.")
             if action == "enable_schedule" and (
-                    self._pending_upload is not None or
+                    self._pending_upload is not None or self._deletion_review is not None or
                     self._last_backup is None or
                     self._last_backup["receipt"]["source_coverage"] != "complete" or
                     self._last_backup["receipt"]["at_risk_threads"] != 0):
                 raise MigrationError("Review incomplete backup coverage before enabling automatic backups.")
             values = {name: payload[name] for name in fields[action]}
+            if action == "confirm_deletions" and (
+                    values["confirm_intentional_deletions"] is not True or
+                    self._deletion_review is None or
+                    values["review_id"] != self._deletion_review["review_id"]):
+                raise MigrationError("Review the complete list and confirm this exact deletion review.")
             if action == "abandon_upload" and (
                     values["confirm_abandon"] is not True or
                     not isinstance(values["reservation_id"], str) or
@@ -175,7 +189,10 @@ class HostedSetupFlow:
                     "Hosted backup could not be confirmed. Keep the pending state and "
                     "retry with this same connection and key. Previously verified snapshots "
                     "are kept. Automatic protection is not active; contact "
-                    "joshua@segeren.com if needed." if action == "first_backup" else
+                    "joshua@segeren.com if needed." if action in ("first_backup", "confirm_deletions") else
+                    "The complete deletion review could not be verified. No deletion approval was granted. "
+                    "Keep previous backups and unfinished upload state. Check upload status or "
+                    "contact joshua@segeren.com." if action == "prepare_deletions" else
                     "Upload status or cleanup could not be confirmed. Keep its pending state. "
                     "Use Check upload status before trying again; previously verified backups "
                     "are kept. Contact joshua@segeren.com if needed."
@@ -227,6 +244,21 @@ class HostedSetupFlow:
                                   self._binding["deviceId"], apply=True))
 
     def _perform(self, action, values):
+        if action == "leave_deletion_review":
+            # Leaving is not consent, cancellation, or journal cleanup.
+            self._update(phase="backup_ready" if self._last_backup else "key_ready")
+            return
+        if action == "prepare_deletions":
+            if self.source_home is None:
+                raise MigrationError("The backup source has not been configured.")
+            path, key_id = self._keys.backup_metadata(self._binding)
+            review = validate_deletion_review_view(prepare_setup_rebaseline(
+                self.source_home, self._binding["deviceId"], str(path),
+                expected_binding={**self._binding, "keyId": key_id}, apply=True))
+            with self._lock:
+                self._deletion_review = copy.deepcopy(review)
+                self._public["phase"] = "deletion_review"
+            return
         if action == "leave_upload_review":
             # Leave the view, not the durable upload. No journal, reservation,
             # published backup or schedule is removed by this navigation step.
@@ -272,6 +304,7 @@ class HostedSetupFlow:
             with self._lock:
                 if result["status"] == "released":
                     self._pending_upload = None
+                    self._deletion_review = None
                     self._public["phase"] = "backup_ready" if self._last_backup else "key_ready"
                 else:
                     self._pending_upload = {**self._pending_upload,
@@ -292,13 +325,15 @@ class HostedSetupFlow:
             else:
                 remove_hosted_schedule(self.source_home, expected_binding=anchor, apply=True)
             return
-        if action == "first_backup":
+        if action in ("first_backup", "confirm_deletions"):
             if self.source_home is None:
                 raise MigrationError("The backup source has not been configured.")
             path, key_id = self._keys.backup_metadata(self._binding)
             receipt = _backup_receipt(back_up_hosted_history(
                 self.source_home, self._binding["deviceId"], str(path),
-                expected_binding={**self._binding, "keyId": key_id}, apply=True))
+                expected_binding={**self._binding, "keyId": key_id}, apply=True,
+                **({} if action == "first_backup" else {
+                    "deletion_review_id": values["review_id"], "confirm_intentional_deletions": True})))
             saved = {"binding": dict(self._binding), "key_id": key_id,
                      "receipt": receipt,
                      "checked_at": datetime.now(timezone.utc).isoformat()}
@@ -307,6 +342,7 @@ class HostedSetupFlow:
             with self._lock:
                 self._last_backup = saved
                 self._pending_upload = None
+                self._deletion_review = None
                 self._public["phase"] = "backup_ready"
             return
         if action == "prepare_key":

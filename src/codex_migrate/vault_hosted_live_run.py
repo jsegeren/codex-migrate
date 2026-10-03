@@ -166,6 +166,24 @@ class HostedLiveBackupRun:
             raise MigrationError("The hosted publication receipt does not match its version.")
         return published
 
+    def pending_deletion_review(self, *, expected_key_id):
+        """Reopen only this bound run's review, without authorizing a retry."""
+        from codex_migrate.vault_hosted_rebaseline import load_rebaseline
+        with self._locked():
+            state = self._pending()
+            self._match_pending(state, expected_key_id=expected_key_id)
+            if state is None:
+                return None
+            binding = state.get("deletionReview")
+            if binding is None or state["phase"] == "cleanup_pending":
+                raise MigrationError("Resolve this unfinished upload before preparing deletion review.")
+            approval = load_rebaseline(str(self._home), binding["reviewId"])
+            approval.check_authority(str(self._home), self._upload._account_id,
+                                     self._upload._vault_id, expected_key_id)
+            if approval.stamp != binding:
+                raise MigrationError("The interrupted deletion review changed; contact support.")
+            return approval
+
     def back_up_live_history(self, metadata: dict, *, crypto_helper: str,
                              max_prior_bytes: int, apply: bool = False,
                              deletion_review_id: Optional[str] = None,

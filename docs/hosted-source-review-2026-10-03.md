@@ -89,6 +89,40 @@ or abandonment consumes the review with an owner-only receipt. A prior ordinary
 pending upload cannot be converted into a reviewed upload: keep its state and
 use the separate verified abandonment/cleanup path first.
 
+### Acceptance-gated customer review
+
+In hosted setup, open **If a hosted backup is stuck** and choose **Review
+intentional deletions**. The app verifies the saved account, Vault, individual
+key and current device renewal before preparing the private review. The screen
+shows every missing verified thread ID, unidentified transcript path and pasted
+attachment path, with exact counts—not the diagnostic's 25-entry sample. It
+does not expose content fingerprints, absolute home paths, account/key IDs,
+conversation bodies or titles. Private relative paths and IDs stay inside the
+loopback dashboard; do not copy the list into public support posts.
+
+The unchecked **I reviewed every entry** confirmation is separate from
+preparation. It enables **Confirm intentional deletions + back up** for exactly
+that review ID. Rendering uses text, never HTML from a path. Changing the review,
+starting an action or leaving the phase resets the checkbox. Returning without
+approving does not grant consent or remove any pending journal. Unrecognized
+entries or unexpected loss require recovery/support, not confirmation.
+
+Confirmation runs the existing reviewed-backup path with fresh catalog/source
+checks. Only after the remote sealed manifest and local recovery checkpoint are
+verified does the app replace its completed-backup receipt and clear the review.
+Failure keeps the earlier receipt and exact review for an explicit retry; no
+automatic approval or ordinary background retry can bypass the review. A new
+schedule cannot be enabled while the app has an unresolved review.
+
+After restart, reconnect the same saved key and choose review again. If this
+run has an interrupted reviewed upload, the app reopens its exact private report
+and checks its saved digest, account/Vault/key and source-root binding. It never
+substitutes a freshly generated review for that run. An ordinary pending upload,
+cleanup-pending run, changed/missing report or mismatched key is refused; use
+the unfinished-upload controls or contact Joshua. The low-level published-ACK
+reconciliation can handle a vanished report/source, but the customer review
+screen cannot truthfully display a vanished list and requires support instead.
+
 ### Resolve an ordinary failed upload before reviewing deletion
 
 The dark operator entrypoints now expose that lifecycle without deleting a
@@ -160,11 +194,11 @@ real-service/independent-Mac recovery proof remains required before release.
 
 ## Remaining release work
 
-Intentional-deletion confirmation is still operator-only, not yet buyer UI.
-Unfinished-upload controls exist only behind the hosted acceptance gate. Tests exercise real
+Intentional-deletion confirmation and unfinished-upload controls exist only
+behind the hosted acceptance gate. Tests exercise real
 source inventory/staging and retry logic with synthetic service/crypto boundaries;
 they are not production, real-R2 or clean-Mac certification. Integrate a clear
-buyer intentional-deletion review/confirmation, prove cleanup against actual R2, complete those independent
+the buyer path against the real service, prove cleanup against actual R2, complete those independent
 recovery checks, and certify the original full release objective.
 
 Owner: the primary Codex Backup implementation task. The clean sibling task

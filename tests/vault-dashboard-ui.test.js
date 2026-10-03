@@ -21,9 +21,10 @@ const refreshHostedRecovery = source.match(/async function refreshHostedRecovery
 const hostedSetupView = source.match(/function hostedSetupView\(data\)\{[\s\S]*?\n\}/)[0];
 const hostedSetupStep = source.match(/async function hostedSetupStep\(action,step=\{\}\)\{[\s\S]*?\n\}/)[0];
 const refreshHostedSetup = source.match(/async function refreshHostedSetup\(\)\{[\s\S]*?\n\}/)[0];
+const reviewPathLabel = source.match(/function reviewPathLabel\(path\)\{[\s\S]*?\n\}/)[0];
 
 function setupFixture() {
-  const phases = ['start', 'email', 'pairing_checkpoint', 'pairing_uncertain', 'paired', 'key_save', 'key_ready', 'backup_ready', 'pending_upload'];
+  const phases = ['start', 'email', 'pairing_checkpoint', 'pairing_uncertain', 'paired', 'key_save', 'key_ready', 'backup_ready', 'pending_upload', 'deletion_review'];
   const blocks = phases.map(phase => ({ dataset: { setupPhase: phase }, hidden: false }));
   const document = { activeElement: { outside: true } };
   const controls = phases.map(phase => ({ phase, disabled: false, focus() { document.activeElement = this; } }));
@@ -41,7 +42,7 @@ function setupFixture() {
     }, document, clearInterval: () => {}, setInterval: () => 1,
   };
   vm.createContext(context);
-  vm.runInContext('let hostedSetupTimer=null,hostedSetupInterval=0,hostedSetupPhase=null,hostedSetupEpoch=0,hostedUploadReservation=null; ' + hostedSetupView + '\n' + refreshHostedSetup + '\n' + hostedSetupStep, context);
+  vm.runInContext('let hostedSetupTimer=null,hostedSetupInterval=0,hostedSetupPhase=null,hostedSetupEpoch=0,hostedUploadReservation=null,hostedDeletionReview=null; ' + reviewPathLabel + '\n' + hostedSetupView + '\n' + refreshHostedSetup + '\n' + hostedSetupStep, context);
   return { context, panel, controls, elements, blocks, document };
 }
 
@@ -111,6 +112,65 @@ test('release handler sends only an explicitly checked exact reservation and cle
   assert.equal(calls[0].step.reservation_id, 'exact-id');
   assert.equal(calls[0].step.confirm_abandon, true);
   assert.doesNotMatch(source, /(?:localStorage|sessionStorage)\.setItem\([^\n]*reservation/);
+});
+
+test('deletion review displays every item as text and resets consent on replacement or action', () => {
+  const { context, elements } = setupFixture();
+  const review = { review_id: 'exact-review', missing_thread_ids: Array.from({length:30},(_,i)=>'thread-'+i),
+    missing_files: [{collection:'active',path:'<img src=x onerror=attack>.jsonl\nfake-heading'}],
+    missing_attachments:['attachment/pasted-text.txt'] };
+  const data = {enabled:true, phase:'deletion_review',status:'ready',deletion_review:review};
+  context.hostedSetupView(data);
+  const list=elements.get('setup-deletion-list');
+  assert.match(list.textContent,/thread-29/);
+  assert.match(list.textContent,/<img src=x onerror=attack>/);
+  assert.equal(list.innerHTML,undefined);
+  assert.match(list.textContent,/\\nfake-heading/);
+  assert.equal(elements.get('setup-confirm-deletions').disabled,true);
+  elements.get('setup-deletion-confirm').checked=true;
+  context.hostedSetupView(data);
+  assert.equal(elements.get('setup-confirm-deletions').disabled,false);
+  context.hostedSetupView({...data,deletion_review:{...review,review_id:'replacement'}});
+  assert.equal(elements.get('setup-deletion-confirm').checked,false);
+  elements.get('setup-deletion-confirm').checked=true;
+  context.hostedSetupView({...data,status:'running',step:'confirm_deletions'});
+  assert.equal(elements.get('setup-deletion-confirm').checked,false);
+  assert.equal(elements.get('setup-confirm-deletions').disabled,true);
+  context.hostedSetupView({...data,phase:'backup_ready'});
+  assert.equal(elements.get('setup-enable-schedule').disabled,true);
+  assert.match(elements.get('hosted-setup-status').textContent,/unresolved.*New work may not be backed up/);
+  assert.doesNotMatch(source,/setup-deletion-list"\)\.innerHTML/);
+});
+
+test('intentional-deletion action names only the checked review and clears consent before request', () => {
+  const elements=new Map([['setup-deletion-confirm',{checked:false}],['setup-confirm-deletions',{}]]);
+  const calls=[];
+  const context={$:id=>elements.get(id),hostedDeletionReview:'exact-review',
+    hostedSetupStep:(action,step)=>calls.push({action,step})};
+  vm.createContext(context);
+  vm.runInContext(source.match(/\$\("setup-confirm-deletions"\)\.onclick=.*?;\n/)[0],context);
+  elements.get('setup-confirm-deletions').onclick();
+  assert.equal(calls.length,0);
+  elements.get('setup-deletion-confirm').checked=true;
+  elements.get('setup-confirm-deletions').onclick();
+  assert.equal(elements.get('setup-deletion-confirm').checked,false);
+  assert.equal(calls[0].action,'confirm_deletions');
+  assert.equal(calls[0].step.review_id,'exact-review');
+  assert.equal(calls[0].step.confirm_intentional_deletions,true);
+  assert.doesNotMatch(source,/(?:localStorage|sessionStorage)\.setItem\([^\n]*review/);
+});
+
+test('path labels visibly escape Unicode line separators, bidi and invisible display controls', () => {
+  const {context,elements}=setupFixture();
+  const path='2026/ok\u2028Missing conversation IDs (999)\u202etxt.lnosj.jsonl';
+  const attachment='\u0085\u2029\u2066\u200b\u{e0001}/pasted-text.txt';
+  context.hostedSetupView({enabled:true,phase:'deletion_review',status:'ready',deletion_review:{
+    review_id:'exact-review',missing_thread_ids:['real-thread'],
+    missing_files:[{collection:'active',path}],missing_attachments:[attachment]}});
+  const text=elements.get('setup-deletion-list').textContent;
+  assert.doesNotMatch(text,/[\u0085\u2028\u2029\u202e\u2066\u200b\u{e0001}]/u);
+  for(const escape of ['\\u2028','\\u202e','\\u0085','\\u2029','\\u2066','\\u200b','\\u{e0001}'])assert.ok(text.includes(escape));
+  assert.equal(text.split('\n').filter(line=>line.startsWith('Missing conversation IDs')).length,1);
 });
 
 test('setup lost reply reads status exactly once without repeating pairing or echoing a private proof', async () => {
