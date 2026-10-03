@@ -87,7 +87,43 @@ reply is reconciled against its exact authenticated published catalog and the
 saved digest, even if the source/report subsequently disappeared. Publication
 or abandonment consumes the review with an owner-only receipt. A prior ordinary
 pending upload cannot be converted into a reviewed upload: keep its state and
-use the existing verified abandonment/cleanup path with support first.
+use the separate verified abandonment/cleanup path first.
+
+### Resolve an ordinary failed upload before reviewing deletion
+
+The dark operator entrypoints now expose that lifecycle without deleting a
+journal by hand:
+
+```sh
+./codex-migrate vault --source-home /absolute/account/home hosted-pending-upload \
+  --device-id '<device UUID>' --key-metadata /absolute/path/vault.json --json
+
+# Only after deciding to abandon this exact unpublished upload:
+./codex-migrate vault --source-home /absolute/account/home hosted-abandon-upload \
+  --device-id '<same device UUID>' --key-metadata /absolute/path/vault.json \
+  --reservation-id '<reservation UUID from inspection>' --apply --json
+```
+
+Inspection requests the service receipt for the exact local reservation and
+returns opaque IDs and states only. Neither an absent journal nor a published
+receipt proves readable backup protection. An already published version must
+finish its exact backup verification; this explicit abandonment interface
+refuses publication, including a publication racing the earlier inspection.
+
+Abandonment verifies the reservation and individual key again under the run
+lock. A changed reservation is refused, never substituted. With a saved setup
+binding, the app-facing functions follow verified device renewal without
+changing account, Vault or key. Provider text, bearer tokens, grants and local
+content are not returned on failure.
+
+`cleanup_pending` is not release: keep the journal and repeat the same exact
+abandonment after service cleanup completes. Only `released` retires recognized
+temporary upload scratch and that reservation's local journal. A failed reply
+uses the existing exact-reservation reconciliation instead of blindly issuing
+another action. Published snapshots, live Codex files and unknown scratch stay
+intact. These commands do not change the schedule or grant deletion approval.
+The customer-facing confirmation controls and actual-R2 cleanup/recovery proof
+remain separate work.
 
 The baseline is never erased or treated as a first backup. No remote snapshot
 or referenced chunk is deleted; old publication records remain selectable under

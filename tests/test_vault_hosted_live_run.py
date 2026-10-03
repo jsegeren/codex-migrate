@@ -471,6 +471,51 @@ class HostedLiveRunTests(unittest.TestCase):
             publish.assert_called_once()
             self.assertIsNone(self.run.pending())
 
+    def test_exact_abandon_refuses_stale_reservation_or_wrong_key_before_network(self):
+        pending = self.interrupted_run()
+        with patch.object(self.upload, "reservation_receipt") as receipt, patch.object(
+                self.upload, "abandon") as abandon:
+            for kwargs in ({"expected_reservation_id": OTHER},
+                           {"expected_key_id": OTHER},
+                           {"expected_reservation_id": "bad"}, {"expected_key_id": True}):
+                with self.subTest(kwargs=kwargs), self.assertRaises(MigrationError):
+                    self.run.abandon_pending(apply=True, **kwargs)
+                receipt.assert_not_called()
+                abandon.assert_not_called()
+        self.assertEqual(self.run.pending(expected_key_id=KEY), pending)
+        with self.assertRaises(MigrationError):
+            self.run.pending(expected_key_id=OTHER)
+
+    def test_exact_abandon_after_publication_keeps_journal_for_verified_resume(self):
+        pending = self.interrupted_run()
+        with patch.object(self.upload, "reservation_receipt", return_value={
+                "state": "published", "snapshotId": pending["snapshotId"],
+                "verifiedObjectCount": 3}), patch.object(self.upload, "abandon") as abandon:
+            with self.assertRaisesRegex(MigrationError, "published backups cannot be abandoned"):
+                self.run.abandon_pending(apply=True, expected_key_id=KEY,
+                    expected_reservation_id=pending["reservationId"])
+            abandon.assert_not_called()
+        self.assertEqual(self.run.pending(), pending)
+
+    def test_exact_abandon_requires_that_run_still_exists(self):
+        with patch.object(self.upload, "reservation_receipt") as receipt:
+            with self.assertRaises(MigrationError):
+                self.run.abandon_pending(apply=True, expected_reservation_id=OTHER)
+            receipt.assert_not_called()
+
+    def test_exact_abandon_keeps_same_identity_until_verified_release(self):
+        pending = self.interrupted_run()
+        kwargs = {"apply": True, "expected_key_id": KEY,
+                  "expected_reservation_id": pending["reservationId"]}
+        with patch.object(self.upload, "reservation_receipt", return_value={"state": "active"}) as receipt, \
+                patch.object(self.upload, "abandon") as abandon:
+            self.assertEqual(self.run.abandon_pending(**kwargs), "cleanup_pending")
+            self.assertEqual(self.run.pending()["reservationId"], pending["reservationId"])
+            receipt.return_value = {"state": "released"}
+            self.assertEqual(self.run.abandon_pending(**kwargs), "released")
+            abandon.assert_called_once_with(pending["reservationId"], apply=True)
+            self.assertIsNone(self.run.pending())
+
     def test_abandon_requires_confirmation_and_server_release_before_new_run(self):
         pending = self.interrupted_run(scratch_name="b" * 62 + ".cvchunk")
         journal = self.run._directory / ("snapshot-" + pending["snapshotId"])
