@@ -88,6 +88,8 @@ jobs:
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-business-backup-checks.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0041_business_backup_alerts.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-business-backup-alerts.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f hosted/migrations/0042_subscription_checkout.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-subscription-checkout.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-device-rotation.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-quota.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/hosted-publication-base.sql
