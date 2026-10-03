@@ -20,7 +20,7 @@ from codex_migrate import vault_hosted_upload_client as upload
 PREVIEW = re.compile(
     r"https://codex-migrate-[a-z0-9]+-joshuas-projects-d3a5c48d\.vercel\.app\Z")
 PATHS = frozenset("/api/" + name for name in (
-    "hosted-enrollment", "hosted-recovery", "hosted-upload",
+    "hosted-enrollment", "hosted-subscription", "hosted-recovery", "hosted-upload",
     "hosted-receipt-page", "hosted-publish", "hosted-verify-step",
     "hosted-publish-checkpointed", "hosted-published-chunks"))
 HEADERS = frozenset(("authorization", "content-type", "content-length",

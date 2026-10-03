@@ -5,7 +5,8 @@ const { readMigrationFiles } = require('drizzle-orm/migrator');
 const { sandboxDatabaseUrl, sandboxDatabaseRuntime } = require('../hosted/recovery_runtime');
 
 const TABLES = Object.freeze(['accounts', 'vaults', 'upload_reservations',
-  'snapshots', 'snapshot_objects', 'subscription_enrollments']);
+  'snapshots', 'snapshot_objects', 'subscription_enrollments',
+  'subscription_checkout_attempts']);
 
 function requireCheck(value) {
   if (!value) throw new Error('hosted_preflight_failed');

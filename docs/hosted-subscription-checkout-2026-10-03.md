@@ -1,0 +1,73 @@
+# Sandbox subscription checkout checkpoint
+
+This slice creates a real Stripe **test-mode** subscription checkout for an
+already purchased, email-paired native device. It does not activate Production,
+publish a customer price, charge a live payment, or certify cloud recovery.
+The existing one-time app purchase and appcast are unchanged.
+
+## Ownership and payment evidence
+
+- The native bearer and device ID resolve the account through the existing
+  unexpired/unrevoked session and fresh original-purchase verification. The
+  request cannot supply account identity, a Checkout Session, email, price,
+  allowance, or trial duration.
+- A durable account-scoped attempt freezes the server catalog and return site
+  before Stripe creation. Concurrent requests share the same attempt and
+  Stripe idempotency key. Provider/catalog identity is checked before checkout.
+- Lost create or database acknowledgement is retried/reconciled using that
+  attempt. After 23 hours an attempt without a saved session refuses automatic
+  creation; Stripe may prune idempotency keys after 24 hours. Expired saved
+  sessions require support rather than silently starting another subscription.
+- Completion retrieves the saved session and its current Stripe subscription.
+  Both must have the exact server-owned account/attempt metadata, test mode,
+  customer, monthly USD price, quantity and collection state. Pending, canceled,
+  unpaid, paused, foreign or changed-price subscriptions grant nothing.
+- Recording subscription evidence is idempotent and cannot overwrite another
+  subscription or attach the same subscription to two accounts. This record
+  is not payment authority: every upload continues its independent fresh
+  Stripe and original-purchase checks. No last-good backup pointer is touched.
+
+## Explicit test policy
+
+`HOSTED_SANDBOX_SUBSCRIPTION_OPEN=yes` is required in addition to both sandbox
+modes, the pinned sandbox database and named project's protected Preview.
+Production/live mode remains refused. The price and allowance come from the
+same server catalog settings as the upload runtime; no customer inputs select
+them. The sandbox fixture collects a card and has a 30-day test trial. That is
+not the final commercial billing, tax, retention or first-included-month
+contract, and final prices still require measured all-in costs and approval.
+
+The route has only `begin` and `status`. Re-enrollment after cancellation and
+automatic replacement of expired checkouts are deliberately absent until an
+explicit reconciliation path proves there is no second subscription. This is
+not yet a public billing UI or a complete subscription lifecycle.
+
+## Verification boundary
+
+Focused JavaScript tests cover account/catalog refusal, payment status,
+idempotence, lost replies, provider failures, route inputs and default-off
+configuration. Disposable PostgreSQL tests exercise real migration/functions,
+durable attempts, conflict handling and evidence insertion. Fixtures/mocks do
+not establish a real Stripe enrollment, cloud backup or recovery result.
+
+At this checkpoint, all 87 SQL files in the CI sequence passed against fresh,
+Unix-socket-only disposable PostgreSQL 18. The full JavaScript suite passed
+643 tests with one skip; the Preview transport suite passed 11. Independent
+reviewer `public_release_review` accepted the exact bounded checkout and
+preflight changes as-is after its focused tests, source inspection, syntax and
+diff checks. No real service enrollment or customer billing is claimed.
+
+Next: independently review this exact diff, run required CI, apply the reviewed
+migration only to the pinned sandbox, and complete real email pairing followed
+by the actual test checkout. Then prove publication and separate-Mac recovery,
+corruption/interruption safety, unattended scheduling, measured costs, final
+billing terms and the exact signed/notarized release before selling hosting.
+
+Primary references: [Stripe Checkout subscription parameters](https://docs.stripe.com/api/checkout/sessions/create),
+[free trials](https://docs.stripe.com/payments/checkout/free-trials), and
+[idempotent requests](https://docs.stripe.com/api/idempotent_requests).
+
+Owner: the primary Codex Backup implementation task. Its reused sibling
+worktree is retained for this active slice, with retirement due October 4, 2026.
+Source checkpoints must be pushed before handoff; credentials and test keys
+remain outside Git.

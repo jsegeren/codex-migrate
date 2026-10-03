@@ -38,7 +38,7 @@ test('sandbox identity, exact receipts and required tables produce bounded evide
   assert.equal(result.requiredTablesPresent, true);
   assert.match(result.note, /not schema-drift, hosted backup or recovery acceptance/);
   const committed = expectedMigrations();
-  assert.equal(committed.length, 42);
+  assert.equal(committed.length, 43);
   assert(committed.every(row => /^[a-f0-9]{64}$/.test(row.hash)));
 });
 for (const change of [{ VERCEL_ENV: 'production' }, { HOSTED_MODE: 'live' },
