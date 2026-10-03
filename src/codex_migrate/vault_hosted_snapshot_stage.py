@@ -6,7 +6,6 @@ checked object graph. It never publishes, schedules, or claims protection.
 
 from __future__ import annotations
 
-from collections import Counter
 from dataclasses import dataclass
 import os
 from pathlib import Path
@@ -24,6 +23,9 @@ from codex_migrate.vault_hosted_chunk_journal import HostedChunkJournal
 from codex_migrate.vault_hosted_snapshot_tail import stage_hosted_snapshot_tail
 from codex_migrate.vault_hosted_source_index import (
     published_source_facts, record_source_facts,
+)
+from codex_migrate.vault_hosted_source_loss import (
+    _missing_verified_threads, _missing_unidentified_transcripts,
 )
 from codex_migrate.vault_paginated import source_fingerprint
 from codex_migrate.vault_identity import (
@@ -126,52 +128,6 @@ def _reusable_paginated(prior: Sequence[dict], count: int):
             return None
         seen.add(thread_id)
     return rows
-
-
-def _missing_verified_threads(previous: Sequence[dict], current: Sequence[dict]) -> bool:
-    """Do not promote a smaller history without an explicit deletion decision.
-
-    A thread may move between transcript trees or into paginated history; its
-    verified ID, not its path or collection, determines whether it survived.
-    """
-    history = ("active", "archived", "paginated")
-    before = {item.get("thread_id") for item in previous
-              if item.get("collection") in history and
-              item.get("identity_state") == "verified" and item.get("thread_id")}
-    after = {item.get("thread_id") for item in current
-             if item.get("collection") in history and
-             item.get("identity_state") == "verified" and item.get("thread_id")}
-    return bool(before - after)
-
-
-def _missing_unidentified_transcripts(previous: Sequence[dict],
-                                      current: Sequence[dict]) -> bool:
-    """Do not silently drop files whose Codex thread ID could not be trusted.
-
-    Keep a row when its path still exists, even if the file was appended. A
-    move to a different path is recognized only by the same plaintext hash;
-    identical copies are counted so deleting one cannot hide behind another.
-    An ambiguous move/rewrite stops publication for explicit review.
-    """
-    collections = ("active", "archived")
-    before_paths = {(item.get("collection"), item.get("path"))
-                    for item in previous if item.get("collection") in collections}
-    now = {(item.get("collection"), item.get("path")) for item in current
-           if item.get("collection") in collections}
-    remaining = Counter(
-        item.get("sha256") for item in current
-        if item.get("collection") in collections and
-           (item.get("collection"), item.get("path")) not in before_paths)
-    for item in previous:
-        if (item.get("collection") not in collections or
-                item.get("identity_state") == "verified" or
-                (item.get("collection"), item.get("path")) in now):
-            continue
-        digest = item.get("sha256")
-        if not isinstance(digest, str) or not _HEX.fullmatch(digest) or not remaining[digest]:
-            return True
-        remaining[digest] -= 1
-    return False
 
 
 def _reuse_candidates(files: list, prior: Sequence[dict],
