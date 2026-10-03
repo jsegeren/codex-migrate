@@ -5,8 +5,11 @@ import json
 import os
 from pathlib import Path
 import socket
+import subprocess
 import sys
+import tempfile
 import threading
+import time
 import unittest
 from unittest.mock import patch
 from urllib.error import URLError
@@ -170,6 +173,27 @@ sys.exit(0 if passed else 1)
                 with self.assertRaises(ValueError) as caught:
                     RELAY.relay_process([sys.executable, "-c", child], ORIGIN, OPS, max_seconds=1)
                 self.assertEqual(str(caught.exception), "protected_recovery_relay_failed")
+
+    def test_exited_leader_does_not_leave_inherited_pipe_descendant(self):
+        with tempfile.TemporaryDirectory() as directory:
+            pid_file = Path(directory) / "owned-descendant.pid"
+            descendant = "import signal,time;signal.signal(signal.SIGTERM,signal.SIG_IGN);time.sleep(30)"
+            child = ("import subprocess,sys,json,pathlib;"
+                "p=subprocess.Popen([sys.executable,'-c'," + repr(descendant) + "]);"
+                "pathlib.Path(" + repr(str(pid_file)) + ").write_text(str(p.pid));"
+                "print(json.dumps({'type':'result','passed':True,'action':'recover'}),flush=True)")
+            with patch.object(RELAY, "PreviewOpener", return_value=self.opener()):
+                with self.assertRaises(ValueError):
+                    RELAY.relay_process([sys.executable, "-c", child], ORIGIN, OPS, max_seconds=4)
+            pid = int(pid_file.read_text())
+            def running():
+                result = subprocess.run(["/bin/ps", "-p", str(pid), "-o", "stat="],
+                    capture_output=True, text=True, timeout=2)
+                return result.returncode == 0 and bool(result.stdout.strip()) and not result.stdout.strip().startswith("Z")
+            deadline = time.monotonic() + 2
+            while running() and time.monotonic() < deadline:
+                time.sleep(.02)
+            self.assertFalse(running(), "owned inherited-pipe descendant survived relay cleanup")
 
 
 if __name__ == "__main__":

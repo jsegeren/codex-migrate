@@ -157,6 +157,23 @@ def relay_request(opener, value, expected_sequence):
                 "headers": fields, "body": base64.b64encode(data).decode("ascii")}
 
 
+def signal_owned_group(process, value):
+    try:
+        os.killpg(process.pid, value)
+    except ProcessLookupError:
+        pass
+    except PermissionError:
+        # Darwin can report EPERM for an already-exited empty group. Do not
+        # mistake that for containment: verify no non-zombie member remains.
+        require(process.poll() is not None)
+        result = subprocess.run(["/bin/ps", "-e", "-o", "pgid=,stat="],
+                                capture_output=True, timeout=2)
+        require(result.returncode == 0 and len(result.stdout) <= 256 * 1024)
+        for line in result.stdout.splitlines():
+            group, state = line.split()
+            require(int(group) != process.pid or state.startswith(b"Z"))
+
+
 def relay_process(command, origin, working_directory, *, max_seconds=900, max_requests=300):
     """Host-owned Tart exec command only; argv must contain no credential.
 
@@ -200,19 +217,16 @@ def relay_process(command, origin, working_directory, *, max_seconds=900, max_re
         raise ValueError("protected_recovery_relay_failed") from None
     finally:
         if process is not None:
+            # The owned group can outlive its leader. Never use leader liveness
+            # as proof that inherited pipe holders or descendants are gone.
+            signal_owned_group(process, signal.SIGTERM)
             if process.poll() is None:
-                try:
-                    os.killpg(process.pid, signal.SIGTERM)
-                except ProcessLookupError:
-                    pass
                 try:
                     process.wait(timeout=5)
                 except subprocess.TimeoutExpired:
-                    try:
-                        os.killpg(process.pid, signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
-                    process.wait(timeout=5)
+                    pass
+            signal_owned_group(process, signal.SIGKILL)
+            process.wait(timeout=5)
             for stream in (process.stdin, process.stdout):
                 if stream is not None and not stream.closed:
                     stream.close()
