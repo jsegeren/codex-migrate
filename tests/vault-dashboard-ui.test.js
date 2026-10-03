@@ -23,7 +23,7 @@ const hostedSetupStep = source.match(/async function hostedSetupStep\(action,ste
 const refreshHostedSetup = source.match(/async function refreshHostedSetup\(\)\{[\s\S]*?\n\}/)[0];
 
 function setupFixture() {
-  const phases = ['start', 'email', 'pairing_checkpoint', 'pairing_uncertain', 'paired', 'key_save', 'key_ready', 'backup_ready'];
+  const phases = ['start', 'email', 'pairing_checkpoint', 'pairing_uncertain', 'paired', 'key_save', 'key_ready', 'backup_ready', 'pending_upload'];
   const blocks = phases.map(phase => ({ dataset: { setupPhase: phase }, hidden: false }));
   const document = { activeElement: { outside: true } };
   const controls = phases.map(phase => ({ phase, disabled: false, focus() { document.activeElement = this; } }));
@@ -41,7 +41,7 @@ function setupFixture() {
     }, document, clearInterval: () => {}, setInterval: () => 1,
   };
   vm.createContext(context);
-  vm.runInContext('let hostedSetupTimer=null,hostedSetupInterval=0,hostedSetupPhase=null,hostedSetupEpoch=0; ' + hostedSetupView + '\n' + refreshHostedSetup + '\n' + hostedSetupStep, context);
+  vm.runInContext('let hostedSetupTimer=null,hostedSetupInterval=0,hostedSetupPhase=null,hostedSetupEpoch=0,hostedUploadReservation=null; ' + hostedSetupView + '\n' + refreshHostedSetup + '\n' + hostedSetupStep, context);
   return { context, panel, controls, elements, blocks, document };
 }
 
@@ -62,6 +62,55 @@ test('hosted setup is gated and pairing never claims backup or automatic protect
   assert.match(source, /\.brand small,\.protection\{font-size:14px\}/);
   assert.match(source, /if\(view==="backup"\)refreshHostedSetup\(\)/);
   assert.match(source, /@media print\{#hosted-setup-panel,#hosted-recovery-panel\{display:none!important\}\}/);
+});
+
+test('unfinished-upload release is separately confirmed and publication disables it', () => {
+  const { context, elements } = setupFixture();
+  const pending = { reservation_id: 'synthetic-id', remote_status: 'active', can_abandon: true };
+  const data = { enabled: true, phase: 'pending_upload', status: 'ready', pending_upload: pending };
+  context.hostedSetupView(data);
+  assert.equal(elements.get('setup-abandon-upload').disabled, true);
+  assert.equal(elements.get('setup-upload-confirmation').hidden, false);
+  elements.get('setup-abandon-confirm').checked = true;
+  context.hostedSetupView(data);
+  assert.equal(elements.get('setup-abandon-upload').disabled, false);
+  context.hostedSetupView({ ...data, pending_upload: { ...pending, reservation_id: 'replacement' } });
+  assert.equal(elements.get('setup-abandon-confirm').checked, false);
+  assert.equal(elements.get('setup-abandon-upload').disabled, true);
+  context.hostedSetupView({ ...data, pending_upload: { ...pending, remote_status: 'published', can_abandon: false } });
+  assert.equal(elements.get('setup-abandon-upload').hidden, true);
+  assert.equal(elements.get('setup-upload-confirmation').hidden, true);
+  assert.match(elements.get('setup-upload-detail').textContent, /resume verification/);
+});
+
+test('cleanup pending never claims protection or clears the reviewed reference', () => {
+  const { context, elements } = setupFixture();
+  for (const state of ['cleanup_pending', 'released']) {
+    context.hostedSetupView({ enabled: true, phase: 'pending_upload', status: 'ready',
+      pending_upload: { reservation_id: 'same-id', remote_status: state, can_abandon: true } });
+    assert.equal(elements.get('setup-abandon-upload').textContent, 'Finish upload cleanup');
+    assert.match(elements.get('setup-upload-reference').textContent, /same-id/);
+    assert.match(elements.get('hosted-setup-status').textContent, /New work may not be backed up/);
+    assert.equal(elements.get('setup-enable-schedule').disabled, true);
+  }
+});
+
+test('release handler sends only an explicitly checked exact reservation and clears confirmation', () => {
+  const elements = new Map([['setup-abandon-confirm', { checked: false }], ['setup-abandon-upload', {}]]);
+  const calls = [];
+  const context = { $: id => elements.get(id), hostedUploadReservation: 'exact-id',
+    hostedSetupStep: (action, step) => calls.push({ action, step }) };
+  vm.createContext(context);
+  vm.runInContext(source.match(/\$\("setup-abandon-upload"\)\.onclick=.*?;\n/)[0], context);
+  elements.get('setup-abandon-upload').onclick();
+  assert.equal(calls.length, 0);
+  elements.get('setup-abandon-confirm').checked = true;
+  elements.get('setup-abandon-upload').onclick();
+  assert.equal(elements.get('setup-abandon-confirm').checked, false);
+  assert.equal(calls[0].action, 'abandon_upload');
+  assert.equal(calls[0].step.reservation_id, 'exact-id');
+  assert.equal(calls[0].step.confirm_abandon, true);
+  assert.doesNotMatch(source, /(?:localStorage|sessionStorage)\.setItem\([^\n]*reservation/);
 });
 
 test('setup lost reply reads status exactly once without repeating pairing or echoing a private proof', async () => {

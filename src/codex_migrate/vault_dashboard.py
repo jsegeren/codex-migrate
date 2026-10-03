@@ -25,6 +25,7 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 .hosted-step label{display:block;margin:14px 0 8px;font-weight:700}.hosted-step input,.hosted-step select{max-width:100%;width:100%;margin-bottom:14px}.hosted-step button{margin:8px 0}.hosted-step .actions input{width:auto}.view-backup #hosted-recovery-panel,.view-conversations #hosted-recovery-panel{display:none!important}#hosted-recovery-error{color:#ffc3c8}#hosted-recovery-status{color:var(--muted)}
 .view-conversations #hosted-setup-panel,.view-recovery #hosted-setup-panel{display:none!important}#hosted-setup-error{color:#ffc3c8}#hosted-setup-status{color:var(--muted)}
 .brand small,.protection{font-size:14px}
+#setup-upload-confirmation{display:flex;align-items:flex-start;gap:12px;font-weight:500}#setup-upload-confirmation input{flex:0 0 auto;width:20px;height:20px;min-width:20px;margin:3px 0 0}#setup-upload-reference{overflow-wrap:anywhere;font-size:14px}
 @media print{#hosted-setup-panel,#hosted-recovery-panel{display:none!important}}
 </style>
 </head>
@@ -138,6 +139,22 @@ main{width:min(960px,calc(100% - 32px));margin:36px auto 80px}a{color:var(--ligh
 <p class="muted">This is a completed backup check, not continuous protection. Recovery on a clean Mac still needs verification. Your existing Codex files and repositories have not been changed.</p>
 <button id="setup-backup-again">Back up again</button>
 <button id="setup-check-backup-ready" class="secondary">Check saved connection</button>
+</div>
+<details id="setup-upload-tools" hidden>
+<summary>If a hosted backup is stuck</summary>
+<p>Check the unfinished upload before retrying or releasing it. This does not delete published backups, change Codex files, stop the schedule, or cancel hosted storage.</p>
+<button id="setup-check-upload" class="secondary">Check upload status</button>
+</details>
+<div class="hosted-step" data-setup-phase="pending_upload" hidden>
+<h3>Unfinished upload</h3>
+<p id="setup-upload-detail" role="status" aria-live="polite"></p>
+<p id="setup-upload-reference"></p>
+<p>Releasing this upload keeps your previously published backups and live Codex work. It does not create a new backup or cancel your subscription.</p>
+<label id="setup-upload-confirmation"><input id="setup-abandon-confirm" type="checkbox"><span>I want to release only this unfinished upload. I understand that new work still needs a verified backup.</span></label>
+<button id="setup-abandon-upload" class="secondary" disabled>Release this unfinished upload</button>
+<button id="setup-check-upload-again" class="secondary">Check upload status</button>
+<button id="setup-leave-upload" class="secondary">Return to backup</button>
+<p class="muted">If this upload already published, return to backup to resume its verification. If a deletion-reviewed upload cannot resume there, <a href="mailto:joshua@segeren.com">email Joshua</a>. Do not delete local backup state yourself.</p>
 </div>
 <div id="setup-background" hidden>
 <h3>Background backups</h3>
@@ -421,7 +438,7 @@ for(const link of document.querySelectorAll("[data-route]")){link.classList.togg
 const fmt=n=>{const units=["B","KB","MB","GB","TB"];let i=0;while(n>=1000&&i<units.length-1){n/=1000;i++}return `${n.toFixed(n>=100?0:n>=10?1:2)} ${units[i]}`};
 async function api(path,data){const response=await fetch(path,{method:data===undefined?"GET":"POST",headers:{"X-Codex-Migrate-Token":token,"Content-Type":"application/json"},...(data===undefined?{}:{body:JSON.stringify(data)})});const type=response.headers.get("Content-Type")||"";const body=type.includes("application/json")?await response.json():await response.text();if(!response.ok)throw Error(body.error||"The local request failed");return body}
 function fail(error){$("error").textContent=error.message;$("status").textContent=""}
-let hostedSetupTimer=null,hostedSetupInterval=0,hostedSetupPhase=null,hostedSetupEpoch=0;
+let hostedSetupTimer=null,hostedSetupInterval=0,hostedSetupPhase=null,hostedSetupEpoch=0,hostedUploadReservation=null;
 function hostedSetupView(data){
   const panel=$("hosted-setup-panel"),focusOwned=panel.contains(document.activeElement),phaseChanged=data.phase!==hostedSetupPhase;
   $("setup-recovery").value=data.enabled&&data.phase==="key_save"&&data.status!=="running"?data.recovery_key||"":"";
@@ -431,15 +448,27 @@ function hostedSetupView(data){
   const running=data.status==="running";
   for(const block of panel.querySelectorAll("[data-setup-phase]"))block.hidden=running||block.dataset.setupPhase!==data.phase;
   for(const control of panel.querySelectorAll("button,input,textarea"))control.disabled=running;
+  const pending=data.pending_upload;
+  if(running||phaseChanged||hostedUploadReservation!==pending?.reservation_id)$("setup-abandon-confirm").checked=false;
+  hostedUploadReservation=pending?.reservation_id||null;
+  $("setup-upload-tools").hidden=running||!["key_ready","backup_ready"].includes(data.phase);
+  const canRelease=pending?.can_abandon===true&&data.phase==="pending_upload";
+  $("setup-upload-confirmation").hidden=!canRelease;
+  $("setup-abandon-upload").hidden=!canRelease;
+  $("setup-abandon-upload").disabled=running||!canRelease||!$("setup-abandon-confirm").checked;
+  $("setup-abandon-upload").textContent=pending?.remote_status==="active"?"Release this unfinished upload":"Finish upload cleanup";
+  const uploadMessages={active:"This upload has not published. You can return to backup to retry it, or confirm release below.",cleanup_pending:"The service is cleaning up this unfinished upload. Keep its local retry state. Check again later; another backup cannot start until release is confirmed.",released:"The service released this upload. Confirm Finish upload cleanup to retire only its verified temporary files and retry journal.",published:"This upload has published. It cannot be released here. Return to backup and resume verification before relying on it."};
+  $("setup-upload-detail").textContent=pending?uploadMessages[pending.remote_status]||"Upload status needs support review.":"";
+  $("setup-upload-reference").textContent=pending?"Upload reference: "+pending.reservation_id:"";
   const background=data.background||{enabled:false};
   $("setup-background").hidden=!data.last_backup;
-  $("setup-enable-schedule").disabled=running||background.enabled||data.phase!=="backup_ready"||data.last_backup?.source_coverage!=="complete"||data.last_backup?.at_risk_threads!==0;
+  $("setup-enable-schedule").disabled=running||Boolean(pending)||background.enabled||data.phase!=="backup_ready"||data.last_backup?.source_coverage!=="complete"||data.last_backup?.at_risk_threads!==0;
   $("setup-disable-schedule").disabled=running||!(background.enabled||background.can_stop);
   const backgroundMessages={awaiting_check:"Enabled; the first scheduled check has not finished yet.",running:"A scheduled backup check is running.",failed:"The last scheduled check failed. New work may not be backed up; previous verified versions are kept.",needs_attention:"The last scheduled capture needs attention. Do not assume all new work is protected.",verified:"The last scheduled backup completed.",unchanged:"The last scheduled check found no changes."};
   $("setup-background-status").textContent=background.enabled?`${backgroundMessages[background.status]||"Background status needs attention."}${background.last_checked_at?" Last check: "+new Date(background.last_checked_at).toLocaleString()+".":""}${background.error?" "+background.error:""}`:background.error||"Background backups are off. You can still back up manually.";
-  const messages={start:"Verify your purchase email to connect this Mac.",email:"Check your purchase email for the setup code.",pairing_checkpoint:"The connection still needs to be saved.",pairing_uncertain:"The saved connection needs confirmation.",paired:"This Mac is connected. Automatic protection is not active.",key_save:"Save your recovery key outside this Mac, then confirm your saved copy.",key_ready:"Saved recovery key confirmed. Automatic protection is not active.",backup_ready:data.last_backup?.status==="needs_attention"?"Backup coverage needs attention. Automatic protection is not active.":"Hosted backup verified. Automatic protection is not active."};
+  const messages={start:"Verify your purchase email to connect this Mac.",email:"Check your purchase email for the setup code.",pairing_checkpoint:"The connection still needs to be saved.",pairing_uncertain:"The saved connection needs confirmation.",paired:"This Mac is connected. Automatic protection is not active.",key_save:"Save your recovery key outside this Mac, then confirm your saved copy.",key_ready:"Saved recovery key confirmed. Automatic protection is not active.",pending_upload:"An unfinished upload needs attention. New work may not be backed up.",backup_ready:data.last_backup?.status==="needs_attention"?"Backup coverage needs attention. Automatic protection is not active.":"Hosted backup verified. Automatic protection is not active."};
   $("setup-backup-receipt").textContent=data.last_backup?`${data.last_backup.status==="needs_attention"?"The encrypted capture has incomplete or at-risk content. Keep previous good versions and contact Joshua if you need help.":data.last_backup.status==="unchanged"?"No changes were found; the existing hosted snapshot was verified again.":"The hosted snapshot and its encrypted conversation manifest were verified."} Last completed check: ${new Date(data.last_backup_checked_at).toLocaleString()}.`:"";
-  const working={send_code:"Requesting your setup email…",pair:"Saving and connecting this Mac…",retry_save:"Retrying the saved connection…",resolve:"Checking the saved connection…",reauthorize:"Preparing email verification…",prepare_key:"Preparing the same protected recovery key…",confirm_key:"Checking your saved recovery key…",first_backup:"Encrypting, uploading and verifying your Codex backup… Keep this Mac awake.",enable_schedule:"Enabling background backups…",disable_schedule:"Stopping background backups…"};
+  const working={send_code:"Requesting your setup email…",pair:"Saving and connecting this Mac…",retry_save:"Retrying the saved connection…",resolve:"Checking the saved connection…",reauthorize:"Preparing email verification…",prepare_key:"Preparing the same protected recovery key…",confirm_key:"Checking your saved recovery key…",first_backup:"Encrypting, uploading and verifying your Codex backup… Keep this Mac awake.",enable_schedule:"Enabling background backups…",disable_schedule:"Stopping background backups…",check_upload:"Checking this unfinished upload with the service…",abandon_upload:"Requesting release of this exact upload… Its retry state stays until release is confirmed.",leave_upload_review:"Returning to backup…"};
   $("hosted-setup-status").textContent=running?working[data.step]||"Checking setup…":messages[data.phase]||"Setup needs attention.";
   $("hosted-setup-error").textContent=data.error||"";
   if(focusOwned&&(phaseChanged||document.activeElement.disabled||(!running&&document.activeElement===$("hosted-setup-status")))){
@@ -498,6 +527,11 @@ $("setup-backup-again").onclick=()=>hostedSetupStep("first_backup");
 $("setup-check-backup-ready").onclick=()=>hostedSetupStep("resolve");
 $("setup-enable-schedule").onclick=()=>hostedSetupStep("enable_schedule");
 $("setup-disable-schedule").onclick=()=>hostedSetupStep("disable_schedule");
+$("setup-check-upload").onclick=()=>hostedSetupStep("check_upload");
+$("setup-check-upload-again").onclick=()=>hostedSetupStep("check_upload");
+$("setup-leave-upload").onclick=()=>hostedSetupStep("leave_upload_review");
+$("setup-abandon-confirm").onchange=()=>{const button=$("setup-abandon-upload");button.disabled=button.hidden||!hostedUploadReservation||!$("setup-abandon-confirm").checked};
+$("setup-abandon-upload").onclick=()=>{if(!$("setup-abandon-confirm").checked||!hostedUploadReservation)return;const reservation_id=hostedUploadReservation;$("setup-abandon-confirm").checked=false;return hostedSetupStep("abandon_upload",{reservation_id,confirm_abandon:true})};
 $("setup-copy-key").onclick=async()=>{try{await navigator.clipboard.writeText($("setup-recovery").value);$("hosted-setup-status").textContent="Key copied. Save it outside this Mac before confirming."}catch(error){$("hosted-setup-error").textContent="Copy failed. Select the recovery key and copy it manually."}};
 let hostedRecoveryTimer=null,hostedRecoveryState=null,hostedRecoveryPhase=null,hostedRecoveryEpoch=0,hostedRecoveryPoll=0,hostedRecoveryPending=false;
 function hostedRecoveryView(data){
