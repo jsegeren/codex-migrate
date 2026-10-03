@@ -51,3 +51,19 @@ relay through Tart against the actual protected Preview. Complete actual email
 pairing and test subscription first; do not invent device or billing rows to
 get a passing result. Preserve the original release gates, including saved-key
 recovery, corruption/interruption, scheduling, notarization and updates.
+
+## Actual guest-disconnect finding and shutdown guard
+
+An actual disposable-VM probe showed that a guest descendant can remain alive
+after its local Tart client fails closed. Killing the local process group is
+not remote guest-process containment. The test VM was immediately stopped and
+its stopped state verified; no personal or customer data was involved.
+
+`ops/hosted_vm_recovery.py` is the host entrypoint for the actual recovery drill.
+It fixes the one dedicated VM, interpreter and guest acceptance-driver path;
+it accepts only UUID identities and guest-private file paths, not credentials.
+It requires that the owned VM is already running, invokes the pipe relay, and
+always stops that VM and rechecks live Tart state in `finally`, including after
+failure or operator interruption. Unverified shutdown refuses a success result.
+It never starts, changes or stops any other VM. This is disposable-test
+containment, not a shipping recovery strategy or a cloud recovery receipt.

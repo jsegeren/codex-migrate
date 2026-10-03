@@ -174,7 +174,8 @@ def signal_owned_group(process, value):
             require(int(group) != process.pid or state.startswith(b"Z"))
 
 
-def relay_process(command, origin, working_directory, *, max_seconds=900, max_requests=300):
+def relay_process(command, origin, working_directory, *, max_seconds=900, max_requests=300,
+                  environment=None):
     """Host-owned Tart exec command only; argv must contain no credential.
 
     The caller fixes the command and checks the VM identity. There is no shell,
@@ -183,13 +184,16 @@ def relay_process(command, origin, working_directory, *, max_seconds=900, max_re
     """
     require(isinstance(command, list) and command and all(isinstance(v, str) for v in command)
             and type(max_seconds) is int and 0 < max_seconds <= 900
-            and type(max_requests) is int and 0 < max_requests <= 300)
+            and type(max_requests) is int and 0 < max_requests <= 300
+            and (environment is None or (isinstance(environment, dict)
+                 and all(isinstance(k, str) and isinstance(v, str)
+                         for k, v in environment.items()))))
     opener = PreviewOpener(origin, working_directory)
     process = None
     try:
         with open(os.devnull, "wb") as errors:
             process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                stderr=errors, start_new_session=True)
+                stderr=errors, start_new_session=True, env=environment)
             frames = Frames(process.stdout, process.stdin)
             deadline = time.monotonic() + max_seconds
             sequence = 1
