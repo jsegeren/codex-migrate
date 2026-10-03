@@ -44,7 +44,7 @@ class HostedSourceReviewTests(unittest.TestCase):
         self.pointer = (ACCOUNT, WORKER, {"snapshotId": SNAPSHOT, "sourceCoverage": "complete"})
         self.recovery._latest.return_value = self.pointer
         self.prior = []
-        self.recovery.prior_catalog.side_effect = lambda **_kwargs: (SNAPSHOT, self.prior)
+        self.recovery.prior_catalog.side_effect = lambda **_kwargs: (SNAPSHOT, self.catalog())
         self.enrollment = Mock()
         self.enrollment.backup_clients.return_value = (self.upload, self.recovery)
         patcher = patch(PREFIX + "HostedEnrollmentClient", return_value=self.enrollment)
@@ -64,6 +64,13 @@ class HostedSourceReviewTests(unittest.TestCase):
     def review(self):
         return review_hosted_source(str(self.home), DEVICE, str(self.metadata),
                                     crypto_helper=str(self.helper))
+
+    def catalog(self):
+        # Real native catalogs contain these file facts even when the tested
+        # loss decision only needs identity/path. Keep fixtures structurally real.
+        return [{"size": 1, "sha256": "a" * 64, "records": 5,
+                 "user_messages": 0, "assistant_messages": 0, "titles": [], **row}
+                for row in self.prior]
 
     def assert_no_remote_writes(self):
         self.assertEqual(self.upload.mock_calls, [])
@@ -186,6 +193,47 @@ class HostedSourceReviewTests(unittest.TestCase):
         with self.assertRaisesRegex(MigrationError, "could not be verified"):
             self.review()
         self.assertEqual(self.upload.mock_calls, [])
+
+    def test_malformed_prior_metadata_never_becomes_an_id_or_path_sample(self):
+        valid = {"collection": "active", "path": "old.jsonl", "thread_id": THREAD,
+                 "identity_state": "verified"}
+        mutations = [
+            {"thread_id": "PRIVATE BODY sentinel"}, {"thread_id": None},
+            {"thread_id": "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA"},
+            {"path": "PRIVATE BODY path"},
+            {"path": "/private.jsonl"}, {"path": "../private.jsonl"},
+            {"path": "folder//private.jsonl"}, {"path": "folder/./private.jsonl"},
+            {"path": "private\\body.jsonl"}, {"path": "private\x00body.jsonl"},
+            {"collection": "unknown"}, {"identity_state": "unknown"},
+            {"sha256": "PRIVATE BODY hash"}, {"size": True}, {"size": -1},
+            {"size": 2**63}, {"records": True}, {"records": -1},
+            {"records": None}, {"user_messages": 100}, {"at_risk": "true"},
+            {"titles": ["PRIVATE\x00BODY"]},
+            {"collection": "paginated", "path": "wrong.jsonl"},
+            {"collection": "attachments"},
+        ]
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                self.prior = [{**valid, **mutation}]
+                with self.assertRaisesRegex(MigrationError, "could not be verified") as caught:
+                    self.review()
+                self.assertNotIn("PRIVATE", str(caught.exception))
+                self.assert_no_remote_writes()
+
+    def test_duplicate_prior_paths_refuse_a_review(self):
+        self.prior = [{"collection": "active", "path": "same.jsonl",
+                       "thread_id": THREAD, "identity_state": "verified"}] * 2
+        with self.assertRaisesRegex(MigrationError, "could not be verified"):
+            self.review()
+        self.assert_no_remote_writes()
+
+    def test_legacy_v1_catalog_does_not_invent_verified_identity(self):
+        self.prior = [{"collection": "active", "path": "old.jsonl",
+                       "thread_id": None, "identity_state": None, "records": None,
+                       "user_messages": None, "assistant_messages": None}]
+        result = self.review()
+        self.assertEqual(result["missing_verified_threads"], 0)
+        self.assertEqual(result["missing_unidentified_transcripts"], 1)
 
     def test_source_change_during_scan_refuses_review(self):
         path = self.transcript()

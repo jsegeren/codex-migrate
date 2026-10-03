@@ -8,6 +8,7 @@ relative source paths and are intentionally bounded. This is not an approval.
 import hashlib
 import os
 from pathlib import Path
+import re
 from typing import Optional
 
 from codex_migrate.errors import MigrationError
@@ -20,7 +21,7 @@ from codex_migrate.vault_hosted_source_loss import (
     missing_unidentified_transcripts, missing_verified_threads,
 )
 from codex_migrate.vault_identity import (
-    loss_warnings, mark_simultaneous_conflicts, scan_transcript,
+    canonical_id, loss_warnings, mark_simultaneous_conflicts, scan_transcript,
 )
 from codex_migrate.vault_local_lock import local_history_lock
 from codex_migrate.vault_paginated import (
@@ -46,6 +47,61 @@ def _files(source_home):
             raise MigrationError("Duplicate source paths require review.")
         state[identity] = _identity(check_info(path.lstat()))
     return files, state
+
+
+def _validate_prior(rows):
+    """Authenticated bytes still need schema validation before comparison/output.
+
+    The native catalog command authenticates/decrypts but does not validate all
+    manifest fields. Legacy v1 rows have no identity/count metadata; that absence
+    is unverified, never upgraded to a verified ID. No prior row is mutated.
+    """
+    if not isinstance(rows, list) or len(rows) > 100_000:
+        raise MigrationError("The prior source catalog is invalid.")
+    seen = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            raise MigrationError("The prior source catalog is invalid.")
+        collection, path = row.get("collection"), row.get("path")
+        if (collection not in ("active", "archived", "paginated", "attachments") or
+                not isinstance(path, str) or not path or len(path) > 4096 or
+                path.startswith("/") or "\\" in path or "\x00" in path or
+                any(part in ("", ".", "..") for part in path.split("/")) or
+                (collection != "attachments" and not path.endswith(".jsonl"))):
+            raise MigrationError("The prior source catalog has an unsafe path.")
+        if (collection, path) in seen:
+            raise MigrationError("The prior source catalog has a duplicate path.")
+        seen.add((collection, path))
+        size, digest, thread_id = row.get("size"), row.get("sha256"), row.get("thread_id")
+        state = row.get("identity_state")
+        if state is None:  # Native v1 catalog has optional identity fields.
+            state = "unverified"
+        if (type(size) is not int or not 0 <= size <= 2**63 - 1 or
+                not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest) or
+                thread_id is not None and canonical_id(thread_id) != thread_id or
+                state not in ("verified", "unverified", "needs_review") or
+                state == "verified" and thread_id is None):
+            raise MigrationError("The prior source catalog has invalid identity metadata.")
+        counts = [row.get(key) for key in ("records", "user_messages", "assistant_messages")]
+        if (any(value is not None and (type(value) is not int or not 0 <= value <= 2**63 - 1)
+                for value in counts) or
+                state == "verified" and any(value is None for value in counts) or
+                counts[0] is not None and any(value is not None and value > counts[0]
+                                             for value in counts[1:])):
+            raise MigrationError("The prior source catalog has invalid message counts.")
+        titles = row.get("titles", [])
+        if (not isinstance(titles, list) or len(titles) > 64 or
+                any(not isinstance(title, str) or len(title) > 500 or "\x00" in title
+                    for title in titles) or
+                row.get("at_risk") is not None and type(row["at_risk"]) is not bool):
+            raise MigrationError("The prior source catalog has invalid metadata.")
+        if collection == "paginated" and (
+                state != "verified" or path != thread_id + ".jsonl" or size == 0 or
+                counts[0] == 0):
+            raise MigrationError("The prior source catalog has an invalid paginated identity.")
+        if collection == "attachments" and (
+                state != "unverified" or thread_id is not None or titles or counts != [0, 0, 0]):
+            raise MigrationError("The prior source catalog has an invalid attachment identity.")
 
 
 def _inventory(source_home):
@@ -139,6 +195,9 @@ def review_hosted_source(source_home: str, device_id: str, metadata_path: str, *
             expected_snapshot_id=snapshot_id, expected_account_id=account)
         if observed != snapshot_id:
             raise MigrationError("The hosted review version changed.")
+        _validate_prior(prior)
+        if snapshot_id is None and prior:
+            raise MigrationError("A first backup cannot have a prior source catalog.")
         current, missing_attachments = _inventory(home)
         if recovery._latest() != pointer:
             raise MigrationError("The hosted backup changed during source review.")
