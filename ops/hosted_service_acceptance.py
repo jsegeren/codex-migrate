@@ -283,6 +283,8 @@ def main():
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--vercel-preview-transport", action="store_true",
                         help="Operator-only: use the existing authorized Vercel CLI session")
+    parser.add_argument("--stdio-preview-recovery", action="store_true",
+                        help="Operator-only VM recovery: relay protected API calls over parent pipes")
     for name in ("service-origin", "device-id", "account-id", "vault-id", "crypto-helper",
                  "metadata", "publication-receipt", "recovery-key-file"):
         parser.add_argument("--" + name)
@@ -290,6 +292,11 @@ def main():
     try:
         require(args.apply)
         context = nullcontext()
+        require(not (args.vercel_preview_transport and args.stdio_preview_recovery))
+        if args.stdio_preview_recovery:
+            require(args.action == "recover")
+            from preview_stdio_transport import stdio_recovery
+            context = stdio_recovery(args.service_origin)
         if args.vercel_preview_transport:
             require(args.action != "prepare")
             from vercel_preview_transport import protected_preview
@@ -299,10 +306,13 @@ def main():
                       "publish": lambda: publish(args), "recover": lambda: recover(args)}[args.action]()
     except Exception:
         # Provider/helper exceptions can contain signed URLs, keys or source text.
-        print(json.dumps({"passed": False, "action": args.action,
-                          "code": "hosted_acceptance_failed", "preserve_pending_state": True}))
+        print(json.dumps({"type": "result", "passed": False, "action": args.action}
+              if args.stdio_preview_recovery else {"passed": False, "action": args.action,
+                          "code": "hosted_acceptance_failed", "preserve_pending_state": True}), flush=True)
         return 1
-    print(json.dumps({"passed": True, "action": args.action, **result}, sort_keys=True))
+    print(json.dumps({"type": "result", "passed": True, "action": args.action}
+          if args.stdio_preview_recovery else {"passed": True, "action": args.action, **result},
+          sort_keys=True), flush=True)
     return 0
 
 
