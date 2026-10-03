@@ -394,6 +394,17 @@ class HostedRebaselineTests(unittest.TestCase):
         deleted = {**before, "thread_id": LOST, "path": "deleted.jsonl"}
         with self.assertRaises(MigrationError):
             _deletions([before, deleted], [after], [])
+        with self.assertRaises(MigrationError):
+            _deletions([before, deleted], [{**after, "collection": "paginated",
+                                          "path": THREAD + ".jsonl"}], [])
+
+    def test_duplicate_prior_representations_cannot_hide_a_larger_version(self):
+        before = {**self.prior[0], "thread_id": THREAD, "records": 4}
+        smaller = {**before, "collection": "archived", "path": "small.jsonl", "records": 3}
+        after = {**before, "path": "moved.jsonl", "records": 3}
+        deleted = {**before, "thread_id": LOST, "path": "deleted.jsonl"}
+        with self.assertRaises(MigrationError):
+            _deletions([before, smaller, deleted], [after], [])
 
     def test_malformed_lost_ack_catalog_never_consumes_the_review(self):
         result = self.prepare()

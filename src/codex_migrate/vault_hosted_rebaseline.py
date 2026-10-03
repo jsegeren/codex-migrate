@@ -65,12 +65,19 @@ def _deletions(prior, current, missing_attachments):
         after = [row for row in current if row["collection"] in collections]
         if loss_warnings(before, after):
             raise MigrationError("A remaining thread shortened; deletion approval cannot clear that risk.")
-        old_ids = {row.get("thread_id"): row for row in before if row.get("thread_id")}
-        if any(row.get("thread_id") in old_ids and any(
-                type(old_ids[row["thread_id"]].get(key)) is int and
-                row.get(key, 0) < old_ids[row["thread_id"]][key]
-                for key in ("size", "records", "user_messages", "assistant_messages"))
-               for row in after):
+    # Compare every prior verified representation, not a last-row-wins map.
+    # A conversion between transcript and paginated sources is conservative:
+    # deletion approval is not proof that a smaller representation is complete.
+    old_ids = {}
+    for row in prior:
+        if row.get("identity_state") == "verified" and row.get("thread_id"):
+            old_ids.setdefault(row["thread_id"], []).append(row)
+    for row in current:
+        if row.get("identity_state") != "verified":
+            continue
+        if any(type(old.get(key)) is int and row.get(key, 0) < old[key]
+               for old in old_ids.get(row.get("thread_id"), [])
+               for key in ("size", "records", "user_messages", "assistant_messages")):
             raise MigrationError("A remaining thread shortened; deletion approval cannot clear that risk.")
     # Unidentified files do not have stable thread IDs; still refuse a detected
     # shrink of a remaining same-path file rather than laundering it as deletion.
