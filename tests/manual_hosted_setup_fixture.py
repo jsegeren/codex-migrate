@@ -20,8 +20,11 @@ SNAPSHOT = "22222222-2222-4222-8222-222222222222"
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--state", choices=("active", "cleanup_pending", "released", "published"), default="active")
+    parser.add_argument("--deletions", action="store_true", help="Simulate complete missing-history review, no upload")
     args = parser.parse_args()
-    state = {"remote": args.state, "phase": "pending_upload"}
+    state = {"remote": None if args.deletions else args.state,
+             "phase": "deletion_review" if args.deletions else "pending_upload",
+             "review": args.deletions}
 
     def public():
         result = {"enabled": True, "phase": state["phase"], "status": "ready",
@@ -33,6 +36,12 @@ def main():
             result["pending_upload"] = {"pending": True, "reservation_id": RESERVATION,
                 "snapshot_id": SNAPSHOT, "local_phase": "active", "remote_status": state["remote"],
                 "can_abandon": state["remote"] != "published", "automatic_protection_verified": False}
+        if state["review"]:
+            result["deletion_review"] = {"review_id": RESERVATION,
+                "missing_thread_ids": ["%08d-1111-4111-8111-111111111111" % index for index in range(30)],
+                "missing_files": [{"collection": "active", "path": "2026/09/missing-conversation.jsonl"}],
+                "missing_attachments": [SNAPSHOT + "/pasted-text.txt"],
+                "rebaseline_authorized": False, "automatic_protection_verified": False}
         return result
 
     class Handler(BaseHTTPRequestHandler):
@@ -79,6 +88,14 @@ def main():
                     raise ValueError()
                 if action == "leave_upload_review":
                     state["phase"] = "backup_ready"
+                elif action == "leave_deletion_review":
+                    state["phase"] = "backup_ready"
+                elif action == "prepare_deletions" and args.deletions:
+                    state.update(review=True, phase="deletion_review")
+                elif (action == "confirm_deletions" and state["phase"] == "deletion_review"
+                      and step.get("review_id") == RESERVATION
+                      and step.get("confirm_intentional_deletions") is True):
+                    state.update(review=False, phase="backup_ready")
                 elif action == "check_upload":
                     state["phase"] = "pending_upload" if state["remote"] else "backup_ready"
                 elif (action == "abandon_upload" and state["phase"] == "pending_upload"

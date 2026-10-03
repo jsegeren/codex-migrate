@@ -18,6 +18,7 @@ import uuid
 from codex_migrate.errors import MigrationError
 from codex_migrate.vault_backup import _atomic_json, _helper_path, _metadata, _require_unlinked_path
 from codex_migrate.vault_hosted_enrollment_client import HostedEnrollmentClient
+from codex_migrate.vault_hosted_connection import active_binding
 from codex_migrate.vault_hosted_schedule import MAX_PRIOR_BYTES, SERVICE_ORIGIN, _UUID
 from codex_migrate.vault_hosted_source_loss import missing_unidentified_transcripts, missing_verified_threads
 from codex_migrate.vault_hosted_source_review import _inventory, _validate_prior
@@ -223,10 +224,14 @@ def consume_review(source_home, state, outcome):
 
 
 def prepare_rebaseline(source_home: str, device_id: str, metadata_path: str, *,
-                       crypto_helper: Optional[str] = None, apply: bool = False) -> dict:
+                       crypto_helper: Optional[str] = None,
+                       expected_binding: Optional[dict] = None,
+                       include_review: bool = False, apply: bool = False) -> dict:
     """Save the complete deletion list. This does not approve or upload it."""
     if apply is not True:
         raise MigrationError("Saving a private deletion review requires explicit confirmation.")
+    if type(include_review) is not bool:
+        raise MigrationError("The deletion review output choice is invalid.")
     if not isinstance(device_id, str) or not _UUID.fullmatch(device_id):
         raise MigrationError("The hosted backup device is invalid.")
     if not isinstance(metadata_path, str) or not Path(metadata_path).is_absolute():
@@ -236,13 +241,26 @@ def prepare_rebaseline(source_home: str, device_id: str, metadata_path: str, *,
     key_id = _metadata(metadata)
     if type(metadata["version"]) is not int or "recovery_mode" in metadata:
         raise MigrationError("This review requires an individual Vault key.")
+    if expected_binding is not None and (
+            not isinstance(expected_binding, dict) or
+            set(expected_binding) != {"deviceId", "accountId", "vaultId", "keyId"} or
+            any(not isinstance(entry, str) or not _UUID.fullmatch(entry)
+                for entry in expected_binding.values()) or
+            expected_binding["deviceId"] != device_id or expected_binding["keyId"] != key_id):
+        raise MigrationError("The deletion review does not match its saved connection and key.")
     helper = str(_helper_path(crypto_helper))
     with _update_lock(str(home), nonblocking=True) as marker:
         if _pending_update(marker) is not None:
             raise MigrationError("Wait for the app update before preparing a deletion review.")
+        if expected_binding is not None:
+            device_id = active_binding(str(home), expected_binding)["deviceId"]
         try:
             upload, recovery = HostedEnrollmentClient(SERVICE_ORIGIN).backup_clients(
                 device_id, crypto_helper=helper)
+            if expected_binding is not None and (
+                    upload._account_id != expected_binding["accountId"] or
+                    upload._vault_id != expected_binding["vaultId"]):
+                raise MigrationError("The deletion-review connection changed identity.")
             pointer = recovery._latest()
             account, worker, latest = pointer
             if (account != upload._account_id or worker != upload._worker_origin or latest is None or
@@ -275,7 +293,64 @@ def prepare_rebaseline(source_home: str, device_id: str, metadata_path: str, *,
         except Exception:
             raise MigrationError("Intentional-deletion review could not be verified. No backup or "
                                  "Codex data was changed; contact joshua@segeren.com.") from None
+    if include_review:
+        return deletion_review_view(RebaselineApproval(_bytes(value)))
     return {"review_id": value["reviewId"], "review_file": str(path), "saved": True,
             "missing_verified_threads": len(ids), "missing_unidentified_transcripts": len(files),
             "missing_attachments": len(attachments),
             "rebaseline_authorized": False, "automatic_protection_verified": False}
+
+
+def deletion_review_view(approval: RebaselineApproval) -> dict:
+    """Complete private loopback view, not a sample, approval, or proof of backup.
+
+    Do not expose home paths, account/key IDs, content digests, bodies or titles.
+    Validate saved entries before rendering; confirmation still rechecks catalogs.
+    """
+    value = approval.value
+    return validate_deletion_review_view({"review_id": value["reviewId"],
+        "missing_thread_ids": value["missingThreadIds"], "missing_files": value["missingFiles"],
+        "missing_attachments": value["missingAttachments"],
+        "rebaseline_authorized": False, "automatic_protection_verified": False})
+
+
+def validate_deletion_review_view(value: dict) -> dict:
+    if (not isinstance(value, dict) or set(value) != {"review_id", "missing_thread_ids",
+            "missing_files", "missing_attachments", "rebaseline_authorized", "automatic_protection_verified"} or
+            not isinstance(value["review_id"], str) or not _UUID.fullmatch(value["review_id"]) or
+            value["rebaseline_authorized"] is not False or value["automatic_protection_verified"] is not False or
+            any(not isinstance(value[key], list) for key in (
+                "missing_thread_ids", "missing_files", "missing_attachments")) or
+            sum(len(value[key]) for key in ("missing_thread_ids", "missing_files", "missing_attachments")) > 100_000):
+        raise MigrationError("The complete deletion list is invalid; contact support.")
+    ids, files, attachments = (value["missing_thread_ids"], value["missing_files"], value["missing_attachments"])
+    def safe_path(path):
+        return (isinstance(path, str) and 0 < len(path) <= 4096 and
+                not path.startswith("/") and "\\" not in path and "\x00" not in path and
+                all(part not in ("", ".", "..") for part in path.split("/")))
+    if (any(not isinstance(entry, str) or not _UUID.fullmatch(entry) for entry in ids) or
+            ids != sorted(set(ids)) or
+            any(not isinstance(entry, dict) or set(entry) != {"collection", "path"} or
+                entry["collection"] not in ("active", "archived") or
+                not safe_path(entry["path"]) or not entry["path"].endswith(".jsonl") for entry in files) or
+            files != sorted(files, key=lambda entry: (entry["collection"], entry["path"])) or
+            len({(entry["collection"], entry["path"]) for entry in files}) != len(files) or
+            any(not safe_path(entry) for entry in attachments) or attachments != sorted(set(attachments)) or
+            not ids and not files):
+        raise MigrationError("The complete deletion list is invalid; contact support.")
+    return value
+
+
+def prepare_setup_rebaseline(source_home: str, device_id: str, metadata_path: str, *,
+                             expected_binding: dict, apply: bool = False) -> dict:
+    """Reopen the exact interrupted review, or prepare one without uploading."""
+    from codex_migrate.vault_hosted_pending import _bound_run
+    if apply is not True:
+        raise MigrationError("Preparing deletion review requires explicit confirmation.")
+    with _bound_run(source_home, device_id, metadata_path,
+                    crypto_helper=None, expected_binding=expected_binding) as (run, _upload, key_id):
+        review = run.pending_deletion_review(expected_key_id=key_id)
+        if review is not None:
+            return deletion_review_view(review)
+    return prepare_rebaseline(source_home, device_id, metadata_path,
+        expected_binding=expected_binding, include_review=True, apply=True)

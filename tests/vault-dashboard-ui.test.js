@@ -23,7 +23,7 @@ const hostedSetupStep = source.match(/async function hostedSetupStep\(action,ste
 const refreshHostedSetup = source.match(/async function refreshHostedSetup\(\)\{[\s\S]*?\n\}/)[0];
 
 function setupFixture() {
-  const phases = ['start', 'email', 'pairing_checkpoint', 'pairing_uncertain', 'paired', 'key_save', 'key_ready', 'backup_ready', 'pending_upload'];
+  const phases = ['start', 'email', 'pairing_checkpoint', 'pairing_uncertain', 'paired', 'key_save', 'key_ready', 'backup_ready', 'pending_upload', 'deletion_review'];
   const blocks = phases.map(phase => ({ dataset: { setupPhase: phase }, hidden: false }));
   const document = { activeElement: { outside: true } };
   const controls = phases.map(phase => ({ phase, disabled: false, focus() { document.activeElement = this; } }));
@@ -41,7 +41,7 @@ function setupFixture() {
     }, document, clearInterval: () => {}, setInterval: () => 1,
   };
   vm.createContext(context);
-  vm.runInContext('let hostedSetupTimer=null,hostedSetupInterval=0,hostedSetupPhase=null,hostedSetupEpoch=0,hostedUploadReservation=null; ' + hostedSetupView + '\n' + refreshHostedSetup + '\n' + hostedSetupStep, context);
+  vm.runInContext('let hostedSetupTimer=null,hostedSetupInterval=0,hostedSetupPhase=null,hostedSetupEpoch=0,hostedUploadReservation=null,hostedDeletionReview=null; ' + hostedSetupView + '\n' + refreshHostedSetup + '\n' + hostedSetupStep, context);
   return { context, panel, controls, elements, blocks, document };
 }
 
@@ -111,6 +111,50 @@ test('release handler sends only an explicitly checked exact reservation and cle
   assert.equal(calls[0].step.reservation_id, 'exact-id');
   assert.equal(calls[0].step.confirm_abandon, true);
   assert.doesNotMatch(source, /(?:localStorage|sessionStorage)\.setItem\([^\n]*reservation/);
+});
+
+test('deletion review displays every item as text and resets consent on replacement or action', () => {
+  const { context, elements } = setupFixture();
+  const review = { review_id: 'exact-review', missing_thread_ids: Array.from({length:30},(_,i)=>'thread-'+i),
+    missing_files: [{collection:'active',path:'<img src=x onerror=attack>.jsonl'}],
+    missing_attachments:['attachment/pasted-text.txt'] };
+  const data = {enabled:true, phase:'deletion_review',status:'ready',deletion_review:review};
+  context.hostedSetupView(data);
+  const list=elements.get('setup-deletion-list');
+  assert.match(list.textContent,/thread-29/);
+  assert.match(list.textContent,/<img src=x onerror=attack>/);
+  assert.equal(list.innerHTML,undefined);
+  assert.equal(elements.get('setup-confirm-deletions').disabled,true);
+  elements.get('setup-deletion-confirm').checked=true;
+  context.hostedSetupView(data);
+  assert.equal(elements.get('setup-confirm-deletions').disabled,false);
+  context.hostedSetupView({...data,deletion_review:{...review,review_id:'replacement'}});
+  assert.equal(elements.get('setup-deletion-confirm').checked,false);
+  elements.get('setup-deletion-confirm').checked=true;
+  context.hostedSetupView({...data,status:'running',step:'confirm_deletions'});
+  assert.equal(elements.get('setup-deletion-confirm').checked,false);
+  assert.equal(elements.get('setup-confirm-deletions').disabled,true);
+  context.hostedSetupView({...data,phase:'backup_ready'});
+  assert.equal(elements.get('setup-enable-schedule').disabled,true);
+  assert.doesNotMatch(source,/setup-deletion-list"\)\.innerHTML/);
+});
+
+test('intentional-deletion action names only the checked review and clears consent before request', () => {
+  const elements=new Map([['setup-deletion-confirm',{checked:false}],['setup-confirm-deletions',{}]]);
+  const calls=[];
+  const context={$:id=>elements.get(id),hostedDeletionReview:'exact-review',
+    hostedSetupStep:(action,step)=>calls.push({action,step})};
+  vm.createContext(context);
+  vm.runInContext(source.match(/\$\("setup-confirm-deletions"\)\.onclick=.*?;\n/)[0],context);
+  elements.get('setup-confirm-deletions').onclick();
+  assert.equal(calls.length,0);
+  elements.get('setup-deletion-confirm').checked=true;
+  elements.get('setup-confirm-deletions').onclick();
+  assert.equal(elements.get('setup-deletion-confirm').checked,false);
+  assert.equal(calls[0].action,'confirm_deletions');
+  assert.equal(calls[0].step.review_id,'exact-review');
+  assert.equal(calls[0].step.confirm_intentional_deletions,true);
+  assert.doesNotMatch(source,/(?:localStorage|sessionStorage)\.setItem\([^\n]*review/);
 });
 
 test('setup lost reply reads status exactly once without repeating pairing or echoing a private proof', async () => {

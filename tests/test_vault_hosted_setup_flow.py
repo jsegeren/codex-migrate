@@ -461,6 +461,82 @@ class HostedSetupFlowTests(unittest.TestCase):
                 "local_phase": "active", "remote_status": state,
                 "can_abandon": state != "published", "automatic_protection_verified": False}
 
+    def prepare_deletions(self, value=None):
+        review = {"review_id": DEVICE, "missing_thread_ids": [VAULT],
+            "missing_files": [{"collection": "active", "path": "old.jsonl"}],
+            "missing_attachments": [VAULT + "/pasted-text.txt"],
+            "rebaseline_authorized": False, "automatic_protection_verified": False}
+        with patch("codex_migrate.vault_hosted_setup_flow.prepare_setup_rebaseline",
+                   return_value=review if value is None else value) as prepare:
+            return self.step("prepare_deletions"), prepare
+
+    def test_deletion_review_is_complete_read_only_and_exactly_bound(self):
+        key_id = self.ready_for_backup()
+        self.step("first_backup")
+        before = json.dumps(self.saved, sort_keys=True)
+        result, prepare = self.prepare_deletions()
+        self.assertEqual(result["phase"], "deletion_review")
+        self.assertEqual(result["deletion_review"]["missing_thread_ids"], [VAULT])
+        prepare.assert_called_once_with(self.home, DEVICE, "/synthetic/state/hosted-key.json",
+            expected_binding={**IDENTITY, "keyId": key_id}, apply=True)
+        self.assertEqual(json.dumps(self.saved, sort_keys=True), before)
+        self.assertEqual(self.backup.call_count, 1)
+        result["deletion_review"]["missing_thread_ids"].clear()
+        self.assertEqual(self.flow.snapshot()["deletion_review"]["missing_thread_ids"], [VAULT])
+
+    def test_deletion_confirmation_requires_matching_review_and_separate_true(self):
+        key_id = self.ready_for_backup()
+        self.prepare_deletions()
+        for review, flag in ((VAULT, True), (DEVICE, False), (DEVICE, 1)):
+            with self.assertRaises(MigrationError):
+                self.flow.stage("confirm_deletions", {"review_id": review,
+                    "confirm_intentional_deletions": flag, "apply": True})
+        self.backup.assert_not_called()
+        result = self.step("confirm_deletions", review_id=DEVICE, confirm_intentional_deletions=True)
+        self.backup.assert_called_once_with(self.home, DEVICE, "/synthetic/state/hosted-key.json",
+            expected_binding={**IDENTITY, "keyId": key_id}, apply=True,
+            deletion_review_id=DEVICE, confirm_intentional_deletions=True)
+        self.assertEqual(result["phase"], "backup_ready")
+        self.assertNotIn("deletion_review", result)
+
+    def test_failed_review_or_confirm_preserves_last_good_and_redacts_errors(self):
+        self.ready_for_backup()
+        self.step("first_backup")
+        before = json.dumps(self.saved, sort_keys=True)
+        with patch("codex_migrate.vault_hosted_setup_flow.prepare_setup_rebaseline",
+                   side_effect=MigrationError("PRIVATE BODY token")):
+            result = self.step("prepare_deletions")
+            self.assertEqual(result["phase"], "backup_ready")
+            self.assertNotIn("PRIVATE", result["error"])
+        self.prepare_deletions()
+        self.backup.side_effect = MigrationError("PRIVATE BODY token")
+        result = self.step("confirm_deletions", review_id=DEVICE, confirm_intentional_deletions=True)
+        self.assertEqual(result["phase"], "deletion_review")
+        self.assertIn("deletion_review", result)
+        self.assertNotIn("PRIVATE", result["error"])
+        self.assertEqual(json.dumps(self.saved, sort_keys=True), before)
+
+    def test_leaving_or_restarting_review_never_approves_and_blocks_schedule(self):
+        self.ready_for_backup()
+        self.step("first_backup")
+        self.prepare_deletions()
+        self.backup.reset_mock()
+        self.step("leave_deletion_review")
+        self.backup.assert_not_called()
+        with self.assertRaises(MigrationError):
+            self.flow.stage("enable_schedule", {"apply": True})
+        self.flow = HostedSetupFlow(self.registry, self.home)
+        self.assertNotIn("deletion_review", self.flow.snapshot())
+        with self.assertRaises(MigrationError):
+            self.flow.stage("confirm_deletions", {"review_id": DEVICE,
+                "confirm_intentional_deletions": True, "apply": True})
+
+    def test_malformed_deletion_view_cannot_be_rendered_or_confirmed(self):
+        self.ready_for_backup()
+        for value in ({}, {"private": "token"}, {"review_id": DEVICE}):
+            self.assertEqual(self.prepare_deletions(value)[0]["status"], "failed")
+            self.assertNotIn("deletion_review", self.flow.snapshot())
+
     def check_upload(self, value=None):
         with patch("codex_migrate.vault_hosted_setup_flow.pending_hosted_upload",
                    return_value=value if value is not None else self.pending_upload()) as inspect:
