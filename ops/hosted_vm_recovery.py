@@ -36,8 +36,13 @@ def running():
 
 
 def stop_and_verify():
-    if running():
-        require(tart(["stop", VM]).returncode == 0)
+    # A failed metadata query must not prevent the containment attempt. The
+    # fixed target is owned; final live stopped state is the authority, even
+    # when stop timed out or raced with an already-completed shutdown.
+    try:
+        tart(["stop", VM])
+    except (OSError, subprocess.SubprocessError):
+        pass
     require(not running())
 
 

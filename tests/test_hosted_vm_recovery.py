@@ -84,14 +84,32 @@ class OwnedVMTests(unittest.TestCase):
                         VM.running()
 
     def test_stop_is_fixed_and_state_rechecked(self):
-        with patch.object(VM, "running", side_effect=[True, False]), \
+        with patch.object(VM, "running", return_value=False), \
                 patch.object(VM, "tart", return_value=subprocess.CompletedProcess([], 0)) as tart:
             VM.stop_and_verify()
             tart.assert_called_once_with(["stop", VM.VM])
-        with patch.object(VM, "running", side_effect=[True, True]), \
+        with patch.object(VM, "running", return_value=True), \
                 patch.object(VM, "tart", return_value=subprocess.CompletedProcess([], 0)):
             with self.assertRaises(ValueError):
                 VM.stop_and_verify()
+
+    def test_metadata_failure_cannot_prevent_fixed_stop_attempt(self):
+        with patch.object(VM, "running", side_effect=ValueError("metadata unavailable")), \
+                patch.object(VM, "tart", return_value=subprocess.CompletedProcess([], 0)) as tart:
+            with self.assertRaises(ValueError):
+                VM.stop_and_verify()
+            tart.assert_called_once_with(["stop", VM.VM])
+
+    def test_lost_stop_reply_requires_final_live_stopped_state(self):
+        for state in (True, False):
+            with patch.object(VM, "running", return_value=state), \
+                    patch.object(VM, "tart", side_effect=subprocess.TimeoutExpired([VM.TART], 30)) as tart:
+                if state:
+                    with self.assertRaises(ValueError):
+                        VM.stop_and_verify()
+                else:
+                    VM.stop_and_verify()
+                tart.assert_called_once_with(["stop", VM.VM])
 
 
 if __name__ == "__main__":
