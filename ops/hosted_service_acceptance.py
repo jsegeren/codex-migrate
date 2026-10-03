@@ -7,6 +7,7 @@ This is not a customer command and is not a complete release certification.
 """
 
 import argparse
+from contextlib import nullcontext
 import hashlib
 import json
 import os
@@ -280,14 +281,22 @@ def main():
     parser.add_argument("action", choices=("prepare", "publish", "recover"))
     parser.add_argument("--root", required=True)
     parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--vercel-preview-transport", action="store_true",
+                        help="Operator-only: use the existing authorized Vercel CLI session")
     for name in ("service-origin", "device-id", "account-id", "vault-id", "crypto-helper",
                  "metadata", "publication-receipt", "recovery-key-file"):
         parser.add_argument("--" + name)
     args = parser.parse_args()
     try:
         require(args.apply)
-        result = {"prepare": lambda: prepare(Path(args.root)),
-                  "publish": lambda: publish(args), "recover": lambda: recover(args)}[args.action]()
+        context = nullcontext()
+        if args.vercel_preview_transport:
+            require(args.action != "prepare")
+            from vercel_preview_transport import protected_preview
+            context = protected_preview(args.service_origin, Path(__file__).resolve().parents[1])
+        with context:
+            result = {"prepare": lambda: prepare(Path(args.root)),
+                      "publish": lambda: publish(args), "recover": lambda: recover(args)}[args.action]()
     except Exception:
         # Provider/helper exceptions can contain signed URLs, keys or source text.
         print(json.dumps({"passed": False, "action": args.action,

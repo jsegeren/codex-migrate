@@ -41,12 +41,36 @@ certification**. Production checkout, appcast and customer data were not changed
 - Read-only sandbox preflight matched all 42 source migration receipts and
   found the required tables. It ran as an operator check, not as a hosted build
   check; it does not certify schema drift or customer backup/recovery.
+- Verified an existing paid Stripe **test-mode** purchase through the deployed
+  purchase-status API. The signed native helper created a synthetic encryption
+  key and device credential. Private key/token inputs remain outside Git.
+- The actual enrollment API recorded the transactional setup challenge as
+  sent after SendGrid accepted it. This is **not** confirmation that the email
+  arrived or that device pairing succeeded. The recipient is the Founder inbox;
+  its Chrome Google session now requires reauthentication. Neither the personal
+  inbox search nor the connected Gmail search found the challenge. No challenge,
+  purchase token, device bearer or token hash was included in diagnostics.
+- Added an explicitly selected operator-only protected-Preview transport using
+  supported `vercel curl`. Request secrets travel on stdin; only the exact
+  project's HTTPS Preview API routes are accepted. It neither disables Vercel
+  protection nor changes shipping code or R2's HTTPS/grant transport.
+- CLI routing/authentication/Node/proxy/governance environment overrides are
+  excluded. A private, empty `0600` curl startup file prevents inherited curl
+  configuration from changing the destination or output behavior. A real local
+  curl regression verifies this isolation, without modifying operator config.
+- A real deployed API probe preserved HTTP status and JSON headers and returned
+  `403 access_denied` for an uncredentialed device. The sanitized-environment
+  probe also passed. This proves protected API reachability and refusal, **not**
+  a successful enrolled backup.
+- Reviewer `public_release_review` accepted the transport as-is after the two
+  configuration-inheritance fixes. Its independent run passes all 32 focused
+  transport/harness tests, compilation and diff check.
 
 ## Next required proof
 
-1. Connect the native driver to the protected Preview using a supported,
-   narrowly scoped authenticated test transport. Do not disable deployment
-   protection or embed its credentials in shipping code.
+1. The host-side protected-Preview transport is implemented and independently
+   reviewed. Complete real email/device pairing, then establish the independent
+   VM's scoped transport without copying the host's provider login cache.
 2. Enroll a synthetic buyer and its two separate native devices through the
    actual purchase/email path. Verify a real Stripe **test-mode** subscription;
    do not use fabricated purchase/subscription rows as acceptance evidence.
@@ -68,6 +92,9 @@ expected account/Vault identity, existing private encryption metadata, and the
 native helper. `recover` runs in the VM using its own paired device, a private
 publication receipt, and a separately transferred private synthetic recovery key.
 Do not pass keys, tokens, signed URLs or personal transcript content in arguments.
+On the authenticated operator host only, `--vercel-preview-transport` selects
+the supported existing CLI session. It is not a shipping-app option and does
+not supply the VM with provider credentials or grant an upload entitlement.
 
 Keep output and key files outside Git. The source authority is the task branch
 `codex/hosted-service-acceptance`. Its sibling worktree is temporarily retained
