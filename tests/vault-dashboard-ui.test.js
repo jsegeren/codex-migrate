@@ -116,7 +116,7 @@ test('release handler sends only an explicitly checked exact reservation and cle
 test('deletion review displays every item as text and resets consent on replacement or action', () => {
   const { context, elements } = setupFixture();
   const review = { review_id: 'exact-review', missing_thread_ids: Array.from({length:30},(_,i)=>'thread-'+i),
-    missing_files: [{collection:'active',path:'<img src=x onerror=attack>.jsonl'}],
+    missing_files: [{collection:'active',path:'<img src=x onerror=attack>.jsonl\nfake-heading'}],
     missing_attachments:['attachment/pasted-text.txt'] };
   const data = {enabled:true, phase:'deletion_review',status:'ready',deletion_review:review};
   context.hostedSetupView(data);
@@ -124,6 +124,7 @@ test('deletion review displays every item as text and resets consent on replacem
   assert.match(list.textContent,/thread-29/);
   assert.match(list.textContent,/<img src=x onerror=attack>/);
   assert.equal(list.innerHTML,undefined);
+  assert.match(list.textContent,/\\nfake-heading/);
   assert.equal(elements.get('setup-confirm-deletions').disabled,true);
   elements.get('setup-deletion-confirm').checked=true;
   context.hostedSetupView(data);
@@ -136,6 +137,7 @@ test('deletion review displays every item as text and resets consent on replacem
   assert.equal(elements.get('setup-confirm-deletions').disabled,true);
   context.hostedSetupView({...data,phase:'backup_ready'});
   assert.equal(elements.get('setup-enable-schedule').disabled,true);
+  assert.match(elements.get('hosted-setup-status').textContent,/unresolved.*New work may not be backed up/);
   assert.doesNotMatch(source,/setup-deletion-list"\)\.innerHTML/);
 });
 

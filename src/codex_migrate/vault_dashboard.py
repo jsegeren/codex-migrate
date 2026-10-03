@@ -468,7 +468,7 @@ function hostedSetupView(data){
   hostedDeletionReview=review?.review_id||null;
   $("setup-confirm-deletions").disabled=running||data.phase!=="deletion_review"||!hostedDeletionReview||!$("setup-deletion-confirm").checked;
   $("setup-deletion-reference").textContent=review?"Review reference: "+review.review_id:"";
-  $("setup-deletion-list").textContent=review?["Missing conversation IDs ("+review.missing_thread_ids.length+")",...review.missing_thread_ids,"", "Missing unidentified files ("+review.missing_files.length+")",...review.missing_files.map(item=>item.collection+" / "+item.path),"", "Missing pasted-text attachments ("+review.missing_attachments.length+")",...review.missing_attachments].join("\n"):"";
+  $("setup-deletion-list").textContent=review?["Missing conversation IDs ("+review.missing_thread_ids.length+")",...review.missing_thread_ids,"", "Missing unidentified files ("+review.missing_files.length+")",...review.missing_files.map(item=>item.collection+" / "+JSON.stringify(item.path)),"", "Missing pasted-text attachments ("+review.missing_attachments.length+")",...review.missing_attachments.map(path=>JSON.stringify(path))].join("\n"):"";
   if(running||phaseChanged||hostedUploadReservation!==pending?.reservation_id)$("setup-abandon-confirm").checked=false;
   hostedUploadReservation=pending?.reservation_id||null;
   $("setup-upload-tools").hidden=running||!["key_ready","backup_ready"].includes(data.phase);
@@ -492,6 +492,7 @@ function hostedSetupView(data){
   Object.assign(messages,{deletion_review:"Review only. Missing history has not been approved for a new backup."});
   Object.assign(working,{prepare_deletions:"Verifying the complete missing-history review…",confirm_deletions:"Rechecking your exact review and backing up remaining work…",leave_deletion_review:"Leaving without granting deletion approval…"});
   $("hosted-setup-status").textContent=running?working[data.step]||"Checking setup…":messages[data.phase]||"Setup needs attention.";
+  if(!running&&review&&data.phase!=="deletion_review")$("hosted-setup-status").textContent="Missing-history review is unresolved. New work may not be backed up.";
   $("hosted-setup-error").textContent=data.error||"";
   if(focusOwned&&(phaseChanged||document.activeElement.disabled||(!running&&document.activeElement===$("hosted-setup-status")))){
     const backgroundAction=["enable_schedule","disable_schedule"].includes(data.step);
