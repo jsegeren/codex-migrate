@@ -21,6 +21,7 @@ const refreshHostedRecovery = source.match(/async function refreshHostedRecovery
 const hostedSetupView = source.match(/function hostedSetupView\(data\)\{[\s\S]*?\n\}/)[0];
 const hostedSetupStep = source.match(/async function hostedSetupStep\(action,step=\{\}\)\{[\s\S]*?\n\}/)[0];
 const refreshHostedSetup = source.match(/async function refreshHostedSetup\(\)\{[\s\S]*?\n\}/)[0];
+const reviewPathLabel = source.match(/function reviewPathLabel\(path\)\{[\s\S]*?\n\}/)[0];
 
 function setupFixture() {
   const phases = ['start', 'email', 'pairing_checkpoint', 'pairing_uncertain', 'paired', 'key_save', 'key_ready', 'backup_ready', 'pending_upload', 'deletion_review'];
@@ -41,7 +42,7 @@ function setupFixture() {
     }, document, clearInterval: () => {}, setInterval: () => 1,
   };
   vm.createContext(context);
-  vm.runInContext('let hostedSetupTimer=null,hostedSetupInterval=0,hostedSetupPhase=null,hostedSetupEpoch=0,hostedUploadReservation=null,hostedDeletionReview=null; ' + hostedSetupView + '\n' + refreshHostedSetup + '\n' + hostedSetupStep, context);
+  vm.runInContext('let hostedSetupTimer=null,hostedSetupInterval=0,hostedSetupPhase=null,hostedSetupEpoch=0,hostedUploadReservation=null,hostedDeletionReview=null; ' + reviewPathLabel + '\n' + hostedSetupView + '\n' + refreshHostedSetup + '\n' + hostedSetupStep, context);
   return { context, panel, controls, elements, blocks, document };
 }
 
@@ -157,6 +158,19 @@ test('intentional-deletion action names only the checked review and clears conse
   assert.equal(calls[0].step.review_id,'exact-review');
   assert.equal(calls[0].step.confirm_intentional_deletions,true);
   assert.doesNotMatch(source,/(?:localStorage|sessionStorage)\.setItem\([^\n]*review/);
+});
+
+test('path labels visibly escape Unicode line separators, bidi and invisible display controls', () => {
+  const {context,elements}=setupFixture();
+  const path='2026/ok\u2028Missing conversation IDs (999)\u202etxt.lnosj.jsonl';
+  const attachment='\u0085\u2029\u2066\u200b\u{e0001}/pasted-text.txt';
+  context.hostedSetupView({enabled:true,phase:'deletion_review',status:'ready',deletion_review:{
+    review_id:'exact-review',missing_thread_ids:['real-thread'],
+    missing_files:[{collection:'active',path}],missing_attachments:[attachment]}});
+  const text=elements.get('setup-deletion-list').textContent;
+  assert.doesNotMatch(text,/[\u0085\u2028\u2029\u202e\u2066\u200b\u{e0001}]/u);
+  for(const escape of ['\\u2028','\\u202e','\\u0085','\\u2029','\\u2066','\\u200b','\\u{e0001}'])assert.ok(text.includes(escape));
+  assert.equal(text.split('\n').filter(line=>line.startsWith('Missing conversation IDs')).length,1);
 });
 
 test('setup lost reply reads status exactly once without repeating pairing or echoing a private proof', async () => {

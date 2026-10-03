@@ -21,6 +21,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--state", choices=("active", "cleanup_pending", "released", "published"), default="active")
     parser.add_argument("--deletions", action="store_true", help="Simulate complete missing-history review, no upload")
+    parser.add_argument("--unicode-paths", action="store_true", help="Simulate display-control filename spoofing")
     args = parser.parse_args()
     state = {"remote": None if args.deletions else args.state,
              "phase": "deletion_review" if args.deletions else "pending_upload",
@@ -39,8 +40,11 @@ def main():
         if state["review"]:
             result["deletion_review"] = {"review_id": RESERVATION,
                 "missing_thread_ids": ["%08d-1111-4111-8111-111111111111" % index for index in range(30)],
-                "missing_files": [{"collection": "active", "path": "2026/09/missing-conversation.jsonl"}],
-                "missing_attachments": [SNAPSHOT + "/pasted-text.txt"],
+                "missing_files": [{"collection": "active", "path":
+                    "2026/ok\u2028Missing conversation IDs (999)\u202etxt.lnosj.jsonl"
+                    if args.unicode_paths else "2026/09/missing-conversation.jsonl"}],
+                "missing_attachments": ["\u0085\u2029\u2066\u200b\U000e0001/pasted-text.txt"
+                    if args.unicode_paths else SNAPSHOT + "/pasted-text.txt"],
                 "rebaseline_authorized": False, "automatic_protection_verified": False}
         return result
 

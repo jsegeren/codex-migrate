@@ -453,6 +453,12 @@ const fmt=n=>{const units=["B","KB","MB","GB","TB"];let i=0;while(n>=1000&&i<uni
 async function api(path,data){const response=await fetch(path,{method:data===undefined?"GET":"POST",headers:{"X-Codex-Migrate-Token":token,"Content-Type":"application/json"},...(data===undefined?{}:{body:JSON.stringify(data)})});const type=response.headers.get("Content-Type")||"";const body=type.includes("application/json")?await response.json():await response.text();if(!response.ok)throw Error(body.error||"The local request failed");return body}
 function fail(error){$("error").textContent=error.message;$("status").textContent=""}
 let hostedSetupTimer=null,hostedSetupInterval=0,hostedSetupPhase=null,hostedSetupEpoch=0,hostedUploadReservation=null,hostedDeletionReview=null;
+function reviewPathLabel(path){
+  return JSON.stringify(path).replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu,character=>{
+    const code=character.codePointAt(0),hex=code.toString(16);
+    return code<=0xffff?"\\u"+hex.padStart(4,"0"):"\\u{"+hex+"}";
+  });
+}
 function hostedSetupView(data){
   const panel=$("hosted-setup-panel"),focusOwned=panel.contains(document.activeElement),phaseChanged=data.phase!==hostedSetupPhase;
   $("setup-recovery").value=data.enabled&&data.phase==="key_save"&&data.status!=="running"?data.recovery_key||"":"";
@@ -468,7 +474,7 @@ function hostedSetupView(data){
   hostedDeletionReview=review?.review_id||null;
   $("setup-confirm-deletions").disabled=running||data.phase!=="deletion_review"||!hostedDeletionReview||!$("setup-deletion-confirm").checked;
   $("setup-deletion-reference").textContent=review?"Review reference: "+review.review_id:"";
-  $("setup-deletion-list").textContent=review?["Missing conversation IDs ("+review.missing_thread_ids.length+")",...review.missing_thread_ids,"", "Missing unidentified files ("+review.missing_files.length+")",...review.missing_files.map(item=>item.collection+" / "+JSON.stringify(item.path)),"", "Missing pasted-text attachments ("+review.missing_attachments.length+")",...review.missing_attachments.map(path=>JSON.stringify(path))].join("\n"):"";
+  $("setup-deletion-list").textContent=review?["Missing conversation IDs ("+review.missing_thread_ids.length+")",...review.missing_thread_ids,"", "Missing unidentified files ("+review.missing_files.length+")",...review.missing_files.map(item=>item.collection+" / "+reviewPathLabel(item.path)),"", "Missing pasted-text attachments ("+review.missing_attachments.length+")",...review.missing_attachments.map(path=>reviewPathLabel(path))].join("\n"):"";
   if(running||phaseChanged||hostedUploadReservation!==pending?.reservation_id)$("setup-abandon-confirm").checked=false;
   hostedUploadReservation=pending?.reservation_id||null;
   $("setup-upload-tools").hidden=running||!["key_ready","backup_ready"].includes(data.phase);
